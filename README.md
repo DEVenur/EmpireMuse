@@ -1,15 +1,15 @@
-# MuseHeart-MusicBot
+# EmpireMuse
 ## bot de música programado em python com player interativo, comandos de barra + slash, integração com o [last.fm](https://www.last.fm/) e muito mais.
 
-## Página com invites e algumas infos/screenshots da Muse Heart e funcionamento dessa source: [clique aqui](https://gist.github.com/zRitsu/4875008554a00c3c372b2df6dcdf437f#file-muse_heart_invites-md).
+> **EmpireMuse** é uma obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu** e distribuído sob a licença **GPL-2.0** (veja [LICENSE](LICENSE) e [CREDITS.md](CREDITS.md)).
 
-[![](https://discordapp.com/api/guilds/911370624507707483/embed.png?style=banner2)](https://discord.gg/KM3NS7D6Zj)
+<!-- TODO(dono): convite do servidor de suporte -->
 
 ### Algumas Previews:
 
-- Player controller: modo normal/mini-player (skin: default) e suporte a [RPC (Rich Presence)](https://github.com/zRitsu/MuseHeart-MusicBot-RPC-app)
+- Player controller: modo normal/mini-player (skin: default) e suporte a [RPC (Rich Presence)](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app)
 
-[![](https://i.ibb.co/6tVbfFH/image.png)](https://i.ibb.co/6tVbfFH/image.png)
+[![](assets/readme_preview_player_default.png)](assets/readme_preview_player_default.png)
 
 <details>
 <summary>
@@ -19,25 +19,29 @@ Mais previews:
 
 - Comandos de barra / Slash commands
 
-[![](https://i.ibb.co/nmhYWrK/muse-heart-slashcommands.png)](https://i.ibb.co/nmhYWrK/muse-heart-slashcommands.png)
+[![](assets/readme_preview_slashcommands.png)](assets/readme_preview_slashcommands.png)
 
 - Integração com o [last.fm](https://www.last.fm/) para scrobbles (outras funcionalidades em breve).
 
-[![](https://i.ibb.co/SXm608z/muse-heart-lastfm.png)](https://i.ibb.co/SXm608z/muse-heart-lastfm.png)
+[![](assets/readme_preview_lastfm.png)](assets/readme_preview_lastfm.png)
 
 - Player controller: modo fixo/estendido com canal e conversa de song requests (skin: default), configurável com o comando: /setup
 
-[![](https://i.ibb.co/5cZ7JGs/image.png)](https://i.ibb.co/5cZ7JGs/image.png)
+[![](assets/readme_preview_player_setup.png)](assets/readme_preview_player_setup.png)
 
 - Player controller: modo fixo/estendido com canal de song-request em forum com suporte a status automático no canal de voz e palco
 
-[![](https://i.ibb.co/9Hm5cyG/playercontrollerforum.png)](https://i.ibb.co/9Hm5cyG/playercontrollerforum.png)
+[![](assets/readme_preview_controller_forum.png)](assets/readme_preview_controller_forum.png)
 
 * Há diversas outras skins, veja todas usando o comando /change_skin (você também pode criar outras, use os modelos padrões que estão na pasta [skins](utils/music/skins/) como referência, crie uma cópia com outro nome e modifique a seu gosto).
 
 </details>
 
-## Teste agora mesmo criando/reusando um bot próprio com essa source fazendo deploy em um dos serviços abaixo:
+> As imagens de preview foram re-hospedadas em [`assets/`](assets/) e têm origem no projeto upstream; a substituição por arte própria está planejada (veja [CREDITS.md](CREDITS.md)).
+
+## Hospede o seu próprio bot com essa source:
+
+Guias passo a passo (em português, com imagens) estão em [`docs/guides/`](docs/guides/README.md).
 
 ---
 
@@ -46,18 +50,23 @@ Mais previews:
 Repl.it
 </summary>
 
-Link do guia com imagens: https://gist.github.com/zRitsu/70737984cbe163f890dae05a80a3ddbe
+Veja o guia com imagens: [docs/guides/replit-token.md](docs/guides/replit-token.md) (outros guias: [hospedagem](docs/guides/replit-hosting.md), [opcionais](docs/guides/replit-hosting-opcionais.md) e [atualização](docs/guides/replit-atualizar.md)).
 </details>
 
 ---
 
+**Render.com** e **Gitpod** (deploy em 1 clique): Deploy em revisão — será reativado na fase de deploy (I-7).
+
+<!-- Deploy em revisão — será reativado na fase de deploy (I-7). Conteúdo original preservado abaixo:
 <details>
 <summary>
 Render.com
 </summary>
 <br>
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/zRitsu/MuseHeart-MusicBot/tree/main)
+> Nota: os arquivos de deploy (Render, Discloud, SquareCloud, Replit e Gitpod) ainda não foram revisados para o EmpireMuse; o deploy foi adiado.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/DiscordEmpireHub/EmpireMuse/tree/main)
 
 * **[ 1 ]** - No campo **TOKEN_BOT_1** coloque o token do bot **( [tutorial de como obter](https://www.youtube.com/watch?v=lfdmZQySTXE) )**. `Nota: Caso queira, no campo TOKEN você pode incluir token de mais bots para ter bots extras pra ativar o suporte a multi-voice incluindo mais tokens no value (separando com espaços).`
 
@@ -65,10 +74,10 @@ Render.com
 * **[ 2 ]** - No campo **DEFAULT_PREFIX** coloque um prefixo para o bot.
 
 
-* **[ 3 ]** - Nos campos **SPOTIFY_CLIENT_ID** e **SPOTIFY_CLIENT_SECRET** coloque as suas keys do spotify **( [tutorial de como obter](https://www.youtube.com/watch?v=ceKQjWiCyWE) )**.
+* **[ 3 ]** - Nos campos **SPOTIFY_CLIENT_ID** e **SPOTIFY_CLIENT_SECRET** coloque as suas keys do spotify **( [tutorial de como obter](https://www.youtube.com/watch?v=ceKQjWiCyWE) | [guia escrito](docs/guides/spotify-keys.md) )**.
 
 
-* **[ 4 ]** - No campo **MONGO** coloque o link da sua database do MongoDB **( [tutorial de como obter](https://www.youtube.com/watch?v=x1Gq5beRx9k) )**.
+* **[ 4 ]** - No campo **MONGO** coloque o link da sua database do MongoDB **( [tutorial de como obter](https://www.youtube.com/watch?v=x1Gq5beRx9k) | [guia escrito](docs/guides/mongodb.md) )**.
 
 
 * **[ 5 ]** - Clique em Apply e aguarde o processo de build até o bot iniciar (isso pode demorar bastante, no mínimo uns 13 minutos ou mais para o deploy ser finalizado + bot iniciar + servidor lavalink iniciar).
@@ -82,7 +91,7 @@ Gitpod
 </summary>
 <br>
 
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/zRitsu/MuseHeart-MusicBot)
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/DiscordEmpireHub/EmpireMuse)
 
 * **[ 1 ]** - Abra o arquivo .env e coloque o token do bot no campo apropriado (caso não tenha, veja como obter com este tutorial [tutorial](https://www.youtube.com/watch?v=lfdmZQySTXE) de como obter). Também altamente recomendo usar mongodb, procure onde tem MONGO= no arquivo .env e nele coloque o link da sua db do mongodb (caso não tenha, veja como obter por este [tutorial](https://www.youtube.com/watch?v=x1Gq5beRx9k)).
 
@@ -94,6 +103,7 @@ Gitpod
 * **Nota 2:** Não esqueça de ir na lista de [workspaces](https://gitpod.io/workspaces) e clicar nos 3 pontinhos do projeto e depois clicar em **pin**. `(isso evitará o worskpace ser deletado após 14 dias inativo)`
 * **Nota 3:** Não use o gitpod para hospedar / manter o bot online, pois a mesma tem bastante limitações no plano gratuito (mais informações [nesse link](https://www.gitpod.io/pricing)).
 </details>
+-->
 
 ---
 
@@ -105,9 +115,9 @@ Hospedando no seu próprio PC/VPS (windows/linux)
 
 ### Requisitos:
 
-* Python 3.9, 3.10 ou 3.11<br/>
+* Python 3.13 (veja [docs/development.md](docs/development.md))<br/>
 [Download pela Microsoft Store](https://apps.microsoft.com/store/detail/9PJPW5LDXLZ5?hl=pt-br&gl=BR) (Recomendável para usuários do windows 10/11).<br/>
-[Download direto do site oficial](https://www.python.org/downloads/release/python-3117/) (Marque esta opção ao instalar: **Add python to the PATH**)
+[Download direto do site oficial](https://www.python.org/downloads/) (Marque esta opção ao instalar: **Add python to the PATH**)
 * [Git](https://git-scm.com/downloads) (Não escolha a versão portable)</br>
 
 * [JDK 17](https://www.azul.com/downloads) ou superior (Windows e Linux não é necessário instalar, ele é baixado automaticamente)</br>
@@ -116,9 +126,9 @@ Hospedando no seu próprio PC/VPS (windows/linux)
 
 ### Iniciar bot (guia rápido):
 
-* Baixe esta source como [zip](https://github.com/zRitsu/MuseHeart-MusicBot/archive/refs/heads/main.zip) e extraia em seguida (Ou use o comando abaixo no terminal/cmd e abra a pasta em seguida):
+* Baixe esta source como [zip](https://github.com/DiscordEmpireHub/EmpireMuse/archive/refs/heads/main.zip) e extraia em seguida (Ou use o comando abaixo no terminal/cmd e abra a pasta em seguida):
 ```shell
-git clone https://github.com/zRitsu/MuseHeart-MusicBot.git
+git clone https://github.com/DiscordEmpireHub/EmpireMuse.git
 ```
 * dê clique-duplo no arquivo source_setup.sh (ou apenas setup caso o seu windows não esteja exibindo extensões de arquivo) e aguarde.</br>
 `Caso esteja usando linux use o comando no terminal:` 
@@ -145,27 +155,28 @@ bash source_update.sh
 
 ---
 
-Nota: há mais alguns guias na [wiki](https://github.com/zRitsu/MuseHeart-MusicBot/wiki).
+Nota: há mais guias em [`docs/guides/`](docs/guides/README.md).
 
 ### Observações importantes:
 
-* Você pode usar essa source como alternativa de self-hosting do meu bot principal (Muse Heart) pra hospedar/rodar seu próprio bot de música para uso privado ou em servidores públicos no qual você gerencia (que você tenha permissão de adicionar seu próprio bot no servidor). Entretanto não recomendo distribuir o bot usando essa source publicamente por não estar otimizado o suficiente pra lidar com alta demanda de servidores, mas se mesmo assim decidir fazer isso o bot terá que estar sob a [licença](/LICENSE) da source original e dependendo de onde o bot estiver sendo divulgado (ex: botlists) há possibilidade de seu bot ser apontado pelo uso dessa source.
+* Você pode usar essa source para hospedar/rodar seu próprio bot de música para uso privado ou em servidores públicos no qual você gerencia (que você tenha permissão de adicionar seu próprio bot no servidor). Entretanto não recomendo distribuir o bot usando essa source publicamente por não estar otimizado o suficiente pra lidar com alta demanda de servidores, mas se mesmo assim decidir fazer isso o bot terá que estar sob a [licença](/LICENSE) da source original (GPL-2.0) e dependendo de onde o bot estiver sendo divulgado (ex: botlists) há possibilidade de seu bot ser apontado pelo uso dessa source.
 
 
 * Recomendo usar a source atual sem alterações no code. Caso queira fazer modificações (e principalmente adicionar novas funcionalidades) é altamente recomendável que tenha conhecimento em python, disnake, lavalink e etc. E caso queira manter sua source modificada com updates em dias usando a source base também recomendo ter conhecimento em git (pelo menos o necessário pra fazer um merge sem erros).
-
-
-* Não será fornecido suporte caso modifique a source atual (exceto para custom skins), pois atualizo ela com frequência e versões modificadas tendem a ficarem desatualizadas dificultando dar suporte por esse motivo (além de que dependendo da modificação ou implementação poder gerar erros desconhecidos que dificulta ao tentar resolver o problema e de eu exigir usar métodos pra atualizar o code que geralmente desfaz essas alterações).
 
 
 * Caso queira postar algum vídeo/tutorial usando essa source, você está totalmente livre para usá-la pra essa finalidade desde que esteja de acordo com os termos citados nos parágrafos acima.
 
 ---
 
-### Caso tenha algum problema, poste uma [issue](https://github.com/zRitsu/MuseHeart-MusicBot/issues) detalhando o problema.
+### Caso tenha algum problema, poste uma [issue](https://github.com/DiscordEmpireHub/EmpireMuse/issues) detalhando o problema.
+
+Para contribuir, veja [CONTRIBUTING.md](CONTRIBUTING.md); para reportar vulnerabilidades, veja [SECURITY.md](SECURITY.md).
 
 
-## Agradecimentos especiais e créditos:
+## Créditos e agradecimentos:
+
+O EmpireMuse é uma obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) de **zRitsu**, licenciado sob **GPL-2.0** ([LICENSE](LICENSE)). Veja a lista completa de créditos e recursos espelhados em [CREDITS.md](CREDITS.md).
 
 * [DisnakeDev](https://github.com/DisnakeDev) (disnake) e ao Rapptz pelo [discord.py](https://github.com/Rapptz/discord.py) original
 * [Pythonista Guild](https://github.com/PythonistaGuild) (wavelink)

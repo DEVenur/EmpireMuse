@@ -34,6 +34,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `utils/music/interactions.py`: Componentes de UI do Discord (views, botões, modais e selects).
 - `utils/music/checks.py`: Verificações de permissão, voz, DJ e algoritmo de roteamento entre múltiplos bots.
 - `utils/music/local_lavalink.py`: Download e execução sob demanda de binários JDK e Lavalink local.
+- `utils/music/lavalink_server_list.py`: Validação da lista de servidores Lavalink baixada, com fallback para `data/lavalink_servers.ini`.
 - `utils/music/audio_sources/`: Provedores de metadados para plataformas externas (Spotify e Deezer).
 - `utils/music/skins/`: Coleção de 15 skins visuais para o player (10 no modo normal e 5 no modo estático).
 - `wavelink/`: Cliente Lavalink v3/v4 e NodeLink (nós, conexões WebSocket, players e eventos).
@@ -47,7 +48,12 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `modules/help_cog.py`: Sistema interativo de ajuda.
 - `modules/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
 - `modules/server_manager.py`: Comandos administrativos para gerenciamento de servidores.
+- `utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
+- `assets/`: Imagens re-hospedadas (previews, skins, ícones, tutoriais) e `SHA256SUMS`.
+- `data/`: Dados estáticos do projeto (`lavalink_servers.ini`, lista de servidores Lavalink).
 - `docs/`: Documentação técnica, guias de setup e Registros de Decisão de Arquitetura (ADRs).
+- `docs/guides/`: Guias de hospedagem e configuração (adaptados da wiki/gist do upstream).
+- `tests/`: Testes automatizados (pytest).
 
 ---
 
@@ -65,8 +71,12 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   python main.py
   ```
 - **Lint e Testes Automatizados**:
-  - Ferramentas alvo (`ruff`, `pytest`, `pytest-asyncio`, `mypy`/`pyright`) **estão a configurar na fase de saneamento**.
-  - **Não invente nem execute comandos de teste inexistentes** nesta fase.
+  - Testes com `pytest` (config mínima em `pyproject.toml`; dependências em `requirements-dev.txt`):
+    ```bash
+    uv pip install -r requirements-dev.txt
+    .venv/bin/python -m pytest
+    ```
+  - Ferramentas alvo restantes (`ruff`, `mypy`/`pyright`) **estão a configurar na fase de saneamento**; não invente nem execute comandos dessas ferramentas antes disso.
   - Para validação sintática estática básica:
     ```bash
     python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink
@@ -78,27 +88,29 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 
 O desenvolvimento cooperativo de múltiplos agentes é coordenado através do canvas **Maestri**:
 
-- **Papel do Maestro Orquestrador**: Planeja sprints, decompõe demandas, delega tarefas, valida entregas e arbitra conflitos técnicos. **O Maestro não escreve código produtivo.**
+- **Papel do MAESTRO (orquestrador)**: Planeja sprints, decompõe demandas, delega tarefas, valida entregas e arbitra conflitos técnicos. **O MAESTRO não escreve código produtivo.**
 - **Comunicação entre Agentes**:
   - Utilização de `maestri ask`, `maestri check` e notas compartilhadas do canvas.
-  - **Toda tarefa delegada termina obrigatoriamente com o envio do relatório completo ao Maestro** via:
+  - **Toda tarefa delegada termina obrigatoriamente com o envio do relatório completo ao MAESTRO** via:
     ```bash
-    maestri ask "Maestro Orquestrador" "$(cat <<'FIM'
+    maestri ask "MAESTRO" "$(cat <<'FIM'
     <relatório com arquivos criados/alterados, decisões e status>
     FIM
     )"
     ```
-- **Roster de Agentes e Responsabilidades**:
+- **Roster de Agentes e Responsabilidades** (nomes exatos do canvas):
 
-| Agente | Capacidade Principal | Responsabilidades Principais | Modelo Atual (pode mudar) |
+| Agente | Capacidade Principal | Responsabilidades Principais | Ferramenta · Modelo Atual (pode mudar) |
 | :--- | :--- | :--- | :--- |
-| **Maestro Orquestrador** | Orquestração e arbitragem | Planejamento, delegação, validação de etapas e aprovação final de commits. | Maestri |
-| **Backend Specialist** | Raciocínio arquitetural e backend | Regras de negócio, cogs, modelo do player, integração Lavalink, banco de dados e desempenho. | Claude Sonnet |
-| **Frontend Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`web_app.py`). | Claude Sonnet |
-| **AppSec & Vulnerability Hunter** | Auditoria profunda e raciocínio crítico | Auditoria de segurança, validação de dados de entrada, proteção de segredos e supply chain. | Claude Opus |
-| **Git, Docs & Changelog Keeper** | Governança e execução rápida | Governança de documentação, `CHANGELOG.md`, ADRs, padronização de commits e branches. | Gemini 3.8 Flash (Antigravity) |
-| **Repetitive Tasks & Macro Engine** | Execução mecânica rápida | Tarefas mecânicas repetitivas, geração de esqueletos, mocks, formatações em lote e configs. | Gemini 3.8 Flash (Antigravity) |
-| **Devil's Advocate / Second Opinion** | Pensamento divergente e revisão crítica | Revisão crítica de coerência, formulação de hipóteses divergentes e desempate de impasses. | Gemini 3.8 Flash high (Antigravity) |
+| **MAESTRO** | Orquestração e arbitragem | Planejamento, delegação, validação de etapas e aprovação final de commits. | Claude Code · Claude Opus 5.5 |
+| **Backend Specialist** | Raciocínio arquitetural e backend | Regras de negócio, cogs, modelo do player, integração Lavalink, banco de dados e desempenho. | Claude Code |
+| **Frontend Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`web_app.py`). | Claude Code |
+| **QA & Test Engineer** | Qualidade e testes | Testes TDD e de caracterização (RED antes, validação depois); **nunca altera código de produção**. | Claude Code |
+| **DevOps & Dependencies** | Infraestrutura e dependências | Docker, CI, runtime, lint, dependências e lockfiles. | Antigravity · Claude Sonnet 5.5 |
+| **AppSec Hunter** | Auditoria profunda e raciocínio crítico | Auditoria de segurança, validação de dados de entrada, proteção de segredos e supply chain (modo plano/leitura). | Antigravity · Claude Opus 5.5 |
+| **Second Opinion (Devil's Advocate)** | Pensamento divergente e revisão crítica | Revisão crítica de coerência, formulação de hipóteses divergentes e desempate de impasses (modo plano/leitura). | Antigravity · Gemini 3.8 Flash high |
+| **Repetitive Runner** | Execução mecânica rápida | Tarefas mecânicas repetitivas, geração de esqueletos, mocks, formatações em lote e configs. **Nunca recebe arquivos críticos de segurança/infra.** | Antigravity · Gemini 3.8 Flash |
+| **Git & Documentation Keeper** | Governança de documentação | Governança de documentação, `CHANGELOG.md`, ADRs, padronização de commits e branches. | Antigravity · Claude Sonnet 5.5 |
 
 - **Isolamento de Escopo**: Cada agente deve modificar **estritamente os arquivos atribuídos à sua tarefa**. Alterações em arquivos de outros agentes devem ser solicitadas no relatório.
 - **Mediação e Prevenção de Loops**: Caso qualquer agente tente a mesma solução mais de duas vezes sem sucesso ou entre em loop, sua execução é interrompida imediatamente e o impasse é encaminhado para avaliação do **Devil's Advocate**.
@@ -110,7 +122,7 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 A metodologia padrão do projeto utiliza o framework **Everything Claude Code (ECC)**:
 
 1. **Planejamento**: `/ecc:plan` para decomposição de épicos e análise de impacto.
-2. **Desenvolvimento Orientado a Testes (TDD)**: Escrita de testes reprodutores primeiro (RED) antes da implementação produtiva (GREEN) e refatoração (IMPROVE).
+2. **Desenvolvimento Orientado a Testes (TDD)**: o **QA & Test Engineer** escreve os testes reprodutores **ANTES** (RED); o especialista implementa até o GREEN e refatora (IMPROVE); o QA **valida DEPOIS** (testes verdes + smoke). O QA nunca altera código de produção.
 3. **Revisão de Código**: Auto-revisão e submissão para revisão de pares (`code-reviewer`).
 4. **Auditoria de Segurança Proporcional (AppSec)**: Obrigatória em **toda demanda** (diretriz mandatória do dono do projeto), com profundidade proporcional:
    - **Auditoria Completa**: Aplicada obrigatoriamente quando a alteração tocar em:
@@ -125,7 +137,7 @@ A metodologia padrão do projeto utiliza o framework **Everything Claude Code (E
    - **Checagem Rápida**: Verificação de ausência de segredos expostos e aderência estrita de escopo nas demais demandas (ex.: documentação pura, formatação ou textos estáticos).
 5. **Documentação e Changelog**: Atualização dos documentos técnicos correlatos e inclusão das mudanças na seção `[Unreleased]` de [`CHANGELOG.md`](CHANGELOG.md).
 6. **Padronização de Commits**:
-   - Commits, pushes e merges são **terminantemente proibidos** sem a autorização prévia e explícita do Maestro Orquestrador.
+   - Commits, pushes e merges são **terminantemente proibidos** sem a autorização prévia e explícita do MAESTRO.
    - Padrão **Conventional Commits** (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`).
    - Branches nomeadas no formato `tipo/descricao-curta` criadas a partir de `main`.
 

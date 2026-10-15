@@ -134,7 +134,7 @@ licença MIT — mantenha o cabeçalho). Foi estendido para o Lavalink **v4** e 
 ### Lavalink local
 
 `utils/music/local_lavalink.py` valida Java ≥ 17 (`utils/music/local_lavalink.py:63`), baixa JDK/`Lavalink.jar`/`application.yml` se
-necessário e inicia o processo com `subprocess.Popen` (`utils/music/local_lavalink.py:264`). É chamado em executor para não bloquear o
+necessário (o jar e o yml vêm do espelho `DiscordEmpireHub/LL-binaries` `0.0.1`, veja `utils/branding.py`) e inicia o processo com `subprocess.Popen` (`utils/music/local_lavalink.py:264`). É chamado em executor para não bloquear o
 loop (`utils/client.py:219-233`). O node local usa identificador `LOCAL`, host `127.0.0.1` e porta
 `SERVER_PORT` ou `8090` (`utils/client.py:401-415`).
 
@@ -189,7 +189,8 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 
 | Integração | Onde | Observações |
 |---|---|---|
-| **Lavalink** (v3/v4, NodeLink) | `wavelink/`, `modules/music.py` | Fonte de áudio única; lista pública opcional (`utils/music/remote_lavalink_serverlist.py`). |
+| **Lavalink** (v3/v4, NodeLink) | `wavelink/`, `modules/music.py` | Fonte de áudio única; lista pública opcional (`utils/music/remote_lavalink_serverlist.py`, padrão `data/lavalink_servers.ini`). `Lavalink.jar` e `application.yml` vêm do espelho [DiscordEmpireHub/LL-binaries](https://github.com/DiscordEmpireHub/LL-binaries) `0.0.1`. |
+| **App de RPC (Rich Presence)** | `web_app.py`, `utils/music/models.py` | Aplicativo desktop [DiscordEmpireHub/EmpireMuse-RPC-app](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app) (origem: upstream, GPL-3.0); URLs em `utils/branding.py`. |
 | **Spotify** | `utils/music/audio_sources/spotify.py` | API oficial por *client credentials* (`SPOTIFY_CLIENT_ID/SECRET`); só metadados, o áudio vem de outra fonte. Veja `known-issues.md`. |
 | **Deezer** | `utils/music/audio_sources/deezer.py` | API pública sem credenciais; metadados. |
 | **Last.fm** | `utils/music/lastfm_tools.py`, `modules/lastfm.py` | Scrobble e perfil; exige `LASTFM_KEY/SECRET`. |
@@ -199,7 +200,7 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 
 ## 10. Módulos → responsabilidade → tamanho
 
-Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python, **sem testes**).
+Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em `tests/`, veja `development.md`).
 
 | Módulo | Responsabilidade | Linhas |
 |---|---|---|
@@ -228,6 +229,11 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python, **sem tes
 | `modules/help_cog.py` | Comando de ajuda | 383 |
 | `modules/ll_yt_oauth.py` | OAuth do YouTube para o Lavalink | 290 |
 | `modules/server_manager.py` | Gestão de servidores/bots do dono | 219 |
+| `utils/branding.py` | Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`); só stdlib, sem efeitos colaterais no import | — |
+| `assets/` | Imagens re-hospedadas (previews, skins, ícones, tutoriais) + `SHA256SUMS`; servidas via `ASSETS_BASE_URL` | — |
+| `data/lavalink_servers.ini` | Lista de servidores Lavalink públicos (origem: gist do upstream, com crédito no cabeçalho) | — |
+| `docs/guides/` | Guias de hospedagem e configuração adaptados da wiki/gist do upstream | — |
+| `tests/` | Testes automatizados (pytest); `tests/test_branding.py` protege identidade e créditos | — |
 
 ## 11. Implantação
 

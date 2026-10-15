@@ -8,6 +8,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Identidade EmpireMuse (Fase 1)**:
+  - `utils/branding.py`: fonte única de identidade e URLs (nome, repositório, espelhos, upstream e `asset_url`).
+  - `assets/`: 51 imagens re-hospedadas (com `SHA256SUMS`); origem no upstream e serviços de terceiros, com substituição por arte própria planejada.
+  - `data/lavalink_servers.ini`: lista de servidores Lavalink (origem: gist do upstream, com crédito no cabeçalho).
+  - `docs/guides/`: 9 arquivos (índice e 8 guias) adaptados da wiki/gist do MuseHeart-MusicBot, com nota de origem em cada página.
+  - `CREDITS.md`: créditos ao MuseHeart-MusicBot (zRitsu, GPL-2.0) e lista de recursos espelhados.
+  - `tests/test_branding.py`, `pyproject.toml` (mínimo, apenas pytest) e `requirements-dev.txt`: primeiros testes automatizados, que protegem a identidade e os créditos ao upstream.
+- **Lista de servidores Lavalink**: `utils/music/lavalink_server_list.py` (validação da lista baixada, com fallback para `data/lavalink_servers.ini`); testes `tests/test_lavalink_server_list.py` e `tests/test_music_url_filter.py`.
 - **Governança de Agentes e Instruções Centrais**:
   - `AGENTS.md`: Fonte única de instruções, mapa de arquitetura, protocolo de comunicação no Maestri, regras de precedência e definição de pronto (DoD) para todos os agentes autônomos.
   - `CLAUDE.md`: Configuração concisa para o Claude Code importando `@AGENTS.md`, integrando o plugin Everything Claude Code (`ecc@ecc`) com comandos e subagentes recomendados.
@@ -35,6 +43,22 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `docs/architecture.md`: Mapeamento aprofundado dos módulos, ciclo de vida do `BotPool`, fluxo de áudio com Lavalink v3/v4 e persistência.
   - `docs/development.md`: Guia passo a passo de setup com `uv`, variáveis de ambiente, execução do bot e Lavalink local.
   - `docs/known-issues.md`: Catálogo de 31 problemas conhecidos, inconsistências de dependências e débitos técnicos para a fase de saneamento.
+
+### Alterado
+- **Identidade EmpireMuse no bot**: nome e links do projeto passam a vir de `utils/branding.py`; o `/about` aponta para o repositório do EmpireMuse e mantém a linha de crédito ao MuseHeart-MusicBot (zRitsu); o aviso de licença (GPL-2.0) e os links do app de RPC foram atualizados.
+- **Atualização do código**: `SOURCE_REPO` e os scripts de atualização (`source_update.sh`, `source_quick_update.sh`) apontam para `DiscordEmpireHub/EmpireMuse`.
+- **Lavalink**: `Lavalink.jar` e `application.yml` passam a ser baixados do espelho `DiscordEmpireHub/LL-binaries` (release `0.0.1`); a lista de servidores padrão é `data/lavalink_servers.ini`.
+- **Documentação**: `README.md` reescrito para o EmpireMuse (imagens em `assets/`, guias em `docs/guides/`, créditos preservados); `docs/architecture.md`, `docs/development.md` e `AGENTS.md` atualizados (mapa do repositório, testes com pytest, roster e protocolo com o orquestrador `MAESTRO`).
+- **Lista de servidores Lavalink**: `data/lavalink_servers.ini` revisada (1 servidor removido).
+- **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
+
+### Corrigido
+- **Lista de servidores Lavalink**: o download agora valida a resposta (status e formato), usa timeout e recorre ao arquivo local em caso de falha.
+- **Link do commit** no `/about` e no painel não inclui mais `.git`.
+- **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
+
+### Adiado
+- **Deploy** (Render, Discloud, SquareCloud, Replit e Gitpod): arquivos de configuração e referências ainda não foram revisados para o EmpireMuse; ficam para uma fase posterior.
 
 ### Nota de Origem
 O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), originalmente desenvolvido por **zRitsu** e disponibilizado sob a licença **GPL-2.0**.

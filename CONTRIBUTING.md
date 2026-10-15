@@ -88,7 +88,7 @@ O **EmpireMuse** é um software livre distribuído sob os termos da **GNU Genera
 
 O desenvolvimento deste repositório adota uma governança de inteligência artificial assistida por múltiplos agentes orquestrados na plataforma **Maestri**, operando sob as diretrizes do framework Everything Claude Code (ECC).
 
-- As decisões estratégicas, divisão de escopo e aprovações são conduzidas pelo **Maestro Orquestrador**.
+- As decisões estratégicas, divisão de escopo e aprovações são conduzidas pelo **MAESTRO**.
 - Funções especializadas (como Especialista de Backend, Caçador de Vulnerabilidades/AppSec, Guardião de Git/Docs e Engenheiro de Tarefas Repetitivas) operam de forma isolada e cooperativa.
 - Para entender as responsabilidades de cada papel, regras operacionais e comandos do ecossistema de agentes, consulte o documento:
 
