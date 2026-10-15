@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import logging
+import re
 from json import load
 from os import environ
 
@@ -6,6 +8,29 @@ import disnake
 from dotenv import dotenv_values
 
 from utils import branding
+
+logger = logging.getLogger(__name__)
+
+_HEX_COLOR_REGEX = re.compile(r"#?([0-9a-fA-F]{6})")
+_EMPTY_COLOR_VALUES = ("", "none")
+
+
+def parse_embed_color(value: str | None) -> disnake.Color | None:
+    """Converte um hex de 6 dígitos (com ou sem '#') em `disnake.Color`.
+
+    `None`, vazio e 'none' retornam `None` sem aviso (usa a cor do cargo do bot);
+    valor inválido retorna `None` e registra um aviso, sem incluir o valor no log.
+    """
+    if value is None or str(value).strip().lower() in _EMPTY_COLOR_VALUES:
+        return None
+
+    match = _HEX_COLOR_REGEX.fullmatch(str(value).strip())
+    if not match:
+        logger.warning("EMBED_COLOR inválido: use um hex de 6 dígitos (ex.: 8B5CF6). Usando a cor do cargo do bot.")
+        return None
+
+    return disnake.Color(int(match.group(1), 16))
+
 
 bools = {
     "true": True,
@@ -18,7 +43,7 @@ DEFAULT_CONFIG = {
     "AUTO_SYNC_COMMANDS": True,
     "OWNER_IDS": "",
     "COMMAND_LOG": False,
-    "EMBED_COLOR": None,
+    "EMBED_COLOR": branding.EMBED_COLOR_HEX,
     "BOT_ADD_REMOVE_LOG": '',
     "BOT_ADD_REMOVE_LOG_CHANNEL_ID": 0,
     "ERROR_REPORT_WEBHOOK": '',
@@ -26,7 +51,7 @@ DEFAULT_CONFIG = {
     "INTERACTION_COMMAND_ONLY": False,
     "PRESENCE_INTERVAL": 900,
     "SOURCE_REPO": branding.SOURCE_REPO_GIT,
-    "SUPPORT_SERVER": "",
+    "SUPPORT_SERVER": branding.SUPPORT_SERVER_URL,
     "ADDITIONAL_BOT_IDS": "",
     "INVITE_PERMISSIONS": 332892794064,
     "ENABLE_LOGGER": False,
@@ -184,10 +209,7 @@ def load_config():
     except:
         pass
 
-    try:
-        CONFIG["EMBED_COLOR"] = disnake.Color(int(CONFIG["EMBED_COLOR"], 16))
-    except:
-        CONFIG["EMBED_COLOR"] = None
+    CONFIG["EMBED_COLOR"] = parse_embed_color(CONFIG["EMBED_COLOR"])
 
     # converter strings que requer número int.
     for i in [
