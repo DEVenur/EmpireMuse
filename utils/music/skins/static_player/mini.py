@@ -5,6 +5,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import time_format, fix_characters, get_button_style, music_source_image
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -16,7 +17,7 @@ class MiniStaticSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3] + "_static"
-        self.preview = "https://i.ibb.co/F3NTnPc/mini-static-skin.png"
+        self.preview = asset_url("skin_static_mini_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False
@@ -50,7 +51,7 @@ class MiniStaticSkin:
         else:
             embed.set_author(
                 name="Em Pausa:",
-                icon_url="https://cdn.discordapp.com/attachments/480195401543188483/896013933197013002/pause.png"
+                icon_url=asset_url("player_pause_icon.png")
             )
 
         if player.current.track_loops:
@@ -81,7 +82,7 @@ class MiniStaticSkin:
             embed.add_field(name=f"{player.command_log_emoji} **⠂Última Interação:**",
                             value=f"{player.command_log}", inline=False)
 
-        embed.set_image(url=player.current.thumb or "https://media.discordapp.net/attachments/480195401543188483/987830071815471114/musicequalizer.gif")
+        embed.set_image(url=player.current.thumb or asset_url("player_equalizer_2.gif"))
 
         if queue_size:
 

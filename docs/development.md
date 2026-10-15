@@ -108,17 +108,26 @@ de nodes são somadas (`utils/client.py:582-628`):
 |---|---|
 | **`lavalink.ini`** | Copie `lavalink.ini.example` para `lavalink.ini` (ignorado pelo Git). Cada seção é um node (`host`, `port`, `password`, `secure`, `region`, `search_providers`, …). Use `%%` para escrever `%` em valores. Só é lido quando `AUTO_DOWNLOAD_LAVALINK_SERVERLIST` é falso (`utils/client.py:600-601`). |
 | **`LAVALINK_NODE_<N>`** | Variável (ou chave do `.env`) com um JSON por node, p.ex. `LAVALINK_NODE_1='{"identifier": "meu", "host": "...", "port": 443, "password": "...", "secure": true}'`. O JSON é usado como está, sem valores padrão: informe `identifier`, `host`, `port` e `password` (`utils/client.py:603-609`; `check_node` em `utils/client.py:321-371`). |
-| **Lavalink local** | `RUN_LOCAL_LAVALINK=true`, ou nenhum node configurado (`utils/client.py:630`). Baixa `Lavalink.jar` e `application.yml` (URL em `LAVALINK_FILE_URL`) para a raiz do projeto e o JDK se não houver Java 17+. Requer rede e a RAM definida em `LAVALINK_RAM_LIMIT` (MB). O node se chama `LOCAL` e escuta em `127.0.0.1:${SERVER_PORT:-8090}`. |
-| **Lista pública** | `AUTO_DOWNLOAD_LAVALINK_SERVERLIST=true` baixa a lista de nodes públicos (`get_lavalink_servers`, com `LAVALINK_SERVER_LIST` como alternativa). Nodes públicos são instáveis e não devem ser usados com dados sensíveis. |
+| **Lavalink local** | `RUN_LOCAL_LAVALINK=true`, ou nenhum node configurado (`utils/client.py:630`). Baixa `Lavalink.jar` e `application.yml` (URL em `LAVALINK_FILE_URL`; por padrão o espelho [DiscordEmpireHub/LL-binaries](https://github.com/DiscordEmpireHub/LL-binaries) `0.0.1`, constantes `LAVALINK_JAR_URL`/`LAVALINK_APPLICATION_YML_URL` em `utils/branding.py`) para a raiz do projeto e o JDK se não houver Java 17+. Requer rede e a RAM definida em `LAVALINK_RAM_LIMIT` (MB). O node se chama `LOCAL` e escuta em `127.0.0.1:${SERVER_PORT:-8090}`. |
+| **Lista pública** | `AUTO_DOWNLOAD_LAVALINK_SERVERLIST=true` baixa a lista de nodes públicos (`get_lavalink_servers`, com `LAVALINK_SERVER_LIST` como alternativa; o padrão é `data/lavalink_servers.ini` do repositório, `LAVALINK_SERVER_LIST_URL` em `utils/branding.py`). Nodes públicos são instáveis e não devem ser usados com dados sensíveis. |
+
+A lista baixada é validada (status 200 e formato INI com `host`, `port` e `password` em cada seção; `utils/music/lavalink_server_list.py`). Se o download falhar ou a resposta for inválida, o bot usa o arquivo local `data/lavalink_servers.ini`.
 
 Dica: em máquinas de desenvolvimento, `RUN_LOCAL_LAVALINK=true` é o caminho mais previsível; os arquivos
 baixados (`Lavalink.jar`, `application.yml`, `plugins/`, `.tempjar/`, `.java/`) ficam na raiz e não devem
 ser commitados.
 
-## 6. Ferramentas recomendadas (a configurar)
+## 6. Testes e ferramentas
 
-O projeto **não tem** `pyproject.toml`, linter nem testes hoje (~34,5 mil linhas, zero testes). Padrão
-alvo da refatoração (ainda não configurado):
+Os testes automatizados ficam em `tests/` (hoje: `tests/test_branding.py`, que protege a identidade do
+projeto e os créditos ao upstream). O `pyproject.toml` é mínimo e contém apenas a configuração do pytest.
+
+```bash
+uv pip install -r requirements-dev.txt   # pytest 9.1.1 e pytest-asyncio
+.venv/bin/python -m pytest               # Windows: .venv\Scripts\python -m pytest
+```
+
+Padrão alvo da refatoração (demais ferramentas ainda **não** configuradas):
 
 | Ferramenta | Uso |
 |---|---|
@@ -127,7 +136,7 @@ alvo da refatoração (ainda não configurado):
 | `mypy` ou `pyright` | Tipagem gradual nos módulos novos. |
 | `uv` | Dependências e *lockfile* quando o projeto migrar para `pyproject.toml`. |
 
-Até lá, valide mudanças com `python -m compileall -q .` e testes manuais com um bot de teste em um
+Além dos testes, valide mudanças com `python -m compileall -q .` e testes manuais com um bot de teste em um
 servidor de teste (`TEST_GUILDS_*`). Convenções de código: `.claude/rules/empiremuse/python-disnake.md`.
 
 ## 7. Regenerar o pacote ECC dos agentes Antigravity

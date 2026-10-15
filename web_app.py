@@ -16,6 +16,7 @@ import tornado.websocket
 from packaging import version
 
 from config_loader import load_config
+from utils import branding
 
 if TYPE_CHECKING:
     from utils.client import BotPool
@@ -119,8 +120,8 @@ class IndexHandler(tornado.web.RequestHandler):
                      "getElementById(\"url\").innerHTML = window.location.href.replace(\".replit.dev\", \".replit.dev:443\").replace(\"http\", \"ws\")" \
                      ".replace(\"https\", \"wss\") + \"ws\"}</script></body>"
 
-        msg += f"<p><a href=\"https://github.com/zRitsu/DC-MusicBot-RPC" \
-              f"/releases\" target=\"_blank\">Baixe o app de rich presence aqui.</a></p>Link para adicionar no app " \
+        msg += f"<p><a href=\"{branding.RPC_APP_RELEASES_URL}\" " \
+              f"target=\"_blank\">Baixe o app de rich presence aqui.</a></p>Link para adicionar no app " \
               f"de RPC: {ws_url}"
 
         if self.config["ENABLE_RPC_AUTH"]:

@@ -5,6 +5,8 @@ from os import environ
 import disnake
 from dotenv import dotenv_values
 
+from utils import branding
+
 bools = {
     "true": True,
     "false": False,
@@ -23,7 +25,7 @@ DEFAULT_CONFIG = {
     "AUTO_ERROR_REPORT_WEBHOOK": '',
     "INTERACTION_COMMAND_ONLY": False,
     "PRESENCE_INTERVAL": 900,
-    "SOURCE_REPO": "https://github.com/zRitsu/MuseHeart-MusicBot.git",
+    "SOURCE_REPO": branding.SOURCE_REPO_GIT,
     "SUPPORT_SERVER": "",
     "ADDITIONAL_BOT_IDS": "",
     "INVITE_PERMISSIONS": 332892794064,
@@ -44,7 +46,7 @@ DEFAULT_CONFIG = {
     ### Sistema de música ###
     #########################
     "AUTO_DOWNLOAD_LAVALINK_SERVERLIST": False,
-    "LAVALINK_SERVER_LIST": "https://gist.githubusercontent.com/zRitsu/c3511e1da0440b94c126769dd40c9d91/raw/lavalink.ini",
+    "LAVALINK_SERVER_LIST": branding.LAVALINK_SERVER_LIST_URL,
     "LAVALINK_RECONNECT_RETRIES": 30,
     "DEFAULT_SKIN": "default",
     "DEFAULT_STATIC_SKIN": "default",
@@ -100,7 +102,7 @@ DEFAULT_CONFIG = {
     "LAVALINK_INITIAL_RAM": 30,
     "LAVALINK_RAM_LIMIT": 120,
     "LAVALINK_CPU_CORES": 2,
-    "LAVALINK_FILE_URL": "https://github.com/zRitsu/LL-binaries/releases/download/0.0.1/Lavalink.jar",
+    "LAVALINK_FILE_URL": branding.LAVALINK_JAR_URL,
     "SEARCH_PROVIDERS": "scsearch",
     "PREFER_YOUTUBE_NATIVE_PLAYBACK": True,
     "ONLY_USE_NATIVE_SEARCH_PROVIDERS": True,

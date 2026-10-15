@@ -9,6 +9,8 @@ from typing import Union, TYPE_CHECKING
 
 import disnake
 
+from utils.branding import asset_url
+
 if TYPE_CHECKING:
     pass
 
@@ -138,22 +140,22 @@ def percentage(part, whole):
     return int((part * whole) / 100.0)
 
 sources = {
-    "deezer": "https://iili.io/d1Kjip1.png",
-    "soundcloud": "https://iili.io/d1KjPkP.md.png",
-    "spotify": "https://iili.io/d1KVvlS.png",
-    "youtube": "https://iili.io/d1KjLTF.md.png",
-    "applemusic": "https://iili.io/d1Kj6YB.md.png",
-    "twitch": "https://cdn3.iconfinder.com/data/icons/popular-services-brands-vol-2/512/twitch-512.png",
-    "jiosaavn": "https://iili.io/d1KjUEx.png",
-    "tidal": "https://iili.io/d1KjgrQ.png",
-    "youtubemusic": "https://iili.io/d1Kj42V.png",
-    "last.fm": "https://cdn.discordapp.com/emojis/1278883704097341541.png",
+    "deezer": asset_url("provider_deezer_icon.png"),
+    "soundcloud": asset_url("provider_soundcloud_icon.png"),
+    "spotify": asset_url("provider_spotify_icon.png"),
+    "youtube": asset_url("provider_youtube_icon.png"),
+    "applemusic": asset_url("provider_applemusic_icon.png"),
+    "twitch": asset_url("provider_twitch_icon.png"),
+    "jiosaavn": asset_url("provider_jiosaavn_icon.png"),
+    "tidal": asset_url("provider_tidal_icon.png"),
+    "youtubemusic": asset_url("provider_youtubemusic_icon.png"),
+    "last.fm": asset_url("provider_lastfm_emoji.png"),
 }
 
 def music_source_image(sourcename):
     return sources.get(
         sourcename,
-        "https://cdn.discordapp.com/attachments/480195401543188483/895862881105616947/music_equalizer.gif"
+        asset_url("player_equalizer_1.gif")
     )
 
 

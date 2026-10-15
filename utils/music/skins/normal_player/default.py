@@ -5,6 +5,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -16,7 +17,7 @@ class DefaultSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://i.ibb.co/4PkWyqb/image.png"
+        self.preview = asset_url("skin_normal_default_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = True
@@ -47,7 +48,7 @@ class DefaultSkin:
         else:
             embed.set_author(
                 name="Em Pausa:",
-                icon_url="https://cdn.discordapp.com/attachments/480195401543188483/896013933197013002/pause.png"
+                icon_url=asset_url("player_pause_icon.png")
             )
 
         if player.current_hint:
@@ -55,7 +56,7 @@ class DefaultSkin:
         else:
             embed.set_footer(
                 text=str(player),
-                icon_url="https://i.ibb.co/QXtk5VB/neon-circle.gif"
+                icon_url=asset_url("player_loading_neon_circle.gif")
             )
 
         player.mini_queue_feature = True
@@ -102,7 +103,7 @@ class DefaultSkin:
 
         txt += f"{vc_txt}\n"
 
-        bar = "https://cdn.discordapp.com/attachments/554468640942981147/1127294696025227367/rainbow_bar3.gif"
+        bar = asset_url("ui_rainbow_bar_3.gif")
 
         if player.command_log:
             txt += f"```ansi\n [34;1mÚltima Interação:[0m```**┕ {player.command_log_emoji} ⠂**{player.command_log}\n"

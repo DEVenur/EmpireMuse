@@ -10,6 +10,8 @@ from contextlib import suppress
 
 import requests
 
+from utils import branding
+
 
 def download_file(url, filename):
 
@@ -227,7 +229,7 @@ def run_lavalink(
 
     for filename, url in (
         ("Lavalink.jar", lavalink_file_url),
-        ("application.yml", "https://github.com/zRitsu/LL-binaries/releases/download/0.0.1/application.yml")
+        ("application.yml", branding.LAVALINK_APPLICATION_YML_URL)
     ):
         if download_file(url, filename):
             clear_plugins = True

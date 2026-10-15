@@ -15,6 +15,8 @@ import disnake
 import humanize
 from disnake.ext import commands
 
+from utils import branding
+from utils.branding import asset_url
 from utils.db import DBModel
 from utils.music.converters import perms_translations, time_format
 from utils.music.errors import GenericError, NoVoice
@@ -1187,7 +1189,7 @@ class MusicSettings(commands.Cog):
                         "```ansi\n[33;1mModo Fixo (Song-Request):[0m``` " + ", ".join(f"[`[{s}]`]({bot.player_static_skins[s].preview})" for s in static_skin_list) +
                         "\n\n`Nota: No modo global a skin será aplicada globalmente em todos os bots.`",
             colour=bot.get_color(guild.me)
-        ).set_image("https://cdn.discordapp.com/attachments/554468640942981147/1082887587770937455/rainbow_bar2.gif")
+        ).set_image(asset_url("ui_rainbow_bar_2.gif"))
 
         try:
             if bot.user.id != self.bot.user.id:
@@ -1384,7 +1386,7 @@ class MusicSettings(commands.Cog):
                             f"Cuidado! Caso não tenha essa opção significa que o recurso não está disponível no seu "
                             f"servidor e não recomendo prosseguir pra evitar dar acesso permanente ao membro que usar "
                             f"o botão ou evitar problemas de permissões etc."
-            ).set_image(url="https://cdn.discordapp.com/attachments/554468640942981147/1108943648508366868/image.png").
+            ).set_image(url=asset_url("tutorial_guest_invite_guide.png")).
             set_footer(text="Nota: crie um convite sem limitações como: datas para expirar, quantidade de usos ou "
                             "apenas para um usuário usar."),
             components=[disnake.ui.Button(label="Enviar convite", custom_id=f"listen_along_{ctx.author.id}")],
@@ -1839,7 +1841,7 @@ class RPCCog(commands.Cog):
             color=self.bot.get_color(),
             description="**Mini-guia para usar o app para exibir a música que você está ouvindo via RPC:\n\n"
                         "Faça o download do app (musicbot_rpc.zip) "
-                        "[aqui](https://github.com/zRitsu/Discord-MusicBot-RPC/releases).\n\n"
+                        f"[aqui]({branding.RPC_APP_RELEASES_URL}).\n\n"
                         "Extraia o musicbot_rpc.zip e na pasta abra o musicbot_rpc." \
                         "Adicione o link do websocket abaixo no app (aba: Socket Settings):** ```ansi\n" \
                         f"{(self.bot.config['RPC_PUBLIC_URL'] or self.bot.config['RPC_SERVER']).replace('$PORT', os.environ.get('PORT', '80'))}```"

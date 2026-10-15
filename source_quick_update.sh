@@ -7,7 +7,7 @@ if  [ ! -d ".git" ] || [ -z "$(git remote -v)" ]; then
   git --work-tree=. init
 
   if [ -z "$SOURCE_REPO" ]; then
-    git --work-tree=. remote add origin https://github.com/zRitsu/MuseHeart-MusicBot.git
+    git --work-tree=. remote add origin https://github.com/DiscordEmpireHub/EmpireMuse.git
   else
     git --work-tree=. remote add origin $SOURCE_REPO
   fi

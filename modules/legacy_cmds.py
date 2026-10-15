@@ -12,7 +12,7 @@ from zipfile import ZipFile
 import disnake
 import dotenv
 import humanize
-from aiohttp import ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 from disnake.ext import commands
 from disnake.http import Route
 
@@ -24,6 +24,7 @@ from utils.music.checks import check_voice, check_requester_channel, can_connect
 from utils.music.converters import URL_REG
 from utils.music.errors import GenericError, NoVoice
 from utils.music.interactions import SelectBotVoice
+from utils.music.lavalink_server_list import validated_server_list
 from utils.music.models import LavalinkPlayer
 from utils.others import CustomContext, string_to_file, token_regex, CommandArgparse, \
     select_bot_pool
@@ -529,7 +530,7 @@ class Owner(commands.Cog):
                 out_git += f"{e}\n"
 
         self.bot.pool.commit = (await run_command("git rev-parse HEAD")).strip("\n")
-        self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"][:-4]
+        self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"].removesuffix(".git")
 
         return out_git
 
@@ -543,7 +544,7 @@ class Owner(commands.Cog):
             raise GenericError("Não há repositorio iniciado no diretório do bot...\nNota: Use o comando update.")
 
         if not self.bot.pool.remote_git_url:
-            self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"][:-4]
+            self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"].removesuffix(".git")
 
         git_log = []
 
@@ -1127,11 +1128,17 @@ class Owner(commands.Cog):
         self.owner_view = PanelView(self.bot)
 
     async def download_lavalink_serverlist(self):
-        async with ClientSession() as session:
-            async with session.get(self.bot.config["LAVALINK_SERVER_LIST"]) as r:
-                ini_file = await r.read()
-                with open("lavalink.ini", "wb") as f:
-                    f.write(ini_file)
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+                async with session.get(self.bot.config["LAVALINK_SERVER_LIST"], allow_redirects=False) as r:
+                    ini_file = validated_server_list(r.status, await r.read())
+        except (ClientError, asyncio.TimeoutError):
+            traceback.print_exc()
+            print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
+            ini_file = validated_server_list(None, None)
+
+        with open("lavalink.ini", "wb") as f:
+            f.write(ini_file)
 
 def setup(bot: BotCore):
     bot.add_cog(Owner(bot))

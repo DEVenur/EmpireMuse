@@ -3,6 +3,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, get_button_style, music_source_image
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -14,7 +15,7 @@ class MiniPlayer:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://i.ibb.co/R6668sT/image.png"
+        self.preview = asset_url("skin_normal_miniplayer_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False

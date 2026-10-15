@@ -4,6 +4,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import time_format, fix_characters, get_button_style, music_source_image
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -15,7 +16,7 @@ class MiniSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://i.ibb.co/ZBTbdvT/mini.png"
+        self.preview = asset_url("skin_normal_mini_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = True
@@ -49,7 +50,7 @@ class MiniSkin:
         else:
             embed.set_author(
                 name="Em Pausa:",
-                icon_url="https://cdn.discordapp.com/attachments/480195401543188483/896013933197013002/pause.png"
+                icon_url=asset_url("player_pause_icon.png")
             )
 
         if player.current.track_loops:
@@ -92,10 +93,10 @@ class MiniSkin:
                         for n, t in (enumerate(itertools.islice(player.queue, 5)))
                     )
                 )
-                embed_queue.set_image(url="https://cdn.discordapp.com/attachments/554468640942981147/1082887587770937455/rainbow_bar2.gif")
+                embed_queue.set_image(url=asset_url("ui_rainbow_bar_2.gif"))
 
         embed.set_thumbnail(url=player.current.thumb)
-        embed.set_image(url="https://cdn.discordapp.com/attachments/554468640942981147/1082887587770937455/rainbow_bar2.gif")
+        embed.set_image(url=asset_url("ui_rainbow_bar_2.gif"))
 
         if player.current_hint:
             embed.set_footer(text=f"💡 Dica: {player.current_hint}")

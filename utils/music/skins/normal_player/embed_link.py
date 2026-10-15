@@ -5,6 +5,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import time_format, fix_characters, get_button_style
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -16,7 +17,7 @@ class EmbedLinkSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://media.discordapp.net/attachments/554468640942981147/1101330475164893244/Discord_N1QhBDXtar.png"
+        self.preview = asset_url("skin_normal_embed_link_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False

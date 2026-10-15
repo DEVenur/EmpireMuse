@@ -23,6 +23,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | Cliente Lavalink (`wavelink/`) e Lavalink local | KI-23 … KI-24 | médio |
 | Servidor web / RPC (robustez) | KI-25 … KI-26 | médio |
 | Qualidade, testes e modernização | KI-27 … KI-31 | alto |
+| Identidade, guias e testes de marca (Fase 1) | KI-32 … KI-35 | baixo |
 
 ## Instalação e implantação
 
@@ -94,11 +95,20 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-27 | repositório | **Nenhum teste automatizado** em ~34,5 mil linhas de Python. | Qualquer refatoração é feita sem rede de proteção. | alto |
+| KI-27 | `tests/` | **Cobertura mínima de testes**: existem apenas testes de identidade/guarda de marca (`tests/test_branding.py`), do filtro de URLs do Discord e do carregador da lista Lavalink. Faltam testes de caracterização do núcleo (player, filas, comandos, banco) em ~34,5 mil linhas de Python; planejados para a fase de saneamento. | Refatorações do núcleo continuam sem rede de proteção. | alto |
 | KI-28 | `modules/`, `utils/`, `wavelink/`, `web_app.py`, `config_loader.py` | ~365 ocorrências de `except:` nu. | Erros reais são engolidos; inclui `KeyboardInterrupt`/cancelamentos de tasks. | médio |
 | KI-29 | `modules/music.py` (7.876 linhas), `utils/music/models.py` (3.832), `utils/music/interactions.py` (3.310) | Arquivos muito grandes e com muitas responsabilidades. | Revisão e teste difíceis. | médio |
 | KI-30 | `requirements.txt:1`, `requirements.txt:11` | `disnake` e `jishaku` fixados em commits Git (o `disnake` é anterior à 2.12.0; há 2.12.2 estável). Demais pacotes sem versão fixa e sem *lockfile*. | Builds não reproduzíveis e dependência de repositórios Git externos. | médio |
 | KI-31 | `utils/client.py:805`, `utils/client.py:856` | Uso de `datetime.datetime.utcnow()` (obsoleto desde o Python 3.12). | Avisos de depreciação e remoção futura. | baixo |
+
+## Identidade, guias e testes de marca (Fase 1)
+
+| ID | Local | Problema | Impacto | Sev. |
+|---|---|---|---|---|
+| KI-32 | `docs/guides/*.md` | Os guias ainda usam capturas de tela hospedadas no CDN do Discord e no GitHub do upstream. | As imagens podem expirar ou sumir. Migrar para `assets/` ou arte própria. | baixo |
+| KI-33 | `utils/client.py` (~669) | A URL do remote é extraída por fatiamento fixo da saída de `git remote -v` (assume o remote `origin`). | Resultado incorreto com outro nome de remote ou formato de saída. Trocar por *parsing* por campos. | baixo |
+| KI-34 | `tests/test_branding.py` | As varreduras estáticas dependem de `git ls-files` (exigem `.git`) e usam correspondência por substring. | Falham fora de um clone Git e podem gerar falsos positivos/negativos. Revisar no saneamento. | baixo |
+| KI-35 | `utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Assets e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com` da branch `main`. | Forks de terceiros continuam apontando para a DiscordEmpireHub até ajustarem `utils/branding.py` (informativo). | baixo |
 
 ## Como usar este backlog
 

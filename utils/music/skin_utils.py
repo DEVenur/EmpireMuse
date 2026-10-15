@@ -7,6 +7,7 @@ from typing import Optional, TYPE_CHECKING, Union
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, time_format
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ def replaces(
             requester_global_name = "Desconhecido..."
             requester_display_name = "Desconhecido..."
             requester_mention = f"<@{player.current.requester}>"
-            requester_avatar = "https://i.ibb.co/LNpG5TM/unknown.png"
+            requester_avatar = asset_url("player_requester_avatar_unknown.png")
 
         txt = track_title_format(
             track_title=player.current.title,
@@ -104,7 +105,7 @@ def replaces(
             track_duration=track['duration'],
             data=txt
         ). \
-            replace('{track.thumb}', "https://img.youtube.com/vi/2vFA0HL9kTk/mqdefault.jpg"). \
+            replace('{track.thumb}', asset_url("skin_preview_placeholder_yt.jpg")). \
             replace('{playlist.name}', "🎵 DV 🎶"). \
             replace('{playlist.url}', "https://www.youtube.com/playlist?list=PLKlXSJdWVVAD3iztmL2vFVrwA81sRkV7n"). \
             replace('{player.loop.mode}', "Música Atual"). \

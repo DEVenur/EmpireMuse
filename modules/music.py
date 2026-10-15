@@ -26,6 +26,7 @@ from disnake.ext import commands
 from yt_dlp import YoutubeDL
 
 import wavelink
+from utils.branding import asset_url
 from utils.client import BotCore
 from utils.db import DBModel
 from utils.music.audio_sources.deezer import deezer_regex
@@ -47,6 +48,21 @@ from utils.others import check_cmd, send_idle_embed, CustomContext, PlayerContro
 
 sc_recommended = re.compile(r"https://soundcloud\.com/.*/recommended$")
 sc_profile_regex = re.compile(r"<?https://soundcloud\.com/[a-zA-Z0-9_-]+>?$")
+
+DISCORD_CDN_HOSTS = frozenset({"cdn.discordapp.com", "media.discordapp.net"})
+
+
+DISCORD_ATTACHMENT_PATH_PREFIXES = ("/attachments/", "/ephemeral-attachments/")
+
+
+def is_discord_attachment_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").rstrip(".")
+    except ValueError:
+        return False
+    return hostname in DISCORD_CDN_HOSTS and parsed.path.startswith(DISCORD_ATTACHMENT_PATH_PREFIXES)
+
 
 class Music(commands.Cog):
 
@@ -426,7 +442,7 @@ class Music(commands.Cog):
                                     "áudio no servidor.",
                         color=self.bot.get_color(me),
                     ).set_image(
-                        url="https://cdn.discordapp.com/attachments/554468640942981147/1012533546386210956/unknown.png"
+                        url=asset_url("tutorial_server_deafen_guide.png")
                     ), delete_after=20
                 )
 
@@ -1444,7 +1460,7 @@ class Music(commands.Cog):
                 query = urls[0]
                 source = False
 
-                if not self.bot.config["ENABLE_DISCORD_URLS_PLAYBACK"] and "cdn.discordapp.com/attachments/" in query:
+                if not self.bot.config["ENABLE_DISCORD_URLS_PLAYBACK"] and is_discord_attachment_url(query):
                     raise GenericError("**O suporte a links do discord está desativado.**")
 
                 if query.startswith("https://www.youtube.com/results"):
@@ -1818,7 +1834,7 @@ class Music(commands.Cog):
                 if queue_loaded:
                     log_text = f"{inter.author.mention} adicionou `{len(tracks)} músicas` via: {query[7:]}."
                     title = f"Usando músicas salvas de {inter.author.display_name}"
-                    icon_url = "https://i.ibb.co/51yMNPw/floppydisk.png"
+                    icon_url = asset_url("ui_floppy_save_icon.png")
 
                     desc = ""
 
