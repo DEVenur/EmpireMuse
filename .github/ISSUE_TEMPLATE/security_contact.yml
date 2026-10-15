@@ -1,0 +1,42 @@
+name: "Solicitação de contato de segurança"
+description: "Solicite um canal privado com os mantenedores para reporte responsável de vulnerabilidades."
+title: "[Segurança]: Solicitação de contato de segurança"
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### ⚠️ ATENÇÃO: NÃO INCLUA DETALHES TÉCNICOS NESTA ISSUE PÚBLICA
+
+        **Esta issue é pública e visível para qualquer pessoa.**
+        - **NUNCA** inclua aqui detalhes técnicos da vulnerabilidade, passos de exploração, código de prova de conceito (PoC) ou logs do sistema.
+        - Utilize este formulário **exclusivamente** para solicitar um canal privado com a equipe de mantenedores caso o botão nativo do GitHub (*Report a vulnerability*) não esteja disponível na aba Security.
+        - Um mantenedor responderá indicando o canal seguro para o envio do relatório técnico confidencial.
+
+  - type: textarea
+    id: contact_channel
+    attributes:
+      label: Canal Privado Preferencial para Contato
+      description: 'Informe como os mantenedores podem contatar você em privado (ex.: usuário do Discord para DM, identificador seguro). NÃO envie senhas ou tokens!'
+      placeholder: 'Prefiro contato privado via Discord (usuário: @...) ou...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: area
+    attributes:
+      label: Componente ou Área Afetada (Apenas Alto Nível)
+      description: 'Identifique apenas a área genérica sem expor vetores de ataque (ex.: "servidor web", "dependências").'
+      placeholder: 'Área genérica afetada...'
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmação de Segurança
+      options:
+        - label: "Confirmo que não incluí detalhes técnicos da vulnerabilidade"
+          required: true
+        - label: "Compreendo que esta issue é pública e que os detalhes da falha só serão discutidos em canal privado"
+          required: true

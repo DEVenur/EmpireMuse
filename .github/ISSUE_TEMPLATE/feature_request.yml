@@ -1,0 +1,55 @@
+name: Sugestão de Funcionalidade
+description: Sugira uma ideia, melhoria ou nova funcionalidade para o EmpireMuse.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Agradecemos por sugerir melhorias para o EmpireMuse!
+        Antes de criar esta solicitação, verifique se a funcionalidade já não foi proposta em issues abertas ou fechadas.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Sua sugestão está relacionada a um problema?
+      description: 'Uma descrição clara e concisa de qual é a limitação ou problema atual (ex.: "É frustrante quando...").'
+      placeholder: Eu sempre fico confuso quando...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solução Proposta
+      description: Uma explicação detalhada do que você gostaria que acontecesse e como a funcionalidade deveria se comportar.
+      placeholder: Gostaria que o bot oferecesse um comando ou botão para...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas Consideradas
+      description: Descreva quaisquer soluções ou recursos alternativos que você já considerou ou testou.
+      placeholder: Tentei usar a integração X, mas não atendeu porque...
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto Adicional
+      description: Adicione qualquer outro contexto, mockups, diagramas ou capturas de tela sobre a solicitação.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmações
+      options:
+        - label: Pesquisei se a funcionalidade já havia sido solicitada anteriormente.
+          required: true
+        - label: Entendo que a funcionalidade deve respeitar a licença GPL-2.0 e o escopo de bot de música do projeto.
+          required: true
