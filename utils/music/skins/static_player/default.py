@@ -5,6 +5,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -15,7 +16,7 @@ class DefaultStaticSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3] + "_static"
-        self.preview = "https://i.ibb.co/fDzTqtV/default-static-skin.png"
+        self.preview = asset_url("skin_static_default_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False
@@ -44,7 +45,7 @@ class DefaultStaticSkin:
         else:
             embed.set_author(
                 name="Em Pausa:",
-                icon_url="https://cdn.discordapp.com/attachments/480195401543188483/896013933197013002/pause.png"
+                icon_url=asset_url("player_pause_icon.png")
             )
 
         if player.current_hint:
@@ -52,7 +53,7 @@ class DefaultStaticSkin:
         else:
             embed.set_footer(
                 text=str(player),
-                icon_url="https://i.ibb.co/QXtk5VB/neon-circle.gif"
+                icon_url=asset_url("player_loading_neon_circle.gif")
             )
 
         queue_img = ""
@@ -194,7 +195,7 @@ class DefaultStaticSkin:
 
         embed.description = txt
 
-        embed.set_image(url=player.current.thumb or "https://media.discordapp.net/attachments/480195401543188483/987830071815471114/musicequalizer.gif")
+        embed.set_image(url=player.current.thumb or asset_url("player_equalizer_2.gif"))
 
         data["embeds"] = [embed_queue, embed] if embed_queue else [embed]
 

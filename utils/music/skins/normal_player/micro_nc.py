@@ -3,6 +3,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters
 from utils.music.models import LavalinkPlayer
 
@@ -13,7 +14,7 @@ class MicroNC:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://media.discordapp.net/attachments/554468640942981147/1050275579766784051/micro_nc.png"
+        self.preview = asset_url("skin_normal_micro_nc_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False

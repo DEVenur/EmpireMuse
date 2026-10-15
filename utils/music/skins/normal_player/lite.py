@@ -3,6 +3,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, time_format
 from utils.music.models import LavalinkPlayer
 
@@ -13,7 +14,7 @@ class LiteSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://i.ibb.co/h2r9Y5p/lite.png"
+        self.preview = asset_url("skin_normal_lite_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False

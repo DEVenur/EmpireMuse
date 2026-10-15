@@ -20,6 +20,8 @@ import psutil
 from aiohttp import ClientSession
 from disnake.ext import commands
 
+from utils import branding
+from utils.branding import asset_url
 from utils.db import DBModel, db_models
 from utils.music.checks import check_requester_channel
 from utils.music.converters import time_format, URL_REG
@@ -261,7 +263,7 @@ class Misc(commands.Cog):
         else:
             prefix = ""
 
-        image = "https://cdn.discordapp.com/attachments/554468640942981147/1082887587770937455/rainbow_bar2.gif"
+        image = asset_url("ui_rainbow_bar_2.gif")
 
         color = self.bot.get_color()
 
@@ -658,12 +660,16 @@ class Misc(commands.Cog):
             if user_data["custom_prefix"]:
                 embed.description += f"> ⌨️ **⠂Seu prefixo de usuário:** `{disnake.utils.escape_markdown(user_data['custom_prefix'], as_needed=True)}`\n"
 
-        links = "[`[Source]`](https://github.com/zRitsu/MuseHeart-MusicBot)"
+        links = f"[`[Source]`]({branding.REPO_URL})"
 
         if bot.config["SUPPORT_SERVER"]:
             links = f"[`[Suporte]`]({bot.config['SUPPORT_SERVER']})  **|** {links}"
 
         embed.description += f"> 🌐 **⠂**{links}\n"
+        embed.description += (
+            f"> 💜 **⠂**Baseado no [{branding.UPSTREAM_NAME}]({branding.UPSTREAM_URL}) "
+            f"de {branding.UPSTREAM_AUTHOR} (GPL-2.0)\n"
+        )
 
         try:
             owner = bot.appinfo.team.owner

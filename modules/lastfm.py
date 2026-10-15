@@ -11,6 +11,7 @@ from disnake.ext import commands
 from rapidfuzz import fuzz
 
 import wavelink
+from utils.branding import asset_url
 from utils.db import DBModel, scrobble_model
 from utils.music.errors import GenericError
 from utils.music.lastfm_tools import LastFmException
@@ -225,7 +226,7 @@ class LastFmCog(commands.Cog):
                 description=txt, color=self.bot.get_color()
             ).set_thumbnail(url=lastfm_user['image'][-1]["#text"][:-4] + ".gif").set_author(
                 name="Last.fm: Informações da conta vinculada",
-                icon_url="https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png")]
+                icon_url=asset_url("lastfm_default_twitter_avatar.png"))]
 
             try:
                 top_tracks = await self.bot.last_fm.user_top_tracks(data["lastfm"]["username"], limit=3)
@@ -235,7 +236,7 @@ class LastFmCog(commands.Cog):
                     embed = disnake.Embed(
                         description="\n".join(f"> ` {n+1}º ` [`{t['name']}`]({t['url']}) `De:` [`{t['artist']['name']}`]({t['artist']['url']}) `(x{int(t['playcount']):,})`" for n, t in enumerate(top_tracks)),
                         color=embed_color).set_author(name=f"Top 3: Músicas que você mais ouviu (do total de {int(lastfm_user['track_count']):,}):",
-                        icon_url="https://i.ibb.co/Hhcwdf9/muse-heart-disc.jpg",
+                        icon_url=asset_url("lastfm_disc_icon.jpg"),
                         url=f"https://www.last.fm/user/{lastfm_user['name']}/library")
 
                     if thumb:=top_tracks[0]['image'][-1]["#text"]:
@@ -270,7 +271,7 @@ class LastFmCog(commands.Cog):
                     embed = disnake.Embed(
                         description="\n".join(f"> ` {n+1}º ` [`{t['name']}`]({t['url']}) `(x{int(t['playcount']):,})`" for n, t in enumerate(top_artists)),
                         color=embed_color).set_author(name=f"Top 3: Artistas que você mais ouviu (do total de {int(lastfm_user['artist_count']):,}):",
-                        icon_url="https://i.ibb.co/8KQzkyy/muse-heart-artist-icon.jpg",
+                        icon_url=asset_url("lastfm_artist_icon.jpg"),
                         url=f"https://www.last.fm/user/{lastfm_user['name']}/library/artists")
 
                     if thumb:=top_artists[0]['image'][-1]["#text"]:
@@ -295,7 +296,7 @@ class LastFmCog(commands.Cog):
                     embed = disnake.Embed(
                         description="\n".join(f"> ` {n+1}º ` [`{b['name']}`]({b['url']}) `de:` [`{b['artist']['name']}`]({b['artist']['url']}) `(x{int(b['playcount']):,})`" for n, b in enumerate(top_albuns)),
                         color=embed_color).set_author(name=f"Top 3: Álbuns que você mais ouviu (do total de {int(lastfm_user['album_count']):,}):",
-                        icon_url="https://i.ibb.co/s6TQK5D/muse-heart-disc-album.jpg",
+                        icon_url=asset_url("lastfm_album_icon.jpg"),
                         url=f"https://www.last.fm/user/{lastfm_user['name']}/library/albums")
 
                     if thumb:=top_albuns[0]['image'][-1]["#text"]:
@@ -323,7 +324,7 @@ class LastFmCog(commands.Cog):
                             "músicas/artistas/álbuns e ter uma estatística geral das músicas que você ouviu alem de ter "
                             "acesso a uma comunidade incrível da plataforma.**",
                 color=embed_color
-            ).set_thumbnail(url="https://www.last.fm/static/images/lastfm_avatar_twitter.52a5d69a85ac.png")]
+            ).set_thumbnail(url=asset_url("lastfm_default_twitter_avatar.png"))]
 
         view = LastFMView(inter, session_key=current_session_key, scrobble=data["lastfm"]["scrobble"])
 
@@ -346,7 +347,7 @@ class LastFmCog(commands.Cog):
 
             embeds[-1].set_footer(
                 text="O tempo para interagir nessa mensagem foi esgotado.",
-                icon_url="https://i.ibb.co/gb0cZQw/warning.png",
+                icon_url=asset_url("ui_warning_icon.png"),
             )
 
             if msg:
@@ -401,7 +402,7 @@ class LastFmCog(commands.Cog):
         else:
             embeds[-1].set_footer(
                 text="Sua conta foi desvinculada com sucesso!",
-                icon_url="https://i.ibb.co/xLFhCd2/confirm.png",
+                icon_url=asset_url("ui_confirm_icon.png"),
             )
             await func(embeds=embeds, view=view, content=None)
 

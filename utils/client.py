@@ -29,12 +29,14 @@ from user_agent import generate_user_agent
 
 import wavelink
 from config_loader import load_config
+from utils import branding
 from utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from utils.music.audio_sources.deezer import DeezerClient
 from utils.music.audio_sources.spotify import SpotifyClient
 from utils.music.checks import check_pool_bots
 from utils.music.errors import GenericError
 from utils.music.lastfm_tools import LastFM
+from utils.music.lavalink_server_list import validated_server_list
 from utils.music.local_lavalink import run_lavalink
 from utils.music.models import music_mode, LavalinkPlayer, LavalinkPlaylist, LavalinkTrack, PartialTrack, \
     native_sources, CustomYTDL
@@ -281,7 +283,7 @@ class BotPool:
                     "https://discord.com/developers/applications/<br>" \
                     "e clique na sua aplicação e depois clique no menu \"bot\"<br>" \
                     "e em seguida ative todas as intents.<br>" \
-                    "Print de exemplo: https://i.imgur.com/a9c1DHT.png<br>" \
+                    f"Print de exemplo: {branding.asset_url('tutorial_intents_guide.png')}<br>" \
                     "Após corrigir, reinicie a aplicação."
 
                 print(("=" * 30) + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n" + e.replace('<br>', '\n') + "\n" + ("=" * 30))
@@ -290,7 +292,7 @@ class BotPool:
                 e = "Foi utilizado um token inválido.<br>" \
                     "Revise se o token informado está correto<br>" \
                     "ou se o token foi resetado<br>" \
-                    "ou copiado do local correto ( ex: https://i.imgur.com/k894c1q.png )<br>" \
+                    f"ou copiado do local correto ( ex: {branding.asset_url('tutorial_token_guide.png')} )<br>" \
                     "Após corrigir, reinicie a aplicação."
 
                 print(("=" * 30) + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n" + e.replace('<br>', '\n') + "\n" + ( "=" * 30))
@@ -591,12 +593,17 @@ class BotPool:
                 ini_file = "auto_lavalink.ini"
                 print(f"Baixando lista de servidores lavalink (arquivo: {ini_file})")
                 try:
-                    r = requests.get(self.config["LAVALINK_SERVER_LIST"], allow_redirects=False)
-                    with open("auto_lavalink.ini", 'wb') as f:
-                        f.write(r.content)
+                    r = requests.get(self.config["LAVALINK_SERVER_LIST"], allow_redirects=False, timeout=30)
+                    server_list = validated_server_list(r.status_code, r.content)
+                    if server_list is not r.content:
+                        print("Lista de servidores lavalink baixada é inválida, usando o arquivo local do repositório.")
                     r.close()
                 except Exception:
                     traceback.print_exc()
+                    print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
+                    server_list = validated_server_list(None, None)
+                with open("auto_lavalink.ini", 'wb') as f:
+                    f.write(server_list)
         else:
             ini_file = "lavalink.ini"
 
@@ -671,7 +678,7 @@ class BotPool:
             pass
 
         if not self.remote_git_url:
-            self.remote_git_url = self.config["SOURCE_REPO"]
+            self.remote_git_url = self.config["SOURCE_REPO"].removesuffix(".git")
 
         prefix = get_prefix if intents.message_content else commands.when_mentioned
 
@@ -937,9 +944,9 @@ class BotPool:
             if os.environ.get("REPL_SLUG"):
                 message += f"Confira se o token foi adicionado nas secrets da replit"
 
-                print(message + ": Guia de como configurar: https://gist.github.com/zRitsu/70737984cbe163f890dae05a80a3ddbe#2---com-o-projeto-j%C3%A1-criado-prossiga-as-etapas-abaixo")
+                print(message + f": Guia de como configurar: {branding.GUIDES_URL}/replit-token.md")
 
-                message += f'. <a href="https://gist.github.com/zRitsu/70737984cbe163f890dae05a80a3ddbe#2---com-o-projeto-j%C3%A1-criado-prossiga-as-etapas-abaixo" target="_blank">Clique aqui</a> para ver o guia de como configurar.'
+                message += f'. <a href="{branding.GUIDES_URL}/replit-token.md" target="_blank">Clique aqui</a> para ver o guia de como configurar.'
 
             else:
                 message += " Confira se o token foi configurado na ENV/ENVIRONMENT ou no arquivo .env"
@@ -1361,8 +1368,9 @@ class BotCore(commands.AutoShardedBot):
             warn_msg = f"Atenção: O bot [{self.user}] (ID: {self.user.id}) foi configurado no portal do desenvolvedor " \
                   "como bot público\n" \
                   "lembrando que se caso o bot seja divulgado pra ser adicionado publicamente o mesmo terá que " \
-                  "estar sob as condições da licença GPL-2: " \
-                  "https://github.com/zRitsu/MuseHeart-MusicBot/blob/main/LICENSE\n" \
+                  "estar sob as condições da licença GPL-2 " \
+                  f"(obra derivada de {branding.UPSTREAM_NAME}, de {branding.UPSTREAM_AUTHOR}): " \
+                  f"{branding.LICENSE_URL}\n" \
                   "Caso não queira seguir as condições da licença no seu bot, você pode deixar o bot privado desmarcando a " \
                   f"opção public bot acessando o link: https://discord.com/developers/applications/{self.user.id}/bot"
 

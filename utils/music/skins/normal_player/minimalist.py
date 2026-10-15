@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from os.path import basename
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, time_format
 from utils.music.models import LavalinkPlayer
 
@@ -11,7 +12,7 @@ class Minimalist:
 
     def __init__(self):
         self.name = basename(__file__)[:-3]
-        self.preview = "https://i.ibb.co/ynN9F4V/minimalist.png"
+        self.preview = asset_url("skin_normal_minimalist_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False

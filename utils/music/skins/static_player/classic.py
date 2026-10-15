@@ -4,6 +4,7 @@ from os.path import basename
 
 import disnake
 
+from utils.branding import asset_url
 from utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
 from utils.music.models import LavalinkPlayer
 from utils.others import PlayerControls
@@ -15,7 +16,7 @@ class ClassicStaticSkin:
 
     def __init__(self):
         self.name = basename(__file__)[:-3] + "_static"
-        self.preview = "https://media.discordapp.net/attachments/554468640942981147/1047187412343853146/classic_static_skin.png"
+        self.preview = asset_url("skin_static_classic_preview.png")
 
     def setup_features(self, player: LavalinkPlayer):
         player.mini_queue_feature = False
@@ -47,7 +48,7 @@ class ClassicStaticSkin:
         else:
             (embed_top or embed).set_author(
                 name="Em Pausa:",
-                icon_url="https://cdn.discordapp.com/attachments/480195401543188483/896013933197013002/pause.png"
+                icon_url=asset_url("player_pause_icon.png")
             )
 
         if player.current.is_stream:
@@ -97,7 +98,7 @@ class ClassicStaticSkin:
         else:
             embed.set_footer(
                 text=str(player),
-                icon_url="https://i.ibb.co/QXtk5VB/neon-circle.gif"
+                icon_url=asset_url("player_loading_neon_circle.gif")
             )
 
         data["embeds"] = [embed_top, embed] if embed_top else [embed]
