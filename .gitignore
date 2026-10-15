@@ -181,3 +181,13 @@ ai_prompt.txt
 /dev/
 NodeLink/
 config.js
+
+# EmpireMuse / ferramentas de agentes
+.maestri/
+.agents/
+.claude/ecc/
+.claude/settings.local.json
+.ruff_cache/
+/config.json
+/plugins/
+.env*

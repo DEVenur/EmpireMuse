@@ -1,0 +1,76 @@
+name: Relato de Bug
+description: Informe uma falha ou comportamento inesperado para nos ajudar a melhorar o EmpireMuse.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por dedicar seu tempo para relatar um problema!
+        Antes de prosseguir, certifique-se de pesquisar por issues existentes antes de abrir uma nova.
+        **Atenção**: Caso este problema seja uma vulnerabilidade de segurança, consulte nossa política em [SECURITY.md](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/SECURITY.md) para reporte responsável. Não poste falhas de segurança em issues públicas.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do Bug
+      description: Uma explicação clara e concisa sobre qual falha está ocorrendo.
+      placeholder: Descreva detalhadamente o problema encontrado...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Passos para Reproduzir
+      description: Passos sequenciais e detalhados para reproduzir o comportamento reportado.
+      placeholder: |
+        1. Executar o comando '/play ...'
+        2. Tentar alterar a skin do player no painel...
+        3. Observar a exceção gerada no terminal...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento Esperado
+      description: Uma explicação clara do que você esperava que acontecesse.
+      placeholder: O bot deveria conectar ao canal de voz e iniciar a reprodução da faixa normalmente.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs e Rastreamento de Erro (Stack Trace)
+      description: Cole aqui logs do terminal ou mensagens de erro relevantes. NUNCA inclua tokens, credenciais ou segredos!
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Informações do Ambiente
+      description: Detalhes do sistema e versões utilizadas.
+      value: |
+        - Sistema Operacional: 
+        - Versão do Python: 
+        - Versão do Lavalink ou NodeLink: 
+        - Banco de Dados (MongoDB ou TinyMongo): 
+        - Commit ou Branch utilizada: 
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmações Adicionais
+      options:
+        - label: Confirmo que pesquisei por issues existentes para evitar duplicidade.
+          required: true
+        - label: Confirmo que não incluí tokens do Discord, senhas ou credenciais confidenciais nos logs acima.
+          required: true
+        - label: Confirmo que este relato não se trata de uma vulnerabilidade de segurança crítica pública.
+          required: true

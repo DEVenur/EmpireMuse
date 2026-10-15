@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Reporte de Vulnerabilidade de Segurança
+    url: https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/SECURITY.md
+    about: Por favor, consulte nossa política de segurança em SECURITY.md para reportar vulnerabilidades de forma responsável. Não utilize issues públicas para falhas de segurança.
