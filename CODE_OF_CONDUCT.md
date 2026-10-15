@@ -38,7 +38,7 @@ Este Código de Conduta se aplica a todos os espaços da comunidade e também se
 
 Casos de comportamento abusivo, de assédio ou inaceitável de outra forma podem ser relatados para a liderança da comunidade responsável pela aplicação em:
 
-<!-- TODO(dono): definir contato de moderação -->
+equipe de moderação do servidor EmpireHUB no Discord (https://discord.gg/KgtyNg9U6H), por mensagem privada a um moderador.
 
 Todas as queixas serão analisadas e investigadas de maneira rápida e justa.
 

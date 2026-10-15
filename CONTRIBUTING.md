@@ -31,6 +31,12 @@ Adotamos uma estratégia baseada no **GitHub Flow**, garantindo simplicidade e r
    - `ci/configurar-github-actions`
 4. Nunca envie commits diretamente para a branch `main`.
 
+### Proteção da Branch Main e CODEOWNERS
+
+- **Proteção da `main`**: A branch principal é protegida no GitHub. Commits diretos são bloqueados para todos os colaboradores (inclusive mantenedores). Não são permitidos *force-pushes* nem exclusão da branch.
+- **Pull Requests obrigatórios**: Toda e qualquer alteração deve passar por um Pull Request. Todas as conversas e comentários de revisão devem estar resolvidos antes do merge.
+- **Caminhos sensíveis (CODEOWNERS)**: Modificações em arquivos críticos de segurança, dependências, dados e atualização (mapeados em [`.github/CODEOWNERS`](.github/CODEOWNERS)) requerem obrigatoriamente a revisão e aprovação do mantenedor (`@Or4cu1o`).
+
 ---
 
 ## 3. Padrão de Mensagens de Commit (Conventional Commits)

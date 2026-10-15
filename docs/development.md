@@ -77,10 +77,14 @@ na inicialização (bug listado em `known-issues.md`).
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Credenciais do app Spotify (*client credentials*). Sem elas, o suporte interno ao Spotify fica desativado (`utils/client.py:680-688`). |
 | `LASTFM_KEY` / `LASTFM_SECRET` | Integração com o Last.fm (opcional). |
 | `TEST_GUILDS_<NOME_DO_BOT>` | IDs de servidores de teste (separados por `\|\|`) para registrar comandos só neles (`utils/client.py:730`). |
+| `SUPPORT_SERVER` | Convite do servidor de suporte exibido no `/about` e em mensagens de erro (padrão aponta para o EmpireHUB). Em instâncias próprias, altere para o seu servidor ou deixe vazio (`SUPPORT_SERVER=''`) para não exibir o link. |
+| `EMBED_COLOR` | Cor dos embeds (hex de 6 dígitos; padrão `8B5CF6`). Defina `EMBED_COLOR=none` para restaurar e utilizar a cor do cargo mais alto do bot no servidor. |
 | `*_INTENT`, `MESSAGE_CONTENT_INTENT` etc. | Intents; os padrões estão em `config_loader.py:124-147`. |
 
 A lista completa, comentada, está em `.example.env`. Em desenvolvimento, `ENABLE_LOGGER=true` grava
-`./.logs/disnake.log` e `COMMAND_LOG=true` registra os comandos de usuários que não são donos.
+`./.logs/disnake.log` e `COMMAND_LOG=true` registra os comandos de usuários que não são donos. Em instâncias
+próprias (self-hosting), certifique-se de configurar `SUPPORT_SERVER` (com seu convite ou vazio) e `EMBED_COLOR`
+conforme a identidade desejada.
 
 ## 4. Como rodar
 
