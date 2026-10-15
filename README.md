@@ -1,9 +1,14 @@
+<p align="center">
+  <img src="assets/brand/logo.svg" alt="Logo do EmpireMuse" width="160">
+</p>
+
 # EmpireMuse
 ## bot de música programado em python com player interativo, comandos de barra + slash, integração com o [last.fm](https://www.last.fm/) e muito mais.
 
 > **EmpireMuse** é uma obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu** e distribuído sob a licença **GPL-2.0** (veja [LICENSE](LICENSE) e [CREDITS.md](CREDITS.md)).
 
-<!-- TODO(dono): convite do servidor de suporte -->
+[![Discord EmpireHUB](https://img.shields.io/badge/Discord-EmpireHUB-8B5CF6?logo=discord&logoColor=white)](https://discord.gg/KgtyNg9U6H)  
+Entre no servidor oficial [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) para suporte, dúvidas e acompanhar todas as novidades.
 
 ### Algumas Previews:
 

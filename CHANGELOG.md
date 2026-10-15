@@ -8,6 +8,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Identidade Visual e Ativos de Marca (Fase 1.1)**:
+  - `assets/brand/`: arte original da marca EmpireMuse no estilo "Nebulosa", composta por `logo.svg` (emblema vetorial para o README), `avatar.png` (ícone circular de 1024×1024 px) e `banner.png` (banner de perfil de 1500×600 px).
+  - `docs/identidade-visual.md`: especificação da paleta de cores Nebulosa (`#0B0A1F`, `#3B82F6`, `#8B5CF6`, `#C026D3`, `#E11D48`), diretrizes de arte e instruções passo a passo para configuração no Discord Developer Portal.
+- **Governança e Segurança do Repositório (Fase 1.1)**:
+  - `.github/CODEOWNERS`: atribuição de revisão obrigatória do mantenedor (`@Or4cu1o`) para caminhos sensíveis de infraestrutura, dependências, segurança e dados.
+  - Proteção de branch na `main` (bloqueio de commits diretos para todos os colaboradores, obrigatoriedade de Pull Requests, proibição de force-push e resolução prévia de discussões).
+  - Ativação das ferramentas nativas de segurança do GitHub: relato privado de vulnerabilidades (*Private vulnerability reporting*), varredura de segredos com proteção de push (*secret scanning with push protection*) e alertas/atualizações de dependências via Dependabot.
+  - Contato de moderação no Código de Conduta direcionado para a equipe do servidor EmpireHUB no Discord.
 - **Identidade EmpireMuse (Fase 1)**:
   - `utils/branding.py`: fonte única de identidade e URLs (nome, repositório, espelhos, upstream e `asset_url`).
   - `assets/`: 51 imagens re-hospedadas (com `SHA256SUMS`); origem no upstream e serviços de terceiros, com substituição por arte própria planejada.
@@ -45,6 +53,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `docs/known-issues.md`: Catálogo de 31 problemas conhecidos, inconsistências de dependências e débitos técnicos para a fase de saneamento.
 
 ### Alterado
+- **Servidor de Suporte e Comunidade**: inclusão do convite oficial permanente para o servidor [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) no `README.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/config.yml` e na constante `SUPPORT_SERVER_URL` de `utils/branding.py`.
+- **Configuração de Cores dos Embeds**: definição da cor padrão dos embeds para o violeta da paleta Nebulosa (`8B5CF6`); implementação de `parse_embed_color` em `config_loader.py` com suporte flexível a valores com ou sem `#` e fallback seguro para `'none'`.
+- **Política de Segurança**: link direto para criação de advisories privados adicionado ao `SECURITY.md` e ao `.github/ISSUE_TEMPLATE/config.yml`.
+- **Orientações para Instâncias Próprias**: documentado aviso em `.example.env`, `docs/development.md` e `docs/identidade-visual.md` para ajustar `SUPPORT_SERVER` (para o convite próprio ou vazio) e utilizar `EMBED_COLOR=none` para restaurar a cor do cargo do bot.
 - **Identidade EmpireMuse no bot**: nome e links do projeto passam a vir de `utils/branding.py`; o `/about` aponta para o repositório do EmpireMuse e mantém a linha de crédito ao MuseHeart-MusicBot (zRitsu); o aviso de licença (GPL-2.0) e os links do app de RPC foram atualizados.
 - **Atualização do código**: `SOURCE_REPO` e os scripts de atualização (`source_update.sh`, `source_quick_update.sh`) apontam para `DiscordEmpireHub/EmpireMuse`.
 - **Lavalink**: `Lavalink.jar` e `application.yml` passam a ser baixados do espelho `DiscordEmpireHub/LL-binaries` (release `0.0.1`); a lista de servidores padrão é `data/lavalink_servers.ini`.

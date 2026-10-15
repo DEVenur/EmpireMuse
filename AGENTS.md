@@ -50,9 +50,11 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `modules/server_manager.py`: Comandos administrativos para gerenciamento de servidores.
 - `utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
 - `assets/`: Imagens re-hospedadas (previews, skins, ícones, tutoriais) e `SHA256SUMS`.
+- `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar e banner).
 - `data/`: Dados estáticos do projeto (`lavalink_servers.ini`, lista de servidores Lavalink).
 - `docs/`: Documentação técnica, guias de setup e Registros de Decisão de Arquitetura (ADRs).
 - `docs/guides/`: Guias de hospedagem e configuração (adaptados da wiki/gist do upstream).
+- `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `tests/`: Testes automatizados (pytest).
 
 ---

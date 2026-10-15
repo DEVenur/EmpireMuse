@@ -25,15 +25,11 @@ Use o relato privado de vulnerabilidades do GitHub:
 
 1. Acesse <https://github.com/DiscordEmpireHub/EmpireMuse>.
 2. Abra a aba **Security**.
-3. Clique em **Report a vulnerability** e preencha o formulário.
+3. Clique em **Report a vulnerability** e preencha o formulário (ou acesse diretamente <https://github.com/DiscordEmpireHub/EmpireMuse/security/advisories/new>).
 
 O relato fica visível apenas para você e para os mantenedores.
 
-<!-- PENDÊNCIA (mantenedores): habilitar "Private vulnerability reporting" em
-Settings → Code security → Private vulnerability reporting e, depois disso, remover o parágrafo
-de alternativa logo abaixo. -->
-
-Se o botão **Report a vulnerability** ainda não aparecer, abra uma issue pelo modelo
+Caso você não consiga utilizar o formulário do GitHub por qualquer motivo, abra uma issue pelo modelo
 **Solicitação de contato de segurança**
 (<https://github.com/DiscordEmpireHub/EmpireMuse/issues/new?template=security_contact.yml>).
 Esse modelo só pede um canal privado. **Não inclua nenhum detalhe técnico** da vulnerabilidade na
