@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import hashlib
+import logging
 import os
 import platform
 import shutil
@@ -12,13 +14,61 @@ import requests
 
 from utils import branding
 
+logger = logging.getLogger(__name__)
+
+DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um servidor parado trava o boot
+HASH_CHUNK_SIZE = 1024 * 1024
+PLUGINS_DIR = "plugins"
+
+
+class LavalinkDownloadError(Exception):
+    """Falha ao baixar ou preparar os arquivos do Lavalink local (mensagem em pt-BR, sem segredos)."""
+
+
+class IntegrityError(LavalinkDownloadError):
+    """O SHA-256 do arquivo baixado não confere com o esperado."""
+
+
+def file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(HASH_CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def download_verified(url: str, filename: str, sha256: str, timeout=DOWNLOAD_TIMEOUT) -> None:
+    """Baixa ``url`` para um arquivo temporário, confere o SHA-256 e só então move para ``filename`` (atômico).
+
+    Qualquer falha (rede, hash) apaga o temporário e não deixa nada no destino.
+    """
+    expected = (sha256 or "").strip().lower()
+    name = os.path.basename(filename)
+    temp_name = f"{filename}.tmp"
+    digest = hashlib.sha256()
+    try:
+        with requests.get(url, stream=True, timeout=timeout) as response:
+            response.raise_for_status()
+            with open(temp_name, "wb") as f:
+                for chunk in response.iter_content(chunk_size=HASH_CHUNK_SIZE):
+                    digest.update(chunk)
+                    f.write(chunk)
+        if digest.hexdigest() != expected:
+            raise IntegrityError(f"O SHA-256 de {name} baixado não confere com o esperado; o arquivo foi descartado.")
+        os.replace(temp_name, filename)
+    except requests.RequestException as e:
+        raise LavalinkDownloadError(f"Falha ao baixar {name}: {type(e).__name__}") from e
+    finally:
+        with suppress(FileNotFoundError):
+            os.remove(temp_name)
+
 
 def download_file(url, filename):
 
     if os.path.isfile(filename):
         return
 
-    r = requests.get(url, stream=True)
+    r = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT)
     total_size = int(r.headers.get('content-length', 0))
     bytes_downloaded = 0
     previows_progress = 0
@@ -69,8 +119,72 @@ def validate_java(cmd: str, debug: bool = False):
             print(f"\nFalha ao obter versão do java...\n"
                   f"Path: {cmd} | Erro: {repr(e)}\n")
 
+def _matches(path: str, sha256: str) -> bool:
+    return os.path.isfile(path) and file_sha256(path) == sha256.lower()
+
+
+def _jar_hash(url: str, configured_sha256: str) -> str:
+    """Hash do jar: o oficial usa o fixo do projeto; outro endereço exige ``LAVALINK_FILE_SHA256``."""
+    if url == branding.LAVALINK_JAR_URL:
+        return branding.LAVALINK_JAR_SHA256
+    if not (configured_sha256 or "").strip():
+        raise LavalinkDownloadError(
+            "LAVALINK_FILE_URL aponta para um endereço diferente do oficial: defina também LAVALINK_FILE_SHA256 "
+            "(SHA-256 do Lavalink.jar) para permitir o download.")
+    return configured_sha256.strip()
+
+
+def _prepare_yml(directory: str) -> None:
+    path = os.path.join(directory, "application.yml")
+    if os.path.isfile(path):
+        current = file_sha256(path)
+        if current == branding.LAVALINK_APPLICATION_YML_SHA256.lower():
+            return
+        if current not in {h.lower() for h in branding.LAVALINK_APPLICATION_YML_KNOWN_SHA256}:
+            logger.warning("O application.yml existente é personalizado e foi mantido (não será substituído).")
+            return
+    download_verified(branding.LAVALINK_APPLICATION_YML_URL, path, branding.LAVALINK_APPLICATION_YML_SHA256)
+
+
+def _remove_unlisted_plugins(plugins_dir: str) -> None:
+    """Todo .jar em plugins/ é carregado pelo Lavalink: ao renovar o jar, só os plugins oficiais permanecem."""
+    if not os.path.isdir(plugins_dir):
+        return
+    for entry in os.listdir(plugins_dir):
+        if entry.endswith(".jar") and entry not in branding.LAVALINK_PLUGIN_SHA256:
+            with suppress(OSError):
+                os.remove(os.path.join(plugins_dir, entry))
+
+
+def _prepare_plugins(directory: str) -> None:
+    plugins_dir = os.path.join(directory, PLUGINS_DIR)
+    os.makedirs(plugins_dir, exist_ok=True)
+    for name, sha256 in branding.LAVALINK_PLUGIN_SHA256.items():
+        path = os.path.join(plugins_dir, name)
+        if not _matches(path, sha256):
+            download_verified(f"{branding.LAVALINK_BINARIES_URL}/{name}", path, sha256)
+
+
+def prepare_lavalink_files(directory: str = ".", *, lavalink_file_url: str = None,
+                           lavalink_file_sha256: str = None) -> None:
+    """Garante ``Lavalink.jar``, ``application.yml`` e os plugins oficiais em ``directory``, todos verificados (SHA-256).
+
+    Levanta ``LavalinkDownloadError`` (``IntegrityError`` se o hash não confere) antes de qualquer processo iniciar.
+    """
+    directory = str(directory)
+    url = lavalink_file_url or branding.LAVALINK_JAR_URL
+    jar_sha256 = _jar_hash(url, lavalink_file_sha256)
+    jar_path = os.path.join(directory, "Lavalink.jar")
+    if not _matches(jar_path, jar_sha256):
+        download_verified(url, jar_path, jar_sha256)
+        _remove_unlisted_plugins(os.path.join(directory, PLUGINS_DIR))
+    _prepare_yml(directory)
+    _prepare_plugins(directory)
+
+
 def run_lavalink(
         lavalink_file_url: str = None,
+        lavalink_file_sha256: str = None,
         lavalink_initial_ram: int = 30,
         lavalink_ram_limit: int = 100,
         lavalink_additional_sleep: int = 0,
@@ -225,14 +339,7 @@ def run_lavalink(
                 else:
                     java_cmd = os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
 
-    clear_plugins = False
-
-    for filename, url in (
-        ("Lavalink.jar", lavalink_file_url),
-        ("application.yml", branding.LAVALINK_APPLICATION_YML_URL)
-    ):
-        if download_file(url, filename):
-            clear_plugins = True
+    prepare_lavalink_files(".", lavalink_file_url=lavalink_file_url, lavalink_file_sha256=lavalink_file_sha256)
 
     if lavalink_cpu_cores >= 1:
         java_cmd += f" -XX:ActiveProcessorCount={lavalink_cpu_cores}"
@@ -251,12 +358,6 @@ def run_lavalink(
         os.makedirs("./.tempjar/undertow-docbase.80.2258596138812103750")
 
         java_cmd += f" -Djava.io.tmpdir={os.getcwd()}/.tempjar"
-
-    if clear_plugins:
-        try:
-            shutil.rmtree("./plugins")
-        except:
-            pass
 
     java_cmd += " -jar Lavalink.jar"
 
