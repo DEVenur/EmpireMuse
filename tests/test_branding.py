@@ -46,13 +46,12 @@ RUNTIME_PATTERNS = (
     "*.toml", "requirements*.txt",
 )
 
-# I-7 Deploy ADIADO pelo dono: estes arquivos NÃO são alterados nesta fase.
+# I-7 Deploy (reativado): estes arquivos de deploy também devem estar com a identidade do EmpireMuse.
 DEPLOY_PATTERNS = (
     "render.yaml", "discloud.config.example", "squarecloud.config.example",
     ".replit", ".gitpod.yml", "Dockerfile", ".Dockerfile", "*.Dockerfile",
     "replit.nix", "docker-compose*",
 )
-DEPLOY_SKIP_REASON = "I-7 deploy adiado pelo dono — reativar na fase de deploy"
 
 UPSTREAM_RESOURCE_PATTERNS = (
     "zRitsu",
@@ -189,9 +188,36 @@ def test_update_scripts_point_to_empiremuse(script):
     assert "DiscordEmpireHub/EmpireMuse.git" in content, f"{script} deve conter DiscordEmpireHub/EmpireMuse.git"
 
 
-@pytest.mark.skip(reason=DEPLOY_SKIP_REASON)
 def test_render_yaml_has_no_upstream_author():
     assert "zRitsu" not in _read("render.yaml"), _scan(["render.yaml"], ["zRitsu"])
+
+
+def test_render_yaml_points_to_the_empiremuse_repo(branding):
+    content = _read("render.yaml")
+    assert re.search(rf"^\s*repo:\s*{re.escape(branding.SOURCE_REPO_GIT)}\s*$", content, re.MULTILINE), (
+        f"render.yaml: repo deve ser {branding.SOURCE_REPO_GIT}"
+    )
+
+
+def test_render_yaml_python_version_is_compatible_with_the_project():
+    match = re.search(r"key:\s*PYTHON_VERSION\s*\n\s*value:\s*['\"]?([0-9.]+)", _read("render.yaml"))
+    assert match, "render.yaml deve definir PYTHON_VERSION"
+    assert re.fullmatch(r"3\.13(\.\d+)?", match.group(1)), f"PYTHON_VERSION {match.group(1)} deve ser 3.13.x"
+
+
+def test_discloud_avatar_is_the_empiremuse_brand_asset(branding):
+    match = re.search(r"^AVATAR=(\S+)\s*$", _read("discloud.config.example"), re.MULTILINE)
+    assert match, "discloud.config.example deve definir AVATAR"
+    assert (ROOT / "assets/brand/avatar.png").is_file()
+    assert match.group(1) == f"{branding.ASSETS_BASE_URL}/brand/avatar.png"
+
+
+def test_deploy_files_use_no_upstream_image_host():
+    hosts = ("i.ibb.co", "ibb.co", "i.imgur.com", "imgur.com", "iili.io", "cdn.discordapp.com/attachments/",
+             "media.discordapp.net/attachments/")
+    files = [p for p in _repo_files() if _is_deploy(p)]
+    assert files, "nenhum arquivo de deploy encontrado"
+    _fail_with("Host de imagem do upstream em arquivos de deploy", _scan(files, hosts))
 
 
 # --------------------------------------------------------------------------- R2 Lavalink
@@ -257,7 +283,6 @@ def test_runtime_files_have_no_upstream_resources():
     _fail_with("Recursos do upstream em arquivos de runtime", violations)
 
 
-@pytest.mark.skip(reason=DEPLOY_SKIP_REASON)
 def test_deploy_files_have_no_upstream_resources():
     violations = _scan(_runtime_files(deploy=True), UPSTREAM_RESOURCE_PATTERNS)
     _fail_with("Recursos do upstream em arquivos de deploy", violations)
@@ -377,7 +402,6 @@ def test_python_files_do_not_use_old_bot_name():
     _fail_with("Nome antigo (MuseHeart) em arquivos .py", _old_name_scan(py_files))
 
 
-@pytest.mark.skip(reason=DEPLOY_SKIP_REASON)
 def test_deploy_files_do_not_use_old_bot_name():
     _fail_with("Nome antigo (MuseHeart) em arquivos de deploy", _old_name_scan(_runtime_files(deploy=True)))
 
