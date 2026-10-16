@@ -1,7 +1,16 @@
 # Configuração mínima de ferramentas. Este arquivo crescerá na fase de
-# saneamento (ruff, tipagem etc.); por ora contém apenas o pytest.
+# saneamento (ruff, tipagem etc.); por ora contém apenas o pytest e cobertura.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+
+[tool.coverage.run]
+source = [
+    "panel",
+    "utils.music.request_channel",
+]
+
+[tool.coverage.report]
+show_missing = true
