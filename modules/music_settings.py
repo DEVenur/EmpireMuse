@@ -23,29 +23,13 @@ from utils.music.errors import GenericError, NoVoice
 from utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
 from utils.music.models import LavalinkPlayer
 from utils.others import send_idle_embed, CustomContext, select_bot_pool, pool_command, CommandArgparse, update_inter
+from utils.music.request_channel import (apply_request_channel, build_channel_kwargs, check_channel_perm,  # noqa: F401
+                                         create_request_channel, ensure_can_create_channel, ensure_can_reset,
+                                         find_current_request_message, find_request_channel, reset_request_channel)
 
 if TYPE_CHECKING:
     from utils.client import BotCore
 
-channel_perms = ("send_messages", "embed_links", "read_messages")
-
-thread_perms = ("send_messages_in_threads", "embed_links", "read_messages")
-
-forum_perms = ("create_forum_threads", "send_messages_in_threads", "read_messages", "embed_links")
-
-def check_channel_perm(channel: Union[disnake.StageChannel, disnake.VoiceChannel, disnake.ForumChannel, disnake.TextChannel]):
-
-    if isinstance(channel, disnake.ForumChannel):
-        missing_perms = [p for p, v in channel.permissions_for(channel.guild.me) if p in forum_perms and not v]
-    elif isinstance(channel, disnake.Thread):
-        missing_perms = [p for p,v in channel.parent.permissions_for(channel.guild.me) if p in thread_perms and not v]
-    else:
-        missing_perms = [p for p, v in channel.permissions_for(channel.guild.me) if p in channel_perms and not v]
-
-    if missing_perms:
-        raise GenericError(
-            f"**{channel.guild.me.mention} não possui as seguintes permissões necessárias no canal {channel.mention}** ```ansi\n" +
-            "\n".join(f"[0;33m{perms_translations.get(p, p)}[0m" for p in missing_perms) + "```")
 
 
 class SkinSelector(disnake.ui.View):
@@ -450,85 +434,15 @@ class MusicSettings(commands.Cog):
             inter = modal_inter
             channel_name = inter.text_values["forum_title"]
 
-        perms_dict = {
-            "embed_links": True,
-            "send_messages": True,
-            "send_messages_in_threads": True,
-            "read_messages": True,
-            "create_public_threads": True,
-            "read_message_history": True,
-            "manage_messages": True,
-            "manage_channels": True,
-            "attach_files": True,
-        }
-
-        if guild.me.guild_permissions.administrator:
-            perms_dict["manage_permissions"] = True
-
-        channel_kwargs = {
-            "overwrites": {
-                guild.me: disnake.PermissionOverwrite(**perms_dict)
-            }
-        }
+        channel_kwargs = build_channel_kwargs(guild)
 
         await inter.response.defer(ephemeral=True)
 
         guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
 
-        original_message = None
         existing_channel = True
 
-        try:
-            player: LavalinkPlayer = bot.music.players[guild.id]
-            if player.static:
-                original_message = player.message
-        except KeyError:
-            player = None
-
-        if not original_message:
-
-            try:
-                channel_db = bot.get_channel(int(guild_data["player_controller"]["channel"])) or \
-                             await bot.fetch_channel(int(guild_data["player_controller"]["channel"]))
-                original_message = await channel_db.fetch_message(int(guild_data["player_controller"]["message_id"]))
-            except:
-                pass
-
-        embed_archived = disnake.Embed(
-            description=f"**Este canal de pedir música foi reconfigurado pelo membro {inter.author.mention}.**",
-            color=bot.get_color(guild.me)
-        )
-
-        async def get_message(original_message, target):
-
-            if original_message and original_message.channel != target and original_message.guild.id == target.guild.id:
-
-                try:
-                    if isinstance(original_message.channel.parent, disnake.ForumChannel):
-                        await original_message.thread.delete(reason=f"Player reconfigurado por {inter.author}.")
-                        return
-                except AttributeError:
-                    pass
-                except Exception:
-                    traceback.print_exc()
-                    return
-
-                try:
-                    await original_message.edit(content=None, embed=embed_archived, view=None)
-                except:
-                    pass
-
-                try:
-                    await original_message.thread.edit(
-                        archived=True,
-                        locked=True,
-                        reason=f"Player reconfigurado por {inter.author}."
-                    )
-                except:
-                    pass
-
-            else:
-                return original_message
+        player, original_message = await find_current_request_message(bot, guild, guild_data)
 
         if not target:
             try:
@@ -674,35 +588,23 @@ class MusicSettings(commands.Cog):
 
             else:
 
-                if not guild.me.guild_permissions.manage_channels:
-                    raise GenericError(f"**O bot {bot.user.mention} não possui permissão de gerenciar canais pra criar um novo canal.**")
+                ensure_can_create_channel(bot, guild)
 
                 await inter_message.response.defer()
                 if inter_message.data.custom_id.startswith("voice_channel_"):
-                    target = await target.create_voice_channel(f"{bot.user.name} player controller", **channel_kwargs)
+                    kind = "voice"
                 elif inter_message.data.custom_id.startswith("stage_channel_"):
-                    target = await target.create_stage_channel(f"{bot.user.name} player controller", **channel_kwargs)
+                    kind = "stage"
                 else:
-                    target = await target.create_text_channel(f"{bot.user.name} player controller", **channel_kwargs)
+                    kind = "text"
+                target = await create_request_channel(bot, target, kind, channel_kwargs)
 
                 existing_channel = False
 
             inter = inter_message
 
-        if target == guild.public_updates_channel:
-            raise GenericError("**Você não pode usar um canal de atualizações do discord.**")
-
-        if target == guild.rules_channel:
-            raise GenericError("**Você não pode usar um canal de regras.**")
-
-        check_channel_perm(target)
-
-        if isinstance(target, disnake.ForumChannel):
-
-            channel_kwargs.clear()
-
-            if not target.permissions_for(guild.me).create_forum_threads:
-                raise GenericError(f"**{bot.user.mention} não possui permissão para postar no canal {target.mention}.**")
+        async def ask_forum_title(current_title):
+            nonlocal inter
 
             try:
                 id_ = f"modal_{inter.id}"
@@ -735,7 +637,7 @@ class MusicSettings(commands.Cog):
                     except AttributeError:
                         func = msg_select.edit
                     await func(embed=disnake.Embed(description="### Tempo esgotado!", color=bot.get_color(guild.me)), view=None)
-                    return
+                    return None
 
                 try:
                     await msg_select.delete()
@@ -747,152 +649,22 @@ class MusicSettings(commands.Cog):
 
                 await inter.response.defer()
 
-                channel_name = inter.text_values["forum_title"]
+                return inter.text_values["forum_title"]
 
-            thread = None
-            message = None
+            return current_title
 
-            for t in target.threads:
-                if t.owner_id == bot.user.id:
-                    try:
-                        message = await t.fetch_message(t.id)
-                    except disnake.NotFound:
-                        continue
-                    thread = t
-                    thread_kw = {}
-                    if thread.locked and target.permissions_for(target.guild.me).manage_threads:
-                        thread_kw.update({"locked": False, "archived": False})
-                    elif thread.archived:
-                        thread_kw["archived"] = False
-                    if thread_kw:
-                        await t.edit(**thread_kw)
-                    break
+        result = await apply_request_channel(
+            bot, guild, inter.author, target, existing_channel=existing_channel, purge=purge_messages == "yes",
+            channel_kwargs=channel_kwargs, channel_name=channel_name, original_message=original_message,
+            player=player, guild_data=guild_data, ask_forum_title=ask_forum_title, send_idle_embed=send_idle_embed
+        )
 
-            if not thread and guild.me.guild_permissions.read_message_history:
-                async for t in target.archived_threads(limit=100):
-                    if t.owner_id == bot.user.id:
-                        try:
-                            message = await t.fetch_message(t.id)
-                        except disnake.NotFound:
-                            continue
-                        thread = t
-                        thread_kw = {}
-                        if thread.locked and target.permissions_for(target.guild.me).manage_threads:
-                            thread_kw.update({"locked": False, "archived": False})
-                        elif thread.archived:
-                            thread_kw["archived"] = False
-                        if thread_kw:
-                            await t.edit(**thread_kw)
-                        break
+        if not result:
+            return
 
-            if not thread:
-
-                if not target.permissions_for(guild.me).manage_threads:
-                    raise GenericError(
-                        f"**{bot.user.mention} não possui permissão de gerenciar tópicos no canal {target.mention}.**\n"
-                        f"`Nota: Você pode me conceder temporariamente essa permissão e após usar o comando novamente "
-                        f"você pode remover essa permissão.`")
-
-                """if not target.permissions_for(guild.me).create_forum_threads:
-                    raise GenericError(
-                        f"**{bot.user.mention} não possui permissão para postar no canal {target.mention}.**")"""
-
-                thread_wmessage = await target.create_thread(
-                    name=channel_name,
-                    content="Post para pedido de músicas.",
-                    auto_archive_duration=10080,
-                    slowmode_delay=5,
-                )
-                message = thread_wmessage.message
-
-            message = await send_idle_embed(target=message, bot=bot, force=True,
-                                            guild_data=guild_data)
-
-            target = message.channel
-
-            await get_message(original_message, target)
-
-        else:
-
-            if existing_channel and not guild.me.guild_permissions.administrator and not target.permissions_for(guild.me).manage_permissions:
-                raise GenericError(f"**{guild.me.mention} não possui permissão de administrador ou permissão de "
-                                   f"gerenciar permissões do canal {target.mention}** para editar as permissões "
-                                   f"necessárias para o sistema de pedir música funcionar devidamente.\n\n"
-                                   f"Caso não queira fornecer a permissão de administrador ou editar as permissões do"
-                                   f" canal {target.mention} para me permitir gerenciar permissões do canal. Você pode usar o comando "
-                                   f"sem selecionar um canal de destino.")
-
-            if not target.permissions_for(guild.me).read_messages:
-                raise GenericError(f"{bot.user.mention} permissão para ler mensagens no canal {target.mention}")
-
-            if purge_messages == "yes":
-                await target.purge(limit=100, check=lambda m: m.author != guild.me or not m.thread)
-
-            message = await get_message(original_message, target)
-
-            if not message:
-
-                async for m in target.history(limit=100):
-
-                    if m.author == guild.me and m.thread:
-                        message = m
-                        break
-
-        if existing_channel:
-            try:
-                await target.edit(**channel_kwargs)
-            except:
-                traceback.print_exc()
-
-        channel = target
+        channel = result.channel
 
         msg = f"{inter.author.mention}, o sistema pra pedidos de música foi configurado no canal <#{channel.id}> através do bot: {bot.user.mention}"
-
-        if player and player.text_channel != target:
-            if player.static:
-                try:
-                    await player.message.thread.edit(
-                        archived=True,
-                        locked=True,
-                        reason=f"Player reconfigurado por {inter.author}."
-                    )
-                except:
-                    pass
-            else:
-                try:
-                    await player.message.delete()
-                except:
-                    pass
-            if not message or message.channel.id != channel.id:
-                message = await send_idle_embed(channel, bot=bot, force=True, guild_data=guild_data)
-            player.message = message
-            player.static = True
-            player.text_channel = channel
-            player.setup_hints()
-            player.setup_features()
-            await player.invoke_np(force=True)
-
-        elif not message or message.channel.id != channel.id:
-            message = await send_idle_embed(channel, bot=bot, force=True, guild_data=guild_data)
-
-        if isinstance(channel, disnake.TextChannel):
-            if not message.thread:
-                if channel.permissions_for(guild.me).create_public_threads:
-                    await message.create_thread(name="Song-Requests", auto_archive_duration=10080)
-            else:
-                thread_kw = {}
-                if message.thread.locked and message.thread.permissions_for(guild.me).manage_threads:
-                    thread_kw.update({"locked": False, "archived": False})
-                elif message.thread.archived and message.thread.owner_id == bot.user.id:
-                    thread_kw["archived"] = False
-                if thread_kw:
-                    await message.thread.edit(reason=f"Song request reativado por: {inter.author}.", **thread_kw)
-        elif player and isinstance(channel, (disnake.VoiceChannel, disnake.StageChannel)) and player.guild.me.voice.channel != channel:
-            await player.connect(channel.id)
-
-        guild_data['player_controller']['channel'] = str(channel.id)
-        guild_data['player_controller']['message_id'] = str(message.id)
-        await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
 
         reset_txt = f"{inter.prefix}reset" if isinstance(inter, CustomContext) else "/reset"
 
@@ -952,104 +724,42 @@ class MusicSettings(commands.Cog):
 
         guild = bot.get_guild(inter.guild_id) or inter.guild
 
-        if not guild.me.guild_permissions.manage_threads:
-            raise GenericError(f"Não tenho permissão de **{perms_translations['manage_threads']}** no servidor.")
+        ensure_can_reset(guild)
 
         channel_inter = bot.get_channel(inter.channel.id)
 
         guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
 
-        try:
-            channel = bot.get_channel(int(guild_data['player_controller']['channel'])) or \
-                      await bot.fetch_channel(int(guild_data['player_controller']['channel']))
-        except:
-            channel = None
+        channel = await find_request_channel(bot, inter.guild_id, guild_data)
 
-        if not channel or channel.guild.id != inter.guild_id:
-            raise GenericError(f"**Não há canais de pedido de música configurado no bot {bot.user.mention} (ou o canal foi deletado).**")
+        async def notify(event: str):
 
-        try:
-            if isinstance(channel.parent, disnake.ForumChannel):
-                await channel.delete(reason=f"{inter.author.id} resetou player")
+            if event == "forum_deleted":
                 if channel_inter != channel:
                     await inter.edit_original_message("O post foi deletado com sucesso!", embed=None, components=None)
-
-                try:
-                    player: LavalinkPlayer = bot.music.players[guild.id]
-                except KeyError:
-                    pass
-                else:
-                    player.static = False
-                    player.message = None
-                    player.text_channel = channel_inter
-                    player.process_hint()
-                    await player.invoke_np(force=True)
-
                 return
 
-        except AttributeError:
-            pass
-
-        try:
-            original_message = await channel.fetch_message(int(guild_data["player_controller"]["message_id"]))
-        except:
-            original_message = None
-
-        guild_data["player_controller"].update({
-            "message_id": None,
-            "channel": None
-        })
-
-        await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
-
-        try:
-            func = inter.edit_original_message
-        except AttributeError:
             try:
-                func = inter.response.edit_message
+                func = inter.edit_original_message
             except AttributeError:
                 try:
-                    func = inter.store_message.edit
+                    func = inter.response.edit_message
                 except AttributeError:
-                    func = inter.send
+                    try:
+                        func = inter.store_message.edit
+                    except AttributeError:
+                        func = inter.send
 
-        await func(
-            embed=disnake.Embed(
-                color=self.bot.get_color(guild.me),
-                description="**O Canal de pedir música foi resetado com sucesso.**"
-            ), components=[]
-        )
-
-        try:
-            player: LavalinkPlayer = bot.music.players[guild.id]
-        except KeyError:
-            pass
-        else:
-            player.static = False
-            player.message = None
-            player.text_channel = channel_inter
-            player.process_hint()
-            await player.invoke_np(force=True)
-
-        try:
-            if delete_channel == "sim":
-                await channel.delete(reason=f"Player resetado por: {inter.author}")
-
-            elif original_message:
-                await original_message.edit(
-                    content=f"Canal de pedir música foi resetado pelo membro {inter.author.mention}.",
-                    embed=None, components=[
-                        disnake.ui.Button(label="Reconfigurar este canal", emoji="💠",
-                                          custom_id="musicplayer_request_channel")
-                    ]
-                )
-                await original_message.thread.edit(archived=True, reason=f"Player resetado por {inter.author}.")
-        except Exception as e:
-            traceback.print_exc()
-            raise GenericError(
-                "**O canal de pedir música foi resetado da base de dados mas ocorreu um erro no processo:** "
-                f"```py\n{repr(e)}```"
+            await func(
+                embed=disnake.Embed(
+                    color=self.bot.get_color(guild.me),
+                    description="**O Canal de pedir música foi resetado com sucesso.**"
+                ), components=[]
             )
+
+        await reset_request_channel(bot, guild, inter.author, channel, delete_channel=delete_channel,
+                                    channel_inter=channel_inter, guild_data=guild_data, notify=notify)
+
 
     djrole_cd = commands.CooldownMapping.from_cooldown(1, 7, commands.BucketType.guild)
     djrole_mc =commands.MaxConcurrency(1, per=commands.BucketType.guild, wait=False)
