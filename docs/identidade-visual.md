@@ -63,3 +63,11 @@ Quem hospeda a própria instância do EmpireMuse deve se atentar a duas configur
 - **Servidor de suporte (`SUPPORT_SERVER`)**: Por padrão, aponta para o servidor oficial EmpireHUB. Quem hospeda a própria instância deve trocar pelo convite do próprio servidor ou deixar vazio (`SUPPORT_SERVER=''`) para não exibir o link no comando `/about` nem nos botões de erro.
 - **Cor dos embeds (`EMBED_COLOR`)**: O padrão é o violeta `8B5CF6`. Para restaurar o comportamento clássico e utilizar a cor do cargo mais alto do bot no servidor, defina `EMBED_COLOR=none` (ou deixe vazio).
 
+---
+
+## 6. Padronização de Emojis Unicode
+
+O EmpireMuse utiliza exclusivamente **emojis Unicode padronizados** para controles do player e identificação de fontes de música (YouTube, Spotify, Deezer, SoundCloud, Apple Music, Tidal, Last.fm etc.), em substituição aos emojis personalizados legados que dependiam de servidores externos do autor original e falhavam ao renderizar nos bots do EmpireMuse.
+
+Além dos emojis universais, o nome da plataforma é exibido em texto explicativo onde antes havia apenas o ícone, assegurando renderização estável, acessibilidade a leitores de tela e visualização clara em qualquer tema ou plataforma do Discord.
+

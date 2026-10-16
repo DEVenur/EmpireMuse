@@ -85,13 +85,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
 
 ### Corrigido
+- **Arquivos de Deploy**: `render.yaml`, `discloud.config.example` e `squarecloud.config.example` atualizados com a identidade do EmpireMuse — o `render.yaml` apontava para o repositório original — e Python 3.13.5 no Render (item I-7 da Fase 1, anteriormente adiado).
+- **Emojis de Plataformas de Áudio**: 25 emojis personalizados do projeto original (hospedados em servidores Discord do autor original, que não renderizavam nos bots do EmpireMuse) substituídos por emojis Unicode padronizados; o nome da plataforma aparece em texto onde antes havia apenas o ícone.
 - **Canal de Pedidos (`utils/music/request_channel.py`)**: o reset de fórum (`/reset`) agora limpa os campos `channel` e `message_id` salvos no banco de dados; a verificação de permissões (`check_channel_perm`) passa a utilizar os nomes canônicos do Discord/disnake (`view_channel` e `create_forum_threads`), detectando corretamente a ausência de permissões necessárias.
 - **Lista de servidores Lavalink**: o download agora valida a resposta (status e formato), usa timeout e recorre ao arquivo local em caso de falha.
 - **Link do commit** no `/about` e no painel não inclui mais `.git`.
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
 
 ### Adiado
-- **Deploy** (Render, Discloud, SquareCloud, Replit e Gitpod): arquivos de configuração e referências ainda não foram revisados para o EmpireMuse; ficam para uma fase posterior.
+- **Deploy em 1 clique**: reativação dos botões de deploy em 1 clique (Render, Gitpod, Repl.it e Heroku) nos guias e no README mantida para fase posterior de revisão e validação das hospedagens.
 
 ### Nota de Origem
 O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), originalmente desenvolvido por **zRitsu** e disponibilizado sob a licença **GPL-2.0**.
