@@ -389,3 +389,61 @@ class TestConfig:
     def test_client_passes_the_configured_sha256_to_run_lavalink(self):
         source = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
         assert "lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256']" in source.replace('"', "'")
+
+
+# ============================================================================ pedidos do MAESTRO pós-aprovação (observações 1 e 2)
+
+class TestRunLavalinkSignature:
+    def test_sha256_is_the_last_parameter_and_keyword_only(self):
+        import inspect
+        params = list(inspect.signature(ll.run_lavalink).parameters.values())
+        assert params[-1].name == "lavalink_file_sha256"
+        assert params[-1].kind is inspect.Parameter.KEYWORD_ONLY
+        assert params[-1].default in (None, "")
+
+    def test_existing_positional_order_is_preserved(self):
+        import inspect
+        names = [p.name for p in inspect.signature(ll.run_lavalink).parameters.values()]
+        assert names[:6] == ["lavalink_file_url", "lavalink_initial_ram", "lavalink_ram_limit",
+                             "lavalink_additional_sleep", "lavalink_cpu_cores", "use_jabba"]
+
+    def test_client_still_calls_by_keyword_with_the_sha256(self):
+        source = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
+        assert "lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256']" in source.replace('"', "'")
+
+
+class TestOnlyHttpsForUserUrl:
+    @pytest.mark.parametrize("url", ["http://example.test/Lavalink.jar", "HTTP://example.test/Lavalink.jar",
+                                     "  http://example.test/Lavalink.jar"])
+    def test_http_url_is_refused_before_any_request_even_with_the_right_hash(self, net, tmp_path, url):
+        with pytest.raises(ll.LavalinkDownloadError) as info:
+            ll.prepare_lavalink_files(tmp_path, lavalink_file_url=url, lavalink_file_sha256=sha(JAR))
+        assert net.calls == [] and tree(tmp_path) == []
+        assert "HTTPS" in str(info.value)
+
+    @pytest.mark.parametrize("url", ["ftp://example.test/Lavalink.jar", "file:///etc/passwd", "example.test/Lavalink.jar"])
+    def test_other_schemes_are_refused_too(self, net, tmp_path, url):
+        with pytest.raises(ll.LavalinkDownloadError):
+            ll.prepare_lavalink_files(tmp_path, lavalink_file_url=url, lavalink_file_sha256=sha(JAR))
+        assert net.calls == []
+
+    def test_https_url_with_hash_is_still_accepted(self, net, tmp_path):
+        ll.prepare_lavalink_files(tmp_path, lavalink_file_url="https://example.test/meu/Lavalink.jar",
+                                  lavalink_file_sha256=sha(JAR))
+        assert (tmp_path / "Lavalink.jar").read_bytes() == JAR
+
+    def test_run_lavalink_refuses_http_and_never_starts_the_process(self, run):
+        with pytest.raises(ll.LavalinkDownloadError):
+            ll.run_lavalink(lavalink_file_url="http://example.test/Lavalink.jar", lavalink_file_sha256=sha(JAR))
+        assert run == []
+
+    def test_http_is_refused_even_if_an_official_looking_jar_already_exists(self, net, tmp_path):
+        (tmp_path / "Lavalink.jar").write_bytes(JAR)
+        with pytest.raises(ll.LavalinkDownloadError):
+            ll.prepare_lavalink_files(tmp_path, lavalink_file_url="http://example.test/Lavalink.jar",
+                                      lavalink_file_sha256=sha(JAR))
+
+    def test_official_urls_are_https(self):
+        assert branding.LAVALINK_JAR_URL.startswith("https://")
+        assert branding.LAVALINK_APPLICATION_YML_URL.startswith("https://")
+        assert branding.LAVALINK_BINARIES_URL.startswith("https://")

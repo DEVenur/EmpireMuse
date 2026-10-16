@@ -127,6 +127,8 @@ def _jar_hash(url: str, configured_sha256: str) -> str:
     """Hash do jar: o oficial usa o fixo do projeto; outro endereço exige ``LAVALINK_FILE_SHA256``."""
     if url == branding.LAVALINK_JAR_URL:
         return branding.LAVALINK_JAR_SHA256
+    if not url.lower().startswith("https://"):
+        raise LavalinkDownloadError("LAVALINK_FILE_URL precisa usar HTTPS (https://); outros esquemas são recusados.")
     if not (configured_sha256 or "").strip():
         raise LavalinkDownloadError(
             "LAVALINK_FILE_URL aponta para um endereço diferente do oficial: defina também LAVALINK_FILE_SHA256 "
@@ -184,12 +186,13 @@ def prepare_lavalink_files(directory: str = ".", *, lavalink_file_url: str = Non
 
 def run_lavalink(
         lavalink_file_url: str = None,
-        lavalink_file_sha256: str = None,
         lavalink_initial_ram: int = 30,
         lavalink_ram_limit: int = 100,
         lavalink_additional_sleep: int = 0,
         lavalink_cpu_cores: int = 1,
-        use_jabba: bool = False
+        use_jabba: bool = False,
+        *,
+        lavalink_file_sha256: str = None
 ):
     arch, osname = platform.architecture()
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
