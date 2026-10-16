@@ -1,0 +1,100 @@
+{# Bloco de links fixos (fragmento htmx). Variáveis: estado (acao, versao, valores, erros, mensagem, mensagem_tipo, acao_erro, alvo_erro), itens (nome, url, descricao), total, maximo, pode_editar, exportar_url. #}
+{% set erros = estado.erros %}
+{% set valores = estado.valores %}
+<section id="bloco-links" class="bloco-config bloco-largo" aria-labelledby="titulo-lista-links">
+  {% set form = estado %}
+  {% set form_id = "bloco-links" %}
+  {% include "_mensagem_form.html" %}
+
+  <div class="links-cabecalho">
+    <h2 class="subtitulo" id="titulo-lista-links">Links fixos</h2>
+    <p class="contagem-links"><strong>{{ total }} de {{ maximo }}</strong> links</p>
+  </div>
+  <p class="nota">Os links fixos aparecem no menu de favoritos do player deste servidor.</p>
+
+  {% if itens %}
+  <ul class="lista-links" role="list">
+    {% for indice, item in enumerate(itens) %}
+    {% set editando = estado.acao_erro == "editar" and estado.alvo_erro == item.nome %}
+    <li class="item-link">
+      <div class="item-link-texto">
+        <strong class="item-link-nome">{{ item.nome }}</strong>
+        {% if item.url.startswith(("http://", "https://")) %}
+        <a class="item-link-url" href="{{ item.url }}" rel="noopener noreferrer" target="_blank">{{ item.url }}<span class="visually-hidden"> (abre em outra aba)</span></a>
+        {% else %}
+        <span class="item-link-url">{{ item.url }}</span>
+        {% end %}
+        {% if item.descricao %}<span class="item-link-descricao">{{ item.descricao }}</span>{% end %}
+      </div>
+      <div class="item-link-acoes">
+        {% if pode_editar %}
+        <details{% if editando %} open{% end %}>
+          <summary role="button" class="secondary outline">Editar<span class="visually-hidden"> {{ item.nome }}</span></summary>
+          <form id="form-links-editar-{{ indice }}" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#bloco-links" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+            {% module xsrf_form_html() %}
+            <input type="hidden" name="versao" value="{{ estado.versao }}">
+            <input type="hidden" name="acao" value="editar">
+            <input type="hidden" name="nome" value="{{ item.nome }}">
+            <label for="editar-url-{{ indice }}">Endereço (URL)</label>
+            <input id="editar-url-{{ indice }}" type="url" name="url" value="{{ valores.get('url') if editando else item.url }}" autocomplete="off"{% if editando and erros.get("url") %} aria-invalid="true" aria-describedby="editar-erro-url-{{ indice }}"{% end %}>
+            {% if editando and erros.get("url") %}<small id="editar-erro-url-{{ indice }}" class="erro-campo">{{ erros["url"] }}</small>{% end %}
+            <label for="editar-descricao-{{ indice }}">Descrição (opcional, de 3 a 50 caracteres)</label>
+            <input id="editar-descricao-{{ indice }}" type="text" name="descricao" value="{{ valores.get('descricao') if editando else item.descricao }}" maxlength="50" autocomplete="off"{% if editando and erros.get("descricao") %} aria-invalid="true" aria-describedby="editar-erro-descricao-{{ indice }}"{% end %}>
+            {% if editando and erros.get("descricao") %}<small id="editar-erro-descricao-{{ indice }}" class="erro-campo">{{ erros["descricao"] }}</small>{% end %}
+            <button type="submit">Salvar alterações</button>
+          </form>
+        </details>
+        {% end %}
+        <form id="form-links-remover-{{ indice }}" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#bloco-links" hx-swap="outerHTML" hx-confirm="Remover o link {{ item.nome }}?" hx-disabled-elt="find button[type=submit]">
+          {% module xsrf_form_html() %}
+          <input type="hidden" name="versao" value="{{ estado.versao }}">
+          <input type="hidden" name="acao" value="remover">
+          <input type="hidden" name="nome" value="{{ item.nome }}">
+          <button type="submit" class="secondary outline botao-perigo">Remover<span class="visually-hidden"> {{ item.nome }}</span></button>
+        </form>
+      </div>
+    </li>
+    {% end %}
+  </ul>
+  {% else %}
+  <p class="nota">Este bot ainda não tem links fixos neste servidor.</p>
+  {% end %}
+
+  <p><a class="botao-acao secondary outline" role="button" href="{{ exportar_url }}" download>Exportar links (JSON)</a></p>
+
+  {% if pode_editar %}
+  {% set adicionando = estado.acao_erro == "adicionar" %}
+  <h2 class="subtitulo">Adicionar link</h2>
+  {% if total >= maximo %}<p class="nota">O limite de {{ maximo }} links foi atingido. Remova algum para adicionar outro.</p>{% end %}
+  <form id="form-links-adicionar" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#bloco-links" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {% module xsrf_form_html() %}
+    <input type="hidden" name="versao" value="{{ estado.versao }}">
+    <input type="hidden" name="acao" value="adicionar">
+    <label for="adicionar-nome">Nome (de 2 a 25 caracteres)</label>
+    <input id="adicionar-nome" type="text" name="nome" value="{{ (valores.get('nome') or '') if adicionando else '' }}" maxlength="25" autocomplete="off"{% if adicionando and erros.get("nome") %} aria-invalid="true" aria-describedby="adicionar-erro-nome"{% end %}>
+    {% if adicionando and erros.get("nome") %}<small id="adicionar-erro-nome" class="erro-campo">{{ erros["nome"] }}</small>{% end %}
+    <label for="adicionar-url">Endereço (URL)</label>
+    <input id="adicionar-url" type="url" name="url" value="{{ (valores.get('url') or '') if adicionando else '' }}" autocomplete="off"{% if adicionando and erros.get("url") %} aria-invalid="true" aria-describedby="adicionar-erro-url"{% end %}>
+    {% if adicionando and erros.get("url") %}<small id="adicionar-erro-url" class="erro-campo">{{ erros["url"] }}</small>{% end %}
+    <label for="adicionar-descricao">Descrição (opcional, de 3 a 50 caracteres)</label>
+    <input id="adicionar-descricao" type="text" name="descricao" value="{{ (valores.get('descricao') or '') if adicionando else '' }}" maxlength="50" autocomplete="off"{% if adicionando and erros.get("descricao") %} aria-invalid="true" aria-describedby="adicionar-erro-descricao"{% end %}>
+    {% if adicionando and erros.get("descricao") %}<small id="adicionar-erro-descricao" class="erro-campo">{{ erros["descricao"] }}</small>{% end %}
+    <button type="submit">Adicionar</button>
+  </form>
+
+  {% set importando = estado.acao_erro == "importar" %}
+  <h2 class="subtitulo">Importar links</h2>
+  <form id="form-links-importar" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#bloco-links" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {% module xsrf_form_html() %}
+    <input type="hidden" name="versao" value="{{ estado.versao }}">
+    <input type="hidden" name="acao" value="importar">
+    <label for="importar-dados">Conteúdo JSON</label>
+    <textarea id="importar-dados" name="dados" rows="6" spellcheck="false" autocomplete="off"{% if importando and erros.get("dados") %} aria-invalid="true" aria-describedby="importar-erro-dados importar-ajuda"{% else %} aria-describedby="importar-ajuda"{% end %}>{{ (valores.get("dados") or "") if importando else "" }}</textarea>
+    {% if importando and erros.get("dados") %}<small id="importar-erro-dados" class="erro-campo">{{ erros["dados"] }}</small>{% end %}
+    <small id="importar-ajuda">Cole o conteúdo de um arquivo exportado por este painel ou pelo comando do bot. Links com o mesmo nome são substituídos.</small>
+    <button type="submit">Importar</button>
+  </form>
+  {% else %}
+  <p class="aviso aviso-info" role="note">Configure o canal de pedidos primeiro para adicionar, editar ou importar links.</p>
+  {% end %}
+</section>

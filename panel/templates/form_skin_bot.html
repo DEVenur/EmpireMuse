@@ -1,0 +1,14 @@
+{% set form_id = "form-skin-bot" %}
+{% set erros = form.erros %}
+{% set valores = form.valores %}
+<form id="form-skin-bot" class="form-config" method="post" action="{{ form.acao }}" hx-post="{{ form.acao }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+  {% module xsrf_form_html() %}
+  <input type="hidden" name="versao" value="{{ form.versao }}">
+  <h2 class="subtitulo">Aparência do player neste bot</h2>
+  {% include "_mensagem_form.html" %}
+  {% set nome_campo, rotulo, opcoes, atual, com_vazio, prefixo_id = "skin", "Skin do player", skins, valores.get("skin"), False, "skin" %}
+  {% include "_campo_skin.html" %}
+  {% set nome_campo, rotulo, opcoes, atual, com_vazio, prefixo_id = "static_skin", "Skin do player no modo estático", skins_estaticas, valores.get("static_skin"), False, "static-skin" %}
+  {% include "_campo_skin.html" %}
+  <button type="submit">Salvar</button>
+</form>

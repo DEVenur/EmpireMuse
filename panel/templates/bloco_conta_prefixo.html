@@ -1,0 +1,19 @@
+{# Prefixo pessoal (fragmento htmx). Variável: estado (acao, versao, valores{custom_prefix}, erros, mensagem, mensagem_tipo). #}
+{% set form = estado %}
+{% set form_id = "conta-prefixo" %}
+{% set erros = estado.erros %}
+<section id="conta-prefixo" class="bloco-config bloco-largo" aria-labelledby="titulo-conta-prefixo">
+  <h2 class="subtitulo" id="titulo-conta-prefixo">Prefixo pessoal</h2>
+  {% include "_mensagem_form.html" %}
+  <p class="nota">Prefixo que só você usa para chamar os comandos de texto do bot.</p>
+  <form id="form-conta-prefixo" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#conta-prefixo" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {% module xsrf_form_html() %}
+    <input type="hidden" name="versao" value="{{ estado.versao }}">
+    <input type="hidden" name="acao" value="prefixo">
+    <label for="conta-campo-prefixo">Prefixo</label>
+    <input id="conta-campo-prefixo" type="text" name="custom_prefix" value="{{ estado.valores.get('custom_prefix') or '' }}" maxlength="5" autocomplete="off" autocapitalize="off" spellcheck="false"{% if erros.get("custom_prefix") %} aria-invalid="true" aria-describedby="conta-erro-prefixo conta-ajuda-prefixo"{% else %} aria-describedby="conta-ajuda-prefixo"{% end %}>
+    {% if erros.get("custom_prefix") %}<small id="conta-erro-prefixo" class="erro-campo">{{ erros["custom_prefix"] }}</small>{% end %}
+    <small id="conta-ajuda-prefixo">De 1 a 5 caracteres, sem espaços. Deixe vazio para remover o seu prefixo.</small>
+    <button type="submit">Salvar prefixo</button>
+  </form>
+</section>

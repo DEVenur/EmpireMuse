@@ -1,0 +1,14 @@
+{# Topo das páginas de configuração. Variáveis: acesso, inicial, titulo_categoria. #}
+<nav class="migalhas" aria-label="Você está em">
+  <a href="/painel/servidores">Meus servidores</a>
+  <span aria-hidden="true">›</span>
+  <a href="/painel/servidores/{{ acesso.guild_id }}">{{ acesso.name }}</a>
+</nav>
+<div class="servidor-topo">
+  {% if acesso.icon_url %}
+  <img class="servidor-icone" src="{{ acesso.icon_url }}" alt="" width="48" height="48">
+  {% else %}
+  <span class="servidor-icone servidor-inicial" aria-hidden="true">{{ inicial }}</span>
+  {% end %}
+  <h1 id="titulo-config">{{ titulo_categoria }}</h1>
+</div>

@@ -1,0 +1,4 @@
+{# Mensagem do formulário. Variáveis: form, form_id. #}
+{% if form.mensagem %}
+<p class="mensagem-form {% if form.mensagem_tipo == 'sucesso' %}mensagem-sucesso{% else %}mensagem-erro{% end %}" id="msg-{{ form_id }}" role="{% if form.mensagem_tipo == 'sucesso' %}status{% else %}alert{% end %}" tabindex="-1">{{ form.mensagem }}</p>
+{% end %}

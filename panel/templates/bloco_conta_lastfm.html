@@ -1,0 +1,23 @@
+{# Last.fm (fragmento htmx). Variável: estado (acao, versao, valores{scrobble}, mensagem, mensagem_tipo, vinculada, usuario). A chave de sessão nunca chega ao template. #}
+{% set form = estado %}
+{% set form_id = "conta-lastfm" %}
+<section id="conta-lastfm" class="bloco-config bloco-largo" aria-labelledby="titulo-conta-lastfm">
+  <h2 class="subtitulo" id="titulo-conta-lastfm">Last.fm</h2>
+  {% include "_mensagem_form.html" %}
+  {% if estado.vinculada %}
+  <p class="nota">Conta vinculada: <strong>{{ estado.usuario }}</strong></p>
+  <form id="form-conta-lastfm" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#conta-lastfm" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {% module xsrf_form_html() %}
+    <input type="hidden" name="versao" value="{{ estado.versao }}">
+    <input type="hidden" name="acao" value="lastfm_scrobble">
+    <label for="conta-lastfm-scrobble">
+      <input id="conta-lastfm-scrobble" type="checkbox" name="scrobble" value="on" role="switch" aria-describedby="conta-lastfm-ajuda"{% if estado.valores.get("scrobble") %} checked{% end %}>
+      Registrar no Last.fm as músicas que eu ouvir (scrobble)
+    </label>
+    <small id="conta-lastfm-ajuda">Para vincular ou desvincular a conta, use os comandos do bot no Discord.</small>
+    <button type="submit">Salvar</button>
+  </form>
+  {% else %}
+  <p class="aviso aviso-info" role="note">Nenhuma conta do Last.fm está vinculada. Vincule pelo Discord, usando o comando do bot para o Last.fm; depois volte aqui para ligar ou desligar o scrobble.</p>
+  {% end %}
+</section>

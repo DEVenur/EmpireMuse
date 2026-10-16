@@ -1,0 +1,14 @@
+{# Seletor de bot (GET, funciona sem JS). Variáveis: acesso, bot_atual, mostrar_seletor, caminho_categoria. #}
+{% if mostrar_seletor %}
+<form class="seletor-bot" method="get" action="{{ caminho_categoria }}">
+  <label for="seletor-bot">Bot a configurar</label>
+  <div class="seletor-bot-linha">
+    <select id="seletor-bot" name="bot">
+      {% for bot in acesso.bots %}
+      <option value="{{ bot.id }}"{% if bot_atual and bot.id == bot_atual.id %} selected{% end %}>{{ bot.name }}</option>
+      {% end %}
+    </select>
+    <button type="submit" class="secondary outline">Trocar bot</button>
+  </div>
+</form>
+{% end %}

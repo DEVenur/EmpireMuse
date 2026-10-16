@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block titulo %}Geral · {{ acesso.name }}{% end %}
+
+{% block conteudo %}
+{% set titulo_categoria = "Geral" %}
+{% set slug_atual = "geral" %}
+{% set caminho_categoria = "/painel/servidores/" + acesso.guild_id + "/geral" %}
+{% include "_topo_config.html" %}
+{% include "_nav_categorias.html" %}
+<div class="bloco-config">
+  {% set form = forms["prefixo"] %}
+  {% include "form_prefixo.html" %}
+</div>
+<div class="bloco-config">
+  {% set form = forms["status_voz"] %}
+  {% include "form_status_voz.html" %}
+</div>
+{% include "bloco_ouvir_junto.html" %}
+{% end %}

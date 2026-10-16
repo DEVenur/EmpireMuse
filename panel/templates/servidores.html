@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block titulo %}Meus servidores{% end %}
+
+{% block conteudo %}
+<section aria-labelledby="titulo-servidores">
+  <h1 id="titulo-servidores">Meus servidores</h1>
+  <p class="nota">
+    Aparecem aqui os servidores em que você tem a permissão <strong>Gerenciar Servidor</strong>.
+    Para atualizar a lista, é preciso sair e entrar de novo com o Discord.
+  </p>
+
+  {% if cartoes %}
+  <ul class="grade-servidores" role="list">
+    {% for cartao in cartoes %}
+    <li class="cartao-servidor">
+      <div class="cartao-cabecalho">
+        {% if cartao.icon_url %}
+        <img class="servidor-icone" src="{{ cartao.icon_url }}" alt="" width="48" height="48" loading="lazy">
+        {% else %}
+        <span class="servidor-icone servidor-inicial" aria-hidden="true">{{ cartao.initial }}</span>
+        {% end %}
+        <h2 class="servidor-nome">{{ cartao.name }}</h2>
+      </div>
+      <div class="cartao-acoes">
+        {% if cartao.configurable %}
+        <a class="botao-acao" role="button" href="/painel/servidores/{{ cartao.guild_id }}"
+           aria-label="Configurar {{ cartao.name }}">Configurar</a>
+        {% end %}
+        {% for convite in cartao.invites %}
+        <a class="botao-acao secondary outline" role="button" href="{{ convite.url }}"
+           rel="noopener noreferrer" aria-label="Adicionar {{ convite.bot_name }} a {{ cartao.name }}">
+          <img class="bot-avatar" src="{{ convite.bot_avatar_url }}" alt="" width="20" height="20" loading="lazy">
+          Adicionar {{ convite.bot_name }}
+        </a>
+        {% end %}
+      </div>
+    </li>
+    {% end %}
+  </ul>
+  {% else %}
+  <div class="estado-vazio">
+    <p class="lead">Você não gerencia nenhum servidor.</p>
+    <p class="nota">Para aparecer aqui, você precisa da permissão <strong>Gerenciar Servidor</strong> no Discord.</p>
+  </div>
+  {% end %}
+</section>
+{% end %}

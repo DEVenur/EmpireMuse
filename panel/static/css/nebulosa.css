@@ -1,0 +1,757 @@
+/*
+ * Identidade visual "Nebulosa" do painel EmpireMuse, aplicada sobre o Pico CSS 2.1.1.
+ * Paleta de marca: #0B0A1F fundo · #8B5CF6 violeta · #3B82F6 azul · #C026D3 magenta · #E11D48 vermelho.
+ * Contrastes (WCAG 2.2 AA, medidos): texto #F5F3FF/#0B0A1F 17,8:1 · texto suave #C4B5FD/#0B0A1F 10,6:1 ·
+ * link #A78BFA/#0B0A1F 7,2:1 · botão #FFFFFF/#7C3AED 5,7:1 (hover #FFFFFF/#6D28D9 7,1:1) ·
+ * erro #FB7185/#15133A 6,6:1 · foco #3B82F6/#0B0A1F 5,3:1 · borda de campo #6B64B8/#15133A 3,5:1.
+ */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Tokens de marca */
+  --nb-fundo: #0b0a1f;
+  --nb-superficie: #15133a;
+  --nb-elevada: #1e1b4b;
+  --nb-borda: #2e2a6b;
+  --nb-borda-campo: #6b64b8;
+  --nb-texto: #f5f3ff;
+  --nb-texto-suave: #c4b5fd;
+  --nb-violeta: #8b5cf6;
+  --nb-violeta-botao: #7c3aed;
+  --nb-violeta-botao-hover: #6d28d9;
+  --nb-violeta-link: #a78bfa;
+  --nb-azul: #3b82f6;
+  --nb-magenta: #c026d3;
+  --nb-vermelho: #e11d48;
+  --nb-erro-texto: #fb7185;
+
+  /* Sobrescritas do Pico */
+  --pico-background-color: var(--nb-fundo);
+  --pico-color: var(--nb-texto);
+  --pico-muted-color: var(--nb-texto-suave);
+  --pico-muted-border-color: var(--nb-borda);
+  --pico-primary: var(--nb-violeta-link);
+  --pico-primary-background: var(--nb-violeta-botao);
+  --pico-primary-border: var(--nb-violeta-botao);
+  --pico-primary-underline: rgb(167 139 250 / 50%);
+  --pico-primary-hover: #c4b5fd;
+  --pico-primary-hover-background: var(--nb-violeta-botao-hover);
+  --pico-primary-hover-border: var(--nb-violeta-botao-hover);
+  --pico-primary-hover-underline: var(--pico-primary-hover);
+  --pico-primary-focus: rgb(59 130 246 / 55%);
+  --pico-primary-inverse: #fff;
+  --pico-h1-color: var(--nb-texto);
+  --pico-h2-color: var(--nb-texto);
+  --pico-h3-color: var(--nb-texto);
+  --pico-card-background-color: var(--nb-superficie);
+  --pico-card-border-color: var(--nb-borda);
+  --pico-card-sectioning-background-color: var(--nb-elevada);
+  --pico-form-element-background-color: var(--nb-superficie);
+  --pico-form-element-border-color: var(--nb-borda-campo);
+  --pico-form-element-color: var(--nb-texto);
+  --pico-form-element-focus-color: var(--nb-azul);
+  --pico-form-element-active-border-color: var(--nb-azul);
+  --pico-form-element-placeholder-color: var(--nb-texto-suave);
+  --pico-form-element-invalid-border-color: var(--nb-erro-texto);
+  --pico-form-element-invalid-active-border-color: var(--nb-erro-texto);
+  --pico-form-element-invalid-focus-color: var(--nb-erro-texto);
+  --pico-switch-checked-background-color: var(--nb-violeta-botao);
+  --pico-border-radius: 0.5rem;
+}
+
+body {
+  background:
+    radial-gradient(60rem 30rem at 85% -10%, rgb(139 92 246 / 22%), transparent 70%),
+    radial-gradient(45rem 28rem at -10% 10%, rgb(59 130 246 / 14%), transparent 70%),
+    var(--nb-fundo);
+  background-attachment: fixed;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1 0 auto;
+  padding-block: 2.5rem;
+}
+
+main:focus {
+  outline: none;
+}
+
+/* Foco visível em todos os controles (WCAG 2.4.7 / 2.4.11) */
+:focus-visible {
+  outline: 0.1875rem solid var(--nb-azul);
+  outline-offset: 0.1875rem;
+}
+
+.pular-conteudo {
+  background: var(--nb-violeta-botao);
+  border-radius: 0 0 var(--pico-border-radius) var(--pico-border-radius);
+  color: #fff;
+  left: 1rem;
+  padding: 0.5rem 1rem;
+  position: absolute;
+  text-decoration: none;
+  top: -4rem;
+  z-index: 10;
+}
+
+.pular-conteudo:focus {
+  top: 0;
+}
+
+/* Cabeçalho */
+.topo {
+  background: rgb(21 19 58 / 85%);
+  border-bottom: 1px solid var(--nb-borda);
+}
+
+.topo-conteudo {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding-block: 0.75rem;
+}
+
+.marca {
+  align-items: center;
+  color: var(--nb-texto);
+  display: inline-flex;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+
+.marca img {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.marca-nome {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.marca-selo {
+  border: 1px solid var(--nb-violeta-link);
+  border-radius: 999px;
+  color: var(--nb-texto-suave);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.625rem;
+  text-transform: uppercase;
+}
+
+/* Área do usuário no cabeçalho */
+.usuario {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.usuario-avatar {
+  background: var(--nb-elevada);
+  border-radius: 50%;
+  height: 2rem;
+  width: 2rem;
+}
+
+.usuario-nome {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-sair {
+  margin: 0;
+}
+
+.botao-sair {
+  --pico-color: var(--nb-texto-suave);
+  --pico-border-color: var(--nb-borda-campo);
+  --pico-background-color: transparent;
+  color: var(--nb-texto-suave);
+  margin: 0;
+  padding: 0.375rem 1rem;
+  width: auto;
+}
+
+.botao-sair:hover {
+  background: var(--nb-elevada);
+  color: var(--nb-texto);
+}
+
+@media (max-width: 480px) {
+  .usuario-nome {
+    display: none;
+  }
+}
+
+/* Boas-vindas e erro */
+.boas-vindas,
+.erro {
+  margin-inline: auto;
+  max-width: 40rem;
+  text-align: center;
+}
+
+.boas-vindas-logo {
+  filter: drop-shadow(0 0 1.5rem rgb(139 92 246 / 45%));
+  height: 7.5rem;
+  margin-bottom: 1rem;
+  width: 7.5rem;
+}
+
+.lead {
+  color: var(--nb-texto-suave);
+  font-size: 1.125rem;
+}
+
+.nota {
+  color: var(--nb-texto-suave);
+  font-size: 0.9rem;
+}
+
+.botao-entrar {
+  font-size: 1.125rem;
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+}
+
+.erro-codigo {
+  background: linear-gradient(90deg, var(--nb-azul), var(--nb-violeta), var(--nb-magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(4rem, 18vw, 7rem);
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+/* Avisos (região ao vivo) */
+.avisos:empty {
+  display: none;
+}
+
+.aviso {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-erro-texto);
+  border-radius: var(--pico-border-radius);
+  color: var(--nb-erro-texto);
+  padding: 0.75rem 1rem;
+}
+
+/* Indicadores do htmx (o estilo embutido do htmx fica desligado por causa da CSP) */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}
+
+/* Rodapé */
+.rodape {
+  border-top: 1px solid var(--nb-borda);
+  color: var(--nb-texto-suave);
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  padding-block: 1.5rem;
+  text-align: center;
+}
+
+.rodape p {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
+
+/* Etapa 3 — menu principal e servidores */
+.menu-principal {
+  margin-inline-start: auto;
+  margin-inline-end: 1rem;
+}
+
+.menu-principal a {
+  color: var(--nb-texto-suave);
+  padding: 0.25rem 0.5rem;
+  text-decoration: none;
+}
+
+.menu-principal a:hover {
+  color: var(--nb-texto);
+  text-decoration: underline;
+}
+
+.grade-servidores {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.cartao-servidor {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  justify-content: space-between;
+  list-style: none;
+  margin: 0;
+  padding: 1rem;
+}
+
+.cartao-cabecalho,
+.servidor-topo,
+.bot-item {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.servidor-nome {
+  font-size: 1.125rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.servidor-icone {
+  background: var(--nb-elevada);
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 48px;
+  width: 48px;
+}
+
+.servidor-icone-grande {
+  height: 64px;
+  width: 64px;
+}
+
+.servidor-inicial {
+  align-items: center;
+  color: var(--nb-texto);
+  display: inline-flex;
+  font-size: 1.25rem;
+  font-weight: 700;
+  justify-content: center;
+}
+
+.cartao-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.botao-acao {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 0;
+  text-align: center;
+  width: 100%;
+}
+
+.bot-avatar {
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.estado-vazio {
+  background: var(--nb-superficie);
+  border: 1px dashed var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  margin-top: 1.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.migalhas {
+  margin-bottom: 1rem;
+}
+
+.subtitulo {
+  font-size: 1.125rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.lista-bots,
+.categorias {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lista-bots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.bot-item {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  padding: 0.5rem 0.75rem;
+}
+
+.categorias {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.categorias li {
+  list-style: none;
+  margin: 0;
+}
+
+.categoria-item {
+  align-items: center;
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  color: var(--nb-texto-suave);
+  cursor: not-allowed;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+}
+
+.categoria-selo {
+  border: 1px solid var(--nb-borda);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .menu-principal {
+    margin-inline-end: 0.5rem;
+  }
+}
+
+/* Etapa 4a — formulários de configuração */
+.nav-categorias {
+  margin: 1rem 0 1.5rem;
+}
+
+.categoria-link {
+  color: var(--nb-texto);
+  text-decoration: none;
+}
+
+.categoria-link:hover {
+  background: var(--nb-elevada);
+}
+
+.categoria-link[aria-current="page"] {
+  background: var(--nb-elevada);
+  border-color: var(--pico-primary-hover-background, #8B5CF6);
+  font-weight: 600;
+}
+
+.migalhas {
+  color: var(--nb-texto-suave);
+  font-size: 0.875rem;
+}
+
+.seletor-bot {
+  margin-bottom: 1.5rem;
+  max-width: 28rem;
+}
+
+.seletor-bot-linha {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.seletor-bot-linha select,
+.seletor-bot-linha button {
+  margin-bottom: 0;
+}
+
+.seletor-bot-linha button {
+  flex-shrink: 0;
+  width: auto;
+}
+
+.bloco-config {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  margin-bottom: 1.5rem;
+  max-width: 40rem;
+  padding: 1.25rem;
+}
+
+.bloco-config .subtitulo:first-child,
+.form-config .subtitulo:first-of-type {
+  margin-top: 0;
+}
+
+.opcoes {
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.opcoes legend {
+  color: var(--nb-texto-suave);
+  font-size: 0.875rem;
+  padding-inline: 0.25rem;
+}
+
+.opcoes-rolagem {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.mensagem-form {
+  border: 1px solid;
+  border-radius: var(--pico-border-radius);
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.mensagem-sucesso {
+  background: var(--nb-superficie);
+  border-color: #34D399;
+  color: #6EE7B7;
+}
+
+.mensagem-erro {
+  background: var(--nb-superficie);
+  border-color: var(--nb-erro-texto);
+  color: var(--nb-erro-texto);
+}
+
+.erro-campo {
+  color: var(--nb-erro-texto);
+  display: block;
+  font-weight: 600;
+}
+
+.placeholders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0.5rem 0 1rem;
+  padding: 0;
+}
+
+.placeholders li {
+  list-style: none;
+  margin: 0;
+}
+
+.form-config button[type="submit"] {
+  width: auto;
+}
+
+/* Etapa 4b — links fixos e ouvir junto */
+.visually-hidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.bloco-largo {
+  max-width: 52rem;
+}
+
+.links-cabecalho {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+}
+
+.links-cabecalho .subtitulo {
+  margin-top: 0;
+}
+
+.contagem-links {
+  color: var(--nb-texto-suave);
+  margin: 0;
+}
+
+.lista-links {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.item-link {
+  align-items: flex-start;
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: space-between;
+  list-style: none;
+  margin: 0;
+  padding: 0.75rem 1rem;
+}
+
+.item-link-texto {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.item-link-nome,
+.item-link-url {
+  overflow-wrap: anywhere;
+}
+
+.item-link-url {
+  color: var(--nb-link, #A78BFA);
+  font-size: 0.875rem;
+}
+
+.item-link-descricao {
+  color: var(--nb-texto-suave);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.item-link-acoes {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.item-link-acoes form,
+.item-link-acoes summary {
+  margin: 0;
+}
+
+.item-link-acoes details {
+  margin: 0;
+}
+
+.item-link-acoes details[open] {
+  flex-basis: 100%;
+}
+
+.item-link-acoes summary {
+  list-style: none;
+  width: auto;
+}
+
+.item-link-acoes button {
+  margin: 0;
+  width: auto;
+}
+
+.botao-perigo {
+  --pico-color: var(--nb-erro-texto);
+  --pico-border-color: var(--nb-erro-texto);
+}
+
+.aviso-info {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  color: var(--nb-texto-suave);
+  padding: 0.75rem 1rem;
+}
+
+/* Etapa 4c — canal de pedidos */
+.tarefa {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  margin-bottom: 1.5rem;
+  max-width: 52rem;
+  padding: 1rem 1.25rem;
+}
+
+.tarefa-titulo {
+  font-size: 1.125rem;
+  margin: 0 0 0.5rem;
+}
+
+.tarefa-mensagem {
+  overflow-wrap: anywhere;
+}
+
+.tarefa-ok {
+  border-color: #34D399;
+}
+
+.tarefa-erro {
+  border-color: var(--nb-erro-texto);
+}
+
+.tarefa-erro .tarefa-mensagem {
+  color: var(--nb-erro-texto);
+}
+
+.bloco-perigo {
+  border-color: var(--nb-erro-texto);
+}
+
+.botao-perigo-cheio {
+  --pico-background-color: #BE123C;
+  --pico-border-color: #BE123C;
+  --pico-color: #FFFFFF;
+  width: auto;
+}
+
+.botao-perigo-cheio:hover,
+.botao-perigo-cheio:focus {
+  --pico-background-color: #9F1239;
+  --pico-border-color: #9F1239;
+}
+
+/* Etapa 5 — minha conta */
+.token-novo .token-valor {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  user-select: all;
+  font-size: 1rem;
+}
+
+.bloco-config + .bloco-config {
+  margin-top: 1.5rem;
+}

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0B0A1F">
+  <meta name="xsrf-token" content="{{ handler.xsrf_token.decode('ascii') }}">
+  <meta name="htmx-config" content='{"allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true, "includeIndicatorStyles": false}'>
+  <title>{% block titulo %}Painel{% end %} · EmpireMuse</title>
+  <link rel="icon" type="image/svg+xml" href="/painel/marca/logo.svg">
+  <link rel="stylesheet" href="{{ static_url('vendor/pico.min.css') }}">
+  <link rel="stylesheet" href="{{ static_url('css/nebulosa.css') }}">
+  <script src="{{ static_url('vendor/htmx.min.js') }}" defer></script>
+  <script src="{{ static_url('js/painel.js') }}" defer></script>
+</head>
+<body>
+  <a class="pular-conteudo" href="#conteudo">Pular para o conteúdo</a>
+  <header class="topo">
+    <div class="container topo-conteudo">
+      <a class="marca" href="/painel/" aria-label="EmpireMuse — página inicial do painel">
+        <img src="/painel/marca/logo.svg" alt="" width="40" height="40">
+        <span class="marca-nome">EmpireMuse</span>
+        <span class="marca-selo">Painel</span>
+      </a>
+      {% block navegacao %}
+      {% if usuario %}
+      <nav class="menu-principal" aria-label="Principal">
+        <a href="/painel/servidores">Meus servidores</a>
+        <a href="/painel/conta">Minha conta</a>
+      </nav>
+      <div class="usuario">
+        <img class="usuario-avatar" src="{{ avatar_url }}" alt="" width="32" height="32">
+        <span class="usuario-nome">{{ usuario.global_name or usuario.username }}</span>
+        <form method="post" action="/painel/logout" class="form-sair">
+          {% module xsrf_form_html() %}
+          <button type="submit" class="secondary outline botao-sair">Sair</button>
+        </form>
+      </div>
+      {% end %}
+      {% end %}
+    </div>
+  </header>
+
+  <main id="conteudo" class="container" tabindex="-1">
+    <div id="avisos" class="avisos" role="status" aria-live="polite"></div>
+    {% block conteudo %}{% end %}
+  </main>
+
+  <footer class="rodape">
+    <div class="container">
+      <p>
+        EmpireMuse é software livre (GPL-2.0), baseado no
+        <a href="https://github.com/zRitsu/MuseHeart-MusicBot" rel="noopener noreferrer">MuseHeart-MusicBot</a>
+        de zRitsu.
+        <a href="https://github.com/DiscordEmpireHub/EmpireMuse" rel="noopener noreferrer">Código-fonte</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

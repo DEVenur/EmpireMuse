@@ -1,0 +1,35 @@
+{% set form_id = "form-player" %}
+{% set erros = form.erros %}
+{% set valores = form.valores %}
+<form id="form-player" class="form-config" method="post" action="{{ form.acao }}" hx-post="{{ form.acao }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+  {% module xsrf_form_html() %}
+  <input type="hidden" name="versao" value="{{ form.versao }}">
+  {% include "_mensagem_form.html" %}
+
+  <label for="campo-volume">Volume inicial do player</label>
+  <select id="campo-volume" name="default_player_volume"{% if erros.get("default_player_volume") %} aria-invalid="true" aria-describedby="erro-volume ajuda-volume"{% else %} aria-describedby="ajuda-volume"{% end %}>
+    {% for volume in volumes %}
+    <option value="{{ volume }}"{% if str(volume) == str(valores.get("default_player_volume")) %} selected{% end %}>{{ volume }}%</option>
+    {% end %}
+  </select>
+  {% if erros.get("default_player_volume") %}<small id="erro-volume" class="erro-campo">{{ erros["default_player_volume"] }}</small>{% end %}
+  <small id="ajuda-volume">Volume com que o player começa a tocar neste servidor.</small>
+
+  <fieldset class="opcoes">
+    <legend>Comportamento</legend>
+    <label>
+      <input type="checkbox" name="autoplay" value="on"{% if valores.get("autoplay") %} checked{% end %}>
+      Autoplay: continuar tocando músicas parecidas quando a fila acabar
+    </label>
+    <label>
+      <input type="checkbox" name="check_other_bots_in_vc" value="on"{% if valores.get("check_other_bots_in_vc") %} checked{% end %}>
+      Não entrar em canais de voz onde já há outro bot de música
+    </label>
+    <label>
+      <input type="checkbox" name="enable_restrict_mode" value="on"{% if valores.get("enable_restrict_mode") %} checked{% end %}>
+      Modo restrito: só DJs e quem tem permissão podem usar os controles
+    </label>
+  </fieldset>
+
+  <button type="submit">Salvar</button>
+</form>

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block titulo %}Aparência · {{ acesso.name }}{% end %}
+
+{% block conteudo %}
+{% set titulo_categoria = "Aparência" %}
+{% set slug_atual = "aparencia" %}
+{% set caminho_categoria = "/painel/servidores/" + acesso.guild_id + "/aparencia" %}
+{% include "_topo_config.html" %}
+{% include "_nav_categorias.html" %}
+{% include "_seletor_bot.html" %}
+<div class="bloco-config">
+  {% set form = forms["skin_bot"] %}
+  {% include "form_skin_bot.html" %}
+</div>
+<div class="bloco-config">
+  {% set form = forms["skin_global"] %}
+  {% include "form_skin_global.html" %}
+</div>
+{% end %}

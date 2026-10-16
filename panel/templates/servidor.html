@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ acesso.name }}{% end %}
+
+{% block conteudo %}
+<nav class="migalhas" aria-label="Você está em">
+  <a href="/painel/servidores">Meus servidores</a>
+</nav>
+
+<section aria-labelledby="titulo-servidor">
+  <div class="servidor-topo">
+    {% if acesso.icon_url %}
+    <img class="servidor-icone servidor-icone-grande" src="{{ acesso.icon_url }}" alt="" width="64" height="64">
+    {% else %}
+    <span class="servidor-icone servidor-icone-grande servidor-inicial" aria-hidden="true">{{ inicial }}</span>
+    {% end %}
+    <h1 id="titulo-servidor">{{ acesso.name }}</h1>
+  </div>
+
+  <h2 class="subtitulo">Bots neste servidor</h2>
+  <ul class="lista-bots" role="list">
+    {% for bot in acesso.bots %}
+    <li class="bot-item">
+      <img class="bot-avatar" src="{{ bot.avatar_url }}" alt="" width="32" height="32" loading="lazy">
+      <span>{{ bot.name }}</span>
+    </li>
+    {% end %}
+  </ul>
+
+  {% if convites %}
+  <h2 class="subtitulo">Adicionar mais bots</h2>
+  <p class="nota">Estes bots ainda não estão neste servidor.</p>
+  <ul class="lista-bots" role="list">
+    {% for convite in convites %}
+    <li>
+      <a class="botao-acao secondary outline" role="button" href="{{ convite.url }}" rel="noopener noreferrer"
+         aria-label="Adicionar {{ convite.bot_name }} a {{ acesso.name }}">
+        <img class="bot-avatar" src="{{ convite.bot_avatar_url }}" alt="" width="20" height="20" loading="lazy">
+        Adicionar {{ convite.bot_name }}
+      </a>
+    </li>
+    {% end %}
+  </ul>
+  {% end %}
+
+  <h2 class="subtitulo" id="titulo-categorias">Configurações</h2>
+  {% set slug_atual, mostrar_seletor, bot_atual = None, False, None %}
+  {% include "_nav_categorias.html" %}
+</section>
+{% end %}

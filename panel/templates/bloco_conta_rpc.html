@@ -1,0 +1,24 @@
+{# Token do app de RPC (fragmento htmx). Variável: estado (acao, versao, mensagem, mensagem_tipo, disponivel, configurado, token_novo). token_novo só existe na resposta do POST que gerou o token. #}
+{% set form = estado %}
+{% set form_id = "conta-rpc" %}
+{% if estado.disponivel %}
+<section id="conta-rpc" class="bloco-config bloco-largo" aria-labelledby="titulo-conta-rpc">
+  <h2 class="subtitulo" id="titulo-conta-rpc">Token do app de RPC</h2>
+  {% include "_mensagem_form.html" %}
+  <p class="nota">O token conecta o app de presença (Rich Presence) do bot ao seu Discord. Trate-o como uma senha.</p>
+  {% if estado.token_novo %}
+  <div class="aviso aviso-info token-novo" role="note">
+    <p><strong>Copie o token agora:</strong> ele não será exibido novamente.</p>
+    <p><code class="token-valor">{{ estado.token_novo }}</code></p>
+  </div>
+  {% end %}
+  <p class="nota" id="conta-rpc-estado"><strong>{% if estado.configurado %}Token configurado{% else %}Nenhum token{% end %}</strong></p>
+  <form id="form-conta-rpc" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#conta-rpc" hx-swap="outerHTML"{% if estado.configurado %} hx-confirm="Gerar um novo token? O token atual deixará de funcionar."{% end %} hx-disabled-elt="find button[type=submit]">
+    {% module xsrf_form_html() %}
+    <input type="hidden" name="versao" value="{{ estado.versao }}">
+    <input type="hidden" name="acao" value="rpc_token_gerar">
+    {% if estado.configurado %}<p class="nota" id="conta-rpc-aviso">Gerar um novo token faz o token atual <strong>deixar de funcionar</strong>: o app de RPC conectado com ele será desconectado e precisará do novo token.</p>{% end %}
+    <button type="submit"{% if estado.configurado %} class="secondary outline botao-perigo" aria-describedby="conta-rpc-aviso"{% end %}>Gerar novo token</button>
+  </form>
+</section>
+{% end %}

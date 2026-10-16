@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block titulo %}DJ · {{ acesso.name }}{% end %}
+
+{% block conteudo %}
+{% set titulo_categoria = "DJ" %}
+{% set slug_atual = "dj" %}
+{% set caminho_categoria = "/painel/servidores/" + acesso.guild_id + "/dj" %}
+{% include "_topo_config.html" %}
+{% include "_nav_categorias.html" %}
+{% include "_seletor_bot.html" %}
+<div class="bloco-config">
+  {% set form = forms["dj"] %}
+  {% include "form_dj.html" %}
+</div>
+{% end %}
