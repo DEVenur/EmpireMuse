@@ -24,7 +24,7 @@ organização DiscordEmpireHub, para não depender de contas de terceiros. A ori
 
 | Recurso | Origem | Espelho / local no EmpireMuse | Licença / observações |
 | :--- | :--- | :--- | :--- |
-| Binários do Lavalink (`LL-binaries`, release `0.0.1`) | [zRitsu/LL-binaries](https://github.com/zRitsu/LL-binaries) `0.0.1` | [DiscordEmpireHub/LL-binaries](https://github.com/DiscordEmpireHub/LL-binaries) `0.0.1` | O `Lavalink.jar` é um build SNAPSHOT do Lavalink oficial (licença MIT, equipe lavalink-devs). |
+| Binários do Lavalink (`EmpireMuse-LL-binaries`, release `0.0.2`) | zRitsu (repositório upstream de binários `LL-binaries` na release `0.0.1`); Lavalink oficial v4.2.2 (equipe lavalink-devs) e plugins oficiais | [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) `0.0.2` | Lavalink 4.2.2 oficial (licença MIT) com plugins oficiais espelhados (LavaSrc 4.8.3, youtube-plugin snapshot e lyrics 2.6.1); hashes verificados via SHA-256 no download; preserva o histórico da release `0.0.1` originada de zRitsu. |
 | Aplicativo de RPC (Rich Presence) | [zRitsu/MuseHeart-MusicBot-RPC-app](https://github.com/zRitsu/MuseHeart-MusicBot-RPC-app) | [DiscordEmpireHub/EmpireMuse-RPC-app](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app) | GPL-3.0. |
 | Imagens em `assets/` | Upstream e serviços de terceiros | `assets/` | Substituição por arte própria planejada. |
 | Lista de servidores Lavalink | Gist do upstream; servidores públicos via `lavalink.darrennathanael.com` | `data/lavalink_servers.ini` | O crédito consta no cabeçalho do arquivo. |
