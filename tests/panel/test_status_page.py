@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import tornado.httpclient
 import tornado.httpserver
 import tornado.testing
+import tornado.websocket
 
 from tests.panel.helpers import local_config, require
 from utils import branding
@@ -52,7 +53,8 @@ def make_pool(config, bots=(), failed=None, killing=False, commit=""):
                            failed_bots=dict(failed or {}), commit=commit, remote_git_url="https://github.com/x/y")
 
 
-def get_index(monkeypatch, *, message="", bots=(), failed=None, killing=False, commit="", **overrides):
+def get_index(monkeypatch, *, message="", bots=(), failed=None, killing=False, commit="", path="/", ws=False,
+              **overrides):
     web_app = require("web_app")
     config = local_config(PORT=0, **overrides)
     pool = make_pool(config, bots, failed, killing, commit)
@@ -68,9 +70,14 @@ def get_index(monkeypatch, *, message="", bots=(), failed=None, killing=False, c
 
     async def main():
         web_app.run_app(pool, message, pool.config)
+        if ws:
+            connection = await tornado.websocket.websocket_connect(f"ws://127.0.0.1:{seen['port']}/ws")
+            connection.close()
+            return connection
         client = tornado.httpclient.AsyncHTTPClient()
         try:
-            return await client.fetch(f"http://127.0.0.1:{seen['port']}/", raise_error=False, follow_redirects=False)
+            return await client.fetch(f"http://127.0.0.1:{seen['port']}{path}", raise_error=False,
+                                      follow_redirects=False)
         finally:
             client.close()
 
@@ -218,3 +225,41 @@ class TestExternalTextIsEscaped:
         assert "<script>alert(1)" not in body and "<img src=x onerror" not in body, "texto externo sem escape (XSS)"
         assert "&lt;script&gt;alert(1)&lt;/script&gt;" in body
         assert "&lt;img src=x onerror=alert(2)&gt;" in body
+
+
+# ============================================================================ BAIXO-1: cabeçalhos de segurança de `/`
+
+class TestSecurityHeadersOnIndex:
+    """Contrato do MAESTRO (item 8): nosniff, X-Frame-Options DENY (ou frame-ancestors), Referrer-Policy — sem quebrar
+    /ws nem o painel. CSP completa não serve: a página usa <style> e <script> embutidos."""
+
+    def test_nosniff_frame_denial_and_referrer_policy(self, monkeypatch):
+        headers = get_index(monkeypatch, bots=READY).headers
+        assert headers.get("X-Content-Type-Options") == "nosniff"
+        csp = headers.get("Content-Security-Policy", "")
+        assert headers.get("X-Frame-Options") == "DENY" or re.search(r"frame-ancestors\s+'none'", csp), \
+            "a página não pode ser embutida em iframe (clickjacking)"
+        assert headers.get("Referrer-Policy") in {"no-referrer", "same-origin", "strict-origin",
+                                                  "strict-origin-when-cross-origin", "origin-when-cross-origin"}
+
+    def test_headers_also_present_when_restarting_and_with_the_panel_off(self, monkeypatch):
+        for kwargs in ({"killing": True}, {"PANEL_ENABLED": False}):
+            headers = get_index(monkeypatch, bots=READY, **kwargs).headers
+            assert headers.get("X-Content-Type-Options") == "nosniff", kwargs
+
+    def test_a_csp_if_present_still_allows_the_inline_style_and_script_of_the_page(self, monkeypatch):
+        csp = get_index(monkeypatch, bots=READY).headers.get("Content-Security-Policy", "")
+        if "script-src" in csp:
+            assert "'unsafe-inline'" in csp or "nonce-" in csp or "sha256-" in csp
+        if "style-src" in csp:
+            assert "'unsafe-inline'" in csp or "nonce-" in csp or "sha256-" in csp
+
+    def test_websocket_relay_still_connects(self, monkeypatch):
+        connection = get_index(monkeypatch, ws=True)
+        assert connection is not None
+
+    def test_panel_keeps_its_own_stricter_headers(self, monkeypatch):
+        from tests.panel.helpers import EXPECTED_SECURITY_HEADERS
+        response = get_index(monkeypatch, path="/painel/", PANEL_ENABLED=True)
+        for name, want in EXPECTED_SECURITY_HEADERS.items():
+            assert response.headers.get(name) == want, name

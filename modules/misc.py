@@ -6,6 +6,7 @@ import datetime
 import json
 import os.path
 import platform
+import logging
 import traceback
 from copy import deepcopy
 from itertools import cycle
@@ -45,6 +46,15 @@ def remove_blank_spaces(d):
                 d[new_k] = new_v
         elif isinstance(v, dict):
             remove_blank_spaces(v)
+
+
+logger = logging.getLogger(__name__)
+
+
+def can_send_welcome(channel, me) -> bool:
+    """O aviso de novo servidor usa embeds: precisa de ``send_messages`` e ``embed_links`` no canal."""
+    permissions = channel.permissions_for(me)
+    return bool(permissions.send_messages and permissions.embed_links)
 
 
 class Misc(commands.Cog):
@@ -270,7 +280,7 @@ class Misc(commands.Cog):
         send_video = ""
 
         try:
-            channel = guild.system_channel if guild.system_channel.permissions_for(guild.me).send_messages else None
+            channel = guild.system_channel if can_send_welcome(guild.system_channel, guild.me) else None
         except AttributeError:
             channel = None
 
@@ -360,7 +370,7 @@ class Misc(commands.Cog):
 
             for c in (guild.public_updates_channel, guild.rules_channel):
 
-                if c and c.permissions_for(guild.me).send_messages:
+                if c and can_send_welcome(c, guild.me):
                     channel = c
                     break
 
@@ -433,11 +443,10 @@ class Misc(commands.Cog):
                     kwargs["delete_after"] = 600
                 await asyncio.sleep(1)
                 await channel.send(f"{send_video}\n\nConfira o [**vídeo**]({self.bot.config['MULTIVOICE_VIDEO_DEMO_URL']}) demonstrando essa funcionalidade.", **kwargs)
-        except:
-            print(f"Falha ao enviar mensagem de novo servidor no canal: {channel}\n"
-                  f"ID do canal: {channel.id}\n"
-                  f"Tipo de canal: {type(channel)}\n"
-                  f"{traceback.format_exc()}")
+        except disnake.Forbidden:
+            logger.info("Sem permissão para enviar o aviso de novo servidor no canal %s do servidor %s.", channel.id, guild.id)
+        except Exception as e:
+            logger.warning("Falha ao enviar o aviso de novo servidor no canal %s (%s: %s)", channel.id, type(e).__name__, e)
 
 
     about_cd = commands.CooldownMapping.from_cooldown(1, 5, commands.BucketType.member)

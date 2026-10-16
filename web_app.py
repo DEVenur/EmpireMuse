@@ -64,6 +64,12 @@ def _logo_data_uri() -> str:
 
 class IndexHandler(tornado.web.RequestHandler):
 
+    def set_default_headers(self):
+        # Sem CSP: a página usa <style>/<script> embutidos. Estes três bastam contra sniffing, iframe e vazamento de URL.
+        self.set_header("X-Content-Type-Options", "nosniff")
+        self.set_header("X-Frame-Options", "DENY")
+        self.set_header("Referrer-Policy", "same-origin")
+
     def initialize(self, pool: Optional[BotPool] = None, message: str = "", config: dict = None,
                    panel_enabled: bool = False):
         self.message = message

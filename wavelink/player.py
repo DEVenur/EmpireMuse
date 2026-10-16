@@ -21,7 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import logging
-import pprint
 import re
 import time
 import traceback
@@ -309,18 +308,21 @@ class Player:
             if {'sessionId', 'event'} == self._voice_state.keys():
                 await self.node._send(op='voiceUpdate', guildId=str(self.guild_id), **self._voice_state)
         else:
+            if not self.channel_id:  # o Lavalink 4.2+ exige channelId no voice update
+                return
+
             try:
                 data = {
                     "voice": {
                         "sessionId": self._voice_state["sessionId"],
                         "token": self._voice_state["event"]["token"],
                         "endpoint": self._voice_state["event"]["endpoint"],
-                        "channelId": str(self.channel_id) if self.channel_id else None
+                        "channelId": str(self.channel_id)
                     }
                 }
             except KeyError:
-                pprint.pprint(self._voice_state)
-                traceback.print_exc()
+                # Estado de voz incompleto (falta sessionId ou evento do servidor): só os nomes dos campos vão ao log.
+                __log__.debug(f'PLAYER | Voice update incompleto, campos presentes: {sorted(self._voice_state)}')
                 return
 
             await self.node.update_player(self.guild_id, data=data)
