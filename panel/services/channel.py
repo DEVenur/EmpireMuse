@@ -20,12 +20,13 @@ from panel.services.channel_tokens import ResetTokens
 from panel.services.base import DBModel, DIGITS, Args, FormContext, first, flag, version_of
 from panel.services.service import SettingsService
 from panel.services.tasks import Job, Task, TaskFailure, TaskRunner
+from utils import branding
 from utils.music.converters import perms_translations
 from utils.music.errors import GenericError
-from utils.music.request_channel import (apply_request_channel, build_channel_kwargs, create_request_channel,
-                                         ensure_can_create_channel, ensure_can_reset, find_current_request_message,
-                                         find_request_channel, missing_channel_permissions, reset_request_channel,
-                                         validate_request_target)
+from utils.music.request_channel import (MissingManagePermissions, apply_request_channel, build_channel_kwargs,
+                                         create_request_channel, ensure_can_create_channel, ensure_can_reset,
+                                         find_current_request_message, find_request_channel,
+                                         missing_channel_permissions, reset_request_channel, validate_request_target)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,17 @@ def plain_message(text: str) -> str:
     text = re.sub(r"<[@#][!&]?\d+>", "", text)
     text = text.replace("**", "").replace("`", "")
     return re.sub(r"[ \t]+", " ", text).strip()
+
+
+MSG_MANAGE_PERMISSIONS = (f"O {branding.BOT_NAME} precisa da permissão Gerenciar permissões neste canal (ou de "
+                          "Administrador). Conceda a permissão ao cargo do bot ou escolha Criar um canal novo.")
+
+
+def refusal_message(exc: GenericError) -> str:
+    """Mensagem da recusa em termos do painel (a do módulo compartilhado fala do comando ``/setup``)."""
+    if isinstance(exc, MissingManagePermissions):
+        return MSG_MANAGE_PERMISSIONS
+    return plain_message(exc.text)
 
 
 # ============================================================================ estruturas dos templates
@@ -213,7 +225,7 @@ class ChannelService:
             validate_request_target(ctx.bot, ctx.guild, target, existing_channel=True)
         except GenericError as exc:
             missing = tuple(perms_translations.get(p, p) for p in missing_channel_permissions(target))
-            return Check({"canal": plain_message(exc.text)}, echo, missing)
+            return Check({"canal": refusal_message(exc)}, echo, missing)
         errors: dict[str, str] = {}
         is_forum = isinstance(target, disnake.ForumChannel)
         if is_forum and not FORUM_TITLE_MIN <= len(echo["titulo_forum"]) <= FORUM_TITLE_MAX:
@@ -242,7 +254,7 @@ class ChannelService:
             try:
                 ensure_can_create_channel(ctx.bot, ctx.guild)
             except GenericError as exc:
-                errors["tipo"] = plain_message(exc.text)
+                errors["tipo"] = refusal_message(exc)
         category_id = 0
         if echo["categoria"] != "":
             category = self.resolve(ctx, echo["categoria"], (disnake.CategoryChannel,))
@@ -262,7 +274,7 @@ class ChannelService:
         try:
             ensure_can_reset(ctx.guild)
         except GenericError as exc:
-            return plain_message(exc.text)
+            return refusal_message(exc)
         if self.current(ctx, doc).removido:
             return MSG_NO_CHANNEL
         return None
@@ -309,7 +321,7 @@ class ChannelService:
                 purge=plan.purge, channel_kwargs=channel_kwargs, channel_name=plan.title,
                 original_message=original_message, player=player, guild_data=guild_data)
         except GenericError as exc:
-            raise TaskFailure(plain_message(exc.text))
+            raise TaskFailure(refusal_message(exc))
         self._audit(ctx, "setup")
 
     async def _target(self, ctx: FormContext, plan: SetupPlan, channel_kwargs: dict) -> Any:
@@ -344,7 +356,7 @@ class ChannelService:
                 channel_inter=self._detached_channel(ctx), guild_data=guild_data, notify=notify)
         except GenericError as exc:
             if "```" not in exc.text:
-                raise TaskFailure(plain_message(exc.text))
+                raise TaskFailure(refusal_message(exc))
             self._audit(ctx, "reset")  # o banco já foi limpo; só o Discord falhou
             raise TaskFailure(MSG_PARTIAL)
         self._audit(ctx, "reset")
