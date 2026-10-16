@@ -566,21 +566,21 @@ am_url_regex = re.compile(r"(https?://)?(www\.)?music\.apple\.com/((?P<countryco
 js_url_regex = re.compile(r"(https?://)(www\.)?jiosaavn\.com/(song|album|featured|artist)/([a-zA-Z0-9-_]+)")
 
 music_source_emoji_data = {
-    "youtube": "<:youtube:647253940882374656>",
-    "soundcloud": "<:soundcloud:721530214764773427>",
-    "spotify": "<:spotify:715717523626000445>",
-    "deezer": "<:deezer:1226124676372365402>",
-    "applemusic": "<:applemusic:1225631877658968164>",
-    "twitch": "<:Twitch:803656463695478804>",
-    "jiosaavn": "<:jiosaavn:1235276169473949747>",
-    "tidal": "<:tidal:1235352567048048691>",
-    "youtubemusic": "<:Youtubemusicicon:1245606364470841354>",
-    "last.fm": "<:Lastfm:1278883704097341541>",
-    "bandcamp": "<:bandcamp:767129639490420796>",
+    "youtube": "📺",
+    "soundcloud": "☁️",
+    "spotify": "🟢",
+    "deezer": "🟣",
+    "applemusic": "🍎",
+    "twitch": "🎮",
+    "jiosaavn": "📻",
+    "tidal": "🌊",
+    "youtubemusic": "🎶",
+    "last.fm": "🎧",
+    "bandcamp": "💿",
 }
 
 def music_source_emoji(name: str):
-    return music_source_emoji_data.get(name, "<:play:734221719774035968>")
+    return music_source_emoji_data.get(name, "▶️")
 
 def get_source_emoji_cfg(bot: BotCore, url: str):
 
@@ -631,7 +631,7 @@ def music_source_emoji_url(url: str):
     if url == ">> saved_queue <<":
         return "💾", ""
 
-    return "<:play:734221719774035968>", "Plat. Desconhecida"
+    return "▶️", "Plat. Desconhecida"
 
 def music_source_emoji_id(id_: str):
 
@@ -649,7 +649,7 @@ def music_source_emoji_id(id_: str):
     if id_ == "【DZ】:":
         return music_source_emoji_data["deezer"]
 
-    return "<:play:734221719774035968>"
+    return "▶️"
 
 async def select_bot_pool(inter: Union[CustomContext, disnake.MessageInteraction, disnake.ApplicationCommandInteraction], first=False, return_new=False, edit_original=False):
 

@@ -1085,9 +1085,10 @@ class Music(commands.Cog):
             query = ""
             menu = "latest"
             for i, d in enumerate(user_data["last_tracks"]):
+                emoji, platform = music_source_emoji_url(d["url"])
                 fav_opts.append({"url": d["url"], "option": disnake.SelectOption(label=d["name"], value=f"> lst: {i}",
-                                                                                 description="[📑 Músicas recentes 📑]",
-                                                     emoji=music_source_emoji_url(d["url"])[0])})
+                                                                                 description=f"[📑 Músicas recentes 📑] -> {platform}",
+                                                     emoji=emoji)})
 
         elif query.startswith(">> [📌 Favoritos do servidor 📌] <<"):
 
@@ -1353,7 +1354,7 @@ class Music(commands.Cog):
                     user=inter.author, max_itens=15,
                     opts=[
                         disnake.SelectOption(label=e['title'][:90], value=f"entrie_select_{c}",
-                                             emoji=emoji) for c, e in enumerate(info['entries'])
+                                             emoji=emoji, description=platform) for c, e in enumerate(info['entries'])
                     ], timeout=120)
 
                 embed_title = f"do canal: {(info.get('title') or selected_title)}" if platform == "youtube" else f"do usuário: {info.get('title') or selected_title}"
@@ -2038,7 +2039,7 @@ class Music(commands.Cog):
                 components = [
                     disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
                     disnake.ui.Button(emoji="▶️", label="Tocar" + (" agora" if (player.current and player.current.autoplay) else ""), custom_id=PlayerControls.embed_forceplay),
-                    disnake.ui.Button(emoji="<:add_music:588172015760965654>", label="Adicionar na fila",
+                    disnake.ui.Button(emoji="➕", label="Adicionar na fila",
                                       custom_id=PlayerControls.embed_enqueue_track),
                 ]
 
@@ -2049,7 +2050,7 @@ class Music(commands.Cog):
                     pass
                 components = [
                     disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
-                    disnake.ui.Button(emoji="<:add_music:588172015760965654>", label="Adicionar na fila",
+                    disnake.ui.Button(emoji="➕", label="Adicionar na fila",
                                       custom_id=PlayerControls.embed_enqueue_playlist)
                 ]
             else:
@@ -3306,7 +3307,7 @@ class Music(commands.Cog):
                 if qsize > 3:
                     components.append(
                         disnake.ui.Button(custom_id=PlayerControls.queue, label="Ver lista completa",
-                                          emoji="<:music_queue:703761160679194734>"))
+                                          emoji="📑"))
 
             elif player.queue:
                 txt += f"> 🎶 **⠂Músicas na fila:** `{len(player.queue)}`\n"
@@ -5838,7 +5839,7 @@ class Music(commands.Cog):
                     choices["Playlist"] = {
                         "name": player.current.playlist_name,
                         "url": player.current.playlist_url,
-                        "emoji": "<:music_queue:703761160679194734>"
+                        "emoji": "📑"
                     }
                     msg += f"**Playlist:** [`{player.current.playlist_name}`]({player.current.playlist_url})\n"
 
@@ -6797,7 +6798,7 @@ class Music(commands.Cog):
                 components.extend(
                     [
                         disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
-                        disnake.ui.Button(emoji="<:add_music:588172015760965654>", label="Adicionar na fila",custom_id=PlayerControls.embed_enqueue_playlist)
+                        disnake.ui.Button(emoji="➕", label="Adicionar na fila",custom_id=PlayerControls.embed_enqueue_playlist)
                     ]
                 )
 
@@ -6849,8 +6850,8 @@ class Music(commands.Cog):
                 components.extend(
                     [
                         disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
-                        disnake.ui.Button(emoji="<:play:914841137938829402>", label="Tocar" + (" agora" if (player.current and player.current.autoplay) else ""), custom_id=PlayerControls.embed_forceplay),
-                        disnake.ui.Button(emoji="<:add_music:588172015760965654>", label="Adicionar na fila",
+                        disnake.ui.Button(emoji="▶️", label="Tocar" + (" agora" if (player.current and player.current.autoplay) else ""), custom_id=PlayerControls.embed_forceplay),
+                        disnake.ui.Button(emoji="➕", label="Adicionar na fila",
                                           custom_id=PlayerControls.embed_enqueue_track)
                     ]
                 )

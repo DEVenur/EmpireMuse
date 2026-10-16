@@ -11,8 +11,8 @@
 ##################################################################################################################
 
 ID=1234567890
-NAME=Muse Heart Music Source
-AVATAR=https://i.ibb.co/mDrkdmb/muse.png
+NAME=EmpireMuse
+AVATAR=https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/assets/brand/avatar.png
 TYPE=bot
 MAIN=main.py
 RAM=100

@@ -471,7 +471,7 @@ class MusicSettings(commands.Cog):
 
             if "COMMUNITY" in guild.features:
                 buttons.insert(2, disnake.ui.Button(label="Criar canal de palco", custom_id=f"stage_channel_{id_}",
-                                  emoji="<:stagechannel:1077351815533826209>", disabled=not guild.me.guild_permissions.manage_channels))
+                                  emoji="🎙️", disabled=not guild.me.guild_permissions.manage_channels))
 
             color = self.bot.get_color(guild.me)
 

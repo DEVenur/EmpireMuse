@@ -179,14 +179,14 @@ class MiniStaticSkin:
             disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
             disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
             disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
-            disnake.ui.Button(emoji="<:music_queue:703761160679194734>", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)),
+            disnake.ui.Button(emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)),
             disnake.ui.Select(
                 placeholder="Mais opções:",
                 custom_id="musicplayer_dropdown_inter",
                 min_values=0, max_values=1, required = False,
                 options=[
                     disnake.SelectOption(
-                        label="Adicionar música", emoji="<:add_music:588172015760965654>",
+                        label="Adicionar música", emoji="➕",
                         value=PlayerControls.add_song,
                         description="Adicionar uma música/playlist na fila."
                     ),
@@ -231,7 +231,7 @@ class MiniStaticSkin:
                         description="Sistema de adição de música automática quando a fila estiver vazia."
                     ),
                     disnake.SelectOption(
-                        label="Last.fm scrobble", emoji="<:Lastfm:1278883704097341541>",
+                        label="Last.fm scrobble", emoji="🎧",
                         value=PlayerControls.lastfm_scrobble,
                         description="Ativar/desativar o scrobble/registro de músicas na sua conta do last.fm."
                     ),

@@ -10,8 +10,8 @@
 ### Caso queira, você pode alterar o DISPLAY_NAME, DESCRIPTION e link do AVATAR.                           ###
 ##############################################################################################################
 
-DISPLAY_NAME=Muse Heart Music Source
-DESCRIPTION=Source de música criada por: xritsu [DC ID: 184889853102653440] source link: https://github.com/zRitsu/MuseHeart-MusicBot
+DISPLAY_NAME=EmpireMuse
+DESCRIPTION=EmpireMuse — bot de música para Discord (GPL-2.0) · https://github.com/DiscordEmpireHub/EmpireMuse
 MAIN=main.py
 MEMORY=512
 VERSION=recommended
