@@ -44,6 +44,12 @@ Mais previews:
 
 > As imagens de preview foram re-hospedadas em [`assets/`](assets/) e têm origem no projeto upstream; a substituição por arte própria está planejada (veja [CREDITS.md](CREDITS.md)).
 
+## Painel web
+
+O EmpireMuse possui um painel web integrado para gerenciamento visual de servidores (opções de reprodução, cargos de DJ, skins, links rápidos, canal de pedidos e status de voz) e preferências de conta (prefixo pessoal, favoritos, integrações, Last.fm e token do app RPC), com login oficial via Discord.
+
+Para detalhes de ativação, variáveis de ambiente e configuração no Discord Developer Portal, consulte o [Guia do Painel Web](docs/guides/painel-web.md).
+
 ## Hospede o seu próprio bot com essa source:
 
 Guias passo a passo (em português, com imagens) estão em [`docs/guides/`](docs/guides/README.md).

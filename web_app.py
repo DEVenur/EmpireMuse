@@ -10,13 +10,19 @@ from typing import TYPE_CHECKING, Optional
 
 import aiohttp
 import disnake
+import tornado.httpserver
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
 from packaging import version
 
 from config_loader import load_config
+from panel import build_panel_app, make_router
+from panel.settings import PanelConfigError, load_panel_settings
 from utils import branding
+
+# Limite de corpo de requisição da porta inteira (painel, relé do RPC e página de status): 64 KiB.
+MAX_BODY_SIZE = 64 * 1024
 
 if TYPE_CHECKING:
     from utils.client import BotPool
@@ -420,6 +426,20 @@ class WSClient:
                                 users.remove(i)
 
 
+def _build_panel(pool: BotPool, config: dict):
+    """Cria a aplicação do painel (None se desligado ou com configuração inválida; o servidor segue sem ele)."""
+    try:
+        settings = load_panel_settings(config)
+    except PanelConfigError as e:
+        print(f"🖥️ - Painel web desativado por configuração inválida: {e}")
+        return None, False
+
+    panel_app = build_panel_app(pool, settings)
+    if panel_app:
+        print(f"🖥️ - Painel web ativo em {settings.base_url}/painel/")
+    return panel_app, settings.trust_proxy
+
+
 def run_app(pool: BotPool, message: str = "", config: dict = None):
 
     if not config:
@@ -433,14 +453,32 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
         (r'/ws', WebSocketHandler),
     ])
 
-    app.listen(port=config.get("PORT") or environ.get("PORT", 80))
+    panel_app, trust_proxy = _build_panel(pool, config)
+
+    server = tornado.httpserver.HTTPServer(make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy),
+                                           max_body_size=MAX_BODY_SIZE)
+    server.listen(config.get("PORT") or environ.get("PORT", 80))
+    return panel_app
+
+
+def _shutdown_panel(panel_app) -> None:
+    """Cancela as tarefas do painel em andamento (setup/reset do canal de pedidos) ao encerrar o servidor."""
+    if panel_app is None:
+        return
+    try:
+        tornado.ioloop.IOLoop.current().run_sync(panel_app.settings["task_runner"].shutdown, timeout=5)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Falha ao encerrar as tarefas do painel (%s)", type(exc).__name__)
 
 
 def start(pool: BotPool, message="", config: dict = None):
     if not config:
         config = load_config()
-    run_app(pool, message, config)
-    tornado.ioloop.IOLoop.instance().start()
+    panel_app = run_app(pool, message, config)
+    try:
+        tornado.ioloop.IOLoop.instance().start()
+    finally:
+        _shutdown_panel(panel_app)
 
 
 if __name__ == '__main__':

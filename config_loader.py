@@ -118,6 +118,19 @@ DEFAULT_CONFIG = {
     "ENABLE_RPC_AUTH": False,
 
     ##################################################
+    ### Painel web (OAuth2 Discord, sob /painel):  ###
+    ##################################################
+    "PANEL_ENABLED": False,
+    "PANEL_BASE_URL": "",
+    "PANEL_OAUTH_CLIENT_ID": "",
+    "PANEL_OAUTH_CLIENT_SECRET": "",
+    "PANEL_COOKIE_SECRET": "",
+    "PANEL_SESSION_TTL_HOURS": 12,
+    "PANEL_SESSION_IDLE_MINUTES": 60,
+    "PANEL_TRUST_PROXY": False,
+    "PANEL_INSECURE_COOKIES": False,
+
+    ##################################################
     ### Sistema de música - Local lavalink stuffs: ###
     ##################################################
     "RUN_LOCAL_LAVALINK": False,
@@ -241,6 +254,8 @@ def load_config():
         "SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT",
         "BOT_ADD_REMOVE_LOG_CHANNEL_ID",
         "YOUTUBE_TRACK_COOLDOWN",
+        "PANEL_SESSION_TTL_HOURS",
+        "PANEL_SESSION_IDLE_MINUTES",
     ]:
 
         if not CONFIG[i]:
@@ -263,6 +278,9 @@ def load_config():
         "RUN_RPC_SERVER",
         "ENABLE_RPC_COMMAND",
         "ENABLE_RPC_AUTH",
+        "PANEL_ENABLED",
+        "PANEL_TRUST_PROXY",
+        "PANEL_INSECURE_COOKIES",
         "AUTO_DOWNLOAD_LAVALINK_SERVERLIST",
         "ENABLE_LOGGER",
         "GUILD_DEAFEN_WARN",

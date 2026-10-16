@@ -1,0 +1,54 @@
+{# Integrações (fragmento htmx). Variável: estado (acao, versao, valores{dados,acao_erro,alvo_erro}, erros, mensagem, mensagem_tipo, itens[titulo, url, avatar, link], total, maximo, ilimitado, cheio). Adicionar por URL fica fora da v1. #}
+{% set form = estado %}
+{% set form_id = "conta-integracoes" %}
+{% set erros = estado.erros %}
+{% set valores = estado.valores %}
+{% set importando = valores.get("acao_erro") == "integracoes_importar" %}
+<section id="conta-integracoes" class="bloco-config bloco-largo" aria-labelledby="titulo-conta-integracoes">
+  {% include "_mensagem_form.html" %}
+  <div class="links-cabecalho">
+    <h2 class="subtitulo" id="titulo-conta-integracoes">Integrações</h2>
+    <p class="contagem-links">{% if estado.ilimitado %}<strong>{{ estado.total }}</strong> integrações (ilimitado){% else %}<strong>{{ estado.total }} de {{ estado.maximo }}</strong> integrações{% end %}</p>
+  </div>
+  <p class="nota">Perfis e playlists de plataformas de música ligados à sua conta. Para adicionar uma integração nova, use o comando do bot no Discord; aqui é possível remover e importar.</p>
+
+  {% if estado.itens %}
+  <ul class="lista-links" role="list">
+    {% for indice, item in enumerate(estado.itens) %}
+    <li class="item-link">
+      <div class="item-link-texto">
+        <strong class="item-link-nome">{{ item.titulo }}</strong>
+        {% if item.link %}
+        <a class="item-link-url" href="{{ item.url }}" rel="noopener noreferrer" target="_blank">{{ item.url }}<span class="visually-hidden"> (abre em outra aba)</span></a>
+        {% else %}
+        <span class="item-link-url">{{ item.url }}</span>
+        {% end %}
+      </div>
+      <div class="item-link-acoes">
+        <form id="form-conta-integracao-remover-{{ indice }}" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#conta-integracoes" hx-swap="outerHTML" hx-confirm="Remover a integração {{ item.titulo }}?" hx-disabled-elt="find button[type=submit]">
+          {% module xsrf_form_html() %}
+          <input type="hidden" name="versao" value="{{ estado.versao }}">
+          <input type="hidden" name="acao" value="integracao_remover">
+          <input type="hidden" name="nome" value="{{ item.titulo }}">
+          <button type="submit" class="secondary outline botao-perigo">Remover<span class="visually-hidden"> {{ item.titulo }}</span></button>
+        </form>
+      </div>
+    </li>
+    {% end %}
+  </ul>
+  {% else %}
+  <p class="nota">Você ainda não tem integrações.</p>
+  {% end %}
+
+  <h3 class="subtitulo">Importar integrações</h3>
+  <form id="form-conta-integracoes-importar" class="form-config" method="post" action="{{ estado.acao }}" hx-post="{{ estado.acao }}" hx-target="#conta-integracoes" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {% module xsrf_form_html() %}
+    <input type="hidden" name="versao" value="{{ estado.versao }}">
+    <input type="hidden" name="acao" value="integracoes_importar">
+    <label for="integracoes-importar-dados">Conteúdo JSON</label>
+    <textarea id="integracoes-importar-dados" name="dados" rows="6" spellcheck="false" autocomplete="off"{% if importando and erros.get("dados") %} aria-invalid="true" aria-describedby="integracoes-importar-erro integracoes-importar-ajuda"{% else %} aria-describedby="integracoes-importar-ajuda"{% end %}>{{ (valores.get("dados") or "") if importando else "" }}</textarea>
+    {% if importando and erros.get("dados") %}<small id="integracoes-importar-erro" class="erro-campo">{{ erros["dados"] }}</small>{% end %}
+    <small id="integracoes-importar-ajuda">Cole o conteúdo exportado pelo comando do bot. Integrações com o mesmo nome são substituídas. Nada é consultado em outros sites durante a importação.</small>
+    <button type="submit">Importar</button>
+  </form>
+</section>

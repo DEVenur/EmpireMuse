@@ -34,3 +34,4 @@ Tutorial: Hospedar na discloud (em breve...)
 - [mongodb.md](mongodb.md): criar um banco MongoDB e obter o link de conexão.
 - [spotify-keys.md](spotify-keys.md): obter o Spotify CLIENT_ID e CLIENT_SECRET.
 - [atualizar-lavalink.md](atualizar-lavalink.md): atualizar o `Lavalink.jar` local e a source de música.
+- [painel-web.md](painel-web.md): configuração, Developer Portal e uso do painel web.

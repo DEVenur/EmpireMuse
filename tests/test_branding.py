@@ -226,11 +226,33 @@ def _jishaku_exception(path: str, line: str) -> bool:
     return path == JISHAKU_EXCEPTION_FILE and "jishaku" in line.lower()
 
 
+PANEL_CREDIT_FILE = "panel/templates/base.html"
+UPSTREAM_REPO_URL = "https://github.com/zRitsu/MuseHeart-MusicBot"
+ATTRIBUTION_RE = re.compile(r"zRitsu(?!/)")
+OTHER_UPSTREAM_PATTERNS = tuple(p for p in UPSTREAM_RESOURCE_PATTERNS if p != "zRitsu")
+
+
+def _gpl_credit_exception(path: str, line: str) -> bool:
+    """Crédito GPL-2.0 obrigatório no rodapé do painel: só o link para UPSTREAM_URL e o nome do autor
+    ('zRitsu' não seguido de '/'); qualquer outro recurso do upstream na mesma linha continua barrado."""
+    if path != PANEL_CREDIT_FILE:
+        return False
+    remainder = line.replace(UPSTREAM_REPO_URL, "")
+    if any(pattern in remainder for pattern in OTHER_UPSTREAM_PATTERNS):
+        return False
+    return "zRitsu/" not in remainder
+
+
+def _line_exception(path: str, line: str) -> bool:
+    return _jishaku_exception(path, line) or _gpl_credit_exception(path, line)
+
+
 def test_runtime_files_have_no_upstream_resources():
-    # Exceções: utils/branding.py (UPSTREAM_*), tests/** e a linha do jishaku em requirements.txt.
+    # Exceções: utils/branding.py (UPSTREAM_*), tests/**, a linha do jishaku em requirements.txt e o crédito
+    # GPL-2.0 ao upstream no rodapé do painel (panel/templates/base.html).
     # Arquivos de deploy ficam fora (I-7 adiado) — ver teste pulado abaixo.
     violations = _scan(
-        _runtime_files(deploy=False), UPSTREAM_RESOURCE_PATTERNS, ignore_line=_jishaku_exception
+        _runtime_files(deploy=False), UPSTREAM_RESOURCE_PATTERNS, ignore_line=_line_exception
     )
     _fail_with("Recursos do upstream em arquivos de runtime", violations)
 

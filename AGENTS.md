@@ -35,6 +35,8 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `utils/music/checks.py`: Verificações de permissão, voz, DJ e algoritmo de roteamento entre múltiplos bots.
 - `utils/music/local_lavalink.py`: Download e execução sob demanda de binários JDK e Lavalink local.
 - `utils/music/lavalink_server_list.py`: Validação da lista de servidores Lavalink baixada, com fallback para `data/lavalink_servers.ini`.
+- `panel/`: Sub-aplicação web Tornado do painel de administração (OAuth2, sessões, rotas, serviços, templates e estáticos vendorizados).
+- `utils/music/request_channel.py`: Lógica unificada de setup e reset de canais de texto e fóruns de pedidos, compartilhada entre os cogs e o painel web.
 - `utils/music/audio_sources/`: Provedores de metadados para plataformas externas (Spotify e Deezer).
 - `utils/music/skins/`: Coleção de 15 skins visuais para o player (10 no modo normal e 5 no modo estático).
 - `wavelink/`: Cliente Lavalink v3/v4 e NodeLink (nós, conexões WebSocket, players e eventos).
@@ -55,6 +57,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `docs/`: Documentação técnica, guias de setup e Registros de Decisão de Arquitetura (ADRs).
 - `docs/guides/`: Guias de hospedagem e configuração (adaptados da wiki/gist do upstream).
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
+- `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
 - `tests/`: Testes automatizados (pytest).
 
 ---

@@ -1,0 +1,26 @@
+{% set form_id = "form-dj" %}
+{% set erros = form.erros %}
+{% set selecionados = [str(i) for i in form.valores.get("djroles", [])] %}
+<form id="form-dj" class="form-config" method="post" action="{{ form.acao }}" hx-post="{{ form.acao }}" hx-target="this" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+  {% module xsrf_form_html() %}
+  <input type="hidden" name="versao" value="{{ form.versao }}">
+  {% include "_mensagem_form.html" %}
+
+  <fieldset class="opcoes opcoes-rolagem" aria-describedby="{% if erros.get('djroles') %}erro-djroles {% end %}ajuda-djroles">
+    <legend>Cargos de DJ</legend>
+    <small id="ajuda-djroles">Quem tiver um destes cargos pode controlar o player mesmo sem ser quem pediu a música. Até 25 cargos.</small>
+    {% if erros.get("djroles") %}<small id="erro-djroles" class="erro-campo">{{ erros["djroles"] }}</small>{% end %}
+    {% if cargos %}
+    {% for cargo in cargos %}
+    <label>
+      <input type="checkbox" name="djroles" value="{{ cargo.id }}"{% if str(cargo.id) in selecionados %} checked{% end %}{% if erros.get("djroles") %} aria-invalid="true"{% end %}>
+      {{ cargo.name }}
+    </label>
+    {% end %}
+    {% else %}
+    <p class="nota">Este servidor não tem cargos além de @everyone.</p>
+    {% end %}
+  </fieldset>
+
+  <button type="submit">Salvar</button>
+</form>

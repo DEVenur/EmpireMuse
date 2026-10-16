@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ titulo }}{% end %}
+
+{% block conteudo %}
+<section class="erro" aria-labelledby="titulo-erro">
+  <p class="erro-codigo" aria-hidden="true">{{ codigo }}</p>
+  <h1 id="titulo-erro">{{ titulo }}</h1>
+  <p class="lead">{{ mensagem }}</p>
+  <p><a role="button" href="/painel/">Voltar ao início</a></p>
+</section>
+{% end %}

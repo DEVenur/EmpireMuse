@@ -24,6 +24,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | Servidor web / RPC (robustez) | KI-25 … KI-26 | médio |
 | Qualidade, testes e modernização | KI-27 … KI-31 | alto |
 | Identidade, guias e testes de marca (Fase 1) | KI-32 … KI-35 | baixo |
+| Painel web e comandos relacionados (saneamento) | KI-36 … KI-43 | médio |
 
 ## Instalação e implantação
 
@@ -109,6 +110,19 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | KI-33 | `utils/client.py` (~669) | A URL do remote é extraída por fatiamento fixo da saída de `git remote -v` (assume o remote `origin`). | Resultado incorreto com outro nome de remote ou formato de saída. Trocar por *parsing* por campos. | baixo |
 | KI-34 | `tests/test_branding.py` | As varreduras estáticas dependem de `git ls-files` (exigem `.git`) e usam correspondência por substring. | Falham fora de um clone Git e podem gerar falsos positivos/negativos. Revisar no saneamento. | baixo |
 | KI-35 | `utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Assets e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com` da branch `main`. | Forks de terceiros continuam apontando para a DiscordEmpireHub até ajustarem `utils/branding.py` (informativo). | baixo |
+
+## Painel web e comandos relacionados (saneamento)
+
+| ID | Local | Problema | Impacto | Sev. |
+|---|---|---|---|---|
+| KI-36 | `utils/music/request_channel.py` (e `modules/music_settings.py`) | `/reset`: limpa o banco de dados antes de executar as exclusões no Discord. | Se ocorrer falha no Discord durante o reset com opção de deletar canal, o banco é desconfigurado mas o canal permanece, gerando estado parcial inconsistente. | médio |
+| KI-37 | `utils/music/request_channel.py` (e `modules/music_settings.py`) | `/setup` de fórum: chamada a `post.edit()` sem nenhum argumento. | Gera requisição inútil à API do Discord sem efetuar nenhuma alteração de estado no post. | baixo |
+| KI-38 | `utils/music/request_channel.py` | `validate_request_target`: checagem redundante de permissão de leitura de mensagens (`view_channel`). | Verificação repetida da mesma permissão em etapas sucessivas da validação de destino. | baixo |
+| KI-39 | `utils/music/interactions.py` | Modal de adicionar favorito não replica as exceções de `MAX_USER_FAVS=0` e isenção do dono; modal de adicionar integração usa indevidamente o limite de favoritos. | Donos do bot e instâncias sem limite são impedidos de adicionar favoritos via modal; cadastro de integrações é limitado pela cota de favoritos em vez de `MAX_USER_INTEGRATIONS`. | médio |
+| KI-40 | `modules/music_settings.py`, `utils/music/interactions.py` | Importador de integrações do comando não aceita o formato JSON gerado pelo próprio exportador. | O exportador gera objetos com `url` e `avatar`, enquanto o importador do comando só aceita strings simples, quebrando a restauração de backups via comando. | médio |
+| KI-41 | `modules/music_settings.py`, `utils/music/interactions.py` | Importador de links rápidos do servidor aceita itens `> fav:` sem validar a URL. | Permite a persistência de links com URLs inválidas ou malformadas no banco de dados através da importação de arquivo. | baixo |
+| KI-42 | `modules/music_settings.py`, `modules/music.py` | Cogs ainda possuem implementações próprias de regras em vez de utilizarem `panel/services/`. | Duplicação de código de regras de negócio entre comandos slash e interface web, dificultando manutenção e gerando risco de assimetrias. | médio |
+| KI-43 | `modules/legacy_cmds.py:714`, `utils/client.py` | `setguildprefix` grava o cache com identificador incorreto; campo de configuração órfão `enable_prefixed_commands`. | Invalidação falha no cache em memória de prefixos do pool ao usar o comando legado; presença de campo de configuração sem nenhuma utilidade no código. | baixo |
 
 ## Como usar este backlog
 

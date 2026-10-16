@@ -1,0 +1,36 @@
+{# Convites de "ouvir junto" (fragmento htmx). Variável: ouvir_junto (acao, versao, mensagem, mensagem_tipo, itens[canal_id, canal_nome|None, convite], pode_remover). #}
+{% set form = ouvir_junto %}
+{% set form_id = "bloco-ouvir-junto" %}
+<section id="bloco-ouvir-junto" class="bloco-config bloco-largo" aria-labelledby="titulo-ouvir-junto">
+  <h2 class="subtitulo" id="titulo-ouvir-junto">Ouvir junto</h2>
+  {% include "_mensagem_form.html" %}
+  <p class="nota">Convites usados para ouvir junto em canais de voz deste servidor. Para adicionar um convite, use o comando do bot no Discord.</p>
+  {% if not ouvir_junto.pode_remover %}
+  <p class="aviso aviso-info" role="note">Para remover convites você precisa da permissão <strong>Gerenciar Canais</strong> neste servidor.</p>
+  {% end %}
+  {% if ouvir_junto.itens %}
+  <ul class="lista-links" role="list">
+    {% for indice, item in enumerate(ouvir_junto.itens) %}
+    <li class="item-link">
+      <div class="item-link-texto">
+        <strong class="item-link-nome">{% if item.canal_nome %}{{ item.canal_nome }}{% else %}canal removido{% end %}</strong>
+        <span class="item-link-url">{{ item.convite }}</span>
+      </div>
+      {% if ouvir_junto.pode_remover %}
+      <div class="item-link-acoes">
+        <form id="form-ouvir-junto-{{ indice }}" method="post" action="{{ ouvir_junto.acao }}" hx-post="{{ ouvir_junto.acao }}" hx-target="#bloco-ouvir-junto" hx-swap="outerHTML" hx-confirm="Remover o convite de ouvir junto deste canal?" hx-disabled-elt="find button[type=submit]">
+          {% module xsrf_form_html() %}
+          <input type="hidden" name="versao" value="{{ ouvir_junto.versao }}">
+          <input type="hidden" name="acao" value="remover_ouvir_junto">
+          <input type="hidden" name="canal" value="{{ item.canal_id }}">
+          <button type="submit" class="secondary outline botao-perigo">Remover<span class="visually-hidden"> convite de {% if item.canal_nome %}{{ item.canal_nome }}{% else %}canal removido{% end %}</span></button>
+        </form>
+      </div>
+      {% end %}
+    </li>
+    {% end %}
+  </ul>
+  {% else %}
+  <p class="nota">Nenhum convite de ouvir junto neste servidor.</p>
+  {% end %}
+</section>

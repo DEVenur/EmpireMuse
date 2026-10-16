@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block titulo %}Player · {{ acesso.name }}{% end %}
+
+{% block conteudo %}
+{% set titulo_categoria = "Player" %}
+{% set slug_atual = "player" %}
+{% set caminho_categoria = "/painel/servidores/" + acesso.guild_id + "/player" %}
+{% include "_topo_config.html" %}
+{% include "_nav_categorias.html" %}
+{% include "_seletor_bot.html" %}
+<div class="bloco-config">
+  {% set form = forms["player"] %}
+  {% include "form_player.html" %}
+</div>
+{% end %}
