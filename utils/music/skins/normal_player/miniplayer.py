@@ -66,10 +66,10 @@ class MiniPlayer:
         data["embeds"].append(embed)
 
         data["components"] = [
-            disnake.ui.Button(emoji="<:playpause:1000648043529519144>", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="<:backward:938437126532517928>", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="<:stop:923282526322184212>", custom_id=PlayerControls.stop, style=disnake.ButtonStyle.red),
-            disnake.ui.Button(emoji="<:skip:955164528595857488>", custom_id=PlayerControls.skip),
+            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
+            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
+            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop, style=disnake.ButtonStyle.red),
+            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
             disnake.ui.Button(emoji="🤍", custom_id=PlayerControls.add_favorite),
         ]
 

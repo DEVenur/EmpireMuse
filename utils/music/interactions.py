@@ -1438,7 +1438,7 @@ class FavMenuView(disnake.ui.View):
                 integration_select.callback = self.select_callback
                 self.add_item(integration_select)
 
-        add_button = disnake.ui.Button(label="Adicionar", emoji="<:add_music:588172015760965654>")
+        add_button = disnake.ui.Button(label="Adicionar", emoji="➕")
         add_button.callback = self.add_callback
         self.add_item(add_button)
 
@@ -2486,7 +2486,7 @@ class SkinEditorMenu(disnake.ui.View):
             add_embed_btn.callback = self.add_embed
             self.add_item(add_embed_btn)
 
-            setup_queue_btn = disnake.ui.Button(label="Configurar placeholder da fila", emoji="<:music_queue:703761160679194734>")
+            setup_queue_btn = disnake.ui.Button(label="Configurar placeholder da fila", emoji="📑")
             setup_queue_btn.callback = self.setup_queue
             self.add_item(setup_queue_btn)
 
@@ -2509,7 +2509,7 @@ class SkinEditorMenu(disnake.ui.View):
             back_btn.callback = self.back
             self.add_item(back_btn)
 
-            self.add_item(disnake.ui.Button(label="Lista de placeholders", emoji="<:help:947781412017279016>", custom_id="skin_editor_placeholders"))
+            self.add_item(disnake.ui.Button(label="Lista de placeholders", emoji="❓", custom_id="skin_editor_placeholders"))
 
             save_btn = disnake.ui.Button(label="Salvar Skin", emoji="💾", disabled=save_disabled)
             save_btn.callback = self.save
