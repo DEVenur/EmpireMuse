@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
+import os
 from os import environ
 from traceback import print_exc
 from typing import TYPE_CHECKING, Optional
@@ -12,6 +14,7 @@ import aiohttp
 import disnake
 import tornado.httpserver
 import tornado.ioloop
+import tornado.template
 import tornado.web
 import tornado.websocket
 from packaging import version
@@ -34,10 +37,37 @@ bots_ws = []
 
 minimal_version = version.parse("2.6.1")
 
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_status_loader_cache = None
+_logo_cache = None
+
+
+def _status_loader() -> tornado.template.Loader:
+    """Loader dos templates da página de status (autoescape ligado por padrão no Tornado)."""
+    global _status_loader_cache
+    if _status_loader_cache is None:
+        _status_loader_cache = tornado.template.Loader(os.path.join(_BASE_DIR, "templates"))
+    return _status_loader_cache
+
+
+def _logo_data_uri() -> str:
+    """Logo da marca embutido (data:) para a página não depender de arquivos estáticos; vazio se o arquivo faltar."""
+    global _logo_cache
+    if _logo_cache is None:
+        try:
+            with open(os.path.join(_BASE_DIR, "assets", "brand", "logo.svg"), "rb") as f:
+                _logo_cache = "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode("ascii")
+        except OSError:
+            _logo_cache = ""
+    return _logo_cache
+
+
 class IndexHandler(tornado.web.RequestHandler):
 
-    def initialize(self, pool: Optional[BotPool] = None, message: str = "", config: dict = None):
+    def initialize(self, pool: Optional[BotPool] = None, message: str = "", config: dict = None,
+                   panel_enabled: bool = False):
         self.message = message
+        self.panel_enabled = panel_enabled
         self.pool = pool
         self.config = config
 
@@ -57,88 +87,45 @@ class IndexHandler(tornado.web.RequestHandler):
         except:
             killing_state = False
 
-        if killing_state is True:
-            self.write('<h1 style=\"font-size:5vw\">A aplicação será reiniciada em breve...</h1>')
-            return
-
-        msg = ""
-
-        if self.message:
-            msg += self.message.replace("\n", "</br>")
-
-        style = """<style>
-        table, th, td {
-            border:1px solid black;
-            text-align: center;
-        }
-        a {
-          color: blue;
-          visited: blue;
-        }
-        </style>"""
-
-        failed_bots = []
-        pending_bots = []
         ready_bots = []
+        pending_bots = []
 
-        kwargs = {}
+        if killing_state is not True:
+            for bot in sorted(self.pool.bots, key=lambda b: len(b.guilds)):
+                if bot.is_ready():
+                    ready_bots.append({
+                        "nome": str(bot.user),
+                        "avatar": bot.user.display_avatar.replace(size=256, static_format="png").url,
+                        "servidores": len(bot.guilds),
+                        "convite": disnake.utils.oauth_url(
+                            bot.user.id, permissions=disnake.Permissions(bot.config['INVITE_PERMISSIONS']),
+                            scopes=('bot', 'applications.commands')),
+                    })
+                else:
+                    pending_bots.append(bot.identifier)
 
-        for identifier, exception in self.pool.failed_bots.items():
-            failed_bots.append(f"<tr><td>{identifier}</td><td>{exception}</td></tr>")
+        commit = self.pool.commit or ""
 
-        for bot in sorted(self.pool.bots, key=lambda b: len(b.guilds)):
-
-            if bot.is_ready():
-                avatar = bot.user.display_avatar.replace(size=256, static_format="png").url
-                guilds = len(bot.guilds)
-                ready_bots.append(
-                    f"<tr><td><img src=\"{avatar}\" width=128 weight=128></img></td>\n"
-                    "<td style=\"padding-top: 10px ; padding-bottom: 10px; padding-left: 10px; padding-right: 10px\">"
-                    f"Adicionar:<br><a href=\"{disnake.utils.oauth_url(bot.user.id, permissions=disnake.Permissions(bot.config['INVITE_PERMISSIONS']), scopes=('bot', 'applications.commands'), **kwargs)}\" "
-                    f"rel=\"nofollow\" target=\"_blank\">{bot.user}</a>" + (f"<br>Servers: {guilds}" if guilds else "") + "</td></tr>"
-                )
-            else:
-                pending_bots.append(f"<tr><td>{bot.identifier}</td></tr>")
-
-        if ready_bots:
-            msg += f"\n<p style=\"font-size:20px\">Bots Disponíveis:</p>" \
-                   f"{style}\n<table cellpadding=\"3\">{''.join(ready_bots)}</table>"
-
-        if pending_bots:
-            msg += f"\n<p style=\"font-size:20px\">Bots em inicialização:</p>" \
-                   f"{style}\n<table cellpadding=\"10\">{''.join(pending_bots)}</table>\n" \
-                   f"Nota: Recarregue a página para conferir se o bot está disponível."
-
-        if failed_bots:
-
-            failed_table_style = """<style>
-            table, th, td {
-                border:1px solid black;
-                text-align: left;
-            }
-            </style>"""
-
-            msg += f"\n<p style=\"font-size:20px\">Os seguintes tokens configurado na ENV/SECRET/.env falharam " \
-                   f"na inicialização:</p>" \
-                   f"{failed_table_style}\n<table cellpadding=\"10\">{''.join(failed_bots)}</table>"
-
-        ws_url = "<Body onLoad=\" rpcUrl()\" ><p id=\"url\" style=\"color:blue\"></p><script>function rpcUrl(){document." \
-                     "getElementById(\"url\").innerHTML = window.location.href.replace(\".replit.dev\", \".replit.dev:443\").replace(\"http\", \"ws\")" \
-                     ".replace(\"https\", \"wss\") + \"ws\"}</script></body>"
-
-        msg += f"<p><a href=\"{branding.RPC_APP_RELEASES_URL}\" " \
-              f"target=\"_blank\">Baixe o app de rich presence aqui.</a></p>Link para adicionar no app " \
-              f"de RPC: {ws_url}"
-
-        if self.config["ENABLE_RPC_AUTH"]:
-            msg += f"\nNão esqueça de obter o token para configurar no app, use o comando /rich_presence para obter um.\n<br><br>"
-
-        msg += f"\nPrefixo padrão: {self.pool.config['DEFAULT_PREFIX']}<br><br>"
-
-        if self.pool.commit:
-            msg += f"\nCommit Atual: <a href=\"{self.pool.remote_git_url}/commit/{self.pool.commit}\" target=\"_blank\">{self.pool.commit[:7]}</a>"
-
-        self.write(msg)
+        self.write(_status_loader().load("status.html").generate(
+            reiniciando=killing_state is True,
+            mensagem=self.message.split("\n") if self.message else [],
+            prontos=ready_bots,
+            pendentes=pending_bots,
+            falhas=[(str(k), str(v)) for k, v in self.pool.failed_bots.items()],
+            rpc_auth=bool(self.config["ENABLE_RPC_AUTH"]),
+            rpc_app_url=branding.RPC_APP_RELEASES_URL,
+            prefixo=self.pool.config['DEFAULT_PREFIX'],
+            commit=commit,
+            commit_url=f"{self.pool.remote_git_url}/commit/{commit}" if commit else "",
+            painel_url="/painel/" if self.panel_enabled else "",
+            suporte_url=branding.SUPPORT_SERVER_URL,
+            nome_bot=branding.BOT_NAME,
+            repo_url=branding.REPO_URL,
+            upstream_nome=branding.UPSTREAM_NAME,
+            upstream_autor=branding.UPSTREAM_AUTHOR,
+            upstream_url=branding.UPSTREAM_URL,
+            logo_src=_logo_data_uri(),
+        ))
 
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
@@ -448,12 +435,13 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
         except IndexError:
             pass
 
+    panel_app, trust_proxy = _build_panel(pool, config)
+
     app = tornado.web.Application([
-        (r'/', IndexHandler, {'pool': pool, 'message': message, 'config': config}),
+        (r'/', IndexHandler, {'pool': pool, 'message': message, 'config': config,
+                              'panel_enabled': panel_app is not None}),
         (r'/ws', WebSocketHandler),
     ])
-
-    panel_app, trust_proxy = _build_panel(pool, config)
 
     server = tornado.httpserver.HTTPServer(make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy),
                                            max_body_size=MAX_BODY_SIZE)

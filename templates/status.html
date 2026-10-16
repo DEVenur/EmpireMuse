@@ -1,0 +1,176 @@
+{# Página de status (GET /). Autoescape ligado: todo texto externo (mensagem do pool, nomes, falhas, prefixo) é escapado. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0a1f">
+  <title>{{ nome_bot }} · Status</title>
+  <style>
+    :root {
+      --fundo: #0b0a1f; --superficie: #15133a; --elevada: #1e1b4b; --borda: #2e2a6b;
+      --texto: #f5f3ff; --suave: #c4b5fd; --violeta: #8b5cf6; --botao: #7c3aed; --botao-hover: #6d28d9;
+      --link: #a78bfa; --azul: #3b82f6; --erro: #fb7185; --ok: #6ee7b7;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      background: radial-gradient(60rem 30rem at 85% -10%, rgb(139 92 246 / 22%), transparent 70%),
+                  radial-gradient(45rem 28rem at -10% 10%, rgb(59 130 246 / 14%), transparent 70%), var(--fundo);
+      background-attachment: fixed; color: var(--texto);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.55;
+    }
+    a { color: var(--link); text-underline-offset: 0.2em; }
+    a:hover { color: var(--suave); }
+    a:focus-visible, button:focus-visible { outline: 3px solid var(--azul); outline-offset: 3px; border-radius: 0.25rem; }
+    .pagina { width: 100%; max-width: 60rem; margin-inline: auto; padding: 0 1rem; }
+    .pular { position: absolute; left: -999px; top: 0.5rem; background: var(--botao); color: #fff; padding: 0.5rem 1rem; border-radius: 0.5rem; z-index: 10; }
+    .pular:focus { left: 0.5rem; }
+    .topo { padding-block: 2.5rem 1.5rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem 1.5rem; }
+    .logo { width: 96px; height: 96px; border-radius: 50%; flex: 0 0 auto; }
+    .titulo { flex: 1 1 16rem; }
+    h1 { margin: 0; font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.15; }
+    .lema { margin: 0.25rem 0 0; color: var(--suave); }
+    .acoes { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
+    .botao { display: inline-block; padding: 0.6rem 1.1rem; border-radius: 0.5rem; background: var(--botao); color: #fff; font-weight: 600; text-decoration: none; border: 1px solid var(--botao); }
+    .botao:hover { background: var(--botao-hover); border-color: var(--botao-hover); color: #fff; }
+    .botao-sec { background: transparent; color: var(--texto); border-color: var(--borda); }
+    .botao-sec:hover { background: var(--elevada); border-color: var(--violeta); color: var(--texto); }
+    main { flex: 1 0 auto; padding-block: 0.5rem 2.5rem; }
+    section { margin-top: 2rem; }
+    h2 { font-size: 1.3rem; margin: 0 0 0.75rem; }
+    .aviso { background: var(--superficie); border: 1px solid var(--borda); border-left: 4px solid var(--violeta); border-radius: 0.5rem; padding: 0.9rem 1.1rem; margin: 0; }
+    .aviso-reinicio { font-size: clamp(1.3rem, 4vw, 2rem); font-weight: 600; }
+    .grade { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+    .cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: 0.75rem; padding: 1.1rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-align: center; }
+    .cartao img { width: 96px; height: 96px; border-radius: 50%; }
+    .cartao-nome { font-weight: 700; font-size: 1.1rem; overflow-wrap: anywhere; }
+    .cartao-info { color: var(--suave); margin: 0; }
+    .lista { margin: 0; padding-left: 1.25rem; }
+    .tabela-rolagem { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: var(--superficie); border: 1px solid var(--borda); }
+    th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--borda); vertical-align: top; overflow-wrap: anywhere; }
+    th { background: var(--elevada); }
+    .erro { color: var(--erro); }
+    code { background: var(--elevada); border: 1px solid var(--borda); border-radius: 0.375rem; padding: 0.1rem 0.4rem; overflow-wrap: anywhere; }
+    .nota { color: var(--suave); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    footer { border-top: 1px solid var(--borda); padding-block: 1.5rem; color: var(--suave); font-size: 0.9rem; }
+    footer p { margin: 0.25rem 0; }
+    @media (max-width: 36rem) {
+      .topo { padding-block: 1.5rem 1rem; }
+      .logo { width: 72px; height: 72px; }
+      .acoes .botao { flex: 1 1 100%; text-align: center; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .botao, .cartao { transition: background-color 0.15s ease, border-color 0.15s ease; }
+    }
+  </style>
+</head>
+<body>
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+  <header class="pagina topo">
+    {% if logo_src %}
+    <img class="logo" src="{{ logo_src }}" alt="Logotipo do {{ nome_bot }}" width="96" height="96">
+    {% else %}
+    <svg class="logo" viewBox="0 0 96 96" role="img" aria-label="Logotipo do {{ nome_bot }}"><circle cx="48" cy="48" r="46" fill="#8b5cf6"/><path d="M40 62V30l24-6v32" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="34" cy="62" r="7" fill="#fff"/><circle cx="58" cy="56" r="7" fill="#fff"/></svg>
+    {% end %}
+    <div class="titulo">
+      <h1>{{ nome_bot }}</h1>
+      <p class="lema">Bot de música para o Discord</p>
+      <nav class="acoes" aria-label="Links principais">
+        {% if painel_url %}<a class="botao" href="{{ painel_url }}">Abrir o painel</a>{% end %}
+        <a class="botao botao-sec" href="{{ suporte_url }}" target="_blank" rel="noopener noreferrer">Servidor de suporte<span class="visually-hidden"> (abre em outra aba)</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="conteudo" class="pagina" tabindex="-1">
+    {% if reiniciando %}
+    <p class="aviso aviso-reinicio" role="status">A aplicação será reiniciada em breve...</p>
+    {% else %}
+
+    {% if mensagem %}
+    <section aria-label="Aviso">
+      <p class="aviso" role="status">{% for i, linha in enumerate(mensagem) %}{% if i %}<br>{% end %}{{ linha }}{% end %}</p>
+    </section>
+    {% end %}
+
+    {% if prontos %}
+    <section aria-labelledby="titulo-prontos">
+      <h2 id="titulo-prontos">Bots disponíveis</h2>
+      <ul class="grade">
+        {% for bot in prontos %}
+        <li class="cartao">
+          <img src="{{ bot['avatar'] }}" alt="Avatar do bot {{ bot['nome'] }}" width="96" height="96">
+          <span class="cartao-nome">{{ bot["nome"] }}</span>
+          {% if bot["servidores"] %}<p class="cartao-info">Servidores: {{ bot["servidores"] }}</p>{% end %}
+          <a class="botao" href="{{ bot['convite'] }}" rel="nofollow noopener noreferrer" target="_blank">Adicionar {{ bot["nome"] }}<span class="visually-hidden"> a um servidor (abre em outra aba)</span></a>
+        </li>
+        {% end %}
+      </ul>
+    </section>
+    {% end %}
+
+    {% if pendentes %}
+    <section aria-labelledby="titulo-pendentes">
+      <h2 id="titulo-pendentes">Bots em inicialização</h2>
+      <ul class="lista">
+        {% for identificador in pendentes %}<li>{{ identificador }}</li>{% end %}
+      </ul>
+      <p class="nota">Nota: Recarregue a página para conferir se o bot está disponível.</p>
+    </section>
+    {% end %}
+
+    {% if falhas %}
+    <section aria-labelledby="titulo-falhas">
+      <h2 id="titulo-falhas">Falhas na inicialização</h2>
+      <p class="erro">Os seguintes tokens configurados na ENV/SECRET/.env falharam na inicialização:</p>
+      <div class="tabela-rolagem">
+        <table>
+          <caption class="visually-hidden">Tokens que falharam na inicialização</caption>
+          <thead><tr><th scope="col">Identificador</th><th scope="col">Erro</th></tr></thead>
+          <tbody>
+            {% for identificador, erro in falhas %}<tr><td>{{ identificador }}</td><td>{{ erro }}</td></tr>{% end %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% end %}
+
+    <section aria-labelledby="titulo-rpc">
+      <h2 id="titulo-rpc">App de Rich Presence</h2>
+      <p><a href="{{ rpc_app_url }}" target="_blank" rel="noopener noreferrer">Baixe o app de rich presence aqui.<span class="visually-hidden"> (abre em outra aba)</span></a></p>
+      <p>Link para adicionar no app de RPC: <code id="url"></code></p>
+      <noscript><p class="nota">Ative o JavaScript para ver o endereço do relé; ele é o endereço desta página trocando http por ws e terminando em /ws.</p></noscript>
+      {% if rpc_auth %}<p class="nota">Não esqueça de obter o token para configurar no app, use o comando /rich_presence para obter um.</p>{% end %}
+    </section>
+
+    <section aria-labelledby="titulo-geral">
+      <h2 id="titulo-geral">Informações</h2>
+      <p>Prefixo padrão: {{ prefixo }}</p>
+      {% if commit %}<p>Commit Atual: <a href="{{ commit_url }}" target="_blank" rel="noopener noreferrer">{{ commit[:7] }}<span class="visually-hidden"> (abre em outra aba)</span></a></p>{% end %}
+    </section>
+    {% end %}
+  </main>
+
+  <footer>
+    <div class="pagina">
+      <p>{{ nome_bot }} é software livre sob a licença GPL-2.0, derivado do <a href="{{ upstream_url }}" target="_blank" rel="noopener noreferrer">{{ upstream_nome }}</a> criado por {{ upstream_autor }}.</p>
+      <p>Código-fonte: <a href="{{ repo_url }}" target="_blank" rel="noopener noreferrer">{{ nome_bot }} no GitHub</a>.</p>
+    </div>
+  </footer>
+  {% if not reiniciando %}
+  <script>
+    (function () {
+      var alvo = document.getElementById("url");
+      if (alvo) {
+        alvo.textContent = window.location.href.replace(".replit.dev", ".replit.dev:443").replace("http", "ws").replace("https", "wss") + "ws";
+      }
+    })();
+  </script>
+  {% end %}
+</body>
+</html>
