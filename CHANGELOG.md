@@ -8,6 +8,24 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Painel Web Integrado (Fase 2)**:
+  - Sub-aplicação web embutida sob `/painel/` no servidor HTTP Tornado (`web_app.py`), controlada por `PANEL_ENABLED` e atrelada a `RUN_RPC_SERVER=true`, com zero dependências de runtime adicionais no `requirements.txt`.
+  - Autenticação OAuth2 com Discord (`panel/oauth.py`) utilizando *Authorization Code Grant*, `state` criptográfico de uso único e PKCE S256, revogando o token de acesso imediatamente após leitura do perfil e servidores (sem retenção de tokens em banco, cookies ou logs).
+  - Gerenciamento de sessões em memória (`panel/sessions.py`) protegidas por cookies assinados com prefixo de segurança `__Host-` em produção HTTPS (atributos `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`) e suporte a desenvolvimento local via `PANEL_INSECURE_COOKIES`.
+  - Autorização estrita e autoritativa no servidor (`panel/authz.py`) com base no estado do bot no `BotPool`, exigindo que o usuário seja dono do servidor ou tenha permissões de Administrador ou Gerenciar Servidor.
+  - Interface orientada a hipertexto com templates Tornado, trocas parciais dinâmicas via **htmx 2.0.10** (0BSD) e estilos com **Pico CSS 2.1.1** (MIT) vendorizados localmente com hashes verificados em `SHA256SUMS`, customizados pela paleta Nebulosa (`panel/static/css/nebulosa.css`), sem build Node.js em produção e com Content Security Policy (CSP) rigorosa.
+  - Painel de gerenciamento de servidores com 6 categorias: Player (volume padrão, autoplay, restrito), DJ (cargos), Aparência (skins locais e globais), Links fixos (CRUD, importação/exportação), Canal de pedidos (setup assistido, tarefas assíncronas com polling e reset seguro em duas etapas) e Geral (prefixo, status de voz, remoção de convites de ouvir junto).
+  - Área pessoal do usuário (`/painel/conta`): configuração de prefixo próprio, gerenciamento de favoritos com importação/exportação, remoção de integrações vinculadas, ativação/desativação de scrobble Last.fm e emissão de token de uso único para o aplicativo desktop de RPC.
+  - Controle otimista de concorrência com validação de versão via hash SHA-256 (`versao`) e bloqueio assíncrono granular (`asyncio.Lock`) para evitar colisões entre painel e comandos.
+  - Registro de auditoria estruturado em logs com servidor, usuário, escopo e nomes de campos modificados, sem expor segredos.
+- **Módulo Compartilhado de Canal de Pedidos**:
+  - `utils/music/request_channel.py`: extração e centralização da lógica de configuração (`apply_request_channel`) e redefinição (`reset_request_channel`) de canais de texto e fóruns de pedidos, compartilhada entre os comandos do bot (`modules/music_settings.py`) e o painel web.
+- **Ferramentas de Teste e Cobertura**:
+  - Adição do `pytest-cov==7.1.0` em `requirements-dev.txt` e configuração de medição de cobertura em `pyproject.toml` (para `panel` e `utils.music.request_channel`), com meta ≥ 80% superada (97% na entrega da v1).
+  - Criação de suíte de testes com mais de 800 testes dedicados em `tests/panel/` cobrindo configurações, autenticação, autorização, sessões, regras de negócio e resiliência.
+- **Documentação de Arquitetura e Guias do Painel**:
+  - `docs/adr/0002-painel-web.md`: Registro de Decisão de Arquitetura para o desenvolvimento do painel integrado com Tornado e htmx.
+  - `docs/guides/painel-web.md`: Guia de configuração no Discord Developer Portal, tabela de variáveis de ambiente, modos HTTPS/localhost e permissões.
 - **Identidade Visual e Ativos de Marca (Fase 1.1)**:
   - `assets/brand/`: arte original da marca EmpireMuse no estilo "Nebulosa", composta por `logo.svg` (emblema vetorial para o README), `avatar.png` (ícone circular de 1024×1024 px) e `banner.png` (banner de perfil de 1500×600 px).
   - `docs/identidade-visual.md`: especificação da paleta de cores Nebulosa (`#0B0A1F`, `#3B82F6`, `#8B5CF6`, `#C026D3`, `#E11D48`), diretrizes de arte e instruções passo a passo para configuração no Discord Developer Portal.
@@ -53,6 +71,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `docs/known-issues.md`: Catálogo de 31 problemas conhecidos, inconsistências de dependências e débitos técnicos para a fase de saneamento.
 
 ### Alterado
+- **Servidor Web e Limite de Corpo**: `web_app.py` integra o roteador `make_router` para encaminhar requisições a `/painel/` mantendo `/` e `/ws` inalterados; define limite global de corpo de requisições de 64 KiB (`max_body_size = 65536`) no servidor HTTP Tornado; implementa encerramento gracioso de tarefas pendentes (`_shutdown_panel`).
+- **Refatoração dos Comandos de Configuração**: `modules/music_settings.py` refatorado para delegar operações de configuração e redefinição de canal de pedidos ao módulo compartilhado `utils/music/request_channel.py`.
 - **Servidor de Suporte e Comunidade**: inclusão do convite oficial permanente para o servidor [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) no `README.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/config.yml` e na constante `SUPPORT_SERVER_URL` de `utils/branding.py`.
 - **Configuração de Cores dos Embeds**: definição da cor padrão dos embeds para o violeta da paleta Nebulosa (`8B5CF6`); implementação de `parse_embed_color` em `config_loader.py` com suporte flexível a valores com ou sem `#` e fallback seguro para `'none'`.
 - **Política de Segurança**: link direto para criação de advisories privados adicionado ao `SECURITY.md` e ao `.github/ISSUE_TEMPLATE/config.yml`.
@@ -65,6 +85,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
 
 ### Corrigido
+- **Canal de Pedidos (`utils/music/request_channel.py`)**: o reset de fórum (`/reset`) agora limpa os campos `channel` e `message_id` salvos no banco de dados; a verificação de permissões (`check_channel_perm`) passa a utilizar os nomes canônicos do Discord/disnake (`view_channel` e `create_forum_threads`), detectando corretamente a ausência de permissões necessárias.
 - **Lista de servidores Lavalink**: o download agora valida a resposta (status e formato), usa timeout e recorre ao arquivo local em caso de falha.
 - **Link do commit** no `/about` e no painel não inclui mais `.git`.
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.

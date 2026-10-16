@@ -12,3 +12,4 @@ Para propor uma nova decisão técnica ou arquitetural, copie o modelo base [`00
 | :--- | :--- | :--- | :--- |
 | [0000](0000-template.md) | Modelo de Registro de Decisão Arquitetural | Proposto | 2026-10-14 |
 | [0001](0001-manter-python.md) | Manter Python e Sanear em Vez de Reescrever em Node/TypeScript | Aceito | 2026-10-14 |
+| [0002](0002-painel-web.md) | Painel Web Integrado com Login Discord, Templates Tornado e htmx | Aceito | 2026-10-15 |

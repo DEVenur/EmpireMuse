@@ -123,12 +123,12 @@ ser commitados.
 
 ## 6. Testes e ferramentas
 
-Os testes automatizados ficam em `tests/` (hoje: `tests/test_branding.py`, que protege a identidade do
-projeto e os créditos ao upstream). O `pyproject.toml` é mínimo e contém apenas a configuração do pytest.
+Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/test_branding.py`, `tests/test_identidade_visual.py`), validação de listas de servidores Lavalink, filtros de URLs, a suíte completa do painel web (`tests/panel/`) e caracterização de canais de pedidos (`tests/test_request_channel_*.py`). O `pyproject.toml` define a configuração do pytest e da medição de cobertura (`pytest-cov`).
 
 ```bash
-uv pip install -r requirements-dev.txt   # pytest 9.1.1 e pytest-asyncio
-.venv/bin/python -m pytest               # Windows: .venv\Scripts\python -m pytest
+uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio e pytest-cov
+.venv/bin/python -m pytest               # executa a suíte de testes (Windows: .venv\Scripts\python -m pytest)
+.venv/bin/python -m pytest --cov         # executa testes medindo a cobertura de código
 ```
 
 Padrão alvo da refatoração (demais ferramentas ainda **não** configuradas):
@@ -136,7 +136,7 @@ Padrão alvo da refatoração (demais ferramentas ainda **não** configuradas):
 | Ferramenta | Uso |
 |---|---|
 | `ruff` | Lint e formatação (`ruff check .`, `ruff format .`), com regra para proibir `except:` nu (`E722`). |
-| `pytest` + `pytest-asyncio` | Testes unitários/integração; cobertura mínima de 80% para código novo. |
+| `pytest` + `pytest-asyncio` + `pytest-cov` | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
 | `mypy` ou `pyright` | Tipagem gradual nos módulos novos. |
 | `uv` | Dependências e *lockfile* quando o projeto migrar para `pyproject.toml`. |
 

@@ -15,14 +15,17 @@ flowchart LR
     main["main.py<br/>BotPool().setup()"] --> pool["BotPool<br/>utils/client.py"]
     pool --> b1["BotCore #1<br/>(token A)"]
     pool --> b2["BotCore #2<br/>(token B)"]
-    pool --> web["web_app.py<br/>tornado: / e /ws"]
+    pool --> web["web_app.py<br/>tornado: /, /ws e /painel"]
     pool --> db[("MongoDB (motor)<br/>ou TinyMongo local")]
     b1 & b2 --> cogs["modules/*.py<br/>(cogs)"]
+    cogs --> req["utils/music/request_channel.py<br/>(setup e reset de canal)"]
     cogs --> player["LavalinkPlayer<br/>utils/music/models.py"]
     player --> wl["wavelink/ (cliente próprio)"]
     wl <--> ll["Lavalink v3/v4<br/>(local ou remoto)"]
     cogs --> ext["Spotify · Deezer · Last.fm · yt-dlp"]
     web <-->|"WebSocket RPC"| rpc["App de Rich Presence"]
+    web --> panel["panel/<br/>(sub-app Tornado: painel web)"]
+    panel --> req
 ```
 
 ## 2. Processo e inicialização
@@ -138,25 +141,38 @@ necessário (o jar e o yml vêm do espelho `DiscordEmpireHub/LL-binaries` `0.0.1
 loop (`utils/client.py:219-233`). O node local usa identificador `LOCAL`, host `127.0.0.1` e porta
 `SERVER_PORT` ou `8090` (`utils/client.py:401-415`).
 
-## 7. Servidor web e RPC (`web_app.py`)
+## 7. Servidor web, RPC e Painel Web (`web_app.py` e `panel/`)
 
-Aplicação tornado (`web_app.py:422-435`) escutando em `PORT` (padrão 80):
+Aplicação Tornado (`web_app.py`) executando sob `HTTPServer` com limite global de corpo de requisições de 64 KiB (`max_body_size = 65536`) e escutando na porta `PORT` (padrão 80 ou 8080).
 
-| Rota | Handler | Função |
+A função `make_router` organiza o roteamento das requisições:
+- `/` e `/ws` são atendidos pela aplicação principal do status e RPC;
+- `/painel` e `/painel/*` são direcionados para a sub-aplicação `panel/` quando `PANEL_ENABLED=true` (com `panel_app=None`, requisições caem no fallback 404 da aplicação principal).
+
+| Rota | Handler / Componente | Função |
 |---|---|---|
 | `/` | `IndexHandler` | Página de status: bots prontos (com link de convite), pendentes, falhas de token, link do app de RPC, prefixo e commit (`web_app.py:30-134`). |
 | `/ws` | `WebSocketHandler` | Relé de mensagens do RPC entre os bots e o app desktop (`web_app.py:137-280`). |
+| `/painel` | `build_panel_app` (`panel/`) | Sub-aplicação web de gerenciamento do bot com login via Discord, controle de sessões e interface orientada a hipertexto. |
 
-Os próprios bots também são clientes do `/ws` (ou de um `RPC_SERVER` externo) via `WSClient`
-(`web_app.py:283-419`), com reconexão por backoff.
+### Relé WebSocket do RPC
 
-**Protocolo (alto nível):** os bots e o app de Rich Presence conectam em `/ws`. As operações trocadas são
-`update`/`idle` (estado do player), `rpc_update` (pedido de reenvio), `disconnect` e `close` (encerramento).
-Autenticação por token opcional, em revisão (ver `SECURITY.md`). Implementação: `web_app.py:137-280`.
+Os próprios bots também são clientes do `/ws` (ou de um `RPC_SERVER` externo) via `WSClient` (`web_app.py:283-419`), com reconexão por backoff.
 
-O payload `update`/`idle` é montado em `LavalinkPlayer.process_rpc` (`utils/music/models.py:3450-3560`).
-Se `RUN_RPC_SERVER` for falso e `RPC_SERVER` apontar para o próprio host, `connect_rpc_ws` não conecta
-(`utils/client.py:461-467`).
+**Protocolo (alto nível):** os bots e o app de Rich Presence conectam em `/ws`. As operações trocadas são `update`/`idle` (estado do player), `rpc_update` (pedido de reenvio), `disconnect` e `close` (encerramento). Autenticação por token opcional, em revisão (ver `SECURITY.md`). Implementação: `web_app.py:137-280`.
+
+O payload `update`/`idle` é montado em `LavalinkPlayer.process_rpc` (`utils/music/models.py:3450-3560`). Se `RUN_RPC_SERVER` for falso e `RPC_SERVER` apontar para o próprio host, `connect_rpc_ws` não conecta (`utils/client.py:461-467`).
+
+### Sub-aplicação do Painel Web (`panel/`)
+
+O painel web é ativado quando `PANEL_ENABLED=true` e requer `RUN_RPC_SERVER=true` para que o servidor web suba. Ele foi desenhado sob o princípio de dependência zero adicional e segurança rigorosa:
+
+- **Autenticação OAuth2 (`panel/oauth.py`)**: implementa o fluxo *Authorization Code Grant* com geração criptográfica de `state` e par PKCE S256 (`code_verifier` e `code_challenge`), associados a uma tentativa de login de uso único (10 minutos de validade). Ao obter o token temporário do Discord, lê os perfis e servidores (`identify` e `guilds`) e executa **revogação mandatória e imediata** do token via `POST /oauth2/token/revoke`. Nenhum token de acesso é persistido.
+- **Sessões e Cookies (`panel/sessions.py`)**: as sessões ativas residem em memória, associadas a um ID aleatório de 32 bytes emitido em cookie assinado (`cookie_secret`). Em produção com HTTPS, utiliza o prefixo de segurança `__Host-` (`__Host-painel_sessao`) com flags `Secure`, `HttpOnly`, `SameSite=Lax` e `Path=/`. Para desenvolvimento local em `http://localhost`, a flag `PANEL_INSECURE_COOKIES=true` autoriza cookies normais sem a flag `Secure`.
+- **Autorização Autoritativa (`panel/authz.py`)**: a lista de servidores do OAuth funciona apenas como pré-filtro. Toda ação em `/painel/servidores/<gid>` valida no servidor com dados do `BotPool`: verifica se algum bot do pool está presente na guilda e se o usuário logado é dono do servidor ou possui as permissões `administrator` ou `manage_guild`. Leituras utilizam cache de até 30 segundos; escritas usam verificação mandatória em tempo real (`fresh=True`).
+- **Serviços Puros e Concorrência Otimista (`panel/services/`)**: as regras de configuração de servidores (Player, DJ, Aparência, Links fixos, Geral) e conta (prefixo pessoal, favoritos, integrações, Last.fm e token RPC) são implementadas em serviços desacoplados do HTTP, espelhando com paridade as regras dos comandos do bot. Cada formulário inclui um campo oculto `versao` baseado no hash SHA-256 dos campos pertinentes sob bloqueio assíncrono (`asyncio.Lock`), prevenindo sobrescrita de dados concorrente (retorno HTTP 409).
+- **Canal de Pedidos e Tarefas Assíncronas (`panel/services/channel.py`, `channel_tokens.py`, `tasks.py` e `utils/music/request_channel.py`)**: a lógica de `/setup` e `/reset` foi centralizada em `utils/music/request_channel.py`, compartilhada entre os cogs de comandos e o painel. O painel executa configurações demoradas via `TaskRunner` assíncrono em background, com atualização de estado por polling htmx e encerramento gracioso via `_shutdown_panel()` no desligamento do servidor.
+- **Frontend e Segurança de Conteúdo**: interface construída com templates nativos do Tornado, trocas parciais de HTML via **htmx 2.0.10** (0BSD) e folhas de estilo **Pico CSS 2.1.1** (MIT) vendorizadas em `panel/static/vendor/` (com hashes validados em `SHA256SUMS`) e estendidas por `panel/static/css/nebulosa.css`. Política de Segurança de Conteúdo (CSP) rígida sem `'unsafe-inline'` nem `'unsafe-eval'`. Proteção XSRF obrigatória em todas as requisições `POST`.
 
 ## 8. Persistência
 
@@ -206,7 +222,9 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 |---|---|---|
 | `main.py` / `app.py` | Ponto de entrada | 10 / 1 |
 | `config_loader.py` | Padrões, leitura de env/`config.json`/`.env`, conversão de tipos | 310 |
-| `web_app.py` | Status HTTP, relé WebSocket do RPC, cliente do RPC | 446 |
+| `web_app.py` | Status HTTP, relé WebSocket do RPC, roteador do painel web | 485 |
+| `panel/` | Sub-aplicação web Tornado: OAuth2, sessões, handlers, serviços puros, templates e estáticos | 3.852 |
+| `utils/music/request_channel.py` | Lógica unificada de setup e reset de canal de pedidos compartilhada entre cogs e painel | 469 |
 | `utils/client.py` | `BotPool` (setup, nodes, tokens) e `BotCore` (prefixo, sync, módulos) | 1.457 |
 | `utils/db.py` | Modelos, `MongoDatabase`, `LocalDatabase`, prefixos | 327 |
 | `utils/others.py` | Contexto, `PoolCommand`, paginação, emojis, utilitários | 865 |
@@ -220,7 +238,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `utils/music/{converters,errors,filters,skin_utils,track_encoder,…}.py` | Auxiliares de música | 1.506 |
 | `wavelink/` | Cliente Lavalink v3/v4 (node, websocket, player, eventos) | 2.758 |
 | `modules/music.py` | Comandos de música (play, fila, controles, nodes) | 7.876 |
-| `modules/music_settings.py` | Configurações por servidor/usuário, skins, favoritos | 1.997 |
+| `modules/music_settings.py` | Configurações por servidor/usuário, skins, favoritos | 1.709 |
 | `modules/player_resume.py` | Salvar e retomar sessões de players | 840 |
 | `modules/misc.py` | Comandos gerais (ping, convite, sobre, …) | 1.016 |
 | `modules/legacy_cmds.py` | Comandos legados/administrativos (prefixo) | 1.137 |
@@ -233,7 +251,8 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `assets/` | Imagens re-hospedadas (previews, skins, ícones, tutoriais) + `SHA256SUMS`; servidas via `ASSETS_BASE_URL` | — |
 | `data/lavalink_servers.ini` | Lista de servidores Lavalink públicos (origem: gist do upstream, com crédito no cabeçalho) | — |
 | `docs/guides/` | Guias de hospedagem e configuração adaptados da wiki/gist do upstream | — |
-| `tests/` | Testes automatizados (pytest); `tests/test_branding.py` protege identidade e créditos | — |
+| `docs/painel/` | Pesquisas técnicas e inventários de requisitos do painel web | — |
+| `tests/` | Testes automatizados (pytest e pytest-cov); testes de marca, regras e painel web | — |
 
 ## 11. Implantação
 
