@@ -2,196 +2,123 @@
   <img src="assets/brand/logo.svg" alt="Logo do EmpireMuse" width="160">
 </p>
 
-# EmpireMuse
-## bot de música programado em python com player interativo, comandos de barra + slash, integração com o [last.fm](https://www.last.fm/) e muito mais.
+<h1 align="center">EmpireMuse</h1>
 
-> **EmpireMuse** é uma obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu** e distribuído sob a licença **GPL-2.0** (veja [LICENSE](LICENSE) e [CREDITS.md](CREDITS.md)).
+<p align="center">
+  <strong>Bot de música multi-instância e player interativo da comunidade EmpireHub</strong>
+</p>
 
-[![Discord EmpireHUB](https://img.shields.io/badge/Discord-EmpireHUB-8B5CF6?logo=discord&logoColor=white)](https://discord.gg/KgtyNg9U6H)  
-Entre no servidor oficial [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) para suporte, dúvidas e acompanhar todas as novidades.
+<p align="center">
+  <a href="https://discord.gg/KgtyNg9U6H"><img src="https://img.shields.io/badge/Discord-EmpireHUB-8B5CF6?logo=discord&logoColor=white" alt="Discord EmpireHUB"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Licen%C3%A7a-GPL--2.0-blue.svg" alt="Licença GPL-2.0"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13"></a>
+  <a href="https://github.com/DiscordEmpireHub/EmpireMuse/actions/workflows/ci.yml"><img src="https://github.com/DiscordEmpireHub/EmpireMuse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
 
-### Algumas Previews:
+---
 
-- Player controller: modo normal/mini-player (skin: default) e suporte a [RPC (Rich Presence)](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app)
+## Sobre o Projeto
+
+O **EmpireMuse** é o bot de música oficial da comunidade [EmpireHUB](https://discord.gg/KgtyNg9U6H). Desenvolvido em **Python 3.13** com o framework [disnake](https://github.com/DisnakeDev/disnake), o bot conta com processamento de áudio externo de alta fidelidade baseado no ecossistema [Lavalink v4](https://github.com/lavalink-devs/Lavalink) e NodeLink, arquitetura multi-instância em pool e interface visual rica para usuários e administradores no Discord.
+
+> O **EmpireMuse** é uma obra derivada e evolução contínua do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu** e distribuído sob a licença **GPL-2.0** (consulte [LICENSE](LICENSE) e [CREDITS.md](CREDITS.md)).
+
+Participe do nosso servidor oficial [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) para interagir com a comunidade, tirar dúvidas e acompanhar as atualizações do bot.
+
+---
+
+## Recursos Principais
+
+- 🎵 **Player Interativo e Rico**: Controles multimídia completos via botões, menus de seleção e modais, com 15 skins visuais intercambiáveis (10 dinâmicas e 5 estáticas).
+- 📻 **Arquitetura Multi-instância (`BotPool`)**: Gerenciamento integrado de múltiplos bots no mesmo processo para balanceamento de canais de voz simultâneos.
+- 🌐 **Painel Web Integrado (`panel/`)**: Interface web moderna orientada a hipertexto (Tornado + htmx + Pico CSS) com autenticação Discord OAuth2 e PKCE para gerenciamento de configurações de servidores e preferências pessoais.
+- 🎧 **Múltiplas Fontes de Áudio**: Suporte a YouTube (com cliente TV, cifra remota e autenticação OAuth opcional contra bloqueios anti-bot), Spotify, Deezer e servidores Lavalink locais ou remotos.
+- 💬 **Canais e Fóruns de Pedidos**: Modos dedicados de song-request em canais de texto ou fóruns com sincronização automática de status de voz e palco.
+- 📊 **Integrações e Presença**: Suporte a scrobble no [Last.fm](https://www.last.fm/) e integração via WebSocket com aplicativo desktop de [Rich Presence (RPC)](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app).
+- 🛡️ **Segurança e Resiliência**: Isolamento estrito de variáveis de ambiente do subprocesso Lavalink por allowlist, download de binários verificado por SHA-256 e políticas de cookies seguros (`__Host-`).
+
+---
+
+## Previews da Interface
+
+- **Player Controller**: Modo normal com mini-player e suporte a RPC (Rich Presence):
 
 [![](assets/readme_preview_player_default.png)](assets/readme_preview_player_default.png)
 
 <details>
-<summary>
-Mais previews:
-</summary>
+<summary><strong>Ver mais capturas de tela e recursos visuais:</strong></summary>
 <br>
 
-- Comandos de barra / Slash commands
+- **Comandos de Barra / Slash Commands**:
 
 [![](assets/readme_preview_slashcommands.png)](assets/readme_preview_slashcommands.png)
 
-- Integração com o [last.fm](https://www.last.fm/) para scrobbles (outras funcionalidades em breve).
+- **Integração com o Last.fm** para scrobbles em tempo real:
 
 [![](assets/readme_preview_lastfm.png)](assets/readme_preview_lastfm.png)
 
-- Player controller: modo fixo/estendido com canal e conversa de song requests (skin: default), configurável com o comando: /setup
+- **Player Controller Estendido**: Modo de canal fixo de pedidos com conversa e fila interativa (`/setup`):
 
 [![](assets/readme_preview_player_setup.png)](assets/readme_preview_player_setup.png)
 
-- Player controller: modo fixo/estendido com canal de song-request em forum com suporte a status automático no canal de voz e palco
+- **Canal de Pedidos em Fórum**: Tópicos dedicados com atualização dinâmica de status no canal de voz e palco:
 
 [![](assets/readme_preview_controller_forum.png)](assets/readme_preview_controller_forum.png)
 
-* Há diversas outras skins, veja todas usando o comando /change_skin (você também pode criar outras, use os modelos padrões que estão na pasta [skins](utils/music/skins/) como referência, crie uma cópia com outro nome e modifique a seu gosto).
+> As imagens de preview foram preservadas temporariamente do projeto original e estão hospedadas em [`assets/`](assets/). A substituição gradual por artes exclusivas da identidade visual Nebulosa está planejada (veja [CREDITS.md](CREDITS.md)).
 
 </details>
 
-> As imagens de preview foram re-hospedadas em [`assets/`](assets/) e têm origem no projeto upstream; a substituição por arte própria está planejada (veja [CREDITS.md](CREDITS.md)).
+---
 
-## Painel web
+## Painel Web Integrado
 
-O EmpireMuse possui um painel web integrado para gerenciamento visual de servidores (opções de reprodução, cargos de DJ, skins, links rápidos, canal de pedidos e status de voz) e preferências de conta (prefixo pessoal, favoritos, integrações, Last.fm e token do app RPC), com login oficial via Discord.
+O EmpireMuse inclui uma sub-aplicação web completa sob `/painel/` servida diretamente pelo servidor HTTP Tornado, dispensando dependências de runtime adicionais:
 
-Para detalhes de ativação, variáveis de ambiente e configuração no Discord Developer Portal, consulte o [Guia do Painel Web](docs/guides/painel-web.md).
+- **Gerenciamento de Servidores**: Ajuste de volume padrão, modo DJ, alternância de skins, links rápidos fixos, setup assistido de canais de pedidos e status do canal de voz;
+- **Área Pessoal do Usuário** (`/painel/conta`): Configuração de prefixo customizado, gerenciador de playlists e favoritos com importação/exportação, vinculação Last.fm e emissão de tokens de presença rica;
+- **Segurança de Nível Bancário**: Fluxo *Authorization Code Grant* com par criptográfico PKCE S256, revogação instantânea de access tokens, controle otimista de concorrência com validação SHA-256 e cookies de sessão isolados.
 
-## Hospede o seu próprio bot com essa source:
-
-Guias passo a passo (em português, com imagens) estão em [`docs/guides/`](docs/guides/README.md).
+Consulte o [Guia do Painel Web](docs/guides/painel-web.md) para detalhes de rotas, permissões e setup de OAuth2 no Discord Developer Portal.
 
 ---
 
-<details>
-<summary>
-Repl.it
-</summary>
+## Visão Geral de Arquitetura
 
-Veja o guia com imagens: [docs/guides/replit-token.md](docs/guides/replit-token.md) (outros guias: [hospedagem](docs/guides/replit-hosting.md), [opcionais](docs/guides/replit-hosting-opcionais.md) e [atualização](docs/guides/replit-atualizar.md)).
-</details>
+O sistema é estruturado em camadas modulares para desacoplar regras de negócio, interface do Discord e processamento de áudio:
 
----
+- **Ponto de Entrada (`main.py` / `app.py`)**: Inicialização do loop de eventos asyncio e instanciação do `BotPool`.
+- **Pool de Bots (`utils/client.py`)**: Classe `BotPool` que supervisiona múltiplos bots `BotCore` (disnake), nós Lavalink e clientes de RPC.
+- **Servidor Web e Relé (`web_app.py`)**: Servidor Tornado que expõe a página de status, relé WebSocket de RPC e o roteador da aplicação web `panel/`.
+- **Motor de Áudio (`wavelink/` e `utils/music/`)**: Modelos de reprodução (`LavalinkPlayer`, `LavalinkTrack`), cliente de nós Lavalink e gerenciamento de subprocesso Java local (`local_lavalink.py`).
+- **Persistência (`utils/db.py`)**: Suporte híbrido transparente para MongoDB (produção) e TinyMongo local (desenvolvimento).
+- **Cogs e Comandos (`modules/`)**: Módulos de comandos de música, configurações de servidor, tratamento de erros, ajuda e integração com Last.fm.
 
-**Render.com** e **Gitpod** (deploy em 1 clique): Deploy em revisão — será reativado na fase de deploy (I-7).
-
-<!-- Deploy em revisão — será reativado na fase de deploy (I-7). Conteúdo original preservado abaixo:
-<details>
-<summary>
-Render.com
-</summary>
-<br>
-
-> Nota: os arquivos de deploy (Render, Discloud, SquareCloud, Replit e Gitpod) ainda não foram revisados para o EmpireMuse; o deploy foi adiado.
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/DiscordEmpireHub/EmpireMuse/tree/main)
-
-* **[ 1 ]** - No campo **TOKEN_BOT_1** coloque o token do bot **( [tutorial de como obter](https://www.youtube.com/watch?v=lfdmZQySTXE) )**. `Nota: Caso queira, no campo TOKEN você pode incluir token de mais bots para ter bots extras pra ativar o suporte a multi-voice incluindo mais tokens no value (separando com espaços).`
-
-
-* **[ 2 ]** - No campo **DEFAULT_PREFIX** coloque um prefixo para o bot.
-
-
-* **[ 3 ]** - Nos campos **SPOTIFY_CLIENT_ID** e **SPOTIFY_CLIENT_SECRET** coloque as suas keys do spotify **( [tutorial de como obter](https://www.youtube.com/watch?v=ceKQjWiCyWE) | [guia escrito](docs/guides/spotify-keys.md) )**.
-
-
-* **[ 4 ]** - No campo **MONGO** coloque o link da sua database do MongoDB **( [tutorial de como obter](https://www.youtube.com/watch?v=x1Gq5beRx9k) | [guia escrito](docs/guides/mongodb.md) )**.
-
-
-* **[ 5 ]** - Clique em Apply e aguarde o processo de build até o bot iniciar (isso pode demorar bastante, no mínimo uns 13 minutos ou mais para o deploy ser finalizado + bot iniciar + servidor lavalink iniciar).
-</details>
+Para uma documentação aprofundada com fluxogramas, ciclo de vida e mapeamento completo de arquivos, consulte [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
-<details>
-<summary>
-Gitpod
-</summary>
-<br>
+## Desenvolvimento Local e Contribuição
 
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/DiscordEmpireHub/EmpireMuse)
+Para configurar um ambiente local, executar testes e contribuir com o desenvolvimento do bot:
 
-* **[ 1 ]** - Abra o arquivo .env e coloque o token do bot no campo apropriado (caso não tenha, veja como obter com este tutorial [tutorial](https://www.youtube.com/watch?v=lfdmZQySTXE) de como obter). Também altamente recomendo usar mongodb, procure onde tem MONGO= no arquivo .env e nele coloque o link da sua db do mongodb (caso não tenha, veja como obter por este [tutorial](https://www.youtube.com/watch?v=x1Gq5beRx9k)).
-
-
-* **[ 2 ]** - Clique com botão direito em cima do arquivo main.py e depois clique em: Run Python File in Terminal.
-
-
-* **Nota 1:** Requer verificação da conta por número de celular/mobile.
-* **Nota 2:** Não esqueça de ir na lista de [workspaces](https://gitpod.io/workspaces) e clicar nos 3 pontinhos do projeto e depois clicar em **pin**. `(isso evitará o worskpace ser deletado após 14 dias inativo)`
-* **Nota 3:** Não use o gitpod para hospedar / manter o bot online, pois a mesma tem bastante limitações no plano gratuito (mais informações [nesse link](https://www.gitpod.io/pricing)).
-</details>
--->
+1. **Guia de Desenvolvimento**: Siga o passo a passo de setup com `uv`, variáveis do `.env`, execução do bot e Lavalink local em [`docs/development.md`](docs/development.md).
+2. **Padrão de Git Worktrees**: O desenvolvimento de novas funcionalidades e correções opera obrigatoriamente através de worktrees isoladas em `worktrees/` a partir da branch `main`. Veja a seção 9 de [`docs/development.md`](docs/development.md).
+3. **Diretrizes de Contribuição**: Padrões de código, formatação com `ruff`, convenções de commits convencionais e fluxo de pull requests estão documentados em [`CONTRIBUTING.md`](CONTRIBUTING.md).
+4. **Política de Segurança**: Recomendações de segurança, reporte responsável de vulnerabilidades e escopo de proteção em [`SECURITY.md`](SECURITY.md).
 
 ---
 
-<details>
-<summary>
-Hospedando no seu próprio PC/VPS (windows/linux)
-</summary>
-<br>
+## Créditos e Licença
 
-### Requisitos:
+O **EmpireMuse** é um software livre distribuído sob os termos da licença **GNU General Public License v2.0 (GPL-2.0)**. Em conformidade com a licença, todos os avisos de direitos autorais originais foram preservados.
 
-* Python 3.13 (veja [docs/development.md](docs/development.md))<br/>
-[Download pela Microsoft Store](https://apps.microsoft.com/store/detail/9PJPW5LDXLZ5?hl=pt-br&gl=BR) (Recomendável para usuários do windows 10/11).<br/>
-[Download direto do site oficial](https://www.python.org/downloads/) (Marque esta opção ao instalar: **Add python to the PATH**)
-* [Git](https://git-scm.com/downloads) (Não escolha a versão portable)</br>
+- Autor original: **zRitsu** ([MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot))
+- Licença completa: [LICENSE](LICENSE)
+- Catálogo de atribuições e componentes de terceiros: [CREDITS.md](CREDITS.md)
 
-* [JDK 17](https://www.azul.com/downloads) ou superior (Windows e Linux não é necessário instalar, ele é baixado automaticamente)</br>
-
-`Nota: esta source requer no mínimo 512mb de RAM E 1Ghz de CPU para rodar normalmente (caso rode o Lavalink na mesma instância do bot considerando que o bot seja privado).`
-
-### Iniciar bot (guia rápido):
-
-* Baixe esta source como [zip](https://github.com/DiscordEmpireHub/EmpireMuse/archive/refs/heads/main.zip) e extraia em seguida (Ou use o comando abaixo no terminal/cmd e abra a pasta em seguida):
-```shell
-git clone https://github.com/DiscordEmpireHub/EmpireMuse.git
-```
-* dê clique-duplo no arquivo source_setup.sh (ou apenas setup caso o seu windows não esteja exibindo extensões de arquivo) e aguarde.</br>
-`Caso esteja usando linux use o comando no terminal:` 
-```shell
-bash source_setup.sh
-```
-* Vai aparecer um arquivo com nome **.env**, edite ele e coloque o token do bot no campo apropriado (você também pode editar outras coisas deste mesmo arquivo caso queira fazer ajustes específicos no bot).</br>
-`Nota: Caso não tenha criado uma conta de bot,` [veja este tutorial](https://www.youtube.com/watch?v=lfdmZQySTXE) `para criar seu bot e obter o token necessário.`</br>`Também altamente recomendo usar mongodb, procure onde tem MONGO= no arquivo .env e nele coloque o link da sua db do mongodb (caso não tenha, veja como obter por este` [tutorial](https://www.youtube.com/watch?v=x1Gq5beRx9k)`). ` 
-* Agora basta apenas abrir o arquivo source_start_win.bat para iniciar o bot se o seu sistema for windows, caso seja linux dê clique duplo no start.sh (ou se preferir execute o bot usando o comando abaixo):
-```shell
-bash source_start.sh
-```
-
-### Notas:
-
-* Para atualizar seu bot dê um clique duplo no update.sh (windows), p/ Linux use o comando no shell/terminal:
-```shell
-bash source_update.sh
-```
-`Ao atualizar, há chance de qualquer alteração manual feita ser perdida (caso não seja um fork desta source)...`<br/>
-
-`Obs: Caso esteja rodando a source diretamente de uma máquina com windows (e que tenha git instalado) apenas dê um duplo-click no arquivo source_update.sh`
-</details>
-
----
-
-Nota: há mais guias em [`docs/guides/`](docs/guides/README.md).
-
-### Observações importantes:
-
-* Você pode usar essa source para hospedar/rodar seu próprio bot de música para uso privado ou em servidores públicos no qual você gerencia (que você tenha permissão de adicionar seu próprio bot no servidor). Entretanto não recomendo distribuir o bot usando essa source publicamente por não estar otimizado o suficiente pra lidar com alta demanda de servidores, mas se mesmo assim decidir fazer isso o bot terá que estar sob a [licença](/LICENSE) da source original (GPL-2.0) e dependendo de onde o bot estiver sendo divulgado (ex: botlists) há possibilidade de seu bot ser apontado pelo uso dessa source.
-
-
-* Recomendo usar a source atual sem alterações no code. Caso queira fazer modificações (e principalmente adicionar novas funcionalidades) é altamente recomendável que tenha conhecimento em python, disnake, lavalink e etc. E caso queira manter sua source modificada com updates em dias usando a source base também recomendo ter conhecimento em git (pelo menos o necessário pra fazer um merge sem erros).
-
-
-* Caso queira postar algum vídeo/tutorial usando essa source, você está totalmente livre para usá-la pra essa finalidade desde que esteja de acordo com os termos citados nos parágrafos acima.
-
----
-
-### Caso tenha algum problema, poste uma [issue](https://github.com/DiscordEmpireHub/EmpireMuse/issues) detalhando o problema.
-
-Para contribuir, veja [CONTRIBUTING.md](CONTRIBUTING.md); para reportar vulnerabilidades, veja [SECURITY.md](SECURITY.md).
-
-
-## Créditos e agradecimentos:
-
-O EmpireMuse é uma obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) de **zRitsu**, licenciado sob **GPL-2.0** ([LICENSE](LICENSE)). Veja a lista completa de créditos e recursos espelhados em [CREDITS.md](CREDITS.md).
-
-* [DisnakeDev](https://github.com/DisnakeDev) (disnake) e ao Rapptz pelo [discord.py](https://github.com/Rapptz/discord.py) original
-* [Pythonista Guild](https://github.com/PythonistaGuild) (wavelink)
-* [Lavalink-Devs](https://github.com/lavalink-devs) (lavalink e lavaplayer)
-* [DarrenOfficial](https://lavalink-list.darrennathanael.com/) Lavalink serverlist (Usuários que publicaram seus servidores lavalink estão listados no comando about junto com website/link).
-* E a todos os membros que me me ajudaram bastante com reports de erros (sendo nas [issues](https://github.com/zRitsu/MuseHeart-MusicBot/issues) e no servidor do discord)
-* Demais atribuições podem ser conferidas no [dependency graph](https://github.com/zRitsu/MuseHeart-MusicBot/network/dependencies)
+Agradecimentos especiais aos projetos de código aberto que tornam o EmpireMuse possível:
+- [DisnakeDev](https://github.com/DisnakeDev) pelo framework `disnake` (e [Rapptz](https://github.com/Rapptz) pelo `discord.py` original);
+- [Lavalink-Devs](https://github.com/lavalink-devs) pelo servidor de áudio Lavalink e Lavaplayer;
+- [Pythonista Guild](https://github.com/PythonistaGuild) pela biblioteca WaveLink;
+- À comunidade e equipe do servidor **EmpireHUB** pelo apoio contínuo.

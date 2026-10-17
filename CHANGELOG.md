@@ -96,6 +96,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Adição de testes de caracterização comportamental em `tests/test_residuos_c2.py` assegurando a integridade da API pública do WaveLink, resolução de instâncias no listenalong e isolamento contra dependências expurgadas.
 
 ### Alterado
+- **Reestruturação do README com Escopo Oficial EmpireHub (Bloco C3 / Task C-13)**:
+  - Redesenho completo do `README.md` apresentando o bot oficial da comunidade EmpireHUB, recursos centrais, visão geral de arquitetura e diretrizes de desenvolvimento/contribuição, removendo tutoriais legados de hospedagem de terceiros e preservando créditos GPL-2.0 a zRitsu e ao MuseHeart-MusicBot.
 - **Tipagem de Re-exports no WaveLink (Bloco C2 / PEP 484)**:
   - Re-exports explícitos em `wavelink/__init__.py` utilizando aliases redundantes (`Client as Client`, `Node as Node`, `WebSocket as WebSocket`) em conformidade com a PEP 484, assegurando reconhecimento estático por linters e IDEs sem gerar avisos de import não utilizado (`F401`).
 - **Formatação de Código em Massa com Ruff (Bloco C1)**:
