@@ -84,7 +84,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `docs/architecture.md`: Mapeamento aprofundado dos módulos, ciclo de vida do `BotPool`, fluxo de áudio com Lavalink v3/v4 e persistência.
   - `docs/development.md`: Guia passo a passo de setup com `uv`, variáveis de ambiente, execução do bot e Lavalink local.
   - `docs/known-issues.md`: Catálogo de 31 problemas conhecidos, inconsistências de dependências e débitos técnicos para a fase de saneamento.
-- **Padrão de Git Worktrees e Isolamento de Branches (Task B-01 / Fase 3)**:
+- **Padrão de Git Worktrees e Isolamento de Branches (Task B-01 / Fase B)**:
   - Documentação formal em `docs/development.md` (seção 9) e em `AGENTS.md` (seções 4 e 5) estabelecendo o padrão obrigatório de Git Worktrees para trabalho paralelo de agentes autônomos e desenvolvedores.
   - Fixação da árvore de trabalho principal permanentemente na branch `main` (proibindo trocas de branch no repositório raiz) e isolamento compulsório de branches (`feat/*`, `fix/*`, `refactor/*`) sob `worktrees/` com ciclo de vida e comandos de limpeza pós-merge (`git worktree remove`, `git branch -d` e `git worktree prune`).
 
