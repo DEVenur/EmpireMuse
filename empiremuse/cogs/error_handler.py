@@ -128,7 +128,7 @@ class ErrorHandler(commands.Cog):
             send_webhook = True
 
         if kill_process:
-            await asyncio.create_subprocess_shell("kill 1")
+            await self.bot.pool.shutdown(1)
             return
 
         if not send_webhook or not full_error_msg:
@@ -291,7 +291,7 @@ class ErrorHandler(commands.Cog):
             send_webhook = True
 
         if kill_process:
-            await asyncio.create_subprocess_shell("kill 1")
+            await self.bot.pool.shutdown(1)
             return
 
         if not send_webhook or not full_error_msg:

@@ -16,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 CUSTOM_EMOJI_RE = re.compile(r"<a?:\w+:\d{15,20}>")
 RUNTIME_DIRS = ("empiremuse/",)
-RUNTIME_FILES = ("main.py", "app.py")
+RUNTIME_FILES = ("main.py",)
 
 
 def _runtime_py_files() -> list[str]:

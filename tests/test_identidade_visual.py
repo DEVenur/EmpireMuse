@@ -238,8 +238,6 @@ CODEOWNERS_SENSITIVE_PATHS = [
     "/empiremuse/utils/branding.py",
     "/empiremuse/utils/music/local_lavalink.py",
     "/empiremuse/utils/music/lavalink_server_list.py",
-    "/source_update.sh",
-    "/source_quick_update.sh",
     "/requirements*.txt",
     "/.github/",
     "/LICENSE",

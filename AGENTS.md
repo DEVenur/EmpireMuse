@@ -24,7 +24,7 @@
 Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architecture.md) para detalhes de linha):
 
 - `empiremuse/__main__.py`: Ponto de entrada canônico do pacote (`python -m empiremuse`), instancia `BotPool` e inicializa o loop do processo.
-- `main.py` / `app.py`: Atalhos de execução na raiz que chamam `empiremuse.__main__.main()`.
+- `main.py`: Atalho de execução na raiz que chama `empiremuse.__main__.main()`.
 - `empiremuse/paths.py`: Ponto central de resolução de diretórios (`PROJECT_DIR` para raiz e arquivos estáticos, `PACKAGE_DIR` para pacote e templates, e `RUNTIME_DIR` para dados de execução configuráveis via `EMPIREMUSE_HOME`).
 - `empiremuse/config_loader.py`: Carregamento, tipagem e precedência de configurações (`DEFAULT_CONFIG`, `.env`, `config.json`).
 - `empiremuse/web_app.py`: Servidor HTTP Tornado para página de status e relé WebSocket do RPC (Rich Presence).
@@ -93,7 +93,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   - Ferramentas restantes de tipagem (`mypy`/`pyright`) estão a configurar em blocos posteriores; não execute comandos dessas ferramentas antes de sua homologação.
   - Para validação sintática estática básica:
     ```bash
-    python -m compileall -q main.py app.py empiremuse
+    python -m compileall -q main.py empiremuse
     ```
 
 ---

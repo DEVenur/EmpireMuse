@@ -68,14 +68,13 @@ Durante o processo, os mantenedores vão:
 
 **Dentro do escopo** (código mantido neste repositório):
 
-- **Bot:** inicialização e configuração (`main.py`, `app.py`, `empiremuse/__main__.py`,
+- **Bot:** inicialização e configuração (`main.py`, `empiremuse/__main__.py`,
   `empiremuse/config_loader.py`), módulos (cogs) em `empiremuse/cogs/`, utilitários e player em
   `empiremuse/utils/`, cliente de áudio em `empiremuse/wavelink/`, painel web em
   `empiremuse/panel/` e camada de banco de dados (MongoDB ou banco local).
 - **Servidor web e RPC:** `empiremuse/web_app.py`, ou seja, a página de status e o WebSocket de Rich Presence.
-- **Scripts de instalação, atualização e deploy:** `source_*.sh`, `source_*.bat`,
-  `deploy_handlers/`, `.Dockerfile`, os arquivos de configuração de hospedagem na raiz do
-  repositório e a instalação automática do Lavalink local.
+- **Instalação, conteinerização e deploy:** Dockerfile oficial, docker-compose, scripts de
+  automação e a instalação automática do Lavalink local.
 
 **Fora do escopo:**
 

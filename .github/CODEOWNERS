@@ -5,8 +5,6 @@
 /empiremuse/utils/branding.py @Or4cu1o
 /empiremuse/utils/music/local_lavalink.py @Or4cu1o
 /empiremuse/utils/music/lavalink_server_list.py @Or4cu1o
-/source_update.sh @Or4cu1o
-/source_quick_update.sh @Or4cu1o
 /requirements*.txt @Or4cu1o
 /.github/ @Or4cu1o
 /LICENSE @Or4cu1o

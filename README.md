@@ -87,12 +87,12 @@ Consulte o [Guia do Painel Web](docs/guides/painel-web.md) para detalhes de rota
 
 O sistema é estruturado em camadas modulares para desacoplar regras de negócio, interface do Discord e processamento de áudio:
 
-- **Ponto de Entrada (`main.py` / `app.py`)**: Inicialização do loop de eventos asyncio e instanciação do `BotPool`.
-- **Pool de Bots (`utils/client.py`)**: Classe `BotPool` que supervisiona múltiplos bots `BotCore` (disnake), nós Lavalink e clientes de RPC.
-- **Servidor Web e Relé (`web_app.py`)**: Servidor Tornado que expõe a página de status, relé WebSocket de RPC e o roteador da aplicação web `panel/`.
-- **Motor de Áudio (`wavelink/` e `utils/music/`)**: Modelos de reprodução (`LavalinkPlayer`, `LavalinkTrack`), cliente de nós Lavalink e gerenciamento de subprocesso Java local (`local_lavalink.py`).
-- **Persistência (`utils/db.py`)**: Suporte híbrido transparente para MongoDB (produção) e TinyMongo local (desenvolvimento).
-- **Cogs e Comandos (`modules/`)**: Módulos de comandos de música, configurações de servidor, tratamento de erros, ajuda e integração com Last.fm.
+- **Ponto de Entrada (`empiremuse/__main__.py` / `main.py`)**: Ponto canônico `python -m empiremuse` e atalho direto `main.py` para inicialização do loop de eventos asyncio e instanciação do `BotPool`.
+- **Pool de Bots (`empiremuse/utils/client.py`)**: Classe `BotPool` que supervisiona múltiplos bots `BotCore` (disnake), nós Lavalink e clientes de RPC.
+- **Servidor Web e Relé (`empiremuse/web_app.py`)**: Servidor Tornado que expõe a página de status, relé WebSocket de RPC e o roteador da aplicação web `empiremuse/panel/`.
+- **Motor de Áudio (`empiremuse/wavelink/` e `empiremuse/utils/music/`)**: Modelos de reprodução (`LavalinkPlayer`, `LavalinkTrack`), cliente de nós Lavalink e gerenciamento de subprocesso Java local (`local_lavalink.py`).
+- **Persistência (`empiremuse/utils/db.py`)**: Suporte híbrido transparente para MongoDB (produção) e TinyMongo local (desenvolvimento).
+- **Cogs e Comandos (`empiremuse/cogs/`)**: Módulos de comandos de música, configurações de servidor, tratamento de erros, ajuda e integração com Last.fm.
 
 Para uma documentação aprofundada com fluxogramas, ciclo de vida e mapeamento completo de arquivos, consulte [`docs/architecture.md`](docs/architecture.md).
 

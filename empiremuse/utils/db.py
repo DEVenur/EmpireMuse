@@ -227,7 +227,7 @@ class MongoDatabase(BaseDB):
     def __init__(self, token: str, timeout=30, cache_maxsize=1000, cache_ttl=300):
         super().__init__(cache_maxsize=cache_maxsize, cache_ttl=cache_ttl)
 
-        fix_ssl = os.environ.get("MONGO_SSL_FIX") or os.environ.get("REPL_SLUG")
+        fix_ssl = os.environ.get("MONGO_SSL_FIX")
 
         if fix_ssl:
             parse_result = urlparse(token)

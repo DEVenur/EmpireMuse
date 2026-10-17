@@ -94,7 +94,7 @@ Principais pilares da arquitetura adotada:
 ### Riscos e Mitigações
 - **Risco**: Colisão de alterações simultâneas entre moderadores no Discord e administradores na web.
   - **Mitigação**: Campo `versao` baseado em hash SHA-256, `asyncio.Lock` granular por escopo e retorno HTTP 409 com mensagem instrutiva de recarregamento.
-- **Risco**: Esgotamento de limites de requisição (*rate limiting*) da API do Discord em IPs compartilhados (ex.: Replit/Render).
+- **Risco**: Esgotamento de limites de requisição (*rate limiting*) da API do Discord em IPs compartilhados (ex.: provedores de computação em nuvem com IPs compartilhados).
   - **Mitigação**: Limitação de taxa em memória por IP nas rotas de login/callback (`panel/ratelimit.py`), minimização das chamadas à API do Discord (apenas no login e sob demanda estrita) e verificação de autorizações ancorada na memória interna dos bots do pool.
 - **Risco**: Envenenamento de cabeçalhos de proxy (*Host Header / IP Spoofing*).
   - **Mitigação**: O parâmetro `PANEL_BASE_URL` é validado e fixado na configuração; cabeçalhos `X-Forwarded-*` só são aceitos quando a flag `PANEL_TRUST_PROXY=true` estiver explicitamente ativa atrás de proxies confiáveis.

@@ -103,6 +103,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Encerramento Ordenado do Pool de Bots (Bloco D1 / Tarefa D-02)**:
+  - Implementação do método `shutdown()` em `BotPool` (`empiremuse/utils/client.py`), realizando o encerramento gracioso e ordenado de todos os bots conectados, fechamento de sessões do Lavalink e registro do código de saída do processo, com captura de falhas individuais via logging defensivo sem interromper o loop de eventos.
+  - Substituição de chamadas duras de término de processo (`kill 1` e `sys.exit`) por encerramento controlado e cooperativo.
 - **Roteamento Seguro de Dados de Execução e Migração para Pacote empiremuse (Bloco C4 / Saneamento)**:
   - Migração de todos os módulos, cogs, templates e utilitários para o pacote canônico `empiremuse/` (`empiremuse.cogs`, `empiremuse.utils`, `empiremuse.wavelink`, `empiremuse.panel`).
   - Roteamento seguro de bancos de dados locais (`LocalDatabase` em `local_database/`), listas de servidores (`lavalink.ini`, `auto_lavalink.ini`), logs (`.logs/disnake.log`) e sincronização de comandos de barra (`.app_commands_sync_data/`) respeitando `RUNTIME_DIR` / `EMPIREMUSE_HOME`.
@@ -145,8 +148,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
 
 ### Removido
+- **Expurgo de Artefatos Legados de Deploy e Plataformas Descontinuadas (Bloco D1 / Fase D)**:
+  - Remoção de scripts legados de ciclo de vida e instalação rápida (`source_setup.sh`, `source_quick_setup.sh`, `source_update.sh`, `source_quick_update.sh`, `source_start.sh`, `source_start_windows.bat`, `source_cleanup.sh`, `source_cleanup_windows.bat`).
+  - Remoção de modelos e configurações de deploy de terceiros descontinuados ou incompatíveis (`.Dockerfile`, `.gitpod.yml`, `.replit`, `replit.nix`, `deploy_handlers/`, `render.yaml`, `squarecloud.config.example`, `discloud.config.example`).
+  - Remoção do atalho redundante `app.py` na raiz, consolidando `python -m empiremuse` como ponto canônico e `main.py` como atalho direto.
+  - Desativação do comando legado de auto-atualização em tempo de execução via Git (`@bot update` / `source_update.sh`) e seus componentes interativos (`update_buttons`), eliminando execuções de comandos externos em tempo de execução.
 - **Expurgo de Dependências Obsoletas e Superfície de Supply Chain (Bloco C2 / KI-05)**:
-  - Remoção de 8 dependências obsoletas em `requirements.txt` (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`), reduzindo a superfície de dependências e supply chain (resolução de KI-05).
+  - Remoção de 7 dependências obsoletas em `requirements.txt` (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `emoji`, `regex`), reduzindo a superfície de dependências e supply chain (resolução de KI-05).
+  - O `curl_cffi` passou a vir pelo extra `yt-dlp[default,curl-cffi]`.
 - **Limpeza de Código Morto e Imports Não Utilizados (Bloco C2)**:
   - Remoção de código inalcançável em `wavelink/node.py` (instrução de log posterior ao `return`).
   - Remoção de imports órfãos e variáveis mortas em `modules/music.py`, `modules/music_settings.py`, `panel/handlers/auth.py`, `utils/music/models.py` e arquivos de testes (`tests/panel/`, `tests/test_audio_fase2a.py` e `tests/test_request_channel_characterization.py`).
@@ -182,7 +191,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - **Nota de mudança / Compatibilidade**: Variáveis de ambiente como `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, configurações de proxy de rede (`HTTP_PROXY`, `HTTPS_PROXY`), `LAVALINK_SERVER_PASSWORD` ou prefixos genéricos `PLUGINS_*` definidos no ambiente do bot não são mais repassados ao processo do Lavalink local. Caso necessite configurar opções de inicialização da JVM, senhas ou configurações de plugins, declare-as explicitamente no arquivo `application.yml`.
 
 ### Adiado
-- **Deploy em 1 clique**: reativação dos botões de deploy em 1 clique (Render, Gitpod, Repl.it e Heroku) nos guias e no README mantida para fase posterior de revisão e validação das hospedagens.
+- **Deploy em 1 clique**: botões de deploy em 1 clique em plataformas de terceiros descontinuados definitivamente em favor de contêineres Docker oficiais e auto-hospedagem padronizada.
 
 ### Nota de Origem
 O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), originalmente desenvolvido por **zRitsu** e disponibilizado sob a licença **GPL-2.0**.

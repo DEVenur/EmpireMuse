@@ -74,23 +74,15 @@ class Owner(commands.Cog):
     git_format = f"--pretty=format:{os_quote}%H*****%h*****%s*****%ct{os_quote}"
 
     additional_files = [
-        "./lavalink.ini",
-        "./application.yml",
-        "./squarecloud.config",
-        "./squarecloud.app",
-        "./discloud.config",
+        "lavalink.ini",
+        "application.yml",
+        "discloud.config",
     ]
 
     extra_dirs = ["local_database", ".player_sessions"]
 
     def __init__(self, bot: BotCore):
         self.bot = bot
-        self.git_init_cmds = [
-            "git init",
-            f"git remote add origin {self.bot.config['SOURCE_REPO']}",
-            "git fetch origin",
-            "git --work-tree=. checkout -b main -f --track origin/main",
-        ]
         self.owner_view: Optional[PanelView] = None
         self.extra_hints = bot.config["EXTRA_HINTS"].split("||")
 
@@ -310,14 +302,6 @@ class Owner(commands.Cog):
         else:
             return txt
 
-    update_flags = CommandArgparse()
-    update_flags.add_argument(
-        "-force", "--force", action="store_true", help="Forçar update ignorando o estado do repositório local)."
-    )
-    update_flags.add_argument(
-        "-pip", "--pip", action="store_true", help="Instalar/atualizar dependências após a atualização."
-    )
-
     @commands.is_owner()
     @commands.max_concurrency(1, commands.BucketType.default)
     @panel_command(
@@ -325,225 +309,12 @@ class Owner(commands.Cog):
         description="Atualizar meu code usando o git.",
         emoji="🛠️",
         alt_name="Atualizar Bot",
-        extras={"flags": update_flags},
     )
-    async def update(
-        self, ctx: Union[CustomContext, disnake.MessageInteraction], *, opts: str = ""
-    ):  # TODO: Rever se há alguma forma de usar commands.Flag sem um argumento obrigatório, ex: --pip.
-        out_git = ""
-
-        git_log = []
-
-        if shutil.which("poetry"):
-            file = "./pyproject.toml"
-            use_poetry = True
-        else:
-            file = "./requirements.txt"
-            use_poetry = False
-
-        requirements_old = ""
-        try:
-            with open(file) as f:
-                requirements_old = f.read()
-        except:
-            pass
-
-        args, unknown = self.bot.get_command("update").extras["flags"].parse_known_args(opts.split())
-
-        try:
-            await ctx.response.defer()
-        except:
-            pass
-
-        if git_clean := args.force or not os.path.exists(os.environ["GIT_DIR"]):
-            out_git += await self.cleanup_git(force=args.force)
-
-        try:
-            await run_command("git --work-tree=. reset --hard")
-        except:
-            pass
-
-        if not git_clean:
-            try:
-                pull_log = await run_command("git --work-tree=. pull --allow-unrelated-histories -X theirs")
-                if "Already up to date" in pull_log:
-                    raise GenericError("**Já estou com os ultimos updates instalados...**")
-                out_git += pull_log
-
-            except GenericError as e:
-                raise e
-
-            except Exception as e:
-                if "Already up to date" in str(e):
-                    raise GenericError("Já estou com os ultimos updates instalados...")
-
-                elif not "Fast-forward" in str(e):
-                    traceback.print_exc()
-                    try:
-                        await run_command("git --work-tree=. reset --hard origin/main")
-                    except:
-                        traceback.print_exc()
-                        out_git += await self.cleanup_git(force=True)
-
-                elif "Need to specify how to reconcile divergent branches" in str(e):
-                    out_git += await run_command("git --work-tree=. rebase --no-ff")
-
-        commit = ""
-
-        for l in out_git.split("\n"):
-            if l.startswith("Updating"):
-                commit = l.replace("Updating ", "").replace("..", "...")
-                break
-
-        data = (await run_command(f"git --work-tree=. log {commit} {self.git_format}")).split("\n")
-
-        git_log += format_git_log(data)
-
-        self.bot.pool.commit = commit.split("...")[-1]
-
-        text = "`Será necessário me reiniciar após as alterações.`"
-
-        txt = f"`✅` **[Atualização realizada com sucesso!]({self.bot.pool.remote_git_url}/commits/main)**"
-
-        if git_log:
-            txt += f"\n\n{self.format_log(git_log[:10])}"
-
-        if git_log_txt := out_git[:1000].split("Fast-forward")[-1]:
-            if git_clean:
-                git_log_txt = "\n".join(l for l in git_log_txt.split("\n") if not l.startswith("hint: "))
-            txt += f"\n\n`📄` **Log:** ```py\n{git_log_txt}```\n{text}"
-        else:
-            txt += f"\n\n{text}"
-
-        if isinstance(ctx, CustomContext):
-            embed = disnake.Embed(description=txt, color=self.bot.get_color(ctx.guild.me))
-            await ctx.send(embed=embed, view=self.owner_view)
-
-            self.bot.loop.create_task(self.update_deps(ctx, requirements_old, args, use_poetry=use_poetry))
-
-        else:
-            self.bot.loop.create_task(self.update_deps(ctx, requirements_old, args, use_poetry=use_poetry))
-            return txt
-
-    async def update_deps(self, ctx, original_reqs, args, use_poetry=False):
-        if use_poetry:
-            cmd = "poetry install"
-            file = "./pyproject.toml"
-        else:
-            cmd = "pip3 install -U -r requirements.txt --no-cache-dir"
-            file = "./requirements.txt"
-
-        if args.pip:
-            embed = disnake.Embed(
-                description="**Instalando as dependências.\nPor favor aguarde...**",
-                color=self.bot.get_color(ctx.guild.me),
-            )
-
-            msg = await ctx.channel.send(embed=embed)
-
-            await run_command(cmd)
-
-            embed.description = "**As dependências foram instaladas com sucesso!**"
-
-            await msg.edit(embed=embed)
-
-        else:
-            with open(file) as f:
-                requirements_new = f.read()
-
-            if original_reqs != requirements_new:
-                txt = ""
-
-                if venv := os.getenv("VIRTUAL_ENV"):
-                    if os.name == "nt":
-                        txt += "call " + venv.split("\\")[-1] + " && "
-                    else:
-                        txt += ". ./" + venv.split("/")[-1] + " && "
-
-                try:
-                    prefix = ctx.prefix if (not str(ctx.guild.me.id) in ctx.prefix) else f"@{ctx.guild.me.name}"
-                except AttributeError:
-                    prefix = self.bot.default_prefix if self.bot.intents.message_content else f"@{ctx.guild.me.name}"
-
-                await ctx.send(
-                    embed=disnake.Embed(
-                        description="**Será necessário atualizar as dependências usando o comando "
-                        "abaixo no terminal/shell:**\n"
-                        f"```sh\n{txt}{cmd}```\nou usar usar o comando: "
-                        f"```ansi\n[34;1m{prefix}update --force --pip[0m``` \n"
-                        f"**Nota:** Dependendo da hospedagem (ou que não tenha 150mb de RAM livre "
-                        f"e 0.5vCPU) você deve enviar o arquivo requirements.txt ao invés de "
-                        f"usar uma das opções acima ou os botões de instalar dependências abaixo...",
-                        color=self.bot.get_color(ctx.guild.me),
-                    ),
-                    components=[
-                        disnake.ui.Button(label="Download requirements.txt", custom_id="updatecmd_requirements"),
-                        disnake.ui.Button(
-                            label="Atualizar dependências",
-                            custom_id="updatecmd_installdeps_" + ("poetry" if use_poetry else "pip"),
-                        ),
-                        disnake.ui.Button(
-                            label="Atualizar dependências (force)",
-                            custom_id="updatecmd_installdeps_force_" + ("poetry" if use_poetry else "pip"),
-                        ),
-                    ],
-                )
-
-    @commands.Cog.listener("on_button_click")
-    async def update_buttons(self, inter: disnake.MessageInteraction):
-        if not inter.data.custom_id.startswith("updatecmd_"):
-            return
-
-        if inter.data.custom_id.startswith("updatecmd_requirements"):
-            try:
-                os.remove("./update_reqs.zip")
-            except FileNotFoundError:
-                pass
-
-            with ZipFile("update_reqs.zip", "w") as zipObj:
-                zipObj.write("requirements.txt")
-
-            await inter.send(
-                embed=disnake.Embed(
-                    description="**Baixe o arquivo anexado e envie para sua hospedagem via commit etc.**",
-                    color=self.bot.get_color(inter.guild.me),
-                ),
-                file=disnake.File("update_reqs.zip"),
-            )
-
-            os.remove("update_reqs.zip")
-            return
-
-        # install installdeps
-
-        if inter.data.custom_id.startswith("updatecmd_installdeps_force_"):
-            await self.cleanup_git(force=True)
-
-        await inter.message.delete()
-
-        args, unknown = self.bot.get_command("update").extras["flags"].parse_known_args(["-pip"])
-
-        await self.update_deps(inter, "", args, use_poetry=inter.data.custom_id.endswith("_poetry"))
-
-    async def cleanup_git(self, force=False):
-        if force:
-            try:
-                shutil.rmtree(os.environ["GIT_DIR"])
-            except FileNotFoundError:
-                pass
-
-        out_git = ""
-
-        for c in self.git_init_cmds:
-            try:
-                out_git += (await run_command(c)) + "\n"
-            except Exception as e:
-                out_git += f"{e}\n"
-
-        self.bot.pool.commit = (await run_command("git rev-parse HEAD")).strip("\n")
-        self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"].removesuffix(".git")
-
-        return out_git
+    async def update(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, opts: str = ""):
+        raise GenericError(
+            "**O comando de atualização via git foi desativado.**\n"
+            "Para atualizar o EmpireMuse, implante a nova release/imagem oficial."
+        )
 
     @commands.max_concurrency(1, commands.BucketType.guild)
     @commands.cooldown(1, 10, commands.BucketType.user)
@@ -726,9 +497,6 @@ class Owner(commands.Cog):
         alt_name="Exportar source/código-fonte.",
     )
     async def exportsource(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, flags: str = ""):
-        if not os.path.isdir(os.environ["GIT_DIR"]):
-            await self.cleanup_git(force=True)
-
         try:
             env_file = dotenv.dotenv_values(str(paths.RUNTIME_DIR / ".env"))
         except:
@@ -792,7 +560,13 @@ class Owner(commands.Cog):
                 SECRETS[i] = str(SECRETS[i]).lower()
             dotenv.set_key(str(env_temp), i, SECRETS[i])
 
-        filelist = await run_command("git ls-files --others --exclude-standard --cached")
+        filelist = ""
+        git_dir = os.environ.get("GIT_DIR", "./.git")
+        if os.path.isdir(git_dir):
+            try:
+                filelist = await run_command("git ls-files --others --exclude-standard --cached")
+            except Exception:
+                filelist = ""
 
         for folder, subfolder, files in os.walk(Path(__file__).resolve().parent):
             for file in files:
@@ -827,9 +601,8 @@ class Owner(commands.Cog):
 
         try:
             embed = disnake.Embed(
-                description="**Não envie o arquivo source.zip ou o arquivo .env pra ninguém e muito cuidado ao postar "
-                "print's do conteudo do arquivo .env e não adicione esse arquivo em locais públicos como "
-                "github, repl.it, glitch.com, etc.**",
+                description="**Não envie o arquivo source.zip ou o arquivo .env para terceiros, tenha cuidado ao postar "
+                "capturas de tela do conteúdo do arquivo .env e não compartilhe esse arquivo em locais públicos.**",
                 color=self.bot.get_color(ctx.guild.me),
             )
             embed.set_footer(text="Por medida de segurança, esta mensagem será deletada em 2 minutos.")
@@ -870,9 +643,9 @@ class Owner(commands.Cog):
                     continue
                 try:
                     if f == ".env-temp":
-                        zipf.write(str(env_temp), "./.env")
+                        zipf.write(str(env_temp), ".env")
                     else:
-                        zipf.write(f"./{f}")
+                        zipf.write(f)
                 except FileNotFoundError:
                     continue
 

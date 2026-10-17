@@ -85,6 +85,7 @@ class BotPool:
     song_select_cooldown = commands.CooldownMapping.from_cooldown(rate=2, per=15, type=commands.BucketType.member)
 
     def __init__(self):
+        self.exit_code: int = 0
         self.user_prefix_cache = {}
         self.guild_prefix_cache = {}
         self.mongo_database: Optional[MongoDatabase] = None
@@ -268,13 +269,13 @@ class BotPool:
                 if self.killing_state is True:
                     return
 
-                print("Aplicação com ratelimit do discord!\nFinalizando/Reiniciando o processo em 5 segundos...")
+                print("Aplicação com ratelimit do discord!\nFinalizando o processo em 5 segundos...")
 
                 self.killing_state = True
 
                 await asyncio.sleep(5)
 
-                await asyncio.create_subprocess_shell("kill 1")
+                await self.shutdown(1)
 
                 return
 
@@ -331,6 +332,29 @@ class BotPool:
 
     async def run_bots(self, bots: List[BotCore]):
         await asyncio.gather(*[self.start_bot(bot) for bot in bots])
+
+    async def shutdown(self, exit_code: int = 1):
+        self.exit_code = exit_code
+        self.killing_state = True
+        for bot in self.get_all_bots():
+            try:
+                if not bot.is_closed():
+                    await bot.close()
+            except Exception:
+                logger.warning(
+                    "Falha ao fechar o bot %s durante o encerramento",
+                    getattr(bot, "identifier", bot),
+                    exc_info=True,
+                )
+
+        if self.lavalink_instance:
+            try:
+                self.lavalink_instance.kill()
+            except Exception:
+                logger.warning(
+                    "Falha ao finalizar o processo do Lavalink local durante o encerramento",
+                    exc_info=True,
+                )
 
     async def connect_node(self, bot: BotCore, data: dict):
         while not bot.bot_ready:

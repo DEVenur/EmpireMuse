@@ -167,7 +167,7 @@
     (function () {
       var alvo = document.getElementById("url");
       if (alvo) {
-        alvo.textContent = window.location.href.replace(".replit.dev", ".replit.dev:443").replace("http", "ws").replace("https", "wss") + "ws";
+        alvo.textContent = window.location.origin.replace(/^http/, "ws") + "/ws";
       }
     })();
   </script>

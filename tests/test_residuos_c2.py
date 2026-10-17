@@ -75,7 +75,6 @@ class TestProductionImportsIsolation:
         assert (ROOT / "empiremuse").is_dir(), "empiremuse/ deve existir como pacote principal de produção"
         production_paths = [
             ROOT / "main.py",
-            ROOT / "app.py",
             ROOT / "empiremuse",
         ]
 
