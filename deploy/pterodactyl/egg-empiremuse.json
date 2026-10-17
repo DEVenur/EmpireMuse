@@ -1,0 +1,942 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-10-17T18:00:00-03:00",
+    "name": "EmpireMuse",
+    "author": "DiscordEmpireHub",
+    "description": "Bot de música multi-instância para Discord em Python 3.13 com suporte a nós Lavalink externos e servidor local embutido. Não verificado num painel real (teste pendente). Memória mínima: 768 MB, recomendada: 1 GB.",
+    "features": null,
+    "docker_images": {
+        "EmpireMuse 0.1": "or4cu1o/empiremuse:0.1",
+        "EmpireMuse latest": "or4cu1o/empiremuse:latest"
+    },
+    "file_denylist": [],
+    "startup": "python -m empiremuse",
+    "config": {
+        "files": "{}",
+        "startup": "{\r\n    \"done\": \"Online.\"\r\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/sh\nset -eu\n\nmkdir -p /mnt/server/local_database /mnt/server/.logs /mnt/server/.lavalink\n",
+            "container": "alpine:3.21@sha256:ce64758a109eb420d874a118f87920e625e12d3634e03b4a5573fd9f6e5d3507",
+            "entrypoint": "sh"
+        }
+    },
+    "variables": [
+        {
+            "name": "Token do bot no Discord",
+            "description": "Token de autenticação gerado no Discord Developer Portal; obrigatório para funcionamento do bot.",
+            "env_variable": "TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Prefixo padrão de comandos",
+            "description": "Prefixo padrão utilizado para acionamento de comandos de texto legados.",
+            "env_variable": "DEFAULT_PREFIX",
+            "default_value": "!!",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Download automático de servidores Lavalink",
+            "description": "Baixar automaticamente a lista pública de servidores Lavalink remotos ao ligar o bot.",
+            "env_variable": "AUTO_DOWNLOAD_LAVALINK_SERVERLIST",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "String de conexão do MongoDB",
+            "description": "URI de conexão para banco de dados MongoDB externo; deixe vazio para persistência local TinyMongo.",
+            "env_variable": "MONGO",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Sessões de reprodução no MongoDB",
+            "description": "Salvar sessões de tocadores ativos no MongoDB em vez do armazenamento em arquivo local.",
+            "env_variable": "PLAYER_SESSIONS_MONGODB",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Alerta de segurança de dados confidenciais",
+            "description": "Emitir avisos no console sobre dados sensíveis em hosts que mantêm código-fonte público.",
+            "env_variable": "SENSITIVE_INFO_WARN",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Client ID da API do Spotify",
+            "description": "Identificador do aplicativo cadastrado no painel de desenvolvedores do Spotify.",
+            "env_variable": "SPOTIFY_CLIENT_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Client Secret da API do Spotify",
+            "description": "Chave secreta do aplicativo cadastrado no painel de desenvolvedores do Spotify.",
+            "env_variable": "SPOTIFY_CLIENT_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Páginas extras de playlists no Spotify",
+            "description": "Limite de blocos de 100 músicas adicionais carregadas ao importar playlists do Spotify.",
+            "env_variable": "SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Intent de banimentos no servidor",
+            "description": "Habilita a intent para receber eventos de banimento de membros.",
+            "env_variable": "BANS_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de mensagens diretas privadas",
+            "description": "Habilita a intent para receber mensagens enviadas no privado do bot.",
+            "env_variable": "DM_MESSAGES_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de reações em mensagens diretas",
+            "description": "Habilita a intent para eventos de reações em conversas privadas.",
+            "env_variable": "DM_REACTIONS_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de digitação em mensagens diretas",
+            "description": "Habilita a intent para eventos de digitação em conversas privadas.",
+            "env_variable": "DM_TYPING_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de mensagens de servidores",
+            "description": "Habilita a intent para receber mensagens enviadas nos canais de servidores.",
+            "env_variable": "GUILD_MESSAGES_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de reações em servidores",
+            "description": "Habilita a intent para receber reações adicionadas ou removidas em servidores.",
+            "env_variable": "GUILD_REACTIONS_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de eventos agendados",
+            "description": "Habilita a intent para acompanhar eventos agendados nos servidores.",
+            "env_variable": "GUILD_SCHEDULED_EVENTS_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de digitação em servidores",
+            "description": "Habilita a intent para receber notificações de usuários digitando nos servidores.",
+            "env_variable": "GUILD_TYPING_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de emojis e figurinhas",
+            "description": "Habilita a intent para monitorar alterações em emojis e figurinhas dos servidores.",
+            "env_variable": "EMOJIS_AND_STICKERS_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de integrações de servidores",
+            "description": "Habilita a intent para receber atualizações de integrações do Discord.",
+            "env_variable": "INTEGRATIONS_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de convites de servidores",
+            "description": "Habilita a intent para rastrear criação e exclusão de convites nos servidores.",
+            "env_variable": "INVITES_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de estados de canais de voz",
+            "description": "Habilita a intent obrigatória para rastrear conexões e desconexões nos canais de voz.",
+            "env_variable": "VOICE_STATES_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de webhooks do Discord",
+            "description": "Habilita a intent para monitorar alterações em webhooks nos servidores.",
+            "env_variable": "WEBHOOKS_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent privilegiada de presenças",
+            "description": "Habilita a intent privilegiada de status e atividades de membros no Discord.",
+            "env_variable": "PRESENCES_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent de conteúdo da mensagem",
+            "description": "Habilita a intent privilegiada para leitura de conteúdo de mensagens e comandos legados.",
+            "env_variable": "MESSAGE_CONTENT_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "IDs dos donos do bot",
+            "description": "Identificadores de usuários no Discord com permissão total de dono, separados por barra dupla.",
+            "env_variable": "OWNER_IDS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Encerrar ao receber bloqueio 429",
+            "description": "Finaliza o processo do bot imediatamente caso receba limite de requisições 429 do Discord.",
+            "env_variable": "KILL_ON_429",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Tempo de recarga entre comandos",
+            "description": "Ativa intervalo de espera entre comandos para prevenir abuso e sobrecarga na API.",
+            "env_variable": "ENABLE_COMMANDS_COOLDOWN",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Exibir comandos no console",
+            "description": "Registra comandos executados no console para auditoria e acompanhamento operacional.",
+            "env_variable": "COMMAND_LOG",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Link do servidor de suporte",
+            "description": "Endereço de convite para suporte exibido aos usuários nos comandos informativos.",
+            "env_variable": "SUPPORT_SERVER",
+            "default_value": "https://discord.gg/KgtyNg9U6H",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Sincronizar comandos na inicialização",
+            "description": "Registra e sincroniza comandos slash automaticamente na API do Discord ao ligar.",
+            "env_variable": "AUTO_SYNC_COMMANDS",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Webhook de entrada e saída de servidores",
+            "description": "URL de webhook do Discord para notificações de adição ou remoção de servidores.",
+            "env_variable": "BOT_ADD_REMOVE_LOG",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "ID do canal de registro de servidores",
+            "description": "ID do canal para envio de notificações de entrada e saída em servidores.",
+            "env_variable": "BOT_ADD_REMOVE_LOG_CHANNEL_ID",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Webhook de relatórios de erros manuais",
+            "description": "URL de webhook para envio manual de relatórios de exceções pelos usuários.",
+            "env_variable": "ERROR_REPORT_WEBHOOK",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Webhook de relatório automático de falhas",
+            "description": "URL de webhook em canal restrito para envio automático de rastreamentos de exceções.",
+            "env_variable": "AUTO_ERROR_REPORT_WEBHOOK",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Cor das mensagens embed",
+            "description": "Código hexadecimal de 6 dígitos sem cerquilha para cor padrão dos embeds, ou none.",
+            "env_variable": "EMBED_COLOR",
+            "default_value": "8B5CF6",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Repositório do código fonte",
+            "description": "Endereço do repositório Git utilizado em comandos informativos de versão.",
+            "env_variable": "SOURCE_REPO",
+            "default_value": "https://github.com/DiscordEmpireHub/EmpireMuse.git",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Desativar comandos com prefixo de texto",
+            "description": "Bloqueia o acionamento de comandos de texto via prefixo, aceitando apenas comandos de barra.",
+            "env_variable": "INTERACTION_COMMAND_ONLY",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intervalo de rotação de presenças",
+            "description": "Tempo em segundos entre alternâncias das frases de status configuradas no bot.",
+            "env_variable": "PRESENCE_INTERVAL",
+            "default_value": "900",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "IDs de instâncias adicionais do bot",
+            "description": "IDs de bots secundários separados por espaço para inclusão de convites múltiplos.",
+            "env_variable": "ADDITIONAL_BOT_IDS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Permissões do convite do bot",
+            "description": "Máscara inteira de permissões do Discord solicitada no link gerado pelo comando convite.",
+            "env_variable": "INVITE_PERMISSIONS",
+            "default_value": "332892794064",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Ativar logs detalhados do sistema",
+            "description": "Ativa o nível de depuração detalhada (DEBUG) nos logs para investigação de problemas.",
+            "env_variable": "ENABLE_LOGGER",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Aviso de microfone/áudio silenciado",
+            "description": "Avisa no canal de texto quando o bot for ensurdecido no canal de voz no servidor.",
+            "env_variable": "GUILD_DEAFEN_WARN",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Endereço da lista de nós Lavalink",
+            "description": "URL com lista de servidores Lavalink remotos caso a busca externa esteja ativada.",
+            "env_variable": "LAVALINK_SERVER_LIST",
+            "default_value": "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/data/lavalink_servers.ini",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Tentativas de reconexão ao nó de áudio",
+            "description": "Número máximo de tentativas seguidas de reconectar ao servidor Lavalink.",
+            "env_variable": "LAVALINK_RECONNECT_RETRIES",
+            "default_value": "30",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Provedor interno exclusivo para Deezer",
+            "description": "Força a resolução de links do Deezer pelo módulo interno ignorando o Lavalink.",
+            "env_variable": "FORCE_USE_DEEZER_CLIENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Limite de itens favoritos por usuário",
+            "description": "Quantidade máxima de músicas ou listas salvas por membro; zero para sem restrição.",
+            "env_variable": "MAX_USER_FAVS",
+            "default_value": "10",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tamanho máximo do nome de favorito",
+            "description": "Limite de caracteres para o nome personalizado de uma playlist salva nos favoritos.",
+            "env_variable": "USER_FAV_MAX_NAME_LENGTH",
+            "default_value": "35",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tamanho máximo do link de favorito",
+            "description": "Limite de caracteres aceito para a URL de uma música nos favoritos do usuário.",
+            "env_variable": "USER_FAV_MAX_URL_LENGTH",
+            "default_value": "90",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tempo de desconexão por ociosidade",
+            "description": "Tempo em segundos antes de sair do canal de voz quando a reprodução terminar.",
+            "env_variable": "IDLE_TIMEOUT",
+            "default_value": "180",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tempo de espera por membros no canal",
+            "description": "Tempo em segundos aguardando o retorno de usuários antes de desconectar de canal vazio.",
+            "env_variable": "WAIT_FOR_MEMBERS_TIMEOUT",
+            "default_value": "180",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Skin padrão no modo normal",
+            "description": "Identificador do tema visual padrão utilizado nas mensagens de reprodução normal.",
+            "env_variable": "DEFAULT_SKIN",
+            "default_value": "default",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Skin padrão do canal de pedidos",
+            "description": "Identificador do tema visual padrão fixado no canal permanente de song-request.",
+            "env_variable": "DEFAULT_STATIC_SKIN",
+            "default_value": "default",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Lista de skins normais desabilitadas",
+            "description": "Nomes de skins normais ocultadas do menu de seleção, separados por espaço.",
+            "env_variable": "IGNORE_SKINS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Lista de skins fixas desabilitadas",
+            "description": "Nomes de skins de canal fixo ocultadas do menu de seleção, separados por espaço.",
+            "env_variable": "IGNORE_STATIC_SKINS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Mensagens extras de dicas no rodapé",
+            "description": "Frases adicionais de orientação aos usuários no rodapé da música, separadas por barra dupla.",
+            "env_variable": "EXTRA_HINTS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Frequência de aparição de dicas",
+            "description": "Fator de chance para exibição de dicas no player; números maiores tornam menos frequente.",
+            "env_variable": "HINT_RATE",
+            "default_value": "4",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Votos para pular faixa (Vote Skip)",
+            "description": "Quantidade necessária de votos de ouvintes para avançar para a próxima faixa.",
+            "env_variable": "VOTE_SKIP_AMOUNT",
+            "default_value": "3",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tempo limite do pool de comandos legados",
+            "description": "Segundos de espera para limpeza e descarte de dados residuais do pool de comandos.",
+            "env_variable": "PREFIXED_POOL_TIMEOUT",
+            "default_value": "4",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tocar arquivos e anexos do Discord",
+            "description": "Permite enfileirar arquivos de áudio enviados como anexos em canais do Discord.",
+            "env_variable": "ENABLE_DISCORD_URLS_PLAYBACK",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Frequência de backup do player local",
+            "description": "Intervalo em segundos para gravação das sessões dos reprodutores no disco local.",
+            "env_variable": "PLAYER_INFO_BACKUP_INTERVAL",
+            "default_value": "45",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tempo limite de conexão com MongoDB",
+            "description": "Limite de tempo em segundos para aguardar respostas de operações com o MongoDB.",
+            "env_variable": "MONGO_TIMEOUT",
+            "default_value": "30",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Frequência de backup no MongoDB",
+            "description": "Intervalo em segundos para persistência de dados das sessões ativas no MongoDB.",
+            "env_variable": "PLAYER_INFO_BACKUP_INTERVAL_MONGO",
+            "default_value": "300",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Capacidade da fila de reprodução",
+            "description": "Quantidade máxima de faixas aceitas simultaneamente na fila; zero para ilimitado.",
+            "env_variable": "QUEUE_MAX_ENTRIES",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Efeito de digitação em comandos legados",
+            "description": "Ativa sinalização de digitação enquanto o bot processa comandos via texto.",
+            "env_variable": "ENABLE_DEFER_TYPING",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Latência limite para reconectar áudio",
+            "description": "Limite de latência em milissegundos para disparar reconexão ao canal de voz.",
+            "env_variable": "VOICE_CHANNEL_LATENCY_RECONNECT",
+            "default_value": "200",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Capacidade de itens no cache de playlists",
+            "description": "Limite de registros de listas de reprodução retidos simultaneamente em memória.",
+            "env_variable": "PLAYLIST_CACHE_SIZE",
+            "default_value": "500",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tempo de expiração do cache de playlists",
+            "description": "Duração em segundos da retenção de dados de playlists externas em cache.",
+            "env_variable": "PLAYLIST_CACHE_TTL",
+            "default_value": "1800",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Adicionar música marcando o bot",
+            "description": "Permite pedir músicas apenas mencionando o bot com o nome ou link desejado.",
+            "env_variable": "ENABLE_SONGREQUEST_MENTION",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Iniciar servidor HTTP do Rich Presence",
+            "description": "Habilita o servidor web interno Tornado necessário para o status rico e painel.",
+            "env_variable": "RUN_RPC_SERVER",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Comando de presença rica para membros",
+            "description": "Habilita comando slash para que membros gerem token de integração ao Rich Presence.",
+            "env_variable": "ENABLE_RPC_COMMAND",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Endereço WebSocket local do RPC",
+            "description": "URL WebSocket do serviço de presença rica escutando localmente no container.",
+            "env_variable": "RPC_SERVER",
+            "default_value": "ws://localhost:$PORT/ws",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Endereço público do Rich Presence",
+            "description": "URL externa para conexão dos aplicativos de desktop dos membros ao Rich Presence.",
+            "env_variable": "RPC_PUBLIC_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Exigir autenticação no Rich Presence",
+            "description": "Obriga uso de token de usuário para conectar ao relé WebSocket do Rich Presence.",
+            "env_variable": "ENABLE_RPC_AUTH",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Habilitar painel administrativo web",
+            "description": "Ativa o painel de gerenciamento web com login seguro via Discord OAuth2.",
+            "env_variable": "PANEL_ENABLED",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "URL pública do painel web",
+            "description": "Endereço público completo do painel web para retorno da autenticação OAuth2.",
+            "env_variable": "PANEL_BASE_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Client ID da aplicação no painel",
+            "description": "Identificador da aplicação Discord utilizada para autorizar o acesso ao painel.",
+            "env_variable": "PANEL_OAUTH_CLIENT_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Client Secret da aplicação no painel",
+            "description": "Chave secreta OAuth2 para concluir o login dos administradores no painel web.",
+            "env_variable": "PANEL_OAUTH_CLIENT_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Chave de assinatura de sessão do painel",
+            "description": "Chave secreta com mínimo de 32 caracteres para assinatura criptográfica de sessões.",
+            "env_variable": "PANEL_COOKIE_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Validade da sessão do painel em horas",
+            "description": "Tempo máximo de vigência de uma sessão logada no painel administrativo.",
+            "env_variable": "PANEL_SESSION_TTL_HOURS",
+            "default_value": "12",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Tolerância de inatividade no painel",
+            "description": "Minutos de tolerância sem cliques antes de deslogar o usuário por ociosidade.",
+            "env_variable": "PANEL_SESSION_IDLE_MINUTES",
+            "default_value": "60",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Confiar em proxy reverso no painel web",
+            "description": "Interpretar cabeçalhos X-Forwarded-* de proxies reversos para obter IP real.",
+            "env_variable": "PANEL_TRUST_PROXY",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Cookies desprotegidos em desenvolvimento",
+            "description": "Permite tráfego de cookies de autenticação sem conexão HTTPS segura em testes.",
+            "env_variable": "PANEL_INSECURE_COOKIES",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intervalo entre faixas do YouTube",
+            "description": "Tempo em segundos de proteção contra bloqueios temporários no YouTube.",
+            "env_variable": "YOUTUBE_TRACK_COOLDOWN",
+            "default_value": "20",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Executar servidor Lavalink embutido",
+            "description": "Inicia o servidor de áudio Lavalink local dentro do contêiner junto com o bot.",
+            "env_variable": "RUN_LOCAL_LAVALINK",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Conectar ao servidor Lavalink local",
+            "description": "Estabelece conexão do bot com o nó de reprodução local embutido.",
+            "env_variable": "CONNECT_LOCAL_LAVALINK",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Priorizar áudio nativo do YouTube",
+            "description": "Prioriza reprodução direta de faixas do YouTube sem tentar espelhos em outros serviços.",
+            "env_variable": "PREFER_YOUTUBE_NATIVE_PLAYBACK",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Usar apenas buscas com suporte nativo",
+            "description": "Restringe os provedores de busca àqueles suportados diretamente pelo servidor de áudio.",
+            "env_variable": "ONLY_USE_NATIVE_SEARCH_PROVIDERS",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Provedores de busca configurados",
+            "description": "Lista de identificadores de motores de busca suportados separados por espaço.",
+            "env_variable": "SEARCH_PROVIDERS",
+            "default_value": "ytsearch ytmsearch scsearch",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Tempo extra de inicialização do nó local",
+            "description": "Segundos adicionais para esperar o processo do Lavalink carregar antes do bot conectar.",
+            "env_variable": "LAVALINK_ADDITIONAL_SLEEP",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Memória RAM inicial do servidor de áudio",
+            "description": "Memória inicial alocada em megabytes pela JVM para o Lavalink.",
+            "env_variable": "LAVALINK_INITIAL_RAM",
+            "default_value": "30",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Limite de memória do servidor de áudio",
+            "description": "Limite de memória máximo em megabytes que a JVM pode utilizar para o Lavalink.",
+            "env_variable": "LAVALINK_RAM_LIMIT",
+            "default_value": "120",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Alocação de núcleos para o nó local",
+            "description": "Quantidade de núcleos de processador dedicados ao processo do Lavalink.",
+            "env_variable": "LAVALINK_CPU_CORES",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
+            "name": "Token de autenticação OAuth do YouTube",
+            "description": "Refresh token de conta Google para contornar bloqueios anti-robô no YouTube.",
+            "env_variable": "YOUTUBE_OAUTH_REFRESH_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Chave de aplicação do Last.fm",
+            "description": "Chave pública de API obtida no portal de desenvolvedores do Last.fm.",
+            "env_variable": "LASTFM_KEY",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Segredo de autenticação do Last.fm",
+            "description": "Segredo compartilhado da aplicação obtido no portal de desenvolvedores do Last.fm.",
+            "env_variable": "LASTFM_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Presenças na categoria ouvindo",
+            "description": "Frases exibidas no status com atividade ouvindo música, separadas por barra dupla.",
+            "env_variable": "LISTENING_PRESENCES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Presenças na categoria assistindo",
+            "description": "Frases exibidas no status com atividade assistindo a vídeos, separadas por barra dupla.",
+            "env_variable": "WATCHING_PRESENCES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Presenças na categoria jogando",
+            "description": "Frases exibidas no status com atividade jogando partidas, separadas por barra dupla.",
+            "env_variable": "PLAYING_PRESENCES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Presenças em status customizado",
+            "description": "Mensagens de status personalizado fixadas no bot, separadas por barra dupla.",
+            "env_variable": "CUSTOM_STATUS_PRESENCES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Presenças na categoria transmitindo",
+            "description": "Status de transmissão com título e link do canal separados por barra dupla.",
+            "env_variable": "STREAMING_PRESENCES",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Diretório de dados (EmpireMuse Home)",
+            "description": "Diretório base de execução e persistência de dados do bot no contêiner do Pterodactyl.",
+            "env_variable": "EMPIREMUSE_HOME",
+            "default_value": "/home/container",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|string"
+        }
+    ]
+}

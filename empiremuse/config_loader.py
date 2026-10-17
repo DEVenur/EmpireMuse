@@ -187,6 +187,33 @@ DEFAULT_CONFIG = {
 }
 
 
+DEFAULT_PORT = 80
+MAX_PORT = 65535
+
+
+def resolve_port(configured: str | int | None = None) -> int:
+    """Porta do servidor HTTP/RPC: `PORT` (config ou ambiente), depois `SERVER_PORT` (Pterodactyl) e, por fim, 80.
+
+    Valores vazios contam como não definidos. Valor não numérico ou fora de 0-65535 levanta `ValueError`
+    citando a variável de origem.
+    """
+    for origem, valor in (
+        ("PORT", configured),
+        ("PORT", environ.get("PORT")),
+        ("SERVER_PORT", environ.get("SERVER_PORT")),
+    ):
+        if valor is None or str(valor).strip() == "":
+            continue
+        try:
+            porta = int(str(valor).strip())
+        except ValueError:
+            raise ValueError(f"A variável {origem} deve ser um número de porta, mas recebeu {str(valor)!r}.") from None
+        if not 0 <= porta <= MAX_PORT:
+            raise ValueError(f"A variável {origem} deve estar entre 0 e {MAX_PORT}, mas recebeu {porta}.")
+        return porta
+    return DEFAULT_PORT
+
+
 def load_config():
     CONFIG = dict(DEFAULT_CONFIG)
 
@@ -311,7 +338,7 @@ def load_config():
         except KeyError as e:
             raise Exception(f"Você usou uma configuração inválida! {i}: {CONFIG[i]}\n{repr(e)}")
 
-    CONFIG["RPC_SERVER"] = CONFIG["RPC_SERVER"].replace("$PORT", CONFIG.get("PORT") or environ.get("PORT", "80"))
+    CONFIG["RPC_SERVER"] = CONFIG["RPC_SERVER"].replace("$PORT", str(resolve_port(CONFIG.get("PORT"))))
 
     if CONFIG["WAIT_FOR_MEMBERS_TIMEOUT"] < 60:
         CONFIG["WAIT_FOR_MEMBERS_TIMEOUT"] = 60

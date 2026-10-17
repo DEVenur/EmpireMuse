@@ -6,7 +6,6 @@ import base64
 import json
 import logging
 import os
-from os import environ
 from traceback import print_exc
 from typing import TYPE_CHECKING, Optional
 
@@ -20,7 +19,7 @@ import tornado.websocket
 from packaging import version
 
 from empiremuse import paths
-from empiremuse.config_loader import load_config
+from empiremuse.config_loader import load_config, resolve_port
 from empiremuse.panel import build_panel_app, make_router
 from empiremuse.panel.settings import PanelConfigError, load_panel_settings
 from empiremuse.utils import branding
@@ -460,7 +459,7 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
     server = tornado.httpserver.HTTPServer(
         make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy), max_body_size=MAX_BODY_SIZE
     )
-    server.listen(config.get("PORT") or environ.get("PORT", 80))
+    server.listen(resolve_port(config.get("PORT")))
     return panel_app
 
 
