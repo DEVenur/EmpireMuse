@@ -2,12 +2,20 @@
 
 Especificação (MAESTRO): serviço ``bot`` (build local + imagem parametrizada, ``env_file: .env``, volume nomeado em /data,
 endurecimento read_only/tmpfs/no-new-privileges/cap_drop ALL, sem ``init`` porque a imagem já usa tini) e serviço
-opcional ``mongo`` (profile ``mongo``, imagem 8.x fixada por digest, sem ports, credenciais só por ``${VAR:?}``).
+opcional ``mongo`` (profile ``mongo``, imagem 8.x fixada por digest, sem ports, credenciais só por
+``env_file: [{path: .env.mongo, required: true}]``).
 Teste principal do aceite: a ÚNICA porta publicada no arquivo inteiro é a do painel (container 8080); nem o Lavalink
 (2333/8090) nem o Mongo (27017) são publicados, e nenhum segredo aparece literal.
+
+Por que as credenciais do Mongo NÃO usam ``${VAR:?}`` em ``environment``: o Compose interpola o arquivo inteiro mesmo
+com o profile desligado, então quem não usa Mongo (``.env`` sem essas variáveis) não conseguiria subir o bot. O
+``env_file`` com ``required: true`` só é lido com o profile ativo e falha cedo se o arquivo faltar. Por isso o arquivo
+não pode ter nenhuma interpolação obrigatória (``:?``) e o ``.env.mongo`` precisa estar fora do git e da imagem.
 """
 
+import fnmatch
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -102,6 +110,22 @@ def _env(servico: dict) -> dict[str, str | None]:
 
 def _env_files(servico: dict) -> list[str]:
     return [item["path"] if isinstance(item, dict) else str(item) for item in _lista(servico.get("env_file"))]
+
+
+def _env_file_entries(servico: dict) -> list:
+    """``env_file`` como está no YAML (str ou mapeamento), para conferir a FORMA e o ``required``."""
+    return [dict(item) if isinstance(item, dict) else item for item in _lista(servico.get("env_file"))]
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    """git no repositório; se não houver git ou repositório (ex.: árvore exportada), o teste é pulado."""
+    try:
+        resultado = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("git indisponível")
+    if resultado.returncode not in (0, 1):
+        pytest.skip(f"não é um repositório git ({resultado.stderr.strip()[:80]})")
+    return resultado
 
 
 def _contexto_do_build(servico: dict) -> str:
@@ -224,16 +248,23 @@ class TestServicoMongo:
     def test_reinicia_a_menos_que_parado(self, mongo):
         assert mongo["restart"] == "unless-stopped"
 
-    @pytest.mark.parametrize("variavel", ["MONGO_INITDB_ROOT_USERNAME", "MONGO_INITDB_ROOT_PASSWORD"])
-    def test_credencial_vem_so_do_dotenv_com_variavel_obrigatoria(self, mongo, variavel):
-        valor = _env(mongo).get(variavel)
-        assert valor is not None, f"{variavel} ausente em environment"
-        assert re.fullmatch(rf"\$\{{{variavel}:\?[^}}]*\}}", valor), (
-            f"{variavel} precisa ser ${{{variavel}:?}}: {valor!r}"
+    def test_credenciais_por_env_file_env_mongo_obrigatorio_na_forma_longa(self, mongo):
+        entradas = _env_file_entries(mongo)
+        assert entradas == [{"path": ".env.mongo", "required": True}], (
+            f"env_file do mongo precisa ser exatamente [{{path: .env.mongo, required: true}}]: {entradas!r}"
         )
+        assert entradas[0]["required"] is True, "required precisa ser o booleano true, não texto"
 
     def test_nao_recebe_o_env_file_do_bot(self, mongo):
-        assert not _env_files(mongo), "env_file entregaria o TOKEN do Discord e demais segredos do bot ao banco"
+        assert ".env" not in _env_files(mongo), "o .env do bot entregaria o TOKEN do Discord ao banco"
+
+    @pytest.mark.parametrize("variavel", ["MONGO_INITDB_ROOT_USERNAME", "MONGO_INITDB_ROOT_PASSWORD"])
+    def test_credencial_nao_fica_em_environment(self, mongo, variavel):
+        assert variavel not in _env(mongo), f"{variavel} em environment seria interpolada mesmo sem o profile mongo"
+
+    def test_nenhuma_variavel_sensivel_em_environment_do_mongo(self, mongo):
+        sensiveis = [chave for chave in _env(mongo) if NOME_SENSIVEL.search(chave)]
+        assert not sensiveis, f"credenciais do mongo só pelo .env.mongo: {sensiveis}"
 
     def test_outras_variaveis_do_mongo_nao_tem_segredo_literal(self, mongo):
         for chave, valor in _env(mongo).items():
@@ -305,3 +336,44 @@ class TestSegredosEPrivilegios:
 
     def test_imagem_do_bot_nao_usa_latest(self, bot):
         assert ":latest" not in bot["image"]
+
+    def test_nenhuma_variavel_obrigatoria_no_arquivo_inteiro(self, raw):
+        """``${VAR:?}`` / ``${VAR?}`` é interpolado com ou sem o profile: sem a variável, nem o bot sobe."""
+        assert ":?" not in raw, "':?' no compose exige a variável mesmo com o profile mongo desligado"
+        assert not re.search(r"\$\{[^}]*\?", raw), "'${VAR?...}' também exige a variável"
+
+    def test_nenhuma_interpolacao_obrigatoria_nas_strings_carregadas(self, compose):
+        for texto in _todas_as_strings(compose):
+            assert not re.search(r"\$\{[^}]*\?", texto), f"variável obrigatória em: {texto[:60]}"
+
+
+# ============================================================================ .env.mongo fora do git e da imagem
+
+
+class TestEnvMongoNaoVaza:
+    ARQUIVO = ".env.mongo"
+
+    def test_ignorado_pelo_gitignore_do_repositorio(self):
+        resultado = _git("check-ignore", "-v", self.ARQUIVO)
+        assert resultado.returncode == 0, f"{self.ARQUIVO} NÃO está ignorado pelo git"
+        origem = resultado.stdout.split(":", 1)[0]
+        assert Path(origem).name == ".gitignore" and not Path(origem).is_absolute(), (
+            f"{self.ARQUIVO} só está ignorado por uma regra local/global ({origem}); precisa de um .gitignore versionado"
+        )
+
+    def test_nao_esta_versionado(self):
+        resultado = _git("ls-files", "--", self.ARQUIVO)
+        assert resultado.stdout.strip() == "", f"{self.ARQUIVO} está no índice do git"
+
+    def test_barrado_pelo_dockerignore(self):
+        padroes = [
+            linha.strip().strip("/")
+            for linha in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+            if linha.strip() and not linha.strip().startswith("#")
+        ]
+        assert [p for p in padroes if not p.startswith("!") and fnmatch.fnmatch(self.ARQUIVO, p)], (
+            f"{self.ARQUIVO} não é barrado pelo .dockerignore"
+        )
+        assert not [p for p in padroes if p.startswith("!") and fnmatch.fnmatch(self.ARQUIVO, p[1:])], (
+            f"uma exceção '!' do .dockerignore reabre {self.ARQUIVO}"
+        )
