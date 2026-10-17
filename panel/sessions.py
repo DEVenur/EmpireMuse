@@ -1,4 +1,5 @@
 """Sessões do painel e tentativas de login, em memória. Nunca guardam tokens do Discord."""
+
 from __future__ import annotations
 
 import secrets
@@ -117,8 +118,8 @@ class LoginAttemptStore:
     def create(self, state: str, code_verifier: str, next_path: str) -> str:
         now = self._clock()
         while self._attempts and (
-                len(self._attempts) >= MAX_PENDING_ATTEMPTS
-                or next(iter(self._attempts.values())).expires_at <= now):
+            len(self._attempts) >= MAX_PENDING_ATTEMPTS or next(iter(self._attempts.values())).expires_at <= now
+        ):
             self._attempts.popitem(last=False)
         attempt_id = secrets.token_urlsafe(SESSION_ID_BYTES)
         self._attempts[attempt_id] = LoginAttempt(state, code_verifier, next_path, now + ATTEMPT_TTL_SECONDS)

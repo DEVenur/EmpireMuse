@@ -3,6 +3,7 @@
 ATENÇÃO (interpretação): o construtor do SessionStore não está no briefing; os testes o criam em `make_store`
 como SessionStore(settings, clock=clock). Se a assinatura real for outra, ajustar só esta função.
 """
+
 import dataclasses
 
 import pytest

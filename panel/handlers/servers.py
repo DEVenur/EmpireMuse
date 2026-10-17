@@ -1,4 +1,5 @@
 """Páginas de servidores: lista (com convites dos bots ausentes) e visão geral de um servidor autorizado."""
+
 from __future__ import annotations
 
 import html
@@ -40,8 +41,10 @@ class ServerCard:
 
 def decode_args(handler: Any) -> dict[str, list[str]]:
     """Argumentos do corpo do POST como texto (bytes inválidos viram U+FFFD)."""
-    return {name: [value.decode("utf-8", "replace") for value in values]
-            for name, values in handler.request.body_arguments.items()}
+    return {
+        name: [value.decode("utf-8", "replace") for value in values]
+        for name, values in handler.request.body_arguments.items()
+    }
 
 
 def initial_of(name: str) -> str:
@@ -50,10 +53,15 @@ def initial_of(name: str) -> str:
 
 
 def invite_url(client_id: str, guild_id: str, permissions: int) -> str:
-    query = urlencode({
-        "client_id": client_id, "scope": INVITE_SCOPE, "permissions": permissions,
-        "guild_id": guild_id, "disable_guild_select": "true",
-    })
+    query = urlencode(
+        {
+            "client_id": client_id,
+            "scope": INVITE_SCOPE,
+            "permissions": permissions,
+            "guild_id": guild_id,
+            "disable_guild_select": "true",
+        }
+    )
     return f"{INVITE_URL}?{query}"
 
 
@@ -62,17 +70,28 @@ def missing_invites(pool: Any, guild_id: str) -> tuple[bool, tuple[InviteLink, .
     present_ids = {str(bot.user.id) for bot, _ in ready_bots_with_guild(pool, int(guild_id))}
     permissions = pool.config["INVITE_PERMISSIONS"]
     invites = tuple(
-        InviteLink(bot.user.name, bot.user.display_avatar.url,
-                   invite_url(str(bot.application_id or bot.user.id), guild_id, permissions))
-        for bot in pool.bots if bot.is_ready() and str(bot.user.id) not in present_ids)
+        InviteLink(
+            bot.user.name,
+            bot.user.display_avatar.url,
+            invite_url(str(bot.application_id or bot.user.id), guild_id, permissions),
+        )
+        for bot in pool.bots
+        if bot.is_ready() and str(bot.user.id) not in present_ids
+    )
     return bool(present_ids), invites
 
 
 def build_card(guild: ManagedGuild, pool: Any) -> ServerCard:
     """Cartão de um servidor da sessão: "Configurar" se há bot pronto nele; senão um convite por bot ausente."""
     configurable, invites = missing_invites(pool, guild.id)
-    return ServerCard(guild_id=guild.id, name=guild.name, icon_url=guild_icon_url(guild.id, guild.icon),
-                      initial=initial_of(guild.name), configurable=configurable, invites=invites)
+    return ServerCard(
+        guild_id=guild.id,
+        name=guild.name,
+        icon_url=guild_icon_url(guild.id, guild.icon),
+        initial=initial_of(guild.name),
+        configurable=configurable,
+        invites=invites,
+    )
 
 
 class AuthenticatedHandler(PanelHandler):
@@ -119,5 +138,6 @@ class ServerDetailHandler(AuthenticatedHandler):
             self.render_error(404, NOT_FOUND_TITLE, NOT_FOUND_MESSAGE)
             return
         _, invites = missing_invites(self.application.settings["pool"], access.guild_id)
-        self.render_page("servidor.html", acesso=access, inicial=initial_of(access.name), categorias=CATEGORIES,
-                         convites=invites)
+        self.render_page(
+            "servidor.html", acesso=access, inicial=initial_of(access.name), categorias=CATEGORIES, convites=invites
+        )

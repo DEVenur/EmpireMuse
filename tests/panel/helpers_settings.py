@@ -3,6 +3,7 @@
 Aditivo à Etapa 3: reutiliza FakeGuild/FakeBot/FakePool de helpers_servers sem alterar o comportamento deles.
 Contrato: BRIEFING-PAINEL-E4.md (E4a). Nada aqui toca rede ou disco.
 """
+
 import asyncio
 import copy
 import hashlib
@@ -22,8 +23,7 @@ from tests.panel.test_login_flow import LoginBase
 UID = int(USER_ID)
 NOT_FOUND_TEXT = "Servidor não encontrado ou você não tem permissão para gerenciá-lo."
 SAVED_TEXT = "Configurações salvas."
-CONFLICT_TEXT = ("Estas configurações foram alteradas em outro lugar. "
-                 "Recarregue a página para ver os valores atuais.")
+CONFLICT_TEXT = "Estas configurações foram alteradas em outro lugar. Recarregue a página para ver os valores atuais."
 CATEGORIES = ("player", "dj", "aparencia", "geral")
 HOSTILE_ROLE = "<img src=x onerror=alert(1)>"
 HOSTILE_SKIN = "<b>hostil</b>"
@@ -38,6 +38,7 @@ def version_of(fields: dict) -> str:
 
 
 # ============================================================================ banco em memória
+
 
 class FakeDB:
     """Espelha a semântica do BaseDB: get devolve o MESMO dict mutável do cache; só se grava via update.
@@ -98,12 +99,14 @@ class FakeDB:
 
 # ============================================================================ players, bots, pool, servidores
 
+
 class FakePlayer:
     def __init__(self, events, label, static=False, skin="default", skin_static="default", voice_channel_id=None):
         self.events, self.label, self.static = events, label, static
         self.listen_along_invite = ""
-        self.guild = SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(
-            channel=SimpleNamespace(id=voice_channel_id))))
+        self.guild = SimpleNamespace(
+            me=SimpleNamespace(voice=SimpleNamespace(channel=SimpleNamespace(id=voice_channel_id)))
+        )
         self.skin, self.skin_static = skin, skin_static
         self.calls = []
         self.controller_mode = False
@@ -169,10 +172,14 @@ class SettingsBot(FakeBot):
         self.config = world.config
         self.pool = None
         self.music = SimpleNamespace(players={})
-        self.player_skins = {n: SimpleNamespace(preview=f"https://example.invalid/{i}.png")
-                             for i, n in enumerate(("default", "neon", "dark", HOSTILE_SKIN))}
-        self.player_static_skins = {n: SimpleNamespace(preview=f"https://example.invalid/s{i}.png")
-                                    for i, n in enumerate(("default", "green", "blue"))}
+        self.player_skins = {
+            n: SimpleNamespace(preview=f"https://example.invalid/{i}.png")
+            for i, n in enumerate(("default", "neon", "dark", HOSTILE_SKIN))
+        }
+        self.player_static_skins = {
+            n: SimpleNamespace(preview=f"https://example.invalid/s{i}.png")
+            for i, n in enumerate(("default", "green", "blue"))
+        }
         self.default_skin = self.default_static_skin = "default"
 
     def get_channel(self, channel_id):
@@ -212,14 +219,25 @@ class SettingsWorld:
     def __init__(self):
         self.events = []
         self.db = FakeDB(self.events)
-        self.config = {"INVITE_PERMISSIONS": 332892794064, "IGNORE_SKINS": "dark", "IGNORE_STATIC_SKINS": "blue",
-                       "USER_FAV_MAX_NAME_LENGTH": 35, "USER_FAV_MAX_URL_LENGTH": 90, "MAX_USER_FAVS": 10}
-        self.channels = {7777: SimpleNamespace(id=7777, name="pedidos"),
-                         123: SimpleNamespace(id=123, name="Sala <i>DJ</i>"), 456: SimpleNamespace(id=456, name="Sala 2")}
+        self.config = {
+            "INVITE_PERMISSIONS": 332892794064,
+            "IGNORE_SKINS": "dark",
+            "IGNORE_STATIC_SKINS": "blue",
+            "USER_FAV_MAX_NAME_LENGTH": 35,
+            "USER_FAV_MAX_URL_LENGTH": 90,
+            "MAX_USER_FAVS": 10,
+        }
+        self.channels = {
+            7777: SimpleNamespace(id=7777, name="pedidos"),
+            123: SimpleNamespace(id=123, name="Sala <i>DJ</i>"),
+            456: SimpleNamespace(id=456, name="Sala 2"),
+        }
         for channel in self.channels.values():
             channel.guild_id = None
-        roles = [SimpleNamespace(id=int(rid), name=HOSTILE_ROLE if i == 0 else f"Cargo {i + 1}")
-                 for i, rid in enumerate(ROLE_IDS)]
+        roles = [
+            SimpleNamespace(id=int(rid), name=HOSTILE_ROLE if i == 0 else f"Cargo {i + 1}")
+            for i, rid in enumerate(ROLE_IDS)
+        ]
         self.g100 = SettingsGuild(100, "Alfa", roles, owner_id=999)
         self.g800a = SettingsGuild(800, "Ômega", roles, owner_id=999)
         self.g800b = SettingsGuild(800, "Ômega", roles, owner_id=999)
@@ -232,7 +250,7 @@ class SettingsWorld:
         self.g600.add_member(UID)
         self.g500.add_member(UID, administrator=True)
         for guild in (self.g100, self.g800a, self.g800b):
-            guild.members[UID].guild_permissions.manage_channels = True   # administrador implica o poder
+            guild.members[UID].guild_permissions.manage_channels = True  # administrador implica o poder
         for guild in (self.g200, self.g600, self.g500):
             guild.members[UID].guild_permissions.manage_channels = guild is self.g500
         for guild in (self.g100, self.g800a, self.g800b, self.g200, self.g600, self.g500):
@@ -248,13 +266,19 @@ class SettingsWorld:
         self.p800b = FakePlayer(self.events, "p800/b2", voice_channel_id=123)
         self.bot1.music.players.update({100: self.p100, 800: self.p800a})
         self.bot2.music.players.update({800: self.p800b})
-        self.raw = [raw_guild(100, "Alfa", permissions="8"), raw_guild(800, "Ômega", permissions="8"),
-                    raw_guild(200, "Beta", permissions="32"), raw_guild(600, "Rebaixado", permissions="8"),
-                    raw_guild(300, "Gama", permissions="8"),
-                    raw_guild(500, "Fora", owner=False, permissions="1024")]
+        self.raw = [
+            raw_guild(100, "Alfa", permissions="8"),
+            raw_guild(800, "Ômega", permissions="8"),
+            raw_guild(200, "Beta", permissions="32"),
+            raw_guild(600, "Rebaixado", permissions="8"),
+            raw_guild(300, "Gama", permissions="8"),
+            raw_guild(500, "Fora", owner=False, permissions="1024"),
+        ]
         self._seed()
-        self.db.docs[("global", 800)]["listen_along_invites"] = {"123": "https://discord.gg/aaa",
-                                                                 "456": "https://discord.gg/bbb"}
+        self.db.docs[("global", 800)]["listen_along_invites"] = {
+            "123": "https://discord.gg/aaa",
+            "456": "https://discord.gg/bbb",
+        }
         self.db.docs[("global", 200)]["listen_along_invites"] = {"123": "https://discord.gg/ccc"}
         for key in (("global", 800), ("global", 200)):
             self.db.baseline[key] = copy.deepcopy(self.db.docs[key])
@@ -265,9 +289,11 @@ class SettingsWorld:
         self.db.seed("2", 800, self.bot_doc(volume=80, djroles=["5004", "5005"]))
         self.db.seed("2", 200, self.bot_doc())
         self.db.docs[("1", 800)]["player_controller"]["fav_links"] = {
-            "Um": {"url": "https://example.com/um", "description": "do bot 1"}}
+            "Um": {"url": "https://example.com/um", "description": "do bot 1"}
+        }
         self.db.docs[("2", 800)]["player_controller"]["fav_links"] = {
-            "Dois": {"url": "https://example.com/dois", "description": "do bot 2"}}
+            "Dois": {"url": "https://example.com/dois", "description": "do bot 2"}
+        }
         for key in (("1", 800), ("2", 800)):
             self.db.baseline[key] = copy.deepcopy(self.db.docs[key])
         self.db.seed("1", 600, self.bot_doc())
@@ -277,22 +303,37 @@ class SettingsWorld:
     @staticmethod
     def bot_doc(volume=100, autoplay=False, djroles=()):
         doc = copy.deepcopy(FakeDB._models()[0])
-        doc.update({"autoplay": autoplay, "default_player_volume": volume, "djroles": list(djroles),
-                    "extra_flag": "intacto"})
-        doc["player_controller"].update({"channel": "7777", "message_id": "8888", "skin": "default",
-                                         "static_skin": "default",
-                                         "fav_links": {"Fixo": {"url": "https://example.com/x", "description": "d"}}})
+        doc.update(
+            {"autoplay": autoplay, "default_player_volume": volume, "djroles": list(djroles), "extra_flag": "intacto"}
+        )
+        doc["player_controller"].update(
+            {
+                "channel": "7777",
+                "message_id": "8888",
+                "skin": "default",
+                "static_skin": "default",
+                "fav_links": {"Fixo": {"url": "https://example.com/x", "description": "d"}},
+            }
+        )
         return doc
 
     @staticmethod
     def global_doc():
         doc = copy.deepcopy(FakeDB._models()[1])
-        doc.update({"prefix": "!", "custom_skins": {"meu": "DADOS-LEGADOS"}, "custom_skins_static": {},
-                    "listen_along_invites": {"123": "https://discord.gg/abc"}, "extra_flag": "intacto"})
+        doc.update(
+            {
+                "prefix": "!",
+                "custom_skins": {"meu": "DADOS-LEGADOS"},
+                "custom_skins_static": {},
+                "listen_along_invites": {"123": "https://discord.gg/abc"},
+                "extra_flag": "intacto",
+            }
+        )
         return doc
 
 
 # ============================================================================ formulário (um "navegador" mínimo)
+
 
 class Form:
     def __init__(self, action, method, controls):
@@ -319,7 +360,7 @@ class Form:
         for name, value in overrides.items():
             if value is None:
                 continue
-            for item in (value if isinstance(value, list) else [value]):
+            for item in value if isinstance(value, list) else [value]:
                 result.append((name, item))
         return result
 
@@ -368,18 +409,42 @@ class _FormParser(HTMLParser):
                 values = [a.get("value", "on")] if "checked" in a else []
             else:
                 values = [a.get("value", "")]
-            self._form.controls.append({"tag": "input", "type": kind, "name": a.get("name"), "values": values,
-                                        "attrs": a, "disabled": "disabled" in a, "options": []})
+            self._form.controls.append(
+                {
+                    "tag": "input",
+                    "type": kind,
+                    "name": a.get("name"),
+                    "values": values,
+                    "attrs": a,
+                    "disabled": "disabled" in a,
+                    "options": [],
+                }
+            )
         elif tag == "select":
-            self._select = {"tag": "select", "type": "select", "name": a.get("name"), "values": [], "attrs": a,
-                            "multiple": "multiple" in a, "disabled": "disabled" in a, "options": []}
+            self._select = {
+                "tag": "select",
+                "type": "select",
+                "name": a.get("name"),
+                "values": [],
+                "attrs": a,
+                "multiple": "multiple" in a,
+                "disabled": "disabled" in a,
+                "options": [],
+            }
             self._form.controls.append(self._select)
         elif tag == "option" and self._select is not None:
             self._option = {"value": a.get("value"), "selected": "selected" in a, "attrs": a, "label": ""}
             self._select["options"].append(self._option)
         elif tag == "textarea":
-            self._textarea = {"tag": "textarea", "type": "textarea", "name": a.get("name"), "values": [""],
-                              "attrs": a, "disabled": "disabled" in a, "options": []}
+            self._textarea = {
+                "tag": "textarea",
+                "type": "textarea",
+                "name": a.get("name"),
+                "values": [""],
+                "attrs": a,
+                "disabled": "disabled" in a,
+                "options": [],
+            }
             self._form.controls.append(self._textarea)
 
     def handle_data(self, data):
@@ -425,15 +490,21 @@ def invites(body: str):
     """Convites (href para discord.com/oauth2/authorize) da página: lista de {'base','params'}."""
     from html import unescape
     from urllib.parse import parse_qs
+
     found = []
     for href in re.findall(r'href="(https://discord\.com/oauth2/authorize[^"]*)"', body):
         parts = urlsplit(unescape(href))
-        found.append({"base": f"{parts.scheme}://{parts.netloc}{parts.path}",
-                      "params": {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()}})
+        found.append(
+            {
+                "base": f"{parts.scheme}://{parts.netloc}{parts.path}",
+                "params": {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()},
+            }
+        )
     return found
 
 
 # ============================================================================ caso de teste base
+
 
 class SettingsBase(LoginBase):
     """Painel montado com o SettingsWorld; `logged_in()` entra como o usuário 1001."""
@@ -500,9 +571,11 @@ class SettingsBase(LoginBase):
 
 # ============================================================================ regras extraídas do código dos comandos
 
+
 def _tree(relative):
     import ast
     from tests.panel.helpers import ROOT
+
     path = ROOT / relative
     source = path.read_text(encoding="utf-8")
     return source, ast.parse(source)
@@ -510,12 +583,14 @@ def _tree(relative):
 
 def _class_node(tree, name):
     import ast
+
     return next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == name)
 
 
 def command_volume_ranges():
     """Argumentos constantes dos `range(...)` da classe PlayerSettings (modules/music_settings.py)."""
     import ast
+
     _, tree = _tree("modules/music_settings.py")
     ranges = []
     for node in ast.walk(_class_node(tree, "PlayerSettings")):
@@ -534,6 +609,7 @@ def command_allowed_volumes():
 def command_voice_placeholders():
     """Tupla `placeholders` de SetStageTitle (utils/music/interactions.py)."""
     import ast
+
     _, tree = _tree("utils/music/interactions.py")
     for node in _class_node(tree, "SetStageTitle").body:
         if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "placeholders":
@@ -544,21 +620,27 @@ def command_voice_placeholders():
 def command_voice_max_length():
     """max_length (constante) dos TextInput de SetStageTitle."""
     import ast
+
     _, tree = _tree("utils/music/interactions.py")
-    lengths = {kw.value.value for node in ast.walk(_class_node(tree, "SetStageTitle"))
-               if isinstance(node, ast.Call) for kw in node.keywords
-               if kw.arg == "max_length" and isinstance(kw.value, ast.Constant)}
+    lengths = {
+        kw.value.value
+        for node in ast.walk(_class_node(tree, "SetStageTitle"))
+        if isinstance(node, ast.Call)
+        for kw in node.keywords
+        if kw.arg == "max_length" and isinstance(kw.value, ast.Constant)
+    }
     return lengths
 
 
 def command_prefix_max_length():
     """Limite de `len(prefix) > N` em setprefix (modules/legacy_cmds.py)."""
     source, _ = _tree("modules/legacy_cmds.py")
-    block = source[source.index("async def setprefix"):source.index("async def resetprefix")]
+    block = source[source.index("async def setprefix") : source.index("async def resetprefix")]
     return int(re.search(r"len\(prefix\)\s*>\s*(\d+)", block).group(1))
 
 
 # ============================================================================ E4b: formulários identificados por `acao`
+
 
 def acao_form(body: str, acao: str, nome=None):
     """Formulário cujo campo oculto/lido `acao` vale `acao` (e `nome` igual, quando dado)."""

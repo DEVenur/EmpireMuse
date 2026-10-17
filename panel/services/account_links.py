@@ -5,12 +5,12 @@ e o ``/fav add``: adicionar usa o modal (nome 2–25, URL 10–200 extraída com
 ``USER_FAV_MAX_*`` e grava só o trecho que é URL (``URL_REG.match``). Limites de quantidade vêm de ``bot.config`` a cada
 requisição (0 = ilimitado; o dono do bot é isento). Nada aqui faz requisição externa.
 """
+
 from __future__ import annotations
 
 from typing import Any, NamedTuple, Optional
 
-from panel.services.account_base import (AccountContext, AccountSection, Parsed, effective_limit,
-                                         is_web_link)
+from panel.services.account_base import AccountContext, AccountSection, Parsed, effective_limit, is_web_link
 from panel.services.base import Args, clean_title, first, load_json_object
 from utils.music.converters import URL_REG
 
@@ -26,7 +26,7 @@ MSG_NAME_TAKEN = "Você já tem um favorito com esse nome."
 MSG_URL = f"Informe um endereço http(s) válido de {FAV_URL_MIN} a {FAV_URL_MAX} caracteres."
 MSG_FAV_UNKNOWN = "Favorito não encontrado."
 MSG_FAV_FULL = "Você atingiu o limite de favoritos; remova algum para adicionar outro."
-MSG_FAV_JSON = "O conteúdo precisa ser um JSON válido no formato {\"nome\": \"endereço\"}."
+MSG_FAV_JSON = 'O conteúdo precisa ser um JSON válido no formato {"nome": "endereço"}.'
 MSG_FAV_EMPTY = "O conteúdo não tem nenhum favorito."
 MSG_FAV_ITEM = "Um dos itens é inválido (nome, tamanho do endereço ou endereço http/https)."
 MSG_FAV_SPACE = "Você não tem espaço para todos os favoritos do conteúdo; remova algum e tente novamente."
@@ -89,13 +89,24 @@ class FavoritesSection(AccountSection):
         favs = self.favs(doc)
         limit = await effective_limit(ctx, "MAX_USER_FAVS")
         items = tuple(FavView(name, str(url), is_web_link(str(url))) for name, url in favs.items())
-        return {"itens": items, "total": len(items), "maximo": int(ctx.bot.config["MAX_USER_FAVS"]),
-                "ilimitado": limit == 0, "cheio": bool(limit) and len(items) >= limit, "exportar_url": EXPORT_PATH}
+        return {
+            "itens": items,
+            "total": len(items),
+            "maximo": int(ctx.bot.config["MAX_USER_FAVS"]),
+            "ilimitado": limit == 0,
+            "cheio": bool(limit) and len(items) >= limit,
+            "exportar_url": EXPORT_PATH,
+        }
 
     async def parse(self, ctx: AccountContext, doc: dict, action: str, args: Args) -> Parsed:
         name = (first(args, "nome") or "").strip()
-        echo = {"acao_erro": action, "alvo_erro": name if action in ("favorito_editar", "favorito_remover") else None,
-                "nome": name, "url": (first(args, "url") or "").strip(), "dados": first(args, "dados") or ""}
+        echo = {
+            "acao_erro": action,
+            "alvo_erro": name if action in ("favorito_editar", "favorito_remover") else None,
+            "nome": name,
+            "url": (first(args, "url") or "").strip(),
+            "dados": first(args, "dados") or "",
+        }
         favs = self.favs(doc)
         if action == "favorito_adicionar":
             return await self._add(ctx, favs, echo)
@@ -144,7 +155,9 @@ class FavoritesSection(AccountSection):
         if not data:
             return Parsed({}, {"dados": MSG_FAV_EMPTY}, echo)
         config = ctx.bot.config
-        items = self._import_items(data, int(config["USER_FAV_MAX_NAME_LENGTH"]), int(config["USER_FAV_MAX_URL_LENGTH"]))
+        items = self._import_items(
+            data, int(config["USER_FAV_MAX_NAME_LENGTH"]), int(config["USER_FAV_MAX_URL_LENGTH"])
+        )
         if items is None:
             return Parsed({}, {"dados": MSG_FAV_ITEM}, echo)
         kept = {key: value for key, value in favs.items() if key not in items}  # sobrescrever não ocupa vaga
@@ -185,8 +198,13 @@ class IntegrationsSection(AccountSection):
     async def extras(self, ctx: AccountContext, doc: dict) -> dict[str, Any]:
         limit = await effective_limit(ctx, "MAX_USER_INTEGRATIONS")
         items = tuple(self._view(title, value) for title, value in self.links(doc).items())
-        return {"itens": items, "total": len(items), "maximo": int(ctx.bot.config["MAX_USER_INTEGRATIONS"]),
-                "ilimitado": limit == 0, "cheio": bool(limit) and len(items) >= limit}
+        return {
+            "itens": items,
+            "total": len(items),
+            "maximo": int(ctx.bot.config["MAX_USER_INTEGRATIONS"]),
+            "ilimitado": limit == 0,
+            "cheio": bool(limit) and len(items) >= limit,
+        }
 
     @staticmethod
     def _view(title: str, value: Any) -> IntegrationView:
@@ -195,8 +213,11 @@ class IntegrationsSection(AccountSection):
         return IntegrationView(title, url, avatar, is_web_link(url))
 
     async def parse(self, ctx: AccountContext, doc: dict, action: str, args: Args) -> Parsed:
-        echo = {"acao_erro": action, "alvo_erro": first(args, "nome") if action == "integracao_remover" else None,
-                "dados": first(args, "dados") or ""}
+        echo = {
+            "acao_erro": action,
+            "alvo_erro": first(args, "nome") if action == "integracao_remover" else None,
+            "dados": first(args, "dados") or "",
+        }
         links = self.links(doc)
         if action == "integracao_remover":
             name = first(args, "nome") or ""

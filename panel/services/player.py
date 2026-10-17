@@ -1,4 +1,5 @@
 """Categorias Player (G-01…G-04) e DJ (G-05)."""
+
 from __future__ import annotations
 
 import re

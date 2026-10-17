@@ -12,6 +12,7 @@ os pontos em que a UI se mistura à lógica entram como callbacks:
 ``inter.author``).
 ``send_idle_embed`` é injetável para o cog poder substituí-lo (testes) sem que este módulo conheça o cog.
 """
+
 from __future__ import annotations
 
 import traceback
@@ -36,6 +37,7 @@ thread_perms = ("send_messages_in_threads", "embed_links", "view_channel")
 
 forum_perms = ("send_messages", "send_messages_in_threads", "embed_links", "view_channel")
 
+
 class MissingManagePermissions(GenericError):
     """O bot não tem Administrador nem Gerenciar permissões no canal escolhido (o painel mapeia por este tipo)."""
 
@@ -49,7 +51,11 @@ class RequestChannelResult(NamedTuple):
     message: Any
 
 
-def missing_channel_permissions(channel: Union[disnake.StageChannel, disnake.VoiceChannel, disnake.ForumChannel, disnake.TextChannel, disnake.Thread]) -> list[str]:
+def missing_channel_permissions(
+    channel: Union[
+        disnake.StageChannel, disnake.VoiceChannel, disnake.ForumChannel, disnake.TextChannel, disnake.Thread
+    ],
+) -> list[str]:
     """Nomes canônicos das permissões do bot que faltam no canal (post/thread: confere o canal pai)."""
 
     if isinstance(channel, disnake.ForumChannel):
@@ -61,17 +67,21 @@ def missing_channel_permissions(channel: Union[disnake.StageChannel, disnake.Voi
     return [p for p, v in channel.permissions_for(channel.guild.me) if p in channel_perms and not v]
 
 
-def check_channel_perm(channel: Union[disnake.StageChannel, disnake.VoiceChannel, disnake.ForumChannel, disnake.TextChannel]):
-
+def check_channel_perm(
+    channel: Union[disnake.StageChannel, disnake.VoiceChannel, disnake.ForumChannel, disnake.TextChannel],
+):
     missing_perms = missing_channel_permissions(channel)
 
     if missing_perms:
         raise GenericError(
-            f"**{channel.guild.me.mention} não possui as seguintes permissões necessárias no canal {channel.mention}** ```ansi\n" +
-            "\n".join(f"\x1b[0;33m{perms_translations.get(p, p)}\x1b[0m" for p in missing_perms) + "```")
+            f"**{channel.guild.me.mention} não possui as seguintes permissões necessárias no canal {channel.mention}** ```ansi\n"
+            + "\n".join(f"\x1b[0;33m{perms_translations.get(p, p)}\x1b[0m" for p in missing_perms)
+            + "```"
+        )
 
 
 # ============================================================================ preparo
+
 
 def build_channel_kwargs(guild: disnake.Guild) -> dict:
     """Overwrite do bot nos canais criados/editados pelo setup."""
@@ -90,11 +100,7 @@ def build_channel_kwargs(guild: disnake.Guild) -> dict:
     if guild.me.guild_permissions.administrator:
         perms_dict["manage_permissions"] = True
 
-    return {
-        "overwrites": {
-            guild.me: disnake.PermissionOverwrite(**perms_dict)
-        }
-    }
+    return {"overwrites": {guild.me: disnake.PermissionOverwrite(**perms_dict)}}
 
 
 async def find_current_request_message(bot: BotCore, guild: disnake.Guild, guild_data: dict):
@@ -109,10 +115,10 @@ async def find_current_request_message(bot: BotCore, guild: disnake.Guild, guild
         player = None
 
     if not original_message:
-
         try:
-            channel_db = bot.get_channel(int(guild_data["player_controller"]["channel"])) or \
-                         await bot.fetch_channel(int(guild_data["player_controller"]["channel"]))
+            channel_db = bot.get_channel(int(guild_data["player_controller"]["channel"])) or await bot.fetch_channel(
+                int(guild_data["player_controller"]["channel"])
+            )
             original_message = await channel_db.fetch_message(int(guild_data["player_controller"]["message_id"]))
         except:
             pass
@@ -122,11 +128,14 @@ async def find_current_request_message(bot: BotCore, guild: disnake.Guild, guild
 
 def ensure_can_create_channel(bot: BotCore, guild: disnake.Guild) -> None:
     if not guild.me.guild_permissions.manage_channels:
-        raise GenericError(f"**O bot {bot.user.mention} não possui permissão de gerenciar canais pra criar um novo canal.**")
+        raise GenericError(
+            f"**O bot {bot.user.mention} não possui permissão de gerenciar canais pra criar um novo canal.**"
+        )
 
 
-async def create_request_channel(bot: BotCore, parent: Union[disnake.CategoryChannel, disnake.Guild], kind: str,
-                                 channel_kwargs: dict):
+async def create_request_channel(
+    bot: BotCore, parent: Union[disnake.CategoryChannel, disnake.Guild], kind: str, channel_kwargs: dict
+):
     """Cria o canal do bot (``kind``: ``text``, ``voice`` ou ``stage``) em ``parent`` (categoria ou servidor)."""
     name = f"{bot.user.name} player controller"
     if kind == "voice":
@@ -137,9 +146,7 @@ async def create_request_channel(bot: BotCore, parent: Union[disnake.CategoryCha
 
 
 async def _archive_previous_message(original_message, target, actor, embed_archived):
-
     if original_message and original_message.channel != target and original_message.guild.id == target.guild.id:
-
         try:
             if isinstance(original_message.channel.parent, disnake.ForumChannel):
                 await original_message.thread.delete(reason=f"Player reconfigurado por {actor}.")
@@ -156,11 +163,7 @@ async def _archive_previous_message(original_message, target, actor, embed_archi
             pass
 
         try:
-            await original_message.thread.edit(
-                archived=True,
-                locked=True,
-                reason=f"Player reconfigurado por {actor}."
-            )
+            await original_message.thread.edit(archived=True, locked=True, reason=f"Player reconfigurado por {actor}.")
         except:
             pass
 
@@ -169,6 +172,7 @@ async def _archive_previous_message(original_message, target, actor, embed_archi
 
 
 # ============================================================================ setup
+
 
 def validate_request_target(bot: BotCore, guild: disnake.Guild, target, *, existing_channel: bool = True) -> None:
     """Checagens do ``/setup`` que não têm efeito colateral (``GenericError`` na primeira que falhar).
@@ -184,28 +188,44 @@ def validate_request_target(bot: BotCore, guild: disnake.Guild, target, *, exist
     check_channel_perm(target)
 
     if isinstance(target, disnake.ForumChannel):
-
         if not target.permissions_for(guild.me).create_forum_threads:
             raise GenericError(f"**{bot.user.mention} não possui permissão para postar no canal {target.mention}.**")
 
         return
 
-    if existing_channel and not guild.me.guild_permissions.administrator and not target.permissions_for(guild.me).manage_permissions:
-        raise MissingManagePermissions(f"**{guild.me.mention} não possui permissão de administrador ou permissão de "
-                           f"gerenciar permissões do canal {target.mention}** para editar as permissões "
-                           f"necessárias para o sistema de pedir música funcionar devidamente.\n\n"
-                           f"Caso não queira fornecer a permissão de administrador ou editar as permissões do"
-                           f" canal {target.mention} para me permitir gerenciar permissões do canal. Você pode usar o comando "
-                           f"sem selecionar um canal de destino.")
+    if (
+        existing_channel
+        and not guild.me.guild_permissions.administrator
+        and not target.permissions_for(guild.me).manage_permissions
+    ):
+        raise MissingManagePermissions(
+            f"**{guild.me.mention} não possui permissão de administrador ou permissão de "
+            f"gerenciar permissões do canal {target.mention}** para editar as permissões "
+            f"necessárias para o sistema de pedir música funcionar devidamente.\n\n"
+            f"Caso não queira fornecer a permissão de administrador ou editar as permissões do"
+            f" canal {target.mention} para me permitir gerenciar permissões do canal. Você pode usar o comando "
+            f"sem selecionar um canal de destino."
+        )
 
     if not target.permissions_for(guild.me).read_messages:
         raise GenericError(f"{bot.user.mention} permissão para ler mensagens no canal {target.mention}")
 
 
 async def apply_request_channel(
-        bot: BotCore, guild: disnake.Guild, actor: Any, target, *, existing_channel: bool, purge: bool,
-        channel_kwargs: dict, channel_name: str, original_message, player, guild_data: dict,
-        ask_forum_title: Optional[AskForumTitle] = None, send_idle_embed=default_send_idle_embed,
+    bot: BotCore,
+    guild: disnake.Guild,
+    actor: Any,
+    target,
+    *,
+    existing_channel: bool,
+    purge: bool,
+    channel_kwargs: dict,
+    channel_name: str,
+    original_message,
+    player,
+    guild_data: dict,
+    ask_forum_title: Optional[AskForumTitle] = None,
+    send_idle_embed=default_send_idle_embed,
 ) -> Optional[RequestChannelResult]:
     """Configura ``target`` como canal de pedidos e grava no banco (passos pós-escolha do ``/setup``).
 
@@ -213,13 +233,12 @@ async def apply_request_channel(
     """
     embed_archived = disnake.Embed(
         description=f"**Este canal de pedir música foi reconfigurado pelo membro {actor.mention}.**",
-        color=bot.get_color(guild.me)
+        color=bot.get_color(guild.me),
     )
 
     validate_request_target(bot, guild, target, existing_channel=existing_channel)
 
     if isinstance(target, disnake.ForumChannel):
-
         channel_kwargs.clear()
 
         if ask_forum_title:
@@ -264,12 +283,12 @@ async def apply_request_channel(
                     break
 
         if not thread:
-
             if not target.permissions_for(guild.me).manage_threads:
                 raise GenericError(
                     f"**{bot.user.mention} não possui permissão de gerenciar tópicos no canal {target.mention}.**\n"
                     f"`Nota: Você pode me conceder temporariamente essa permissão e após usar o comando novamente "
-                    f"você pode remover essa permissão.`")
+                    f"você pode remover essa permissão.`"
+                )
 
             """if not target.permissions_for(guild.me).create_forum_threads:
                 raise GenericError(
@@ -283,24 +302,20 @@ async def apply_request_channel(
             )
             message = thread_wmessage.message
 
-        message = await send_idle_embed(target=message, bot=bot, force=True,
-                                        guild_data=guild_data)
+        message = await send_idle_embed(target=message, bot=bot, force=True, guild_data=guild_data)
 
         target = message.channel
 
         await _archive_previous_message(original_message, target, actor, embed_archived)
 
     else:
-
         if purge:
             await target.purge(limit=100, check=lambda m: m.author != guild.me or not m.thread)
 
         message = await _archive_previous_message(original_message, target, actor, embed_archived)
 
         if not message:
-
             async for m in target.history(limit=100):
-
                 if m.author == guild.me and m.thread:
                     message = m
                     break
@@ -315,8 +330,8 @@ async def apply_request_channel(
 
     message = await _switch_player_and_thread(bot, guild, actor, channel, message, player, guild_data, send_idle_embed)
 
-    guild_data['player_controller']['channel'] = str(channel.id)
-    guild_data['player_controller']['message_id'] = str(message.id)
+    guild_data["player_controller"]["channel"] = str(channel.id)
+    guild_data["player_controller"]["message_id"] = str(message.id)
     await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
 
     return RequestChannelResult(channel, message)
@@ -329,9 +344,7 @@ async def _switch_player_and_thread(bot, guild, actor, channel, message, player,
         if player.static:
             try:
                 await player.message.thread.edit(
-                    archived=True,
-                    locked=True,
-                    reason=f"Player reconfigurado por {actor}."
+                    archived=True, locked=True, reason=f"Player reconfigurado por {actor}."
                 )
             except:
                 pass
@@ -364,13 +377,18 @@ async def _switch_player_and_thread(bot, guild, actor, channel, message, player,
                 thread_kw["archived"] = False
             if thread_kw:
                 await message.thread.edit(reason=f"Song request reativado por: {actor}.", **thread_kw)
-    elif player and isinstance(channel, (disnake.VoiceChannel, disnake.StageChannel)) and player.guild.me.voice.channel != channel:
+    elif (
+        player
+        and isinstance(channel, (disnake.VoiceChannel, disnake.StageChannel))
+        and player.guild.me.voice.channel != channel
+    ):
         await player.connect(channel.id)
 
     return message
 
 
 # ============================================================================ reset
+
 
 def ensure_can_reset(guild: disnake.Guild) -> None:
     if not guild.me.guild_permissions.manage_threads:
@@ -380,13 +398,16 @@ def ensure_can_reset(guild: disnake.Guild) -> None:
 async def find_request_channel(bot: BotCore, guild_id: int, guild_data: dict):
     """Canal de pedidos configurado no banco (cache ou API); ``GenericError`` se não há/foi apagado/é de outro servidor."""
     try:
-        channel = bot.get_channel(int(guild_data['player_controller']['channel'])) or \
-                  await bot.fetch_channel(int(guild_data['player_controller']['channel']))
+        channel = bot.get_channel(int(guild_data["player_controller"]["channel"])) or await bot.fetch_channel(
+            int(guild_data["player_controller"]["channel"])
+        )
     except:
         channel = None
 
     if not channel or channel.guild.id != guild_id:
-        raise GenericError(f"**Não há canais de pedido de música configurado no bot {bot.user.mention} (ou o canal foi deletado).**")
+        raise GenericError(
+            f"**Não há canais de pedido de música configurado no bot {bot.user.mention} (ou o canal foi deletado).**"
+        )
 
     return channel
 
@@ -400,8 +421,15 @@ async def _reset_player(player, channel_inter):
 
 
 async def reset_request_channel(
-        bot: BotCore, guild: disnake.Guild, actor: Any, channel, *, delete_channel: Optional[str], channel_inter,
-        guild_data: dict, notify: Notify,
+    bot: BotCore,
+    guild: disnake.Guild,
+    actor: Any,
+    channel,
+    *,
+    delete_channel: Optional[str],
+    channel_inter,
+    guild_data: dict,
+    notify: Notify,
 ) -> None:
     """Passos do ``/reset`` depois de achar o canal. ``delete_channel == "sim"`` apaga o canal.
 
@@ -410,10 +438,7 @@ async def reset_request_channel(
     try:
         if isinstance(channel.parent, disnake.ForumChannel):
             # E4c: o reset de fórum também limpa o banco (antes o apontamento ficava até o próximo uso).
-            guild_data["player_controller"].update({
-                "message_id": None,
-                "channel": None
-            })
+            guild_data["player_controller"].update({"message_id": None, "channel": None})
             await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
 
             await channel.delete(reason=f"{actor.id} resetou player")
@@ -436,10 +461,7 @@ async def reset_request_channel(
     except:
         original_message = None
 
-    guild_data["player_controller"].update({
-        "message_id": None,
-        "channel": None
-    })
+    guild_data["player_controller"].update({"message_id": None, "channel": None})
 
     await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
 
@@ -459,10 +481,12 @@ async def reset_request_channel(
         elif original_message:
             await original_message.edit(
                 content=f"Canal de pedir música foi resetado pelo membro {actor.mention}.",
-                embed=None, components=[
-                    disnake.ui.Button(label="Reconfigurar este canal", emoji="💠",
-                                      custom_id="musicplayer_request_channel")
-                ]
+                embed=None,
+                components=[
+                    disnake.ui.Button(
+                        label="Reconfigurar este canal", emoji="💠", custom_id="musicplayer_request_channel"
+                    )
+                ],
             )
             await original_message.thread.edit(archived=True, reason=f"Player resetado por {actor}.")
     except Exception as e:

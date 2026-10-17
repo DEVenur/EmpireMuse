@@ -3,6 +3,7 @@
 ``session.guilds`` (do login) é só pré-filtro: a decisão real exige (a) um bot pronto do pool no servidor,
 (b) o usuário como membro atual e (c) dono, ADMINISTRATOR ou MANAGE_GUILD agora.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -72,8 +73,9 @@ def ready_bots_with_guild(pool: BotPool, guild_id: int) -> list[tuple[Any, Any]]
 class GuildAuthorizer:
     """Autoriza o acesso a um servidor; decisões positivas ficam em cache por até ``cache_seconds`` (só leituras)."""
 
-    def __init__(self, pool: BotPool, *, clock: Callable[[], float] = time.monotonic,
-                 cache_seconds: float = CACHE_SECONDS) -> None:
+    def __init__(
+        self, pool: BotPool, *, clock: Callable[[], float] = time.monotonic, cache_seconds: float = CACHE_SECONDS
+    ) -> None:
         self._pool = pool
         self._clock = clock
         self._cache_seconds = cache_seconds
@@ -109,8 +111,10 @@ class GuildAuthorizer:
         member = await self._find_member(guild, int(user_id))
         if member is None or not self._may_manage(guild, int(user_id), member):
             raise GuildAccessDenied
-        bots = tuple(BotRef(id=str(bot.user.id), name=bot.user.name, avatar_url=bot.user.display_avatar.url)
-                     for bot, _ in present)
+        bots = tuple(
+            BotRef(id=str(bot.user.id), name=bot.user.name, avatar_url=bot.user.display_avatar.url)
+            for bot, _ in present
+        )
         icon = guild.icon.key if guild.icon else None
         return GuildAccess(guild_id=guild_id, name=guild.name, icon_url=guild_icon_url(guild_id, icon), bots=bots)
 

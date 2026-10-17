@@ -1,4 +1,5 @@
 """Validação da lista de servidores Lavalink baixada da internet, com fallback para o arquivo do repositório."""
+
 from configparser import ConfigParser, Error as ConfigParserError
 from pathlib import Path
 
@@ -20,9 +21,7 @@ def _is_valid_server_list(content: bytes) -> bool:
     except (UnicodeDecodeError, ConfigParserError):
         return False
 
-    return bool(sections) and all(
-        all(key in values for key in _REQUIRED_KEYS) for values in sections.values()
-    )
+    return bool(sections) and all(all(key in values for key in _REQUIRED_KEYS) for values in sections.values())
 
 
 def validated_server_list(status: int | None, content: bytes | None) -> bytes:

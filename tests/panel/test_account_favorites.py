@@ -6,6 +6,7 @@ Importar: nome ≤ USER_FAV_MAX_NAME_LENGTH, URL ≤ USER_FAV_MAX_URL_LENGTH e U
 Limite MAX_USER_FAVS (0 = ilimitado; dono do bot isento), lido de bot.config a cada requisição.
 Integrações: `integration_links`; remover e importar (sem requisição externa); adicionar por URL fica fora da v1.
 """
+
 import html
 import json
 import re
@@ -37,13 +38,13 @@ class FavoritesBase(AccountCase):
 
 # ============================================================================ leitura
 
+
 class FavoritesReadTest(FavoritesBase):
     def test_lists_names_and_urls_of_the_session_user_with_a_list_wide_version(self):
         self.world.set_doc(fav_links={"Rock": BASE + "rock", "Jazz": BASE + "jazz"})
         body = self.body(self.logged_in())
         assert "Rock" in body and BASE + "rock" in body and "Jazz" in body
-        versions = {f.value("versao") for f in parse_forms(body)
-                    if (f.value("acao") or "").startswith("favorit")}
+        versions = {f.value("versao") for f in parse_forms(body) if (f.value("acao") or "").startswith("favorit")}
         assert versions == {version_of({"fav_links": self.favs()})}, versions
 
     def test_count_and_limit_are_shown(self):
@@ -65,8 +66,16 @@ class FavoritesReadTest(FavoritesBase):
         assert "<b>x</b>" not in body and "<s>" not in body and "&lt;b&gt;x&lt;/b&gt;" in body
 
     def test_dangerous_urls_never_become_href_and_external_links_are_noopener(self):
-        self.world.set_doc(fav_links={"a": "javascript:alert(1)", "b": "data:text/html,x", "c": "HTTP://UP.example",
-                                      "d": "https://ok.example/x", "e": '//evil.example/x', "f": 'https://q.example/"onmouseover="x'})
+        self.world.set_doc(
+            fav_links={
+                "a": "javascript:alert(1)",
+                "b": "data:text/html,x",
+                "c": "HTTP://UP.example",
+                "d": "https://ok.example/x",
+                "e": "//evil.example/x",
+                "f": 'https://q.example/"onmouseover="x',
+            }
+        )
         body = self.body(self.logged_in())
         hrefs = [html.unescape(h) for h in re.findall(r'<a\b[^>]*href="([^"]*)"', body)]
         assert not [h for h in hrefs if re.match(r"\s*(javascript|data|vbscript):", h, re.I) or h.startswith("//")]
@@ -76,6 +85,7 @@ class FavoritesReadTest(FavoritesBase):
 
 
 # ============================================================================ adicionar / editar / remover
+
 
 class FavoritesWriteTest(FavoritesBase):
     def test_valid_add_writes_only_the_new_entry_as_name_to_url_text(self):
@@ -90,9 +100,11 @@ class FavoritesWriteTest(FavoritesBase):
 
     def test_url_is_extracted_with_url_reg_like_the_command(self):
         browser = self.logged_in()
-        cases = {"A1": ("  https://example.com/a  ", "https://example.com/a"),
-                 "B2": ("veja https://example.com/b agora", "https://example.com/b"),
-                 "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c")}
+        cases = {
+            "A1": ("  https://example.com/a  ", "https://example.com/a"),
+            "B2": ("veja https://example.com/b agora", "https://example.com/b"),
+            "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c"),
+        }
         for name, (sent, expected) in cases.items():
             assert self.add(browser, name, sent).code == 200, name
             assert self.favs()[name] == expected
@@ -106,11 +118,19 @@ class FavoritesWriteTest(FavoritesBase):
     def test_invalid_add_is_422_on_the_field_and_writes_nothing(self):
         browser = self.logged_in()
         before = self.world.doc()
-        cases = {"nome 1": ("a", BASE + "x"), "nome 26": ("n" * 26, BASE + "x"), "nome vazio": ("", BASE + "x"),
-                 "nome espaços": ("   ", BASE + "x"), "duplicado": ("Rock", BASE + "x"),
-                 "controle": ("a\nb", BASE + "x"), "url ftp": ("Ok", "ftp://example.com/x"),
-                 "url javascript": ("Ok", "javascript:alert(1)"), "sem esquema": ("Ok", "example.com/x"),
-                 "url curta": ("Ok", "http://a"), "url 201": ("Ok", BASE + "a" * (201 - len(BASE)))}
+        cases = {
+            "nome 1": ("a", BASE + "x"),
+            "nome 26": ("n" * 26, BASE + "x"),
+            "nome vazio": ("", BASE + "x"),
+            "nome espaços": ("   ", BASE + "x"),
+            "duplicado": ("Rock", BASE + "x"),
+            "controle": ("a\nb", BASE + "x"),
+            "url ftp": ("Ok", "ftp://example.com/x"),
+            "url javascript": ("Ok", "javascript:alert(1)"),
+            "sem esquema": ("Ok", "example.com/x"),
+            "url curta": ("Ok", "http://a"),
+            "url 201": ("Ok", BASE + "a" * (201 - len(BASE))),
+        }
 
         def check(item):
             label, (nome, url) = item
@@ -158,6 +178,7 @@ class FavoritesWriteTest(FavoritesBase):
 
 # ============================================================================ limite MAX_USER_FAVS e dono
 
+
 class FavoritesLimitTest(FavoritesBase):
     def test_adding_a_new_name_is_refused_at_the_limit(self):
         self.world.set_doc(fav_links=full(10))
@@ -165,7 +186,9 @@ class FavoritesLimitTest(FavoritesBase):
         before = self.world.doc()
         response = self.add(browser, "Extra", BASE + "x")
         assert response.code == 422 and self.world.doc() == before
-        assert self.act(browser, "favorito_editar", alvo="F03", url=BASE + "novo").code == 200, "editar não consome vaga"
+        assert self.act(browser, "favorito_editar", alvo="F03", url=BASE + "novo").code == 200, (
+            "editar não consome vaga"
+        )
 
     def test_limit_is_read_from_the_config_on_every_request(self):
         self.world.set_doc(fav_links=full(10))
@@ -187,12 +210,13 @@ class FavoritesLimitTest(FavoritesBase):
         assert self.do_import(browser, full(15, "G")).code == 200 and len(self.favs()) == 26
 
     def test_a_non_owner_with_the_same_data_is_refused(self):
-        self.world.owner_ids.add(OTHER_UID)       # só o outro usuário é dono
+        self.world.owner_ids.add(OTHER_UID)  # só o outro usuário é dono
         self.world.set_doc(fav_links=full(10))
         assert self.add(self.logged_in(), "Extra", BASE + "x").code == 422
 
 
 # ============================================================================ importar / exportar
+
 
 class FavoritesImportExportTest(FavoritesBase):
     def test_valid_import_merges_and_overwrites_same_names(self):
@@ -206,7 +230,10 @@ class FavoritesImportExportTest(FavoritesBase):
 
     def test_import_stores_only_the_url_reg_match_and_normalizes_names(self):
         browser = self.logged_in()
-        payload = {"  Lixo  ": "https://example.com/ <img src=x onerror=alert(1)>", "Dois": "https://example.com/b?x=1 depois"}
+        payload = {
+            "  Lixo  ": "https://example.com/ <img src=x onerror=alert(1)>",
+            "Dois": "https://example.com/b?x=1 depois",
+        }
         assert self.do_import(browser, payload).code == 200
         assert self.favs()["Lixo"] == "https://example.com/" and self.favs()["Dois"] == "https://example.com/b?x=1"
         assert "  Lixo  " not in self.favs()
@@ -215,11 +242,18 @@ class FavoritesImportExportTest(FavoritesBase):
         browser = self.logged_in()
         before = self.world.doc()
         cases = {
-            "json inválido": "{nao", "lista": [BASE + "a"], "vazio": {}, "valor não é texto": {"Aa": 5},
-            "valor é objeto": {"Aa": {"url": BASE + "a"}}, "url inválida": {"Aa": "ftp://x.example/a"},
-            "url javascript": {"Aa": "javascript:alert(1)"}, "url maior que USER_FAV_MAX_URL_LENGTH (90)": {"Aa": BASE + "a" * 80},
-            "nome maior que USER_FAV_MAX_NAME_LENGTH (35)": {"n" * 36: BASE + "a"}, "nome 1 caractere": {"x": BASE + "a"},
-            "nome só espaços": {"   ": BASE + "a"}, "nome com quebra": {"a\nb": BASE + "a"},
+            "json inválido": "{nao",
+            "lista": [BASE + "a"],
+            "vazio": {},
+            "valor não é texto": {"Aa": 5},
+            "valor é objeto": {"Aa": {"url": BASE + "a"}},
+            "url inválida": {"Aa": "ftp://x.example/a"},
+            "url javascript": {"Aa": "javascript:alert(1)"},
+            "url maior que USER_FAV_MAX_URL_LENGTH (90)": {"Aa": BASE + "a" * 80},
+            "nome maior que USER_FAV_MAX_NAME_LENGTH (35)": {"n" * 36: BASE + "a"},
+            "nome 1 caractere": {"x": BASE + "a"},
+            "nome só espaços": {"   ": BASE + "a"},
+            "nome com quebra": {"a\nb": BASE + "a"},
             "'> fav:' não escapa da validação": {"> fav: x": "javascript:alert(1)"},
             "colisão após strip": {" Aa": BASE + "a", "Aa ": BASE + "b"},
         }
@@ -234,7 +268,7 @@ class FavoritesImportExportTest(FavoritesBase):
 
     def test_import_limits_are_read_from_the_config_per_request(self):
         browser = self.logged_in()
-        payload = {"Aa": BASE + "a" * 80}                      # 100 caracteres
+        payload = {"Aa": BASE + "a" * 80}  # 100 caracteres
         assert self.do_import(browser, payload).code == 422
         self.world.config["USER_FAV_MAX_URL_LENGTH"] = 120
         assert self.do_import(browser, payload).code == 200
@@ -248,7 +282,9 @@ class FavoritesImportExportTest(FavoritesBase):
         before = self.world.doc()
         assert self.do_import(browser, {"N1": BASE + "1", "N2": BASE + "2"}).code == 422, "9 + 2 novos > 10"
         assert self.world.doc() == before
-        assert self.do_import(browser, {"F00": BASE + "novo", "N1": BASE + "1"}).code == 200, "F00 já existe: 9 + 1 = 10"
+        assert self.do_import(browser, {"F00": BASE + "novo", "N1": BASE + "1"}).code == 200, (
+            "F00 já existe: 9 + 1 = 10"
+        )
         assert len(self.favs()) == 10
 
     def test_import_file_larger_than_the_limit_is_422(self):
@@ -279,10 +315,12 @@ class FavoritesImportExportTest(FavoritesBase):
     def test_stale_version_is_409_for_every_favorite_action(self):
         browser = self.logged_in()
         body = self.body(browser)
-        forms = {"favorito_adicionar": (acao_form(body, "favorito_adicionar"), {"nome": "Pop", "url": BASE + "p"}),
-                 "favorito_editar": (acao_form(body, "favorito_editar", "Rock"), {"url": BASE + "e"}),
-                 "favorito_remover": (acao_form(body, "favorito_remover", "Rock"), {}),
-                 "favoritos_importar": (acao_form(body, "favoritos_importar"), {"dados": json.dumps({"Aa": BASE + "a"})})}
+        forms = {
+            "favorito_adicionar": (acao_form(body, "favorito_adicionar"), {"nome": "Pop", "url": BASE + "p"}),
+            "favorito_editar": (acao_form(body, "favorito_editar", "Rock"), {"url": BASE + "e"}),
+            "favorito_remover": (acao_form(body, "favorito_remover", "Rock"), {}),
+            "favoritos_importar": (acao_form(body, "favoritos_importar"), {"dados": json.dumps({"Aa": BASE + "a"})}),
+        }
         self.world.set_doc(fav_links={"Rock": BASE + "r", "Mudou": BASE + "m"})
         before = self.world.doc()
         for acao, (form, over) in forms.items():
@@ -291,6 +329,7 @@ class FavoritesImportExportTest(FavoritesBase):
 
 
 # ============================================================================ integrações
+
 
 class IntegrationsTest(FavoritesBase):
     def integrations(self):
@@ -334,8 +373,11 @@ class IntegrationsTest(FavoritesBase):
 
     def test_import_stores_only_the_url_match_and_never_calls_the_outside(self):
         browser = self.logged_in()
-        payload = {"Spotify": "https://open.spotify.com/user/alguem texto depois",
-                   "Deezer": "https://www.deezer.com/br/profile/123", "Youtube": "https://www.youtube.com/@canal"}
+        payload = {
+            "Spotify": "https://open.spotify.com/user/alguem texto depois",
+            "Deezer": "https://www.deezer.com/br/profile/123",
+            "Youtube": "https://www.youtube.com/@canal",
+        }
         assert self.do_import(browser, payload).code == 200
         assert self.integrations()["Spotify"]["url"] == "https://open.spotify.com/user/alguem"
         assert self.world.external_calls == [], "nenhuma requisição externa (Spotify/Deezer/YouTube)"
@@ -343,11 +385,20 @@ class IntegrationsTest(FavoritesBase):
     def test_invalid_import_is_422_and_writes_nothing(self):
         browser = self.logged_in()
         before = self.world.doc()
-        cases = {"json inválido": "{x", "lista": [BASE], "vazio": {}, "url inválida": {"Aa": "ftp://x.example/a"},
-                 "url javascript": {"Aa": "javascript:alert(1)"}, "url > 150": {"Aa": BASE + "a" * 140},
-                 "título > 90": {"t" * 91: BASE + "a"}, "título vazio": {"   ": BASE + "a"},
-                 "valor sem url": {"Aa": {"avatar": BASE + "a.png"}}, "avatar inválido": {"Aa": {"url": BASE + "a", "avatar": "javascript:x"}},
-                 "valor número": {"Aa": 5}, "'> itg:' não escapa da validação": {"> itg: x": "javascript:alert(1)"}}
+        cases = {
+            "json inválido": "{x",
+            "lista": [BASE],
+            "vazio": {},
+            "url inválida": {"Aa": "ftp://x.example/a"},
+            "url javascript": {"Aa": "javascript:alert(1)"},
+            "url > 150": {"Aa": BASE + "a" * 140},
+            "título > 90": {"t" * 91: BASE + "a"},
+            "título vazio": {"   ": BASE + "a"},
+            "valor sem url": {"Aa": {"avatar": BASE + "a.png"}},
+            "avatar inválido": {"Aa": {"url": BASE + "a", "avatar": "javascript:x"}},
+            "valor número": {"Aa": 5},
+            "'> itg:' não escapa da validação": {"> itg: x": "javascript:alert(1)"},
+        }
 
         def check(item):
             label, payload = item
@@ -361,7 +412,9 @@ class IntegrationsTest(FavoritesBase):
         browser = self.logged_in()
         before = self.world.doc()
         assert self.do_import(browser, {"A1": BASE + "1", "B2": BASE + "2"}).code == 422, "1 existente + 2 novas > 2"
-        assert self.do_import(browser, {"Meu canal": BASE + "novo", "B2": BASE + "2"}).code == 200, "sobrescrever é grátis"
+        assert self.do_import(browser, {"Meu canal": BASE + "novo", "B2": BASE + "2"}).code == 200, (
+            "sobrescrever é grátis"
+        )
         assert self.do_import(browser, {"C3": BASE + "3"}).code == 422
         self.world.owner_ids.add(UID)
         assert self.do_import(browser, {"C3": BASE + "3", "D4": BASE + "4", "E5": BASE + "5"}).code == 200

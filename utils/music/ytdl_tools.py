@@ -11,56 +11,41 @@ from utils.music.models import PartialTrack
 exclude_extractors = ["youtube", "soundcloud", "deezer", "applemusic", "twitch"]
 
 YTDL_OPTS = {
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'retries': 5,
-    'extract_flat': "in_playlist",
-    'cachedir': False,
-    'extractor_args': {
-        'youtube': {
-            'skip': [
-                'hls',
-                'dash',
-                'translated_subs'
-            ],
-            'player_skip': [
-                'js',
-                'configs',
-                'webpage'
-            ],
-            'player_client': ['android_creator'],
-            'max_comments': [0],
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "nocheckcertificate": True,
+    "ignoreerrors": False,
+    "logtostderr": False,
+    "quiet": True,
+    "no_warnings": True,
+    "retries": 5,
+    "extract_flat": "in_playlist",
+    "cachedir": False,
+    "extractor_args": {
+        "youtube": {
+            "skip": ["hls", "dash", "translated_subs"],
+            "player_skip": ["js", "configs", "webpage"],
+            "player_client": ["android_creator"],
+            "max_comments": [0],
         },
-        'youtubetab': {
-            "skip": ["webpage"]
-        }
-    }
+        "youtubetab": {"skip": ["webpage"]},
+    },
 }
 
-class YTDLTools:
 
+class YTDLTools:
     extractors = [
-        {
-            "name": type(e).__name__.lower(),
-            "ie_key": e.ie_key(),
-            "regex": e._VALID_URL,
-            "age_limit": e.age_limit
-        } for e in yt_dlp.list_extractors() if e._VALID_URL
+        {"name": type(e).__name__.lower(), "ie_key": e.ie_key(), "regex": e._VALID_URL, "age_limit": e.age_limit}
+        for e in yt_dlp.list_extractors()
+        if e._VALID_URL
     ]
 
     def extract_info(self, url: str):
         return yt_dlp.YoutubeDL(YTDL_OPTS).extract_info(url=url, download=False)
 
-    async def get_track_info(self, url: str, user: disnake.Member = None, loop = None):
-
+    async def get_track_info(self, url: str, user: disnake.Member = None, loop=None):
         for e in self.extractors:
-
-            if not (matches := re.compile(e['regex']).match(url)) or not matches.groups():
+            if not (matches := re.compile(e["regex"]).match(url)) or not matches.groups():
                 continue
 
             if any(ee in e["name"] for ee in exclude_extractors):
@@ -101,22 +86,18 @@ class YTDLTools:
                 source_name=entrie["extractor"],
             )
 
-            t.info.update({
-                "search_uri": entrie["url"],
-                "authors": entrie["uploader"]
-            })
+            t.info.update({"search_uri": entrie["url"], "authors": entrie["uploader"]})
 
             return [t]
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     ydl = YTDLTools()
     url = "https://www.youtube.com/channel/UC9AiU8Srqw7iPu3UcR9IJ8g"
     for e in ydl.extractors:
-
-        if e['ie_key'] == "Generic":
+        if e["ie_key"] == "Generic":
             continue
 
-        a = re.compile(e['regex']).match(url)
+        a = re.compile(e["regex"]).match(url)
         if a:
-            print(e['ie_key'], e['name'])
+            print(e["ie_key"], e["name"])

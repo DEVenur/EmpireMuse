@@ -5,6 +5,7 @@ test_branding.py; o item 8 (cabeçalhos de `/`) em tests/panel/test_status_page.
 Contrato: BRIEFING-FASE2.md ("Trilha A — contrato do item 3"). Interpretações: .qa-fase2a-interp.txt.
 Sem rede e sem Discord reais: dublês simples (SimpleNamespace / AsyncMock).
 """
+
 import ast
 import asyncio
 import re
@@ -25,11 +26,13 @@ def run(coro):
 
 # ============================================================================ (1) SEARCH_PROVIDERS padrão
 
+
 class TestDefaultSearchProviders:
     EXPECTED = ["ytsearch", "ytmsearch", "scsearch"]
 
     def test_config_loader_default(self):
         import config_loader
+
         assert config_loader.DEFAULT_CONFIG["SEARCH_PROVIDERS"].split() == self.EXPECTED
 
     def test_example_env_default(self):
@@ -40,6 +43,7 @@ class TestDefaultSearchProviders:
 
     def test_both_defaults_agree(self):
         import config_loader
+
         text = (ROOT / ".example.env").read_text(encoding="utf-8")
         env = re.search(r'^SEARCH_PROVIDERS=["\']?([^"\'\n]*)', text, re.MULTILINE).group(1).split()
         assert env == config_loader.DEFAULT_CONFIG["SEARCH_PROVIDERS"].split()
@@ -47,15 +51,23 @@ class TestDefaultSearchProviders:
 
 def make_node(source_managers, search_providers, original=None):
     return SimpleNamespace(
-        _websocket=SimpleNamespace(is_connected=True), stats=SimpleNamespace(uptime=10 ** 9),
-        info={"sourceManagers": list(source_managers)}, identifier="no-1", version=4,
-        search_providers=list(search_providers), partial_providers=[], native_sources=set(),
+        _websocket=SimpleNamespace(is_connected=True),
+        stats=SimpleNamespace(uptime=10**9),
+        info={"sourceManagers": list(source_managers)},
+        identifier="no-1",
+        version=4,
+        search_providers=list(search_providers),
+        partial_providers=[],
+        native_sources=set(),
         original_providers=set(original if original is not None else search_providers),
-        only_use_native_search_providers=True, open=lambda: None)
+        only_use_native_search_providers=True,
+        open=lambda: None,
+    )
 
 
 def call_node_ready(node):
     from modules.music import Music
+
     cog = SimpleNamespace(bot=SimpleNamespace(user="bot"))
     cog.add_provider = lambda *a: Music.add_provider(cog, *a)
     cog.remove_provider = lambda *a: Music.remove_provider(cog, *a)
@@ -86,6 +98,7 @@ class TestNodeReadyDoesNotAddBandcamp:
 
 # ============================================================================ (4) falha de busca sem repr(e)
 
+
 def search_cog(exceptions):
     async def lavalink_tracks(**kwargs):
         return [], None, set(exceptions)
@@ -93,15 +106,23 @@ def search_cog(exceptions):
     async def partial_tracks(**kwargs):
         return [], None, set(exceptions)
 
-    return SimpleNamespace(bot=SimpleNamespace(pool=SimpleNamespace(last_fm=None)),
-                           get_lavalink_tracks=lavalink_tracks, get_partial_tracks=partial_tracks)
+    return SimpleNamespace(
+        bot=SimpleNamespace(pool=SimpleNamespace(last_fm=None)),
+        get_lavalink_tracks=lavalink_tracks,
+        get_partial_tracks=partial_tracks,
+    )
 
 
 def failing_search(exceptions):
     from modules.music import Music
     from utils.music.errors import GenericError
+
     with pytest.raises(GenericError) as info:
-        run(Music.get_tracks(search_cog(exceptions), "teste", ctx=None, user=SimpleNamespace(id=1), bot=SimpleNamespace()))
+        run(
+            Music.get_tracks(
+                search_cog(exceptions), "teste", ctx=None, user=SimpleNamespace(id=1), bot=SimpleNamespace()
+            )
+        )
     return info.value
 
 
@@ -119,8 +140,9 @@ class TestSearchFailureMessage:
         assert "busca" in text and ("erro" in text or "não foi possível" in text or "falha" in text)
 
     def test_detail_stays_available_for_the_log(self):
-        assert "segredo-interno-123" in (failing_search({self.LEAK}).error or ""), \
+        assert "segredo-interno-123" in (failing_search({self.LEAK}).error or ""), (
             "o detalhe técnico vai em GenericError.error (log), não no texto"
+        )
 
     def test_region_message_is_kept(self):
         error = failing_search({"x: This track is not readable. Available countries: BR"})
@@ -148,14 +170,22 @@ class TestSearchFailureMessage:
 
 # ============================================================================ (5) misc.py: aviso de novo servidor
 
+
 def perms(**kw):
     return SimpleNamespace(**{"send_messages": True, "embed_links": True, **kw})
 
 
 def make_guild(channel):
     me = SimpleNamespace(guild_permissions=SimpleNamespace(view_audit_log=False))
-    return SimpleNamespace(id=1, name="Servidor", members=[], me=me, system_channel=channel, rules_channel=None,
-                           public_updates_channel=None)
+    return SimpleNamespace(
+        id=1,
+        name="Servidor",
+        members=[],
+        me=me,
+        system_channel=channel,
+        rules_channel=None,
+        public_updates_channel=None,
+    )
 
 
 def make_channel(permissions, send_error=None):
@@ -173,10 +203,15 @@ def make_channel(permissions, send_error=None):
 
 def welcome(channel):
     from modules.misc import Misc
+
     bot = SimpleNamespace(
-        pool=SimpleNamespace(bots=[]), get_command=lambda name: None, default_prefix="!", user=SimpleNamespace(id=9),
+        pool=SimpleNamespace(bots=[]),
+        get_command=lambda name: None,
+        default_prefix="!",
+        user=SimpleNamespace(id=9),
         config={"SUPPORT_SERVER": "", "INTERACTION_COMMAND_ONLY": True, "MULTIVOICE_VIDEO_DEMO_URL": ""},
-        get_color=lambda: 0x8B5CF6)
+        get_color=lambda: 0x8B5CF6,
+    )
     run(Misc.guild_add(SimpleNamespace(bot=bot), make_guild(channel)))
 
 
@@ -211,13 +246,18 @@ class TestWelcomeMessagePermissions:
     @pytest.mark.parametrize("where", ["public_updates_channel", "rules_channel"])
     def test_fallback_channels_also_need_embed_links(self, where):
         from modules.misc import Misc
+
         bad, good = make_channel(perms(embed_links=False)), make_channel(perms())
         guild = make_guild(None)
         setattr(guild, where, bad)
         bot = SimpleNamespace(
-            pool=SimpleNamespace(bots=[]), get_command=lambda name: None, default_prefix="!", user=SimpleNamespace(id=9),
+            pool=SimpleNamespace(bots=[]),
+            get_command=lambda name: None,
+            default_prefix="!",
+            user=SimpleNamespace(id=9),
             config={"SUPPORT_SERVER": "", "INTERACTION_COMMAND_ONLY": True, "MULTIVOICE_VIDEO_DEMO_URL": ""},
-            get_color=lambda: 0x8B5CF6)
+            get_color=lambda: 0x8B5CF6,
+        )
         run(Misc.guild_add(SimpleNamespace(bot=bot), guild))
         assert bad.sent == [] and good.sent == []
 
@@ -229,6 +269,7 @@ class TestWelcomeMessagePermissions:
 
 
 # ============================================================================ (6) wavelink: decodetrack na rota v4
+
 
 class FakeResponse:
     def __init__(self, status, payload):
@@ -246,6 +287,7 @@ class FakeResponse:
 
 def make_decode_node(version, payload, status=200):
     from wavelink.node import Node
+
     node = object.__new__(Node)
     node.rest_uri, node.password, node.version = "http://127.0.0.1:2333", "senha", version
     calls = []
@@ -265,7 +307,7 @@ class TestDecodeTrack:
     def test_v4_uses_the_v4_route_and_the_encoded_track_parameter(self):
         node, calls = make_decode_node(4, {"encoded": "QUJD", "info": dict(INFO), "pluginInfo": {}})
         track = run(node.build_track("QUJD"))
-        (url, kwargs), = calls
+        ((url, kwargs),) = calls
         assert "/v4/decodetrack" in url
         query = url.partition("?")[2] + "&" + "&".join(f"{k}={v}" for k, v in (kwargs.get("params") or {}).items())
         assert "encodedTrack=QUJD" in query
@@ -274,6 +316,7 @@ class TestDecodeTrack:
 
     def test_v4_error_raises_build_track_error(self):
         from wavelink.errors import BuildTrackError
+
         node, _ = make_decode_node(4, {"status": 400, "error": "Bad Request", "message": "x"}, status=400)
         with pytest.raises(BuildTrackError):
             run(node.build_track("lixo"))
@@ -281,7 +324,7 @@ class TestDecodeTrack:
     def test_v3_keeps_the_old_route(self):
         node, calls = make_decode_node(3, dict(INFO))
         track = run(node.build_track("QUJD"))
-        (url, kwargs), = calls
+        ((url, kwargs),) = calls
         assert "/v4/" not in url and "decodetrack" in url
         assert "track" in (kwargs.get("params") or {}) or "track=" in url
         assert track.title == "Faixa de teste"
@@ -289,8 +332,10 @@ class TestDecodeTrack:
 
 # ============================================================================ (7) wavelink: voz
 
+
 def make_player(version, channel_id, voice_state):
     from wavelink.player import Player
+
     player = object.__new__(Player)
     player.guild_id = 1
     player.channel_id = channel_id

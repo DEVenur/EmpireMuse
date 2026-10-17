@@ -4,6 +4,7 @@ Canais, threads e fóruns são subclasses REAIS de disnake (os `isinstance` do c
 `__init__`; permissões são `disnake.Permissions` reais (a iteração devolve os nomes canônicos, como em produção).
 Tudo o que muda o mundo vai para um `Journal` ordenado, para provar a ordem banco × Discord.
 """
+
 import asyncio
 import copy
 from types import SimpleNamespace
@@ -28,19 +29,28 @@ class Journal(list):
         return [e for e in self if e[0] == name]
 
     def index(self, name, *args):
-        return next(i for i, e in enumerate(self) if e[0] == name and e[1:1 + len(args)] == args)
+        return next(i for i, e in enumerate(self) if e[0] == name and e[1 : 1 + len(args)] == args)
 
 
 def perms(**flags):
     return disnake.Permissions(**flags)
 
 
-FULL_TEXT = dict(view_channel=True, send_messages=True, embed_links=True, read_message_history=True,
-                 manage_permissions=True, manage_threads=True, create_public_threads=True,
-                 send_messages_in_threads=True, manage_messages=True)
+FULL_TEXT = dict(
+    view_channel=True,
+    send_messages=True,
+    embed_links=True,
+    read_message_history=True,
+    manage_permissions=True,
+    manage_threads=True,
+    create_public_threads=True,
+    send_messages_in_threads=True,
+    manage_messages=True,
+)
 
 
 # ============================================================================ mensagens e threads (planos)
+
 
 class FakeThreadInfo:
     """Thread de uma mensagem (message.thread): só o que o comando usa."""
@@ -85,14 +95,15 @@ class FakeMessage:
 
 # ============================================================================ canais (classes reais de disnake)
 
+
 class ChannelMixin:
     """Comportamento comum; precisa vir ANTES da classe do disnake na herança."""
 
     def _setup(self, journal, id_, name, guild, perms_, category=None):
         self.journal, self.id, self.name, self.guild = journal, id_, name, guild
         self._perms, self._category = perms_, category
-        self.messages = {}           # id -> FakeMessage
-        self.history_list = []       # mais novo primeiro
+        self.messages = {}  # id -> FakeMessage
+        self.history_list = []  # mais novo primeiro
         self.fail_edit = None
         self.fail_delete = None
         self.fail_purge = None
@@ -252,7 +263,7 @@ class FakeGuild:
         self.public_updates_channel = None
         self.rules_channel = None
         self.channels = {}
-        self.registry = None   # preenchido pelo bot: novos canais ficam visíveis em bot.get_channel
+        self.registry = None  # preenchido pelo bot: novos canais ficam visíveis em bot.get_channel
         self._next = 6000
 
     def make(self, kind, name, where, kwargs):
@@ -277,11 +288,13 @@ class FakeGuild:
 
 # ============================================================================ banco, player, bot
 
+
 class FakeDB:
     """Mesma semântica do BaseDB: get devolve o MESMO dict; update registra e guarda uma cópia."""
 
     def __init__(self, journal, channel=None, message_id=None):
         from utils.db import DBModel, db_models
+
         doc = copy.deepcopy(db_models[DBModel.guilds])
         doc["player_controller"]["channel"] = channel
         doc["player_controller"]["message_id"] = message_id
@@ -329,8 +342,8 @@ class FakeBot:
         self.music = SimpleNamespace(players={})
         self.channels = {}
         guild.registry = self.channels
-        self.fetchable = {}    # canais que só a API devolve (fora do cache)
-        self.script = {}       # evento -> lista de interações entregues por wait_for (exceção = levantar)
+        self.fetchable = {}  # canais que só a API devolve (fora do cache)
+        self.script = {}  # evento -> lista de interações entregues por wait_for (exceção = levantar)
         self.waits = []
         self.pool = SimpleNamespace(get_guild_bots=lambda gid: [self])
 
@@ -374,6 +387,7 @@ class FakeBot:
 
 
 # ============================================================================ interações
+
 
 class FakeResponse:
     def __init__(self, journal, who):

@@ -1,4 +1,5 @@
 """Páginas básicas do painel: redirecionamento, índice e saúde."""
+
 from __future__ import annotations
 
 from panel.handlers.base import PanelHandler

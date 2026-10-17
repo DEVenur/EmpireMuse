@@ -4,6 +4,7 @@ Objetivo: congelar o comportamento antes de extrair a lógica para `utils/music/
 Mede efeitos no Discord e no banco, a ORDEM entre eles, mensagens de erro e limites. Nada aqui corrige defeitos:
 comportamentos ruins estão registrados de propósito e marcados `INVERTER_APOS_E4C` quando a E4c vai corrigi-los.
 """
+
 import asyncio
 from types import SimpleNamespace
 
@@ -12,10 +13,29 @@ import pytest
 from disnake.ext import commands
 
 import modules.music_settings as ms
-from tests.helpers_request_channel import (ACTOR_MENTION, BOT_ID, BOT_MENTION, GUILD_ID, CommandInter, ComponentInter,
-                                           FakeBot, FakeCategory, FakeDB, FakeForum, FakeGuild, FakeMessage,
-                                           FULL_TEXT, FakePlayer, FakeStage, FakeText, FakeThreadInfo, FakeVoice, Journal,
-                                           ModalInter, perms)
+from tests.helpers_request_channel import (
+    ACTOR_MENTION,
+    BOT_ID,
+    BOT_MENTION,
+    GUILD_ID,
+    CommandInter,
+    ComponentInter,
+    FakeBot,
+    FakeCategory,
+    FakeDB,
+    FakeForum,
+    FakeGuild,
+    FakeMessage,
+    FULL_TEXT,
+    FakePlayer,
+    FakeStage,
+    FakeText,
+    FakeThreadInfo,
+    FakeVoice,
+    Journal,
+    ModalInter,
+    perms,
+)
 from utils.music.errors import GenericError
 
 INVERTER_APOS_E4C = "comportamento ruim registrado de propósito: a E4c inverte este teste (ver BRIEFING-PAINEL-E4)"
@@ -26,31 +46,47 @@ MANAGE_PERMISSIONS_TEXT = (
     f"**{BOT_MENTION} não possui permissão de administrador ou permissão de gerenciar permissões do canal <#22>** "
     "para editar as permissões necessárias para o sistema de pedir música funcionar devidamente.\n\n"
     "Caso não queira fornecer a permissão de administrador ou editar as permissões do canal <#22> para me permitir "
-    "gerenciar permissões do canal. Você pode usar o comando sem selecionar um canal de destino.")
+    "gerenciar permissões do canal. Você pode usar o comando sem selecionar um canal de destino."
+)
 FORUM_MANAGE_THREADS_TEXT = (
     f"**{BOT_MENTION} não possui permissão de gerenciar tópicos no canal <#55>.**\n"
     "`Nota: Você pode me conceder temporariamente essa permissão e após usar o comando novamente "
-    "você pode remover essa permissão.`")
+    "você pode remover essa permissão.`"
+)
 
 
 def ansi_permissions_message(mention, channel, missing):
     """Mensagem EXATA de check_channel_perm: bloco ```ansi com uma linha amarela (ESC[0;33m … ESC[0m) por permissão,
     na ordem em que `Permissions` itera. Os bytes ESC fazem parte do contrato (o Discord só colore com eles)."""
     from utils.music.converters import perms_translations
+
     ordered = [name for name, _ in channel.permissions_for(None) if name in missing]
     lines = "\n".join(f"{ESC}[0;33m{perms_translations.get(name, name)}{ESC}[0m" for name in ordered)
-    return (f"**{BOT_MENTION} não possui as seguintes permissões necessárias no canal {mention}** ```ansi\n"
-            f"{lines}```")
+    return f"**{BOT_MENTION} não possui as seguintes permissões necessárias no canal {mention}** ```ansi\n{lines}```"
 
 
 class Scenario:
     """Servidor com um bot, o canal do comando (#geral, em uma categoria) e um canal de cada tipo."""
 
-    def __init__(self, monkeypatch, *, admin=False, manage_channels=True, manage_threads=True, features=(),
-                 db_channel=None, db_message=None, history=True):
+    def __init__(
+        self,
+        monkeypatch,
+        *,
+        admin=False,
+        manage_channels=True,
+        manage_threads=True,
+        features=(),
+        db_channel=None,
+        db_message=None,
+        history=True,
+    ):
         self.j = Journal()
-        bot_perms = perms(administrator=admin, manage_channels=manage_channels, manage_threads=manage_threads,
-                          read_message_history=history)
+        bot_perms = perms(
+            administrator=admin,
+            manage_channels=manage_channels,
+            manage_threads=manage_threads,
+            read_message_history=history,
+        )
         self.guild = FakeGuild(self.j, bot_perms, features)
         self.db = FakeDB(self.j, db_channel, db_message)
         self.bot = FakeBot(self.j, self.guild, self.db)
@@ -112,8 +148,11 @@ class TestSetupExistingTextChannel:
     def test_happy_path_effects_order_and_database(self, world):
         world.setup(target=world.text)
         j = world.j
-        order = [e[0] for e in j if e[0] in ("channel.history", "send_idle_embed", "channel.edit",
-                                              "message.create_thread", "db.update")]
+        order = [
+            e[0]
+            for e in j
+            if e[0] in ("channel.history", "send_idle_embed", "channel.edit", "message.create_thread", "db.update")
+        ]
         # observado: o overwrite do bot é editado ANTES de enviar o embed ocioso
         assert order == ["channel.history", "channel.edit", "send_idle_embed", "message.create_thread", "db.update"]
         assert j.of("send_idle_embed") == [("send_idle_embed", "#pedidos", True, True)]
@@ -135,20 +174,32 @@ class TestSetupExistingTextChannel:
         world.setup(target=world.text)
         overwrite = world.j.of("channel.edit")[0][2]["overwrites"][world.guild.me]
         granted = {name for name, value in overwrite if value is True}
-        assert granted == {"embed_links", "send_messages", "send_messages_in_threads", "view_channel",
-                           "create_public_threads", "read_message_history", "manage_messages", "manage_channels",
-                           "attach_files"}
+        assert granted == {
+            "embed_links",
+            "send_messages",
+            "send_messages_in_threads",
+            "view_channel",
+            "create_public_threads",
+            "read_message_history",
+            "manage_messages",
+            "manage_channels",
+            "attach_files",
+        }
         admin = Scenario(monkeypatch, admin=True)
         admin.setup(target=admin.text)
         overwrite_admin = admin.j.of("channel.edit")[0][2]["overwrites"][admin.guild.me]
-        assert {n for n, v in overwrite_admin if v is True} == granted | {"manage_roles"}  # manage_permissions == manage_roles
+        assert {n for n, v in overwrite_admin if v is True} == granted | {
+            "manage_roles"
+        }  # manage_permissions == manage_roles
 
     def test_final_reply_mentions_actor_channel_and_how_to_revert(self, world):
         world.setup(target=world.text)
         text = world.final_embed_text()
-        assert text == (f"**{ACTOR_MENTION}, o sistema pra pedidos de música foi configurado no canal <#22> "
-                        f"através do bot: {BOT_MENTION}**\n\nObs: Caso queira reverter essa configuração, apenas use "
-                        f"o comando /reset ou delete o canal/post <#22>")
+        assert text == (
+            f"**{ACTOR_MENTION}, o sistema pra pedidos de música foi configurado no canal <#22> "
+            f"através do bot: {BOT_MENTION}**\n\nObs: Caso queira reverter essa configuração, apenas use "
+            f"o comando /reset ou delete o canal/post <#22>"
+        )
         edits = world.j.of("inter.edit_original_message")
         assert edits[-1][3]["components"] is None
         assert world.j.of("response.defer")[0][2] is True, "resposta efêmera (defer ephemeral=True)"
@@ -171,9 +222,9 @@ class TestSetupExistingTextChannel:
     def test_reuses_the_first_bot_message_with_a_thread_in_the_last_100(self, world):
         me = world.guild.me
         world.text.add_message(1, SimpleNamespace(id=1), FakeThreadInfo(world.j, "alheia"))
-        world.text.add_message(2, me)                                        # do bot, sem thread
+        world.text.add_message(2, me)  # do bot, sem thread
         reused = world.text.add_message(3, me, FakeThreadInfo(world.j, "t3"))  # do bot, com thread
-        world.text.add_message(4, me, FakeThreadInfo(world.j, "t4"))           # mais antiga ainda
+        world.text.add_message(4, me, FakeThreadInfo(world.j, "t4"))  # mais antiga ainda
         world.text.history_list = [world.text.messages[i] for i in (1, 2, 3, 4)]
         world.setup(target=world.text)
         assert world.j.of("send_idle_embed") == [] and world.j.of("message.create_thread") == []
@@ -191,8 +242,11 @@ class TestSetupExistingTextChannel:
             return scenario.j.of("thread.edit")
 
         locked = FakeThreadInfo(world.j, "locked", locked=True, archived=True, perms_=perms(manage_threads=True))
-        assert run(locked)[0][2] == {"locked": False, "archived": False,
-                                     "reason": f"Song request reativado por: Autor#0001."}
+        assert run(locked)[0][2] == {
+            "locked": False,
+            "archived": False,
+            "reason": f"Song request reativado por: Autor#0001.",
+        }
         archived = FakeThreadInfo(world.j, "arq", archived=True, perms_=perms(manage_threads=False))
         assert run(archived)[0][2] == {"archived": False, "reason": "Song request reativado por: Autor#0001."}
         healthy = FakeThreadInfo(world.j, "ok")
@@ -211,8 +265,15 @@ class TestSetupExistingTextChannel:
         assert world.saved["channel"] == "22" and len(world.db.updates) == 1
 
 
-FULL_TEXT_NO_THREADS = dict(view_channel=True, send_messages=True, embed_links=True, read_message_history=True,
-                            manage_permissions=True, manage_threads=True, send_messages_in_threads=True)
+FULL_TEXT_NO_THREADS = dict(
+    view_channel=True,
+    send_messages=True,
+    embed_links=True,
+    read_message_history=True,
+    manage_permissions=True,
+    manage_threads=True,
+    send_messages_in_threads=True,
+)
 
 
 class TestSetupRefusals:
@@ -225,7 +286,9 @@ class TestSetupRefusals:
 
     def test_discord_updates_channel(self, world):
         world.guild.public_updates_channel = world.text
-        assert error_text(world.setup, target=world.text) == "**Você não pode usar um canal de atualizações do discord.**"
+        assert (
+            error_text(world.setup, target=world.text) == "**Você não pode usar um canal de atualizações do discord.**"
+        )
         self.assert_nothing_happened(world)
 
     def test_rules_channel(self, world):
@@ -257,7 +320,7 @@ class TestSetupRefusals:
         self.assert_nothing_happened(world)
         admin = Scenario(monkeypatch, admin=True)
         admin.text._perms = perms(view_channel=True, send_messages=True, embed_links=True)
-        admin.setup(target=admin.text)   # administrador dispensa manage_permissions do canal
+        admin.setup(target=admin.text)  # administrador dispensa manage_permissions do canal
         assert admin.saved["channel"] == "22"
 
     def test_the_permission_check_runs_before_the_manage_permissions_check(self, world):
@@ -312,8 +375,9 @@ class TestSetupOldMessageAndPlayer:
         world.bot.channels[700] = post
         world.db.doc["player_controller"].update({"channel": "700", "message_id": "700"})
         world.setup(target=world.text)
-        assert world.j.of("thread.delete") == [("thread.delete", "post-antigo",
-                                                {"reason": "Player reconfigurado por Autor#0001."})]
+        assert world.j.of("thread.delete") == [
+            ("thread.delete", "post-antigo", {"reason": "Player reconfigurado por Autor#0001."})
+        ]
         assert world.j.of("message.edit") == []
         assert world.j.of("send_idle_embed"), "mensagem nova é enviada no canal escolhido"
 
@@ -331,8 +395,9 @@ class TestSetupOldMessageAndPlayer:
         world.bot.channels[23] = stale_channel
         self.old_message(world, stale_channel, message_id=111)
         player_message = world.lobby.add_message(222, world.guild.me, FakeThreadInfo(world.j, "do-player"))
-        world.bot.music.players[GUILD_ID] = FakePlayer(world.j, world.guild, world.lobby, static=True,
-                                                       message=player_message)
+        world.bot.music.players[GUILD_ID] = FakePlayer(
+            world.j, world.guild, world.lobby, static=True, message=player_message
+        )
         world.setup(target=world.text)
         edited = [e[1] for e in world.j.of("message.edit")]
         assert 222 in edited and 111 not in edited
@@ -344,8 +409,11 @@ class TestSetupOldMessageAndPlayer:
         world.setup(target=world.text)
         names = world.j.names()
         archive = [e for e in world.j.of("thread.edit") if e[1] == "do-player"]
-        assert archive and archive[-1][2] == {"archived": True, "locked": True,
-                                              "reason": "Player reconfigurado por Autor#0001."}
+        assert archive and archive[-1][2] == {
+            "archived": True,
+            "locked": True,
+            "reason": "Player reconfigurado por Autor#0001.",
+        }
         tail = [n for n in names if n.startswith("player.") or n == "db.update"]
         assert tail == ["player.setup_hints", "player.setup_features", "player.invoke_np", "db.update"]
         assert world.j.of("player.invoke_np") == [("player.invoke_np", True)]
@@ -410,13 +478,18 @@ class TestSetupCreateAndSelect:
         embeds, components = self.components(world)
         select, *buttons = components
         assert isinstance(select, disnake.ui.ChannelSelect)
-        assert [t for t in select.channel_types] == [disnake.ChannelType.text, disnake.ChannelType.voice,
-                                                      disnake.ChannelType.stage_voice, disnake.ChannelType.forum]
+        assert [t for t in select.channel_types] == [
+            disnake.ChannelType.text,
+            disnake.ChannelType.voice,
+            disnake.ChannelType.stage_voice,
+            disnake.ChannelType.forum,
+        ]
         assert [b.label for b in buttons] == ["Criar canal de texto", "Criar canal de voz", "Cancelar"]
         assert [b.custom_id for b in buttons] == ["text_channel_777", "voice_channel_777", "voice_channel_cancel_777"]
         assert not any(b.disabled for b in buttons)
-        assert embeds[0].description == ("**Selecione um canal ou clique em um dos botões abaixo para criar um novo "
-                                         "canal para pedir músicas.**")
+        assert embeds[0].description == (
+            "**Selecione um canal ou clique em um dos botões abaixo para criar um novo canal para pedir músicas.**"
+        )
         assert embeds[0].footer.text == "Você tem apenas 45 segundos para selecionar/clicar em uma opção."
         assert len(embeds) == 1
         assert [w[:2] for w in world.bot.waits] == [("button_click", None), ("dropdown", None)]
@@ -426,8 +499,12 @@ class TestSetupCreateAndSelect:
         click(scenario, "voice_channel_cancel_777")
         scenario.setup()
         buttons = scenario.j.of("inter.edit_original_message")[0][3]["components"][1:]
-        assert [b.label for b in buttons] == ["Criar canal de texto", "Criar canal de voz", "Criar canal de palco",
-                                              "Cancelar"]
+        assert [b.label for b in buttons] == [
+            "Criar canal de texto",
+            "Criar canal de voz",
+            "Criar canal de palco",
+            "Cancelar",
+        ]
         assert buttons[2].custom_id == "stage_channel_777"
 
     def test_without_manage_channels_the_create_buttons_are_disabled_with_a_notice(self, monkeypatch):
@@ -436,12 +513,17 @@ class TestSetupCreateAndSelect:
         scenario.setup()
         embeds, components = self.components(scenario)
         labels = {b.label: b.disabled for b in components[1:]}
-        assert labels == {"Criar canal de texto": True, "Criar canal de voz": True, "Criar canal de palco": True,
-                          "Cancelar": False}
+        assert labels == {
+            "Criar canal de texto": True,
+            "Criar canal de voz": True,
+            "Criar canal de palco": True,
+            "Cancelar": False,
+        }
         assert embeds[0].description == "**Selecione um canal abaixo:**"
         assert len(embeds) == 2 and embeds[1].description == (
             f"Os botões de criar canal foram desativados devido o bot **{BOT_MENTION}** "
-            "não possuir a permissão de **gerenciar canais** no servidor.")
+            "não possuir a permissão de **gerenciar canais** no servidor."
+        )
 
     def test_cancel_edits_the_message_and_changes_nothing(self, world):
         click(world, "voice_channel_cancel_777")
@@ -491,8 +573,9 @@ class TestSetupCreateAndSelect:
         world.setup()
         assert world.j.of("create_text_channel")[0][1] == "raiz"
 
-    @pytest.mark.parametrize("button,creator", [("voice_channel_777", "create_voice_channel"),
-                                                ("stage_channel_777", "create_stage_channel")])
+    @pytest.mark.parametrize(
+        "button,creator", [("voice_channel_777", "create_voice_channel"), ("stage_channel_777", "create_stage_channel")]
+    )
     def test_voice_and_stage_are_created_without_a_thread(self, world, button, creator):
         click(world, button)
         world.setup()
@@ -532,7 +615,11 @@ class TestSetupForum:
         assert opened["title"] == "Escolha um nome para o post (em até 30seg.)" and opened["custom_id"] == "777"
         field = opened["components"][0]
         assert (field.custom_id, field.min_length, field.max_length, field.value) == (
-            "forum_title", 4, 30, "Bot Um Song Request")
+            "forum_title",
+            4,
+            30,
+            "Bot Um Song Request",
+        )
         event, timeout, _ = world.bot.waits[0]
         assert (event, timeout) == ("modal_submit", 30)
         assert world.j.of("response.defer")[0][2] is True, "depois do modal: defer efêmero na interação do modal"
@@ -559,7 +646,9 @@ class TestSetupForum:
         edits = world.j.of("thread.edit")
         assert len(edits) == 1 and edits[0][2] == {}, "channel_kwargs é limpo e mesmo assim o post é `edit()`ado"
         assert world.j.of("channel.edit") == [], "o fórum em si nunca é editado"
-        names = [n for n in world.j.names() if n in ("forum.create_thread", "send_idle_embed", "thread.edit", "db.update")]
+        names = [
+            n for n in world.j.names() if n in ("forum.create_thread", "send_idle_embed", "thread.edit", "db.update")
+        ]
         assert names == ["forum.create_thread", "send_idle_embed", "thread.edit", "db.update"]
 
     def test_purge_is_ignored_for_forums(self, world):
@@ -606,23 +695,26 @@ class TestSetupForum:
         assert world.j.of("forum.create_thread"), "NotFound em fetch_message => continua e cria outro"
 
     def test_creating_a_post_needs_manage_threads_in_the_forum(self, world):
-        world.forum._perms = perms(view_channel=True, send_messages=True, embed_links=True,
-                                   send_messages_in_threads=True)
+        world.forum._perms = perms(
+            view_channel=True, send_messages=True, embed_links=True, send_messages_in_threads=True
+        )
         modal_answer(world, "Pedidos do bot")
         text = error_text(world.setup, target=world.forum)
         assert text == FORUM_MANAGE_THREADS_TEXT
         assert world.db.updates == [] and world.j.of("forum.create_thread") == []
 
     def test_forum_permissions_missing_embed_links_is_reported_by_check_channel_perm(self, world):
-        world.forum._perms = perms(view_channel=True, send_messages=True, send_messages_in_threads=True,
-                                   manage_threads=True)
+        world.forum._perms = perms(
+            view_channel=True, send_messages=True, send_messages_in_threads=True, manage_threads=True
+        )
         modal_answer(world, "Pedidos do bot")
         assert "Inserir links" in error_text(world.setup, target=world.forum)
 
     def test_missing_create_forum_threads_is_reported_by_check_channel_perm(self, world):
         # E4c: create_forum_threads (alias de send_messages) passa a ser detectado já na checagem de permissões.
-        world.forum._perms = perms(view_channel=True, embed_links=True, send_messages_in_threads=True,
-                                   manage_threads=True)
+        world.forum._perms = perms(
+            view_channel=True, embed_links=True, send_messages_in_threads=True, manage_threads=True
+        )
         modal_answer(world, "Pedidos do bot")
         text = error_text(world.setup, target=world.forum)
         assert text == ansi_permissions_message("<#55>", world.forum, ("send_messages",))
@@ -678,7 +770,9 @@ class TestResetRefusals:
     def test_no_configured_channel_or_a_missing_one(self, world, channel):
         world.db.doc["player_controller"].update({"channel": channel, "message_id": "1"})
         text = error_text(world.reset)
-        assert text == f"**Não há canais de pedido de música configurado no bot {BOT_MENTION} (ou o canal foi deletado).**"
+        assert (
+            text == f"**Não há canais de pedido de música configurado no bot {BOT_MENTION} (ou o canal foi deletado).**"
+        )
         assert world.db.updates == []
 
     def test_channel_from_another_guild_is_treated_as_missing(self, world):
@@ -701,8 +795,11 @@ class TestResetTextChannel:
     def test_clears_the_database_first_then_replies_then_edits_the_message_and_archives_the_thread(self, world):
         message = configured(world)
         world.reset()
-        names = [n for n in world.j.names() if n in ("db.update", "inter.edit_original_message", "message.edit",
-                                                     "thread.edit", "channel.delete")]
+        names = [
+            n
+            for n in world.j.names()
+            if n in ("db.update", "inter.edit_original_message", "message.edit", "thread.edit", "channel.delete")
+        ]
         assert names == ["db.update", "inter.edit_original_message", "message.edit", "thread.edit"]
         assert world.saved["channel"] is None and world.saved["message_id"] is None
         reply = world.j.of("inter.edit_original_message")[-1][3]
@@ -749,10 +846,19 @@ class TestResetTextChannel:
         player = FakePlayer(world.j, world.guild, world.text, static=True, message=object())
         world.bot.music.players[GUILD_ID] = player
         world.reset()
-        names = [n for n in world.j.names() if n in ("db.update", "inter.edit_original_message", "player.process_hint",
-                                                     "player.invoke_np", "message.edit")]
-        assert names == ["db.update", "inter.edit_original_message", "player.process_hint", "player.invoke_np",
-                         "message.edit"]
+        names = [
+            n
+            for n in world.j.names()
+            if n
+            in ("db.update", "inter.edit_original_message", "player.process_hint", "player.invoke_np", "message.edit")
+        ]
+        assert names == [
+            "db.update",
+            "inter.edit_original_message",
+            "player.process_hint",
+            "player.invoke_np",
+            "message.edit",
+        ]
         assert player.static is False and player.message is None and player.text_channel is world.lobby
         assert world.j.of("player.invoke_np") == [("player.invoke_np", True)]
 
@@ -760,8 +866,10 @@ class TestResetTextChannel:
         message = configured(world)
         message.fail_edit = RuntimeError("falha simulada")
         text = error_text(world.reset)
-        assert text == ("**O canal de pedir música foi resetado da base de dados mas ocorreu um erro no processo:** "
-                        "```py\nRuntimeError('falha simulada')```")
+        assert text == (
+            "**O canal de pedir música foi resetado da base de dados mas ocorreu um erro no processo:** "
+            "```py\nRuntimeError('falha simulada')```"
+        )
         assert world.saved["channel"] is None, "o banco JÁ foi limpo (ordem banco × Discord)"
 
     def test_channel_delete_failure_is_also_a_partial_error(self, world):
@@ -782,13 +890,14 @@ class TestResetForum:
         self.post(world)
         world.reset()
         assert world.j.of("thread.edit") == [] and world.j.of("channel.delete") == [
-            ("channel.delete", "#post de pedidos", f"{9000} resetou player")]
+            ("channel.delete", "#post de pedidos", f"{9000} resetou player")
+        ]
         reply = world.j.of("inter.edit_original_message")[-1]
         assert reply[2] == ("O post foi deletado com sucesso!",) and reply[3] == {"embed": None, "components": None}
 
     def test_no_reply_when_the_command_was_used_inside_the_post_itself(self, world):
         post = self.post(world)
-        world.bot.channels[11] = post       # canal do comando == o post
+        world.bot.channels[11] = post  # canal do comando == o post
         world.reset()
         assert world.j.of("inter.edit_original_message") == []
 
@@ -812,8 +921,7 @@ class TestResetForum:
 
     def test_forum_reset_still_clears_the_database_when_the_player_is_active(self, world):
         self.post(world)
-        world.bot.music.players[GUILD_ID] = FakePlayer(world.j, world.guild, world.forum, static=True,
-                                                       message=object())
+        world.bot.music.players[GUILD_ID] = FakePlayer(world.j, world.guild, world.forum, static=True, message=object())
         world.reset()
         assert world.saved["channel"] is None and world.saved["message_id"] is None
 
@@ -880,14 +988,16 @@ class TestPermissionMessageIsByteExact:
             assert text == ansi_permissions_message(f"<#{channel.id}>", channel, ("embed_links",))
 
     def test_forum_message_has_the_esc_bytes(self, world):
-        world.forum._perms = perms(view_channel=True, send_messages=True, send_messages_in_threads=True,
-                                   manage_threads=True)
+        world.forum._perms = perms(
+            view_channel=True, send_messages=True, send_messages_in_threads=True, manage_threads=True
+        )
         modal_answer(world, "Pedidos do bot")
         text = error_text(world.setup, target=world.forum)
         assert text == ansi_permissions_message("<#55>", world.forum, ("embed_links",))
 
     def test_the_unit_function_in_the_shared_module_is_byte_exact_too(self, world):
         from utils.music import request_channel
+
         world.text._perms = perms(view_channel=True)
         with pytest.raises(GenericError) as raised:
             request_channel.check_channel_perm(world.text)
@@ -897,6 +1007,7 @@ class TestPermissionMessageIsByteExact:
         """Se o cog voltar a ter uma cópia própria da checagem, as duas têm de produzir os mesmos bytes."""
         import modules.music_settings as cog
         from utils.music import request_channel
+
         world.text._perms = perms(view_channel=True)
         messages = []
         for check in (getattr(cog, "check_channel_perm", None), request_channel.check_channel_perm):

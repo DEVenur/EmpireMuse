@@ -3,6 +3,7 @@ autorização (IDOR, bot, revogação), XSRF, limites, rate limit, htmx × pági
 concorrência, auditoria e navegação. Contrato: BRIEFING-PAINEL-E4.md (decisões 1–8 e rotas da E4a).
 Os formulários são lidos do HTML renderizado e reenviados como um navegador faria (helpers_settings.parse_forms).
 """
+
 import asyncio
 import copy
 import html
@@ -12,14 +13,28 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET
 from tests.panel.helpers_servers import INVITE_PERMISSIONS
-from tests.panel.helpers_settings import (CATEGORIES, CONFLICT_TEXT, NOT_FOUND_TEXT, SAVED_TEXT, UID, SettingsBase,
-                                          element_text, invites, parse_forms, version_of)
+from tests.panel.helpers_settings import (
+    CATEGORIES,
+    CONFLICT_TEXT,
+    NOT_FOUND_TEXT,
+    SAVED_TEXT,
+    UID,
+    SettingsBase,
+    element_text,
+    invites,
+    parse_forms,
+    version_of,
+)
 
 HEX16 = re.compile(r"^[0-9a-f]{16}$")
 INVITE_KEYS = {"client_id", "scope", "permissions", "guild_id", "disable_guild_select"}
 # (campo do formulário, novo valor válido) por categoria, para os testes genéricos
-PRIMARY = {"player": ("default_player_volume", "70"), "dj": ("djroles", ["5010"]), "aparencia": ("skin", "neon"),
-           "geral": ("prefix", "$$")}
+PRIMARY = {
+    "player": ("default_player_volume", "70"),
+    "dj": ("djroles", ["5010"]),
+    "aparencia": ("skin", "neon"),
+    "geral": ("prefix", "$$"),
+}
 
 
 def normalize(body: str) -> str:
@@ -64,14 +79,16 @@ class HttpBase(SettingsBase):
         return browser.post(path, body=urlencode(pairs), headers=merged)
 
     def audit_text(self):
-        return "\n".join(r.getMessage() for r in self.caplog.records
-                         if r.levelno == logging.INFO and r.name.startswith("panel"))
+        return "\n".join(
+            r.getMessage() for r in self.caplog.records if r.levelno == logging.INFO and r.name.startswith("panel")
+        )
 
     def all_log_text(self):
         return "\n".join(r.getMessage() for r in self.caplog.records)
 
 
 # ============================================================================ acesso e autorização
+
 
 class AccessTest(HttpBase):
     def test_anonymous_is_redirected_to_login_with_next_for_every_category(self):
@@ -83,14 +100,19 @@ class AccessTest(HttpBase):
             assert parse_qs(location.query).get("next") == [path], location.query
 
         Each.run(CATEGORIES, check)
-        assert self.db.reads == [] and self.pool.api_calls() == 0, "anônimo não pode causar leitura de dados nem chamadas"
+        assert self.db.reads == [] and self.pool.api_calls() == 0, (
+            "anônimo não pode causar leitura de dados nem chamadas"
+        )
 
     def test_anonymous_post_changes_nothing_and_reads_nothing(self):
         browser = self.browser()
         token = self.xsrf_header(browser)
         for category in CATEGORIES:
-            response = browser.post(f"/painel/servidores/100/{category}", body="versao=0&autoplay=on",
-                                    headers={"Content-Type": "application/x-www-form-urlencoded", **token})
+            response = browser.post(
+                f"/painel/servidores/100/{category}",
+                body="versao=0&autoplay=on",
+                headers={"Content-Type": "application/x-www-form-urlencoded", **token},
+            )
             assert response.code in (302, 401, 403), f"{category}: {response.code}"
         assert self.db.writes == [] and self.db.reads == []
 
@@ -124,8 +146,14 @@ class AccessTest(HttpBase):
         assert browser.get(self.url(100, "player")).code == 200, "a rota da categoria deve existir"
         reference = self.not_found_reference(browser)
         reads_before = len(self.db.reads)
-        denied = {"sem bot do pool": "300", "membro comum no bot": "600", "fora da sessão (com bot e admin)": "500",
-                  "inexistente": "999", "não numérico": "abc", "gigante": "9" * 25}
+        denied = {
+            "sem bot do pool": "300",
+            "membro comum no bot": "600",
+            "fora da sessão (com bot e admin)": "500",
+            "inexistente": "999",
+            "não numérico": "abc",
+            "gigante": "9" * 25,
+        }
 
         def check(case):
             label, gid = case
@@ -145,8 +173,17 @@ class AccessTest(HttpBase):
         browser = self.logged_in()
         assert browser.get(self.url(100, "player")).code == 200, "a rota da categoria deve existir"
         reference = self.not_found_reference(browser)
-        cases = [(100, "2"), (100, "999"), (100, "abc"), (100, "1.0"), (100, "-1"), (100, "01"), (200, "1"),
-                 (800, "3"), (100, "1%00")]
+        cases = [
+            (100, "2"),
+            (100, "999"),
+            (100, "abc"),
+            (100, "1.0"),
+            (100, "-1"),
+            (100, "01"),
+            (200, "1"),
+            (800, "3"),
+            (100, "1%00"),
+        ]
 
         def check(case):
             gid, bot = case
@@ -190,7 +227,7 @@ class AccessTest(HttpBase):
 
         for category in ("player", "dj", "aparencia"):
             found = selector(800, category)
-            assert found, f"{category}: guild com 2 bots deve ter seletor <select name=\"bot\">"
+            assert found, f'{category}: guild com 2 bots deve ter seletor <select name="bot">'
             assert [o["value"] for o in found[0]["options"]] == ["1", "2"]
             assert found[0]["values"] == ["1"], "padrão = primeiro bot"
             assert selector(800, category, 2)[0]["values"] == ["2"], "?bot=2 vem selecionado"
@@ -213,8 +250,9 @@ class AccessTest(HttpBase):
         assert len(self.db.writes) == writes and self.db.doc("1", 100) == before, "nada pode ser gravado"
 
     def test_write_after_admin_permission_revoked_is_404_inside_the_read_cache_window(self):
-        self.assert_write_is_404_after(lambda: setattr(self.world.g100.members[UID].guild_permissions,
-                                                       "administrator", False))
+        self.assert_write_is_404_after(
+            lambda: setattr(self.world.g100.members[UID].guild_permissions, "administrator", False)
+        )
 
     def test_write_after_user_left_the_guild_is_404_inside_the_read_cache_window(self):
         self.assert_write_is_404_after(lambda: self.world.g100.members.pop(UID))
@@ -235,6 +273,7 @@ class AccessTest(HttpBase):
 
 # ============================================================================ protocolo: XSRF, limites, rate limit
 
+
 class ProtocolTest(HttpBase):
     def test_forms_carry_xsrf_and_a_16_hex_version(self):
         browser = self.logged_in()
@@ -246,18 +285,27 @@ class ProtocolTest(HttpBase):
             assert form.value("_xsrf"), "falta o campo oculto _xsrf"
             assert HEX16.match(form.value("versao") or ""), f"versao inválida: {form.value('versao')!r}"
 
-        Each.run([("player", "default_player_volume"), ("dj", "djroles"), ("aparencia", "skin"),
-                  ("aparencia", "global_skin"), ("geral", "prefix"), ("geral", "voice_channel_status")], check)
+        Each.run(
+            [
+                ("player", "default_player_volume"),
+                ("dj", "djroles"),
+                ("aparencia", "skin"),
+                ("aparencia", "global_skin"),
+                ("geral", "prefix"),
+                ("geral", "voice_channel_status"),
+            ],
+            check,
+        )
 
     def test_version_is_stable_between_reads_and_changes_only_with_the_forms_own_fields(self):
         browser = self.logged_in()
         _, first, _ = self.open_form(browser, 100, "player", "default_player_volume")
         _, again, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert first.value("versao") == again.value("versao")
-        external_change(self.db, "1", 100, djroles=["5010"])        # campo de OUTRO formulário
+        external_change(self.db, "1", 100, djroles=["5010"])  # campo de OUTRO formulário
         _, after_dj, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert after_dj.value("versao") == first.value("versao"), "versao do player não depende de djroles"
-        external_change(self.db, "1", 100, autoplay=True)           # campo do próprio formulário
+        external_change(self.db, "1", 100, autoplay=True)  # campo do próprio formulário
         _, after_own, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert after_own.value("versao") != first.value("versao")
 
@@ -265,8 +313,12 @@ class ProtocolTest(HttpBase):
         browser = self.logged_in()
         _, form, _ = self.open_form(browser, 100, "player", "default_player_volume")
         doc = self.db.doc("1", 100)
-        expected = version_of({key: doc[key] for key in (
-            "default_player_volume", "autoplay", "check_other_bots_in_vc", "enable_restrict_mode")})
+        expected = version_of(
+            {
+                key: doc[key]
+                for key in ("default_player_volume", "autoplay", "check_other_bots_in_vc", "enable_restrict_mode")
+            }
+        )
         assert form.value("versao") == expected
 
     def test_dj_version_follows_the_briefing_formula(self):
@@ -288,8 +340,9 @@ class ProtocolTest(HttpBase):
             assert wrong.code == 403, f"token errado: {wrong.code}"
             assert len(self.db.writes) == writes
 
-        Each.run([("player", "default_player_volume"), ("dj", "djroles"), ("aparencia", "skin"),
-                  ("geral", "prefix")], check)
+        Each.run(
+            [("player", "default_player_volume"), ("dj", "djroles"), ("aparencia", "skin"), ("geral", "prefix")], check
+        )
 
     def test_post_without_version_is_422_and_writes_nothing(self):
         browser = self.logged_in()
@@ -303,8 +356,16 @@ class ProtocolTest(HttpBase):
             assert response.code == 422, f"status {response.code}"
             assert len(self.db.writes) == writes
 
-        Each.run([("player", "default_player_volume"), ("dj", "djroles"), ("aparencia", "skin"),
-                  ("aparencia", "global_skin"), ("geral", "prefix")], check)
+        Each.run(
+            [
+                ("player", "default_player_volume"),
+                ("dj", "djroles"),
+                ("aparencia", "skin"),
+                ("aparencia", "global_skin"),
+                ("geral", "prefix"),
+            ],
+            check,
+        )
 
     def test_malformed_version_is_rejected_without_writing(self):
         browser = self.logged_in()
@@ -378,6 +439,7 @@ class ProtocolTest(HttpBase):
 
 # ============================================================================ htmx × página inteira, 409, concorrência
 
+
 class ResponseShapeTest(HttpBase):
     def test_htmx_success_returns_only_the_form_fragment_with_message_and_new_version(self):
         browser = self.logged_in()
@@ -450,9 +512,19 @@ class ResponseShapeTest(HttpBase):
         path = urlsplit(url).path
 
         async def both():
-            return await asyncio.gather(*[
-                self.http_client.fetch(self.get_url(path), method="POST", headers=headers, body=body,
-                                       raise_error=False, follow_redirects=False) for body in bodies])
+            return await asyncio.gather(
+                *[
+                    self.http_client.fetch(
+                        self.get_url(path),
+                        method="POST",
+                        headers=headers,
+                        body=body,
+                        raise_error=False,
+                        follow_redirects=False,
+                    )
+                    for body in bodies
+                ]
+            )
 
         responses = self.io_loop.run_sync(both)
         codes = sorted(r.code for r in responses)
@@ -463,6 +535,7 @@ class ResponseShapeTest(HttpBase):
 
 
 # ============================================================================ auditoria (log sem valores)
+
 
 class AuditLogTest(HttpBase):
     def test_audit_line_names_user_guild_scope_category_and_changed_fields_but_no_values(self):
@@ -499,6 +572,7 @@ class AuditLogTest(HttpBase):
 
 
 # ============================================================================ navegação e convites (G-19)
+
 
 class NavigationTest(HttpBase):
     def test_server_page_links_the_six_real_categories_and_nothing_is_coming_soon(self):

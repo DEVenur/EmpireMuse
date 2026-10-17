@@ -3,6 +3,7 @@
 Só HTTP: regras e gravação ficam em ``panel/services/account*.py``. Os dados são sempre os do usuário da sessão (um
 ``user_id`` vindo do formulário ou da URL é ignorado) e o bot de entrada é o primeiro bot pronto do pool.
 """
+
 from __future__ import annotations
 
 import json

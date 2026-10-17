@@ -13,6 +13,7 @@ API exigida do Backend (nomes fixados pelos testes):
   utils/client.py          start_lavalink passa youtube_oauth_refresh_token=self.config['YOUTUBE_OAUTH_REFRESH_TOKEN'].
   modules/legacy_cmds.py   exportsource nunca grava o token no .env exportado.
 """
+
 import ast
 import asyncio
 import hashlib
@@ -38,8 +39,7 @@ YML_002_SHA256 = "0d17d65f3b7d7a889f2b23f2719bd8a1e1aac77b90e0b77e9dacdbd35ce948
 YML_001_SHA256 = "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3"
 JAR_SHA256 = "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a"
 PLUGINS_SHA256 = {
-    "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar":
-        "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
+    "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar": "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
     "lavasrc-plugin-4.8.3.jar": "4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3",
     "lavalink-2.6.1.jar": "1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3",
 }
@@ -65,6 +65,7 @@ def assert_no_token(where: str, *texts) -> None:
 
 
 # ============================================================================ (1) branding -> release 0.0.3
+
 
 class TestBrandingRelease003:
     def test_binaries_base_url_points_to_003(self):
@@ -157,6 +158,7 @@ class TestReplacingThe002Yml:
 
 # ============================================================================ (2) configuração do segredo
 
+
 def _example_env_lines() -> list:
     return [l for l in (ROOT / ".example.env").read_text("utf-8").splitlines() if l.startswith(f"{CONFIG_KEY}=")]
 
@@ -164,6 +166,7 @@ def _example_env_lines() -> list:
 class TestConfigKey:
     def test_default_config_declares_it_empty_and_as_text(self):
         import config_loader
+
         assert config_loader.DEFAULT_CONFIG.get(CONFIG_KEY, "<ausente>") == ""
         assert type(config_loader.DEFAULT_CONFIG[CONFIG_KEY]) is str
 
@@ -175,10 +178,11 @@ class TestConfigKey:
     def test_example_env_documents_it_in_portuguese_with_a_secret_warning(self):
         lines = (ROOT / ".example.env").read_text("utf-8").splitlines()
         index = next(i for i, l in enumerate(lines) if l.startswith(f"{CONFIG_KEY}="))
-        comment = "\n".join(l for l in lines[max(0, index - 12):index] if l.lstrip().startswith("#")).lower()
+        comment = "\n".join(l for l in lines[max(0, index - 12) : index] if l.lstrip().startswith("#")).lower()
         assert comment, "a variável precisa de comentário explicativo acima"
-        assert "segredo" in comment or "secreto" in comment or "não compartilhe" in comment, \
+        assert "segredo" in comment or "secreto" in comment or "não compartilhe" in comment, (
             "o comentário deve avisar que o valor é um segredo"
+        )
         assert "descartável" in comment, "o comentário deve recomendar uma conta Google descartável"
 
     @staticmethod
@@ -186,6 +190,7 @@ class TestConfigKey:
         """`dotenv_values()` procura o .env a partir do módulo (não do cwd): sem isto o .env REAL do dono entraria no teste."""
         import config_loader
         import dotenv
+
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv(CONFIG_KEY, raising=False)
         if dot_env_text is not None:
@@ -208,12 +213,14 @@ class TestConfigKey:
 
     def test_the_token_is_never_hardcoded_in_the_repo_example_or_default(self):
         import config_loader
+
         assert FAKE_TOKEN not in (ROOT / ".example.env").read_text("utf-8")
         assert not re.search(r"1//0[0-9A-Za-z_-]{20,}", (ROOT / ".example.env").read_text("utf-8"))
         assert not re.search(r"1//0[0-9A-Za-z_-]{20,}", repr(config_loader.DEFAULT_CONFIG))
 
 
 # ============================================================================ (3) env do Popen
+
 
 @pytest.fixture
 def started(monkeypatch, tmp_path):
@@ -320,8 +327,9 @@ class TestRunLavalinkOauthEnv:
 
     def test_the_bot_own_process_environment_is_not_mutated(self, started):
         start(FAKE_TOKEN)
-        assert [v for v in OAUTH_ENV_VARS if v in os.environ] == [], \
+        assert [v for v in OAUTH_ENV_VARS if v in os.environ] == [], (
             "o ambiente do processo do bot (herdado por git/shell) não pode receber o token; só o env do Popen"
+        )
 
     def test_each_start_computes_its_own_environment(self, started):
         start(FAKE_TOKEN)
@@ -331,8 +339,11 @@ class TestRunLavalinkOauthEnv:
 
     def test_the_token_is_never_written_to_disk(self, started, tmp_path):
         start(FAKE_TOKEN)
-        offenders = [str(p.relative_to(tmp_path)) for p in tmp_path.rglob("*")
-                     if p.is_file() and FAKE_TOKEN.encode() in p.read_bytes()]
+        offenders = [
+            str(p.relative_to(tmp_path))
+            for p in tmp_path.rglob("*")
+            if p.is_file() and FAKE_TOKEN.encode() in p.read_bytes()
+        ]
         assert offenders == [], f"token gravado em arquivo: {offenders}"
 
     def test_the_application_yml_stays_untouched(self, started, tmp_path):
@@ -369,6 +380,7 @@ class TestRunLavalinkOauthEnv:
 class TestRunLavalinkSignatureA2:
     def test_token_parameter_is_keyword_only_and_defaults_to_empty(self):
         import inspect
+
         param = inspect.signature(ll.run_lavalink).parameters.get("youtube_oauth_refresh_token")
         assert param is not None, "run_lavalink precisa do parâmetro youtube_oauth_refresh_token"
         assert param.kind is inspect.Parameter.KEYWORD_ONLY
@@ -376,10 +388,17 @@ class TestRunLavalinkSignatureA2:
 
     def test_positional_order_and_sha256_parameter_are_preserved(self):
         import inspect
+
         params = inspect.signature(ll.run_lavalink).parameters
         names = list(params)
-        assert names[:6] == ["lavalink_file_url", "lavalink_initial_ram", "lavalink_ram_limit",
-                             "lavalink_additional_sleep", "lavalink_cpu_cores", "use_jabba"]
+        assert names[:6] == [
+            "lavalink_file_url",
+            "lavalink_initial_ram",
+            "lavalink_ram_limit",
+            "lavalink_additional_sleep",
+            "lavalink_cpu_cores",
+            "use_jabba",
+        ]
         assert params["lavalink_file_sha256"].kind is inspect.Parameter.KEYWORD_ONLY
 
     def test_client_passes_the_configured_token_by_keyword(self):
@@ -392,6 +411,7 @@ class TestRunLavalinkSignatureA2:
 
 
 # ============================================================================ (4) o token nunca vaza
+
 
 @pytest.fixture
 def export_env(monkeypatch, tmp_path):
@@ -425,19 +445,27 @@ def export_env(monkeypatch, tmp_path):
 
     bot = SimpleNamespace(
         config={"SOURCE_REPO": "https://example.test/repo.git", "EXTRA_HINTS": ""},
-        loop=SimpleNamespace(run_in_executor=run_in_executor), get_color=lambda me: 0, user="bot#0000")
+        loop=SimpleNamespace(run_in_executor=run_in_executor),
+        get_color=lambda me: 0,
+        user="bot#0000",
+    )
     cog = legacy_cmds.Owner(bot)
-    ctx = SimpleNamespace(author=SimpleNamespace(send=author_send), guild=SimpleNamespace(me=None), send=mock.AsyncMock())
+    ctx = SimpleNamespace(
+        author=SimpleNamespace(send=author_send), guild=SimpleNamespace(me=None), send=mock.AsyncMock()
+    )
 
     def run_export(flags=""):
         return asyncio.run(legacy_cmds.Owner.exportsource.callback(cog, ctx, flags=flags))
 
-    return SimpleNamespace(run=run_export, snapshots=snapshots, sent=sent, tmp=tmp_path, ctx=ctx, monkeypatch=monkeypatch)
+    return SimpleNamespace(
+        run=run_export, snapshots=snapshots, sent=sent, tmp=tmp_path, ctx=ctx, monkeypatch=monkeypatch
+    )
 
 
 def exported_value(env_text: str):
     from dotenv import dotenv_values
     import io
+
     return dotenv_values(stream=io.StringIO(env_text)).get(CONFIG_KEY)
 
 
@@ -480,15 +508,32 @@ class TestExportNeverCarriesTheToken:
     def test_no_leftover_env_temp_file_contains_the_token(self, export_env):
         export_env.monkeypatch.setenv(CONFIG_KEY, FAKE_TOKEN)
         export_env.run()
-        leftovers = [p.name for p in export_env.tmp.iterdir()
-                     if p.is_file() and FAKE_TOKEN.encode() in p.read_bytes()]
+        leftovers = [p.name for p in export_env.tmp.iterdir() if p.is_file() and FAKE_TOKEN.encode() in p.read_bytes()]
         assert leftovers == []
 
 
-SINK_NAMES = frozenset({
-    "print", "debug", "info", "warning", "warn", "error", "exception", "critical", "log",
-    "send", "send_message", "respond", "followup", "reply", "edit", "edit_message", "set_footer", "write",
-})
+SINK_NAMES = frozenset(
+    {
+        "print",
+        "debug",
+        "info",
+        "warning",
+        "warn",
+        "error",
+        "exception",
+        "critical",
+        "log",
+        "send",
+        "send_message",
+        "respond",
+        "followup",
+        "reply",
+        "edit",
+        "edit_message",
+        "set_footer",
+        "write",
+    }
+)
 SENSITIVE_IDENTIFIERS = frozenset({CONFIG_KEY, "youtube_oauth_refresh_token", "oauth_refresh_token", "refresh_token"})
 PRODUCTION_DIRS = ("modules", "utils", "panel", "wavelink")
 PRODUCTION_FILES = ("config_loader.py", "web_app.py", "main.py", "app.py")
@@ -561,13 +606,17 @@ class TestNoOutputSinkReceivesTheToken:
                 if not (isinstance(node, ast.Call) and _call_name(node) in SINK_NAMES):
                     continue
                 values = list(node.args) + [kw.value for kw in node.keywords]
-                if any(_is_whole_config(v) or (isinstance(v, ast.FormattedValue) and _is_whole_config(v.value))
-                       for v in values):
+                if any(
+                    _is_whole_config(v) or (isinstance(v, ast.FormattedValue) and _is_whole_config(v.value))
+                    for v in values
+                ):
                     offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
                 for sub in ast.walk(node):
                     if isinstance(sub, ast.FormattedValue) and _is_whole_config(sub.value):
                         offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
-        assert sorted(set(offenders)) == [], f"saída com a configuração inteira (vazaria segredos): {sorted(set(offenders))}"
+        assert sorted(set(offenders)) == [], (
+            f"saída com a configuração inteira (vazaria segredos): {sorted(set(offenders))}"
+        )
 
     def test_only_the_expected_modules_reference_the_token(self):
         allowed = {"config_loader.py", "utils/client.py", "utils/music/local_lavalink.py", "modules/legacy_cmds.py"}
@@ -585,13 +634,17 @@ class TestNoOutputSinkReceivesTheToken:
         for path in _production_python_files():
             tree = ast.parse(path.read_text("utf-8"), filename=str(path))
             for node in ast.walk(tree):
-                if isinstance(node, ast.Assign) and any(isinstance(t, ast.Attribute) for t in node.targets) \
-                        and _is_direct_secret_reference(node.value):
+                if (
+                    isinstance(node, ast.Assign)
+                    and any(isinstance(t, ast.Attribute) for t in node.targets)
+                    and _is_direct_secret_reference(node.value)
+                ):
                     offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
         assert offenders == [], f"refresh token copiado para atributo: {offenders}"
 
 
 # ============================================================================ (5) application.yml 0.0.3
+
 
 @pytest.fixture(scope="module")
 def release_003():
@@ -603,6 +656,7 @@ def release_003():
 @pytest.fixture(scope="module")
 def yml_003(release_003):
     from ruamel.yaml import YAML
+
     return YAML(typ="safe").load((release_003 / "application.yml").read_text("utf-8"))
 
 
@@ -632,7 +686,13 @@ class TestApplicationYml003:
 
     def test_youtube_clients_are_in_the_contract_order(self, yml_003):
         assert list(yml_003["plugins"]["youtube"]["clients"]) == [
-            "MUSIC", "TV", "ANDROID_VR", "WEB", "WEBEMBEDDED", "TVHTML5_SIMPLY"]
+            "MUSIC",
+            "TV",
+            "ANDROID_VR",
+            "WEB",
+            "WEBEMBEDDED",
+            "TVHTML5_SIMPLY",
+        ]
 
     def test_oauth_is_disabled_by_default(self, yml_003):
         assert yml_003["plugins"]["youtube"]["oauth"]["enabled"] is False

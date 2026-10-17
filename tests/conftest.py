@@ -6,6 +6,7 @@ procura o ``.env`` a partir do DIRETÓRIO DO MÓDULO (não do cwd). Sem este fix
 torna o teste não determinístico e pode imprimir segredos na saída de uma falha. Testes que precisam de um ``.env``
 próprio substituem ``config_loader.dotenv_values`` por um leitor do ``tmp_path``.
 """
+
 import pytest
 
 

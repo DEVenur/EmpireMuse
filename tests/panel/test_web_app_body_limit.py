@@ -2,6 +2,7 @@
 
 O limite vale antes de qualquer handler (XSRF, 413 do painel) e não pode quebrar `/` nem `/ws`.
 """
+
 import asyncio
 from types import SimpleNamespace
 

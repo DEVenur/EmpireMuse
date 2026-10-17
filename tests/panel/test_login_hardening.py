@@ -1,5 +1,6 @@
 """Endurecimento do login (Etapa 2, validação): client_id/503, Retry-After, logs sem query string,
 revogação mesmo em erro inesperado, cookies sem aspas."""
+
 import logging
 from types import SimpleNamespace
 
@@ -16,6 +17,7 @@ CONFIGURED_ID = "999999999999999999"
 
 class ClientIdBase(LoginBase):
     """App SEM cliente OAuth injetado: o client_id é resolvido no primeiro login."""
+
     pool_bots: list = []
     config_overrides: dict = {}
 

@@ -1,4 +1,5 @@
 """Testes do contrato de utils/music/lavalink_server_list.py (validação da lista de servidores Lavalink)."""
+
 import configparser
 from pathlib import Path
 
@@ -53,23 +54,26 @@ def test_returns_content_when_status_200_and_ini_valid():
     assert _module().validated_server_list(200, VALID_INI) == VALID_INI
 
 
-@pytest.mark.parametrize("status,content", [
-    (404, VALID_INI),
-    (404, b"404: Not Found"),
-    (500, VALID_INI),
-    (200, b"404: Not Found"),
-    (200, b"[node1]\nport = 443\n"),
-    (200, b"[node1]\nhost = x.example\n"),
-    (200, b"[node1]\nhost = x.example\nport = 443\n"),
-    (200, b"[node1]\nhost = x.example\nport = 443\npassword = a%b\n"),
-    (200, b"[ok]\nhost = a\nport = 1\npassword = p\n\n[ruim]\nhost = b\nport = 2\n"),
-    (200, b"# so comentario\n"),
-    (200, b""),
-    (200, b"\xff\xfe\x00invalid"),
-    (None, VALID_INI),
-    (200, None),
-    (None, None),
-])
+@pytest.mark.parametrize(
+    "status,content",
+    [
+        (404, VALID_INI),
+        (404, b"404: Not Found"),
+        (500, VALID_INI),
+        (200, b"404: Not Found"),
+        (200, b"[node1]\nport = 443\n"),
+        (200, b"[node1]\nhost = x.example\n"),
+        (200, b"[node1]\nhost = x.example\nport = 443\n"),
+        (200, b"[node1]\nhost = x.example\nport = 443\npassword = a%b\n"),
+        (200, b"[ok]\nhost = a\nport = 1\npassword = p\n\n[ruim]\nhost = b\nport = 2\n"),
+        (200, b"# so comentario\n"),
+        (200, b""),
+        (200, b"\xff\xfe\x00invalid"),
+        (None, VALID_INI),
+        (200, None),
+        (None, None),
+    ],
+)
 def test_falls_back_to_bundled_for_bad_input(status, content):
     assert _module().validated_server_list(status, content) == _bundled_bytes()
 

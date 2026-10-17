@@ -4,6 +4,7 @@ Espelham ``legacy_cmds.setuserprefix/resetuserprefix``, ``modules/lastfm.py`` e 
 (``rpc``). O painel é mais estrito onde o briefing manda: o prefixo recusa espaços e caracteres de controle, e o token
 é gerado com ``secrets`` (o comando usa ``random``). ``sessionkey`` e o token nunca são lidos para a tela nem logados.
 """
+
 from __future__ import annotations
 
 import logging
@@ -145,8 +146,12 @@ async def _close_player(ctx: AccountContext, bot: Any, player: Any) -> None:
             return
     except AttributeError:
         return
-    stats = {"op": "close", "bot_id": bot.user.id, "bot_name": str(bot.user),
-             "thumb": bot.user.display_avatar.replace(size=512, static_format="png").url}
+    stats = {
+        "op": "close",
+        "bot_id": bot.user.id,
+        "bot_name": str(bot.user),
+        "thumb": bot.user.display_avatar.replace(size=512, static_format="png").url,
+    }
     try:
         await player._send_rpc_data([ctx.user_id], stats)
     except Exception as exc:  # um player com problema não impede o novo token; só o tipo vai ao log

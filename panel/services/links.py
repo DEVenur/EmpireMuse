@@ -4,14 +4,23 @@ Espelha o modo ``guild_fav_manager`` de ``utils/music/interactions.py`` (FavModa
 mais estrito que o comando em pontos já aprovados: nome duplicado ao adicionar e nomes inexistentes em editar/remover
 são recusados, editar nunca renomeia e a importação valida todos os itens.
 """
+
 from __future__ import annotations
 
 import copy
 import logging
 from typing import Any, NamedTuple, Optional
 
-from panel.services.base import (DBModel, Args, FormContext, ParseResult, SettingsForm, clean_title, first,
-                                 load_json_object)
+from panel.services.base import (
+    DBModel,
+    Args,
+    FormContext,
+    ParseResult,
+    SettingsForm,
+    clean_title,
+    first,
+    load_json_object,
+)
 from utils.music.converters import URL_REG
 
 logger = logging.getLogger(__name__)
@@ -107,17 +116,28 @@ class LinksForm(SettingsForm):
         return {"acao_erro": None, "alvo_erro": None, "nome": "", "url": "", "descricao": "", "dados": ""}
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        items = tuple(LinkView(name, str(data.get("url", "")), str(data.get("description", "")))
-                      for name, data in current["fav_links"].items())
-        return {"itens": items, "total": len(items), "maximo": MAX_LINKS,
-                "pode_editar": bool(current["canal_configurado"])}
+        items = tuple(
+            LinkView(name, str(data.get("url", "")), str(data.get("description", "")))
+            for name, data in current["fav_links"].items()
+        )
+        return {
+            "itens": items,
+            "total": len(items),
+            "maximo": MAX_LINKS,
+            "pode_editar": bool(current["canal_configurado"]),
+        }
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
         action = first(args, "acao") or ""
         name = (first(args, "nome") or "").strip()
-        echo = {"acao_erro": action, "alvo_erro": name if action == "editar" else None, "nome": name,
-                "url": (first(args, "url") or "").strip(), "descricao": (first(args, "descricao") or "").strip(),
-                "dados": first(args, "dados") or ""}
+        echo = {
+            "acao_erro": action,
+            "alvo_erro": name if action == "editar" else None,
+            "nome": name,
+            "url": (first(args, "url") or "").strip(),
+            "descricao": (first(args, "descricao") or "").strip(),
+            "dados": first(args, "dados") or "",
+        }
         if action not in ACTIONS:
             return _error("acao", MSG_ACTION, echo)
         if action != "remover" and not current["canal_configurado"]:
@@ -146,8 +166,9 @@ class LinksForm(SettingsForm):
         if errors:
             return ParseResult({}, errors, echo)
         entry = {"url": url, "description": echo["descricao"]}
-        return ParseResult({"fav_links": {key: (entry if key == name else value) for key, value in links.items()}},
-                           {}, echo)
+        return ParseResult(
+            {"fav_links": {key: (entry if key == name else value) for key, value in links.items()}}, {}, echo
+        )
 
     def _remove(self, ctx: FormContext, links: dict, echo: dict) -> ParseResult:
         name = echo["nome"]
@@ -187,6 +208,7 @@ class LinksForm(SettingsForm):
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
         # Como o comando: atualiza o embed ocioso do canal de pedidos (no-op se há player ativo).
         from utils.music import interactions
+
         guild_data = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
         await interactions.process_idle_embed(ctx.bot, ctx.guild, guild_data)
 

@@ -32,18 +32,14 @@ spotify_cache_file = os.path.join(gettempdir(), ".spotify_cache.json")
 
 
 class SpotifyClient:
-
-    def __init__(self, client_id: Optional[str] = None, client_secret: Optional[str] = None, playlist_extra_page_limit: int = 0):
-
+    def __init__(
+        self, client_id: Optional[str] = None, client_secret: Optional[str] = None, playlist_extra_page_limit: int = 0
+    ):
         if not client_id:
-            raise Exception(
-                "CLIENT_ID do spotify não informado."
-            )
+            raise Exception("CLIENT_ID do spotify não informado.")
 
         if not client_secret:
-            raise Exception(
-                "CLIENT_SECRET do spotify não informado."
-            )
+            raise Exception("CLIENT_SECRET do spotify não informado.")
 
         self.client_id = client_id
         self.client_secret = client_secret
@@ -61,11 +57,10 @@ class SpotifyClient:
             pass
 
     async def request(self, path: str, params: dict = None):
-
         if self.disabled:
             return
 
-        headers = {'Authorization': f'Bearer {await self.get_valid_access_token()}'}
+        headers = {"Authorization": f"Bearer {await self.get_valid_access_token()}"}
 
         async with ClientSession() as session:
             async with session.get(f"{self.base_url}/{path}", headers=headers, params=params) as response:
@@ -75,8 +70,10 @@ class SpotifyClient:
                     await self.get_access_token()
                     return await self.request(path=path, params=params)
                 elif response.status == 404:
-                    raise GenericError("**Não houve resultado para o link informado (confira se o link está correto ou se o conteúdo dele está privado ou se foi deletado).**\n\n"
-                                       f"{str(response.url).replace('api.', 'open.').replace('/v1/', '/').replace('s/', '/')}")
+                    raise GenericError(
+                        "**Não houve resultado para o link informado (confira se o link está correto ou se o conteúdo dele está privado ou se foi deletado).**\n\n"
+                        f"{str(response.url).replace('api.', 'open.').replace('/v1/', '/').replace('s/', '/')}"
+                    )
                 elif response.status == 429:
                     self.disabled = True
                     print(f"⚠️ - Spotify: Suporte interno desativado devido a ratelimit (429).")
@@ -85,20 +82,18 @@ class SpotifyClient:
                     response.raise_for_status()
 
     async def get_track_info(self, track_id: str):
-        return await self.request(path=f'tracks/{track_id}')
+        return await self.request(path=f"tracks/{track_id}")
 
     async def get_album_info(self, album_id: str):
-        return await self.request(path=f'albums/{album_id}')
+        return await self.request(path=f"albums/{album_id}")
 
     async def get_artist_top(self, artist_id: str):
-        return await self.request(path=f'artists/{artist_id}/top-tracks')
+        return await self.request(path=f"artists/{artist_id}/top-tracks")
 
     async def get_playlist_info(self, playlist_id: str):
-
         result = await self.request(path=f"playlists/{playlist_id}")
 
         if len(result["tracks"]["items"]) == 100 and self.playlist_extra_page_limit > 0:
-
             offset = 101
             page_count = 0
 
@@ -130,17 +125,12 @@ class SpotifyClient:
         else:
             track_ids = ",".join(seed_tracks)
 
-        return await self.request(path='recommendations', params={
-            'seed_tracks': track_ids, 'limit': limit
-        })
+        return await self.request(path="recommendations", params={"seed_tracks": track_ids, "limit": limit})
 
     async def track_search(self, query: str):
-        return await self.request(path='search', params = {
-        'q': quote(query), 'type': 'track', 'limit': 10
-        })
+        return await self.request(path="search", params={"q": quote(query), "type": "track", "limit": 10})
 
     async def get_access_token(self):
-
         if self.token_refresh:
             while self.token_refresh:
                 await asyncio.sleep(1)
@@ -149,15 +139,13 @@ class SpotifyClient:
         self.token_refresh = True
 
         try:
-            token_url = 'https://accounts.spotify.com/api/token'
+            token_url = "https://accounts.spotify.com/api/token"
 
             headers = {
-                'Authorization': 'Basic ' + base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
+                "Authorization": "Basic " + base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
             }
 
-            data = {
-                'grant_type': 'client_credentials'
-            }
+            data = {"grant_type": "client_credentials"}
 
             async with ClientSession() as session:
                 async with session.post(token_url, headers=headers, data=data) as response:
@@ -194,16 +182,16 @@ class SpotifyClient:
             await self.get_access_token()
         return self.spotify_cache["access_token"]
 
-    async def get_tracks(self, bot: BotCore, requester: int, query: str, search: bool = True, check_title: float = None):
-
+    async def get_tracks(
+        self, bot: BotCore, requester: int, query: str, search: bool = True, check_title: float = None
+    ):
         if spotify_link_regex.match(query):
             async with bot.session.get(query, allow_redirects=False) as r:
-                if 'location' not in r.headers:
+                if "location" not in r.headers:
                     raise GenericError("**Falha ao obter resultado para o link informado...**")
                 query = str(r.headers["location"])
 
         if not (matches := spotify_regex.match(query)) and not self.disabled:
-
             if URL_REG.match(query) or not search:
                 return
 
@@ -212,22 +200,21 @@ class SpotifyClient:
             tracks = []
 
             try:
-                tracks_result = r['tracks']['items']
+                tracks_result = r["tracks"]["items"]
             except KeyError:
                 pass
             else:
                 for result in tracks_result:
-
                     trackinfo = {
-                        'title': result["name"],
-                        'author': result["artists"][0]["name"] or "Unknown Artist",
-                        'length': result["duration_ms"],
-                        'identifier': result["id"],
-                        'isStream': False,
-                        'uri': result["external_urls"]["spotify"],
-                        'sourceName': 'spotify',
-                        'position': 0,
-                        'artworkUrl': result["album"]["images"][0]["url"],
+                        "title": result["name"],
+                        "author": result["artists"][0]["name"] or "Unknown Artist",
+                        "length": result["duration_ms"],
+                        "identifier": result["id"],
+                        "isStream": False,
+                        "uri": result["external_urls"]["spotify"],
+                        "sourceName": "spotify",
+                        "position": 0,
+                        "artworkUrl": result["album"]["images"][0]["url"],
                     }
 
                     try:
@@ -237,10 +224,17 @@ class SpotifyClient:
 
                     t = LavalinkTrack(id_=encode_track(trackinfo)[1], info=trackinfo, requester=requester)
 
-                    t.info["extra"]["authors"] = [fix_characters(i['name']) for i in result['artists'] if f"feat. {i['name'].lower()}"
-                                                  not in result['name'].lower()]
+                    t.info["extra"]["authors"] = [
+                        fix_characters(i["name"])
+                        for i in result["artists"]
+                        if f"feat. {i['name'].lower()}" not in result["name"].lower()
+                    ]
 
-                    if check_title and fuzz.token_sort_ratio(query.lower(), f"{t.authors_string} - {t.single_title}".lower()) < check_title:
+                    if (
+                        check_title
+                        and fuzz.token_sort_ratio(query.lower(), f"{t.authors_string} - {t.single_title}".lower())
+                        < check_title
+                    ):
                         continue
 
                     try:
@@ -248,13 +242,15 @@ class SpotifyClient:
                     except KeyError:
                         pass
 
-                    t.info["extra"]["authors_md"] = ", ".join(f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"])
+                    t.info["extra"]["authors_md"] = ", ".join(
+                        f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                    )
 
                     try:
                         if result["album"]["name"] != result["name"]:
                             t.info["extra"]["album"] = {
                                 "name": result["album"]["name"],
-                                "url": result["album"]["external_urls"]["spotify"]
+                                "url": result["album"]["external_urls"]["spotify"],
                             }
                     except (AttributeError, KeyError):
                         pass
@@ -266,7 +262,6 @@ class SpotifyClient:
             return
 
         if self.disabled:
-
             if [n for n in bot.music.nodes.values() if "spotify" in n.info.get("sourceManagers", [])]:
                 return
 
@@ -275,19 +270,18 @@ class SpotifyClient:
         url_type, url_id = matches.groups()
 
         if url_type == "track":
-
             result = await self.get_track_info(url_id)
 
             trackinfo = {
-                'title': result["name"],
-                'author': result["artists"][0]["name"] or "Unknown Artist",
-                'length': result["duration_ms"],
-                'identifier': result["id"],
-                'isStream': False,
-                'uri': result["external_urls"]["spotify"],
-                'sourceName': 'spotify',
-                'position': 0,
-                'artworkUrl': result["album"]["images"][0]["url"],
+                "title": result["name"],
+                "author": result["artists"][0]["name"] or "Unknown Artist",
+                "length": result["duration_ms"],
+                "identifier": result["id"],
+                "isStream": False,
+                "uri": result["external_urls"]["spotify"],
+                "sourceName": "spotify",
+                "position": 0,
+                "artworkUrl": result["album"]["images"][0]["url"],
             }
 
             try:
@@ -297,16 +291,21 @@ class SpotifyClient:
 
             t = LavalinkTrack(id_=encode_track(trackinfo)[1], info=trackinfo, requester=requester)
 
-            t.info["extra"]["authors"] = [fix_characters(i['name']) for i in result['artists'] if f"feat. {i['name'].lower()}"
-                                          not in result['name'].lower()]
+            t.info["extra"]["authors"] = [
+                fix_characters(i["name"])
+                for i in result["artists"]
+                if f"feat. {i['name'].lower()}" not in result["name"].lower()
+            ]
 
-            t.info["extra"]["authors_md"] = ", ".join(f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"])
+            t.info["extra"]["authors_md"] = ", ".join(
+                f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+            )
 
             try:
                 if result["album"]["name"] != result["name"] or result["album"]["total_tracks"] > 1:
                     t.info["extra"]["album"] = {
                         "name": result["album"]["name"],
-                        "url": result["album"]["external_urls"]["spotify"]
+                        "url": result["album"]["external_urls"]["spotify"],
                     }
             except (AttributeError, KeyError):
                 pass
@@ -314,16 +313,15 @@ class SpotifyClient:
             return [t]
 
         data = {
-            'loadType': 'PLAYLIST_LOADED',
-            'playlistInfo': {'name': ''},
-            'sourceName': "spotify",
-            'tracks_data': [],
-            'is_album': False,
-            "thumb": ""
+            "loadType": "PLAYLIST_LOADED",
+            "playlistInfo": {"name": ""},
+            "sourceName": "spotify",
+            "tracks_data": [],
+            "is_album": False,
+            "thumb": "",
         }
 
         if url_type == "album":
-
             cache_key = f"partial:spotify:{url_type}:{url_id}"
 
             if not (result := bot.pool.playlist_cache.get(cache_key)):
@@ -339,19 +337,18 @@ class SpotifyClient:
                 raise GenericError("**Não houve resultados para o link do álbum informado...**")
 
             if len(result["tracks"]) < 2:
-
                 track = result["tracks"][0]
 
                 trackinfo = {
-                    'title': track["name"],
-                    'author': track["artists"][0]["name"] or "Unknown Artist",
-                    'length': track["duration_ms"],
-                    'identifier': track["id"],
-                    'isStream': False,
-                    'uri': track["external_urls"]["spotify"],
-                    'sourceName': 'spotify',
-                    'position': 0,
-                    'artworkUrl': track["album"]["images"][0]["url"],
+                    "title": track["name"],
+                    "author": track["artists"][0]["name"] or "Unknown Artist",
+                    "length": track["duration_ms"],
+                    "identifier": track["id"],
+                    "isStream": False,
+                    "uri": track["external_urls"]["spotify"],
+                    "sourceName": "spotify",
+                    "position": 0,
+                    "artworkUrl": track["album"]["images"][0]["url"],
                 }
 
                 try:
@@ -361,19 +358,19 @@ class SpotifyClient:
 
                 t = LavalinkTrack(id_=encode_track(trackinfo)[1], info=trackinfo, requester=requester)
 
-                t.info["extra"]["authors"] = [fix_characters(i['name']) for i in track['artists'] if
-                                              f"feat. {i['name'].lower()}"
-                                              not in track['name'].lower()]
+                t.info["extra"]["authors"] = [
+                    fix_characters(i["name"])
+                    for i in track["artists"]
+                    if f"feat. {i['name'].lower()}" not in track["name"].lower()
+                ]
 
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in track["artists"])
+                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in track["artists"]
+                )
 
                 try:
                     if result["name"] != track["name"] or result["total_tracks"] > 1:
-                        t.info["extra"]["album"] = {
-                            "name": result["name"],
-                            "url": result["external_urls"]["spotify"]
-                        }
+                        t.info["extra"]["album"] = {"name": result["name"], "url": result["external_urls"]["spotify"]}
                 except (AttributeError, KeyError):
                     pass
 
@@ -388,7 +385,6 @@ class SpotifyClient:
             tracks_data = result["tracks"]["items"]
 
         elif url_type == "artist":
-
             cache_key = f"partial:spotify:{url_type}:{url_id}"
 
             if not (result := bot.pool.playlist_cache.get(cache_key)):
@@ -396,14 +392,14 @@ class SpotifyClient:
                 bot.pool.playlist_cache[cache_key] = result
 
             try:
-                data["playlistInfo"]["name"] = "As mais tocadas de: " + \
-                                               [a["name"] for a in result["tracks"][0]["artists"] if a["id"] == url_id][0]
+                data["playlistInfo"]["name"] = (
+                    "As mais tocadas de: " + [a["name"] for a in result["tracks"][0]["artists"] if a["id"] == url_id][0]
+                )
             except IndexError:
                 data["playlistInfo"]["name"] = "As mais tocadas de: " + result["tracks"][0]["artists"][0]["name"]
             tracks_data = result["tracks"]
 
         elif url_type == "playlist":
-
             cache_key = f"partial:spotify:{url_type}:{url_id}"
 
             if not (result := bot.pool.playlist_cache.get(cache_key)):
@@ -432,7 +428,6 @@ class SpotifyClient:
         playlist_info = playlist if url_type != "album" else None
 
         for t in tracks_data:
-
             if not t:
                 continue
 
@@ -442,15 +437,17 @@ class SpotifyClient:
                 thumb = ""
 
             trackinfo = {
-                'title': t["name"],
-                'author': t["artists"][0]["name"] or "Unknown Artist",
-                'length': t["duration_ms"],
-                'identifier': t["id"],
-                'isStream': False,
-                'uri': t["external_urls"].get("spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"),
-                'sourceName': 'spotify',
-                'position': 0,
-                'artworkUrl': thumb,
+                "title": t["name"],
+                "author": t["artists"][0]["name"] or "Unknown Artist",
+                "length": t["duration_ms"],
+                "identifier": t["id"],
+                "isStream": False,
+                "uri": t["external_urls"].get(
+                    "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
+                ),
+                "sourceName": "spotify",
+                "position": 0,
+                "artworkUrl": thumb,
             }
 
             try:
@@ -458,20 +455,33 @@ class SpotifyClient:
             except KeyError:
                 pass
 
-            track = LavalinkTrack(id_=encode_track(trackinfo)[1], info=trackinfo, requester=requester, playlist=playlist_info)
+            track = LavalinkTrack(
+                id_=encode_track(trackinfo)[1], info=trackinfo, requester=requester, playlist=playlist_info
+            )
 
             try:
                 if t["album"]["name"] != t["name"] or t["album"]["total_tracks"] > 1:
                     track.info["extra"]["album"] = {
                         "name": t["album"]["name"],
-                        "url": t["album"]["external_urls"]["spotify"]
+                        "url": t["album"]["external_urls"]["spotify"],
                     }
             except (AttributeError, KeyError):
                 pass
 
             if t["artists"][0]["name"]:
-                track.info["extra"]["authors"] = [fix_characters(i['name']) for i in t['artists'] if f"feat. {i['name'].lower()}" not in t['name'].lower()]
-                track.info["extra"]["authors_md"] = ", ".join(f"[`{fix_characters(a['name'])}`](<" + a['external_urls'].get('spotify', f'https://www.youtube.com/results?search_query={quote(t["name"])}') + ">)" for a in t['artists'])
+                track.info["extra"]["authors"] = [
+                    fix_characters(i["name"])
+                    for i in t["artists"]
+                    if f"feat. {i['name'].lower()}" not in t["name"].lower()
+                ]
+                track.info["extra"]["authors_md"] = ", ".join(
+                    f"[`{fix_characters(a['name'])}`](<"
+                    + a["external_urls"].get(
+                        "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
+                    )
+                    + ">)"
+                    for a in t["artists"]
+                )
             else:
                 track.info["extra"]["authors"] = ["Unknown Artist"]
                 track.info["extra"]["authors_md"] = "`Unknown Artist`"

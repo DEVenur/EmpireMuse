@@ -3,6 +3,7 @@
 Uma tarefa por servidor por vez; dono = usuário do painel que a criou. Tarefas terminadas expiram depois de 15 minutos.
 As ``asyncio.Task`` ficam em um conjunto rastreado (sem ``create_task`` solto) e ``shutdown()`` cancela todas.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -74,9 +75,15 @@ def valid_task_id(value: str) -> bool:
 class TaskRunner:
     """Registro e execução das tarefas; relógio, timeout e limites são injetáveis (padrões = constantes)."""
 
-    def __init__(self, *, clock: Callable[[], float] = time.monotonic, timeout: float = TASK_TIMEOUT_SECONDS,
-                 max_per_user: int = MAX_TASKS_PER_USER, max_total: int = MAX_TASKS_TOTAL,
-                 ttl: float = TASK_TTL_SECONDS) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        timeout: float = TASK_TIMEOUT_SECONDS,
+        max_per_user: int = MAX_TASKS_PER_USER,
+        max_total: int = MAX_TASKS_TOTAL,
+        ttl: float = TASK_TTL_SECONDS,
+    ) -> None:
         self._clock, self._timeout, self._ttl = clock, timeout, ttl
         self._max_per_user, self._max_total = max_per_user, max_total
         self._tasks: dict[str, Task] = {}
@@ -100,8 +107,16 @@ class TaskRunner:
             raise TaskBusy
         self._evict_oldest_finished(lambda t: t.owner == owner, self._max_per_user)
         self._evict_oldest_finished(lambda t: True, self._max_total)
-        task = Task(id=secrets.token_urlsafe(TASK_ID_BYTES), owner=owner, guild_id=guild_id, bot_id=bot_id, kind=kind,
-                    state=STATE_PENDING, message="", created_at=self._clock())
+        task = Task(
+            id=secrets.token_urlsafe(TASK_ID_BYTES),
+            owner=owner,
+            guild_id=guild_id,
+            bot_id=bot_id,
+            kind=kind,
+            state=STATE_PENDING,
+            message="",
+            created_at=self._clock(),
+        )
         self._tasks[task.id] = task
         runner = asyncio.get_running_loop().create_task(self._run(task, job))
         self._running.add(runner)

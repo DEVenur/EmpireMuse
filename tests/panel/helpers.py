@@ -3,6 +3,7 @@
 Contrato: BRIEFING-PAINEL-E1.md. Os módulos do painel são importados de forma lazy
 para que cada teste falhe individualmente (RED) enquanto a implementação não existe.
 """
+
 import importlib
 import re
 from pathlib import Path

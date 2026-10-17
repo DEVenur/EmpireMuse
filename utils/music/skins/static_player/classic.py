@@ -11,7 +11,6 @@ from utils.others import PlayerControls
 
 
 class ClassicStaticSkin:
-
     __slots__ = ("name", "preview")
 
     def __init__(self):
@@ -26,11 +25,7 @@ class ClassicStaticSkin:
         player.static = True
 
     def load(self, player: LavalinkPlayer) -> dict:
-
-        data = {
-            "content": None,
-            "embeds": []
-        }
+        data = {"content": None, "embeds": []}
 
         embed = disnake.Embed(color=player.bot.get_color(player.guild.me), description="")
 
@@ -42,22 +37,17 @@ class ClassicStaticSkin:
 
         if not player.paused:
             (embed_top or embed).set_author(
-                name="Tocando Agora:",
-                icon_url=music_source_image(player.current.info["sourceName"])
+                name="Tocando Agora:", icon_url=music_source_image(player.current.info["sourceName"])
             )
         else:
-            (embed_top or embed).set_author(
-                name="Em Pausa:",
-                icon_url=asset_url("player_pause_icon.png")
-            )
+            (embed_top or embed).set_author(name="Em Pausa:", icon_url=asset_url("player_pause_icon.png"))
 
         if player.current.is_stream:
             duration = "🔴 **⠂Livestream**"
         else:
             duration = f"⏰ **⠂Duração:** `{time_format(player.current.duration)}`"
 
-        txt = f"{duration}\n" \
-              f"💠 **⠂Uploader:** `{player.current.author}`\n"
+        txt = f"{duration}\n💠 **⠂Uploader:** `{player.current.author}`\n"
 
         if not player.current.autoplay:
             f"🎧 **⠂Pedido por:** <@{player.current.requester}>\n"
@@ -72,21 +62,25 @@ class ClassicStaticSkin:
             txt += f"📑 **⠂Playlist:** [`{fix_characters(player.current.playlist_name, limit=20)}`]({player.current.playlist_url})\n"
 
         if qsize := len(player.queue):
-
-            data["content"] = "**Músicas na fila:**\n```ansi\n" + \
-                              "\n".join(f"[0;33m{(n+1):02}[0m [0;34m[{time_format(t.duration) if not t.is_stream else '🔴 stream'}][0m [0;36m{fix_characters(t.title, 45)}[0m" for n, t in enumerate(
-                                  itertools.islice(player.queue, 15)))
+            data["content"] = "**Músicas na fila:**\n```ansi\n" + "\n".join(
+                f"[0;33m{(n + 1):02}[0m [0;34m[{time_format(t.duration) if not t.is_stream else '🔴 stream'}][0m [0;36m{fix_characters(t.title, 45)}[0m"
+                for n, t in enumerate(itertools.islice(player.queue, 15))
+            )
 
             if qsize > 15:
-                data["content"] += f"\n\n[0;37mE mais[0m [0;35m{qsize}[0m [0;37mmúsicas{'s'[:qsize^1]}.[0m"
+                data["content"] += f"\n\n[0;37mE mais[0m [0;35m{qsize}[0m [0;37mmúsicas{'s'[: qsize ^ 1]}.[0m"
 
             data["content"] += "```"
 
         elif len(player.queue_autoplay):
-
-            data["content"] = "**Próximas músicas recomendadas:**\n```ansi\n" + \
-                              "\n".join(f"[0;33m{(n+1):02}[0m [0;34m[{time_format(t.duration) if not t.is_stream else '🔴 stream'}][0m [0;36m{fix_characters(t.title, 45)}[0m" for n, t in enumerate(
-                                  itertools.islice(player.queue_autoplay, 15))) + "```"
+            data["content"] = (
+                "**Próximas músicas recomendadas:**\n```ansi\n"
+                + "\n".join(
+                    f"[0;33m{(n + 1):02}[0m [0;34m[{time_format(t.duration) if not t.is_stream else '🔴 stream'}][0m [0;36m{fix_characters(t.title, 45)}[0m"
+                    for n, t in enumerate(itertools.islice(player.queue_autoplay, 15))
+                )
+                + "```"
+            )
 
         if player.command_log:
             txt += f"{player.command_log_emoji} **⠂Última Interação:** {player.command_log}\n"
@@ -96,10 +90,7 @@ class ClassicStaticSkin:
         if player.current_hint:
             embed.set_footer(text=f"💡 Dica: {player.current_hint}")
         else:
-            embed.set_footer(
-                text=str(player),
-                icon_url=asset_url("player_loading_neon_circle.gif")
-            )
+            embed.set_footer(text=str(player), icon_url=asset_url("player_loading_neon_circle.gif"))
 
         data["embeds"] = [embed_top, embed] if embed_top else [embed]
 
@@ -108,107 +99,129 @@ class ClassicStaticSkin:
             disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
             disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
             disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
-            disnake.ui.Button(emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)),
+            disnake.ui.Button(
+                emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)
+            ),
             disnake.ui.Select(
                 placeholder="Mais opções:",
                 custom_id="musicplayer_dropdown_inter",
-                min_values=0, max_values=1, required = False,
+                min_values=0,
+                max_values=1,
+                required=False,
                 options=[
                     disnake.SelectOption(
-                        label="Adicionar música", emoji="➕",
+                        label="Adicionar música",
+                        emoji="➕",
                         value=PlayerControls.add_song,
-                        description="Adicionar uma música/playlist na fila."
+                        description="Adicionar uma música/playlist na fila.",
                     ),
                     disnake.SelectOption(
-                        label="Adicionar nos seus favoritos", emoji="💗",
+                        label="Adicionar nos seus favoritos",
+                        emoji="💗",
                         value=PlayerControls.add_favorite,
-                        description="Adicionar a música atual nos seus favoritos."
+                        description="Adicionar a música atual nos seus favoritos.",
                     ),
                     disnake.SelectOption(
-                        label="Tocar do inicio", emoji="⏪",
+                        label="Tocar do inicio",
+                        emoji="⏪",
                         value=PlayerControls.seek_to_start,
-                        description="Voltar o tempo da música atual para o inicio."
+                        description="Voltar o tempo da música atual para o inicio.",
                     ),
                     disnake.SelectOption(
-                        label=f"Volume: {player.volume}%", emoji="🔊",
+                        label=f"Volume: {player.volume}%",
+                        emoji="🔊",
                         value=PlayerControls.volume,
-                        description="Ajustar volume."
+                        description="Ajustar volume.",
                     ),
                     disnake.SelectOption(
-                        label="Misturar", emoji="🔀",
+                        label="Misturar",
+                        emoji="🔀",
                         value=PlayerControls.shuffle,
-                        description="Misturar as músicas da fila."
+                        description="Misturar as músicas da fila.",
                     ),
                     disnake.SelectOption(
-                        label="Readicionar", emoji="🎶",
+                        label="Readicionar",
+                        emoji="🎶",
                         value=PlayerControls.readd,
-                        description="Readicionar as músicas tocadas de volta na fila."
+                        description="Readicionar as músicas tocadas de volta na fila.",
                     ),
                     disnake.SelectOption(
-                        label="Repetição", emoji="🔁",
+                        label="Repetição",
+                        emoji="🔁",
                         value=PlayerControls.loop_mode,
-                        description="Ativar/Desativar repetição da música/fila."
+                        description="Ativar/Desativar repetição da música/fila.",
                     ),
                     disnake.SelectOption(
-                        label=("Desativar" if player.nightcore else "Ativar") + " o efeito nightcore", emoji="🇳",
+                        label=("Desativar" if player.nightcore else "Ativar") + " o efeito nightcore",
+                        emoji="🇳",
                         value=PlayerControls.nightcore,
-                        description="Efeito que aumenta velocidade e tom da música."
+                        description="Efeito que aumenta velocidade e tom da música.",
                     ),
                     disnake.SelectOption(
-                        label=("Desativar" if player.autoplay else "Ativar") + " a reprodução automática", emoji="🔄",
+                        label=("Desativar" if player.autoplay else "Ativar") + " a reprodução automática",
+                        emoji="🔄",
                         value=PlayerControls.autoplay,
-                        description="Sistema de adição de música automática quando a fila estiver vazia."
+                        description="Sistema de adição de música automática quando a fila estiver vazia.",
                     ),
                     disnake.SelectOption(
-                        label="Last.fm scrobble", emoji="🎧",
+                        label="Last.fm scrobble",
+                        emoji="🎧",
                         value=PlayerControls.lastfm_scrobble,
-                        description="Ativar/desativar o scrobble/registro de músicas na sua conta do last.fm."
+                        description="Ativar/desativar o scrobble/registro de músicas na sua conta do last.fm.",
                     ),
                     disnake.SelectOption(
-                        label= ("Desativar" if player.restrict_mode else "Ativar") + " o modo restrito", emoji="🔐",
+                        label=("Desativar" if player.restrict_mode else "Ativar") + " o modo restrito",
+                        emoji="🔐",
                         value=PlayerControls.restrict_mode,
-                        description="Apenas DJ's/Staff's podem usar comandos restritos."
+                        description="Apenas DJ's/Staff's podem usar comandos restritos.",
                     ),
-                ]
+                ],
             ),
         ]
 
-        if (queue:=player.queue or player.queue_autoplay):
+        if queue := player.queue or player.queue_autoplay:
             data["components"].append(
                 disnake.ui.Select(
                     placeholder="Próximas músicas:",
                     custom_id="musicplayer_queue_dropdown",
-                    min_values=0, max_values=1, required = False,
+                    min_values=0,
+                    max_values=1,
+                    required=False,
                     options=[
                         disnake.SelectOption(
-                            label=fix_characters(f"{n+1}. {t.single_title}", 47),
-                            description=fix_characters(f"[{time_format(t.duration) if not t.is_stream else '🔴 Live'}]. {t.authors_string}", 47),
-                            value=f"{n:02d}.{t.title[:96]}"
-                        ) for n, t in enumerate(itertools.islice(queue, 25))
-                    ]
+                            label=fix_characters(f"{n + 1}. {t.single_title}", 47),
+                            description=fix_characters(
+                                f"[{time_format(t.duration) if not t.is_stream else '🔴 Live'}]. {t.authors_string}", 47
+                            ),
+                            value=f"{n:02d}.{t.title[:96]}",
+                        )
+                        for n, t in enumerate(itertools.islice(queue, 25))
+                    ],
                 )
             )
 
         if player.current.ytid and player.node.lyric_support:
             data["components"][5].options.append(
                 disnake.SelectOption(
-                    label= "Visualizar letras", emoji="📃",
+                    label="Visualizar letras",
+                    emoji="📃",
                     value=PlayerControls.lyrics,
-                    description="Obter letra da música atual."
+                    description="Obter letra da música atual.",
                 )
             )
-
 
         if isinstance(player.last_channel, disnake.VoiceChannel):
             data["components"][5].options.append(
                 disnake.SelectOption(
-                    label="Status automático", emoji="📢",
+                    label="Status automático",
+                    emoji="📢",
                     value=PlayerControls.set_voice_status,
-                    description="Configurar o status automático do canal de voz."
+                    description="Configurar o status automático do canal de voz.",
                 )
             )
 
         return data
+
 
 def load():
     return ClassicStaticSkin()

@@ -1,10 +1,16 @@
 """E4a — categorias Aparência (G-08…G-11) e Geral (G-12 prefixo, G-13 status do canal de voz): conjuntos de skins
 do comando, skins personalizadas preservadas (S-04 privado), prefixo + cache do pool, placeholders do status de voz
 e efeitos em memória. Regras extraídas do código em helpers_settings (command_*)."""
+
 import copy
 
-from tests.panel.helpers_settings import (HOSTILE_SKIN, command_prefix_max_length, command_voice_max_length,
-                                          command_voice_placeholders, parse_forms)
+from tests.panel.helpers_settings import (
+    HOSTILE_SKIN,
+    command_prefix_max_length,
+    command_voice_max_length,
+    command_voice_placeholders,
+    parse_forms,
+)
 from tests.panel.test_settings_http import Each, HttpBase, external_change
 
 CUSTOM = "> custom_skin: Meu<b>"
@@ -13,6 +19,7 @@ LEGACY_SKIN_FIELDS = ("custom_skins", "custom_skins_static")
 
 
 # ============================================================================ Aparência: leitura
+
 
 class AppearanceReadTest(HttpBase):
     def test_two_independent_forms_each_with_its_own_version(self):
@@ -50,8 +57,9 @@ class AppearanceReadTest(HttpBase):
         assert HOSTILE_SKIN not in body and "&lt;b&gt;hostil" in body
 
     def test_custom_skin_is_shown_as_a_label_and_never_leaks_its_data(self):
-        external_change(self.db, "1", 100, player_controller={**self.db.doc("1", 100)["player_controller"],
-                                                              "skin": CUSTOM})
+        external_change(
+            self.db, "1", 100, player_controller={**self.db.doc("1", 100)["player_controller"], "skin": CUSTOM}
+        )
         body = self.logged_in().get(self.url(100, "aparencia")).body.decode()
         assert CUSTOM_LABEL in body
         assert "Meu<b>" not in body, "nome da skin personalizada vem escapado"
@@ -59,6 +67,7 @@ class AppearanceReadTest(HttpBase):
 
 
 # ============================================================================ Aparência: escrita por bot
+
 
 class AppearanceBotWriteTest(HttpBase):
     def test_valid_post_writes_only_the_two_skin_keys_of_player_controller(self):
@@ -74,9 +83,17 @@ class AppearanceBotWriteTest(HttpBase):
     def test_invalid_names_are_rejected_without_writing(self):
         browser = self.logged_in()
         before = self.db.doc("1", 100)
-        cases = {"inexistente": "nope", "ignorada": "dark", "markup": "<b>", "maiúscula": "Default",
-                 "espaço": "default ", "traversal": "../neon", "vazia (decisão MAESTRO)": "", "prefixo custom forjado":
-                 "> custom_skin: Forjada", "estática no campo normal": "green"}
+        cases = {
+            "inexistente": "nope",
+            "ignorada": "dark",
+            "markup": "<b>",
+            "maiúscula": "Default",
+            "espaço": "default ",
+            "traversal": "../neon",
+            "vazia (decisão MAESTRO)": "",
+            "prefixo custom forjado": "> custom_skin: Forjada",
+            "estática no campo normal": "green",
+        }
 
         def check(item):
             label, value = item
@@ -91,8 +108,9 @@ class AppearanceBotWriteTest(HttpBase):
         assert self.db.doc("1", 100) == before and self.db.writes == []
 
     def test_custom_skin_is_kept_when_not_changed_and_replaceable_by_a_listed_skin(self):
-        external_change(self.db, "1", 100, player_controller={**self.db.doc("1", 100)["player_controller"],
-                                                              "skin": CUSTOM})
+        external_change(
+            self.db, "1", 100, player_controller={**self.db.doc("1", 100)["player_controller"], "skin": CUSTOM}
+        )
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "aparencia", "skin")
         assert self.submit(browser, url, form, static_skin="green").code == 200
@@ -103,8 +121,9 @@ class AppearanceBotWriteTest(HttpBase):
         assert self.db.doc("1", 100)["player_controller"]["skin"] == "neon"
 
     def test_a_custom_skin_name_is_accepted_only_if_it_is_the_one_already_stored(self):
-        external_change(self.db, "1", 100, player_controller={**self.db.doc("1", 100)["player_controller"],
-                                                              "skin": CUSTOM})
+        external_change(
+            self.db, "1", 100, player_controller={**self.db.doc("1", 100)["player_controller"], "skin": CUSTOM}
+        )
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "aparencia", "skin")
         assert self.submit(browser, url, form, skin=CUSTOM).code == 200, "reenviar o valor atual não é troca"
@@ -121,8 +140,12 @@ class AppearanceBotWriteTest(HttpBase):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "aparencia", "skin")
         before = self.db.doc("global", 100)
-        pairs = form.pairs(skin="neon") + [("custom_skins", "AAAA"), ("custom_skins_static", "BBBB"),
-                                           ("global_skin", "on"), ("prefix", "hack")]
+        pairs = form.pairs(skin="neon") + [
+            ("custom_skins", "AAAA"),
+            ("custom_skins_static", "BBBB"),
+            ("global_skin", "on"),
+            ("prefix", "hack"),
+        ]
         assert self.submit(browser, url, form, pairs=pairs).code in (200, 422)
         assert self.db.doc("global", 100) == before, "nada do documento global muda pelo formulário por bot"
 
@@ -162,13 +185,15 @@ class AppearanceBotEffectsTest(HttpBase):
 
 # ============================================================================ Aparência: global
 
+
 class AppearanceGlobalTest(HttpBase):
     def test_valid_post_writes_only_the_three_global_skin_fields(self):
         browser = self.logged_in()
         before = self.db.doc("global", 100)
         bot_before = self.db.doc("1", 100)
-        response = self.save(browser, 100, "aparencia", "global_skin", global_skin="on", player_skin="neon",
-                             player_skin_static="green")
+        response = self.save(
+            browser, 100, "aparencia", "global_skin", global_skin="on", player_skin="neon", player_skin_static="green"
+        )
         assert response.code == 200, f"status {response.code}"
         expected = copy.deepcopy(before)
         expected.update({"global_skin": True, "player_skin": "neon", "player_skin_static": "green"})
@@ -179,8 +204,12 @@ class AppearanceGlobalTest(HttpBase):
     def test_empty_names_mean_the_pool_default_and_unchecked_means_off(self):
         browser = self.logged_in()
         external_change(self.db, "global", 100, global_skin=True, player_skin="neon", player_skin_static="green")
-        assert self.save(browser, 100, "aparencia", "global_skin", global_skin=None, player_skin="",
-                         player_skin_static="").code == 200
+        assert (
+            self.save(
+                browser, 100, "aparencia", "global_skin", global_skin=None, player_skin="", player_skin_static=""
+            ).code
+            == 200
+        )
         doc = self.db.doc("global", 100)
         assert doc["global_skin"] is False and doc["player_skin"] is None and doc["player_skin_static"] is None
 
@@ -194,9 +223,17 @@ class AppearanceGlobalTest(HttpBase):
             response = self.submit(browser, url, form, **{field: value})
             assert response.code == 422, f"{field}={value!r}: status {response.code}"
 
-        Each.run([("player_skin", "nope"), ("player_skin", "dark"), ("player_skin", "<b>"),
-                  ("player_skin_static", "blue"), ("player_skin_static", "neon"),
-                  ("player_skin_static", "> custom_skin: Forjada")], check)
+        Each.run(
+            [
+                ("player_skin", "nope"),
+                ("player_skin", "dark"),
+                ("player_skin", "<b>"),
+                ("player_skin_static", "blue"),
+                ("player_skin_static", "neon"),
+                ("player_skin_static", "> custom_skin: Forjada"),
+            ],
+            check,
+        )
         assert self.db.doc("global", 100) == before and self.db.writes == []
 
     def test_global_custom_skin_is_kept_when_not_changed(self):
@@ -208,8 +245,12 @@ class AppearanceGlobalTest(HttpBase):
     def test_legacy_skin_fields_in_the_post_are_ignored(self):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "aparencia", "global_skin")
-        pairs = form.pairs(player_skin="neon") + [("custom_skins", "AAAA"), ("custom_skins_static", "BBBB"),
-                                                  ("listen_along_invites", "x"), ("ver", "9.9")]
+        pairs = form.pairs(player_skin="neon") + [
+            ("custom_skins", "AAAA"),
+            ("custom_skins_static", "BBBB"),
+            ("listen_along_invites", "x"),
+            ("ver", "9.9"),
+        ]
         assert self.submit(browser, url, form, pairs=pairs).code in (200, 422)
         doc = self.db.doc("global", 100)
         assert doc["custom_skins"] == {"meu": "DADOS-LEGADOS"} and doc["custom_skins_static"] == {}
@@ -217,8 +258,18 @@ class AppearanceGlobalTest(HttpBase):
 
     def test_global_save_reloads_the_players_of_every_bot_in_the_guild(self):
         browser = self.logged_in()
-        assert self.save(browser, 800, "aparencia", "global_skin", global_skin="on", player_skin="neon",
-                         player_skin_static="green").code == 200
+        assert (
+            self.save(
+                browser,
+                800,
+                "aparencia",
+                "global_skin",
+                global_skin="on",
+                player_skin="neon",
+                player_skin_static="green",
+            ).code
+            == 200
+        )
         for player in (self.world.p800a, self.world.p800b):
             assert (player.skin, player.skin_static) == ("neon", "green"), player.label
             assert player.called("invoke_np") == [{"force": True}] and player.called("setup_features")
@@ -241,6 +292,7 @@ class AppearanceGlobalTest(HttpBase):
 
 # ============================================================================ Geral: prefixo (G-12)
 
+
 class PrefixTest(HttpBase):
     def test_form_shows_the_current_prefix(self):
         _, form, _ = self.open_form(self.logged_in(), 100, "geral", "prefix")
@@ -254,7 +306,9 @@ class PrefixTest(HttpBase):
         expected = copy.deepcopy(before)
         expected["prefix"] = ">>"
         assert self.db.doc("global", 800) == expected
-        assert self.pool.guild_prefix_cache == {800: ">>"}, "chave int do servidor editado (sem o bug de legacy_cmds:714)"
+        assert self.pool.guild_prefix_cache == {800: ">>"}, (
+            "chave int do servidor editado (sem o bug de legacy_cmds:714)"
+        )
         assert (self.db.doc("1", 800), self.db.doc("2", 800)) == bots_before
         assert self.db.writes == [("global", 800)]
 
@@ -307,8 +361,12 @@ class PrefixTest(HttpBase):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "geral", "prefix")
         before = self.db.doc("global", 100)
-        pairs = form.pairs(prefix="$") + [("custom_skins", "AAAA"), ("global_skin", "on"),
-                                          ("listen_along_invites", "x"), ("ver", "9.9")]
+        pairs = form.pairs(prefix="$") + [
+            ("custom_skins", "AAAA"),
+            ("global_skin", "on"),
+            ("listen_along_invites", "x"),
+            ("ver", "9.9"),
+        ]
         assert self.submit(browser, url, form, pairs=pairs).code in (200, 422)
         after = self.db.doc("global", 100)
         for key in ("custom_skins", "global_skin", "listen_along_invites", "ver", "extra_flag"):
@@ -320,6 +378,7 @@ class PrefixTest(HttpBase):
 
 
 # ============================================================================ Geral: status do canal de voz (G-13)
+
 
 class VoiceStatusTest(HttpBase):
     def test_form_is_a_text_area_with_the_current_template(self):
@@ -347,8 +406,7 @@ class VoiceStatusTest(HttpBase):
             response = self.save(browser, 100, "geral", "voice_channel_status", voice_channel_status=text)
             assert response.code == 422, f"{text!r}: status {response.code}"
 
-        Each.run(["Tocando agora", "{foo}", "{track.titulo}", "track.title", "{ track.title }", "{TRACK.TITLE}"],
-                 check)
+        Each.run(["Tocando agora", "{foo}", "{track.titulo}", "track.title", "{ track.title }", "{TRACK.TITLE}"], check)
         assert self.db.doc("global", 100) == before and self.db.writes == []
 
     def test_valid_placeholder_next_to_unknown_braces_is_accepted_like_the_command(self):
@@ -392,8 +450,9 @@ class VoiceStatusTest(HttpBase):
     def test_only_the_global_document_is_written(self):
         browser = self.logged_in()
         before = (self.db.doc("1", 800), self.db.doc("2", 800))
-        assert self.save(browser, 800, "geral", "voice_channel_status",
-                         voice_channel_status="{track.title}").code == 200
+        assert (
+            self.save(browser, 800, "geral", "voice_channel_status", voice_channel_status="{track.title}").code == 200
+        )
         assert (self.db.doc("1", 800), self.db.doc("2", 800)) == before
         assert self.db.writes == [("global", 800)]
 
@@ -432,5 +491,7 @@ class VoiceStatusEffectsTest(HttpBase):
         assert self.world.p100.calls == []
 
     def test_guild_without_players_saves_normally(self):
-        assert self.save(self.logged_in(), 200, "geral", "voice_channel_status",
-                         voice_channel_status="{track.title}").code == 200
+        assert (
+            self.save(self.logged_in(), 200, "geral", "voice_channel_status", voice_channel_status="{track.title}").code
+            == 200
+        )

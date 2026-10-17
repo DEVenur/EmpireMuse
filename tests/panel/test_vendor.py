@@ -1,4 +1,5 @@
 """Bibliotecas vendorizadas (htmx 2.0.10, Pico CSS 2.1.1) e ausência de CDN em panel/."""
+
 import hashlib
 import re
 
@@ -7,9 +8,21 @@ import pytest
 from tests.panel.helpers import PANEL_DIR, VENDOR_DIR
 
 VENDORED_FILES = ["htmx.min.js", "pico.min.css", "LICENSE-htmx.txt", "LICENSE-pico.txt"]
-CDN_HOSTS = ("cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com",
-             "ajax.googleapis.com", "stackpath.bootstrapcdn.com", "maxcdn.bootstrapcdn.com", "code.jquery.com",
-             "cdn.tailwindcss.com", "use.fontawesome.com", "esm.sh", "cdn.skypack.dev")
+CDN_HOSTS = (
+    "cdn.jsdelivr.net",
+    "unpkg.com",
+    "cdnjs.cloudflare.com",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "ajax.googleapis.com",
+    "stackpath.bootstrapcdn.com",
+    "maxcdn.bootstrapcdn.com",
+    "code.jquery.com",
+    "cdn.tailwindcss.com",
+    "use.fontawesome.com",
+    "esm.sh",
+    "cdn.skypack.dev",
+)
 TEXT_SUFFIXES = {".html", ".js", ".css", ".py", ".txt", ".svg", ".md"}
 
 

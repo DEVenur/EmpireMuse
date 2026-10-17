@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+
 import logging
 import re
 import time
@@ -35,33 +36,28 @@ from .eqs import *
 from .errors import *
 from .events import *
 
-__all__ = ('Track', 'TrackPlaylist', 'Player')
+__all__ = ("Track", "TrackPlaylist", "Player")
 __log__ = logging.getLogger(__name__)
 
 
 class WavelinkVoiceClient(VoiceClient):
-
     def __init__(self, bot: Union[commands.Bot, commands.AutoShardedBot], channel: VoiceChannel):
         self.client = bot
         self.channel = channel
 
     async def on_voice_server_update(self, data):
-        lavalink_data = {
-            't': 'VOICE_SERVER_UPDATE',
-            'd': data
-        }
+        lavalink_data = {"t": "VOICE_SERVER_UPDATE", "d": data}
 
         await self.client.music.update_handler(lavalink_data)
 
     async def on_voice_state_update(self, data):
-        lavalink_data = {
-            't': 'VOICE_STATE_UPDATE',
-            'd': data
-        }
+        lavalink_data = {"t": "VOICE_STATE_UPDATE", "d": data}
 
         await self.client.music.update_handler(lavalink_data)
 
-    async def connect(self, *, timeout: float, reconnect: bool, self_mute: bool = False, self_deaf: bool = True) -> None:
+    async def connect(
+        self, *, timeout: float, reconnect: bool, self_mute: bool = False, self_deaf: bool = True
+    ) -> None:
         await self.guild.change_voice_state(channel=self.channel, self_mute=self_mute, self_deaf=self_deaf)
         self._connected = True
 
@@ -69,7 +65,6 @@ class WavelinkVoiceClient(VoiceClient):
         await self.guild.change_voice_state(channel=channel)
 
     async def disconnect(self, *, force: bool) -> None:
-
         player = self.client.music.players[self.channel.guild.id]
 
         if not force and not player.is_connected:
@@ -111,40 +106,42 @@ class Track:
         The thumbnail URL associated with the track. Could be None.
     """
 
-    __slots__ = ('id',
-                 'info',
-                 'query',
-                 'title',
-                 'identifier',
-                 'ytid',
-                 'length',
-                 'duration',
-                 'author',
-                 'is_stream',
-                 'dead')
+    __slots__ = (
+        "id",
+        "info",
+        "query",
+        "title",
+        "identifier",
+        "ytid",
+        "length",
+        "duration",
+        "author",
+        "is_stream",
+        "dead",
+    )
 
     def __init__(self, id_, info: dict, query: str = None, *args, **kwargs):
         self.id = id_
         self.info = info
         self.query = query
         self.info["pluginInfo"] = kwargs.get("pluginInfo", {})
-        self.info['id'] = id_
+        self.info["id"] = id_
 
-        self.title = info.get('title', '')[:97]
-        self.identifier = info.get('identifier', '')
+        self.title = info.get("title", "")[:97]
+        self.identifier = info.get("identifier", "")
         self.ytid = self.identifier if re.match(r"^[a-zA-Z0-9_-]{11}$", self.identifier) else None
-        self.length = info.get('length')
+        self.length = info.get("length")
         self.duration = self.length
-        self.author = info.get('author', '')[:97]
+        self.author = info.get("author", "")[:97]
 
         if self.ytid:
             self.info["artworkUrl"] = f"https://img.youtube.com/vi/{self.ytid}/hqdefault.jpg"
-        elif arturl:=self.info["pluginInfo"].get("artworkUrl"):
+        elif arturl := self.info["pluginInfo"].get("artworkUrl"):
             self.info["artworkUrl"] = arturl
         elif self.info.get("artworkUrl") is None:
             self.info["artworkUrl"] = ""
 
-        self.is_stream = info.get('isStream')
+        self.is_stream = info.get("isStream")
         self.dead = False
 
     def __str__(self):
@@ -157,7 +154,7 @@ class Track:
     @property
     def uri(self):
         try:
-            return self.info['uri']
+            return self.info["uri"]
         except KeyError:
             return ""
 
@@ -180,7 +177,10 @@ class TrackPlaylist:
     def __init__(self, data: dict, **kwargs):
         self.data = data
         encoded_name = kwargs.pop("encoded_name", "track")
-        self.tracks = [kwargs.pop("track_cls", Track)(id_=track[encoded_name], info=track['info'], **kwargs) for track in data['tracks']]
+        self.tracks = [
+            kwargs.pop("track_cls", Track)(id_=track[encoded_name], info=track["info"], **kwargs)
+            for track in data["tracks"]
+        ]
 
 
 class Player:
@@ -268,26 +268,22 @@ class Player:
         return min(position, self.current.duration)
 
     async def update_state(self, state: dict) -> None:
-        state = state['state']
+        state = state["state"]
 
         self.last_update = time.time() * 1000
-        self.last_position = state.get('position', 0)
-        self.position_timestamp = state.get('time', 0)
-        self.ping = state.get('ping', None)
+        self.last_position = state.get("position", 0)
+        self.position_timestamp = state.get("time", 0)
+        self.ping = state.get("ping", None)
 
     async def _voice_server_update(self, data) -> None:
-        self._voice_state.update({
-            'event': data
-        })
+        self._voice_state.update({"event": data})
 
         await self._dispatch_voice_update()
 
     async def _voice_state_update(self, data) -> None:
-        self._voice_state.update({
-            'sessionId': data['session_id']
-        })
+        self._voice_state.update({"sessionId": data["session_id"]})
 
-        channel_id = data['channel_id']
+        channel_id = data["channel_id"]
 
         if not channel_id:  # We're disconnecting
             self.channel_id = None
@@ -301,12 +297,11 @@ class Player:
         await self._dispatch_voice_update()
 
     async def _dispatch_voice_update(self) -> None:
-
-        __log__.debug(f'PLAYER | Dispatching voice update:: {self.channel_id}')
+        __log__.debug(f"PLAYER | Dispatching voice update:: {self.channel_id}")
 
         if self.node.version == 3:
-            if {'sessionId', 'event'} == self._voice_state.keys():
-                await self.node._send(op='voiceUpdate', guildId=str(self.guild_id), **self._voice_state)
+            if {"sessionId", "event"} == self._voice_state.keys():
+                await self.node._send(op="voiceUpdate", guildId=str(self.guild_id), **self._voice_state)
         else:
             if not self.channel_id:  # o Lavalink 4.2+ exige channelId no voice update
                 return
@@ -317,12 +312,12 @@ class Player:
                         "sessionId": self._voice_state["sessionId"],
                         "token": self._voice_state["event"]["token"],
                         "endpoint": self._voice_state["event"]["endpoint"],
-                        "channelId": str(self.channel_id)
+                        "channelId": str(self.channel_id),
                     }
                 }
             except KeyError:
                 # Estado de voz incompleto (falta sessionId ou evento do servidor): só os nomes dos campos vão ao log.
-                __log__.debug(f'PLAYER | Voice update incompleto, campos presentes: {sorted(self._voice_state)}')
+                __log__.debug(f"PLAYER | Voice update incompleto, campos presentes: {sorted(self._voice_state)}")
                 return
 
             await self.node.update_player(self.guild_id, data=data)
@@ -356,7 +351,7 @@ class Player:
         """
         guild = self.bot.get_guild(self.guild_id)
         if not guild:
-            raise InvalidIDProvided(f'No guild found for id <{self.guild_id}>')
+            raise InvalidIDProvided(f"No guild found for id <{self.guild_id}>")
 
         try:
             self.bot.music.players[self.guild_id]
@@ -369,7 +364,7 @@ class Player:
 
         if not guild.voice_client:
             await channel.connect(cls=WavelinkVoiceClient, reconnect=True)
-            __log__.info(f'PLAYER | Connected to voice channel:: {self.channel_id}')
+            __log__.info(f"PLAYER | Connected to voice channel:: {self.channel_id}")
 
         elif not guild.me.voice:
             try:
@@ -402,9 +397,9 @@ class Player:
             return
 
         if not guild:
-            raise InvalidIDProvided(f'No guild found for id <{self.guild_id}>')
+            raise InvalidIDProvided(f"No guild found for id <{self.guild_id}>")
 
-        __log__.info(f'PLAYER | Disconnected from voice channel:: {self.channel_id}')
+        __log__.info(f"PLAYER | Disconnected from voice channel:: {self.channel_id}")
         self.channel_id = None
         await self._get_shard_socket(guild.shard_id).voice_state(self.guild_id, None)
 
@@ -438,31 +433,29 @@ class Player:
         self.current_encoded = kwargs.pop("temp_id", None) or track.id
 
         if self.node.version == 3:
-
             payload = {
-                'op': 'play',
-                'guildId': str(self.guild_id),
-                'track': self.current_encoded,
-                'noReplace': not replace,
-                'startTime': start,
+                "op": "play",
+                "guildId": str(self.guild_id),
+                "track": self.current_encoded,
+                "noReplace": not replace,
+                "startTime": start,
             }
 
             payload.update(kwargs)
 
             if end > 0:
-                payload['endTime'] = str(end)
+                payload["endTime"] = str(end)
 
             await self.node._send(**payload, **kwargs)
         else:
-
-            vol: int = kwargs.get('volume') or self.volume
+            vol: int = kwargs.get("volume") or self.volume
 
             if vol != self.volume:
                 self.volume = vol
 
             pause: bool
 
-            if (p:=kwargs.get("paused")) is not None:
+            if (p := kwargs.get("paused")) is not None:
                 pause = p
             else:
                 pause = self.paused
@@ -476,11 +469,11 @@ class Player:
             }
 
             if end > 0:
-                payload['endTime'] = str(end)
+                payload["endTime"] = str(end)
 
             await self.node.update_player(self.guild_id, payload, replace)
 
-        __log__.debug(f'PLAYER | Started playing track:: {str(track)} ({self.channel_id})')
+        __log__.debug(f"PLAYER | Started playing track:: {str(track)} ({self.channel_id})")
 
     async def stop(self) -> None:
         """|coro|
@@ -488,10 +481,10 @@ class Player:
         Stop the Player's currently playing song.
         """
         if self.node.version == 3:
-            await self.node._send(op='stop', guildId=str(self.guild_id))
+            await self.node._send(op="stop", guildId=str(self.guild_id))
         else:
             await self.node.update_player(self.guild_id, {"encodedTrack": None}, replace=True)
-        __log__.debug(f'PLAYER | Current track stopped:: {str(self.current)} ({self.channel_id})')
+        __log__.debug(f"PLAYER | Current track stopped:: {str(self.current)} ({self.channel_id})")
         self.current = None
         self.current_encoded = None
 
@@ -516,16 +509,13 @@ class Player:
 
         if self.node.version == 3:
             await self.stop()
-            await self.node._send(op='destroy', guildId=str(self.guild_id))
+            await self.node._send(op="destroy", guildId=str(self.guild_id))
         else:
-
             if self.node.session_id:
-
                 uri: str = f"{self.node.rest_uri}/v4/sessions/{self.node.session_id}/players/{self.guild_id}"
 
                 async with self.node.session.delete(url=uri, headers=self.node.headers) as resp:
                     if resp.status != 204:
-
                         try:
                             data = await resp.json()
                         except:
@@ -552,7 +542,7 @@ class Player:
             The Equalizer to set.
         """
         if self.node.version == 3:
-            await self.node._send(op='equalizer', guildId=str(self.guild_id), bands=equalizer.eq)
+            await self.node._send(op="equalizer", guildId=str(self.guild_id), bands=equalizer.eq)
         else:
             raise Exception("Não implementado para lavalink v4 (ainda)")
         self._equalizer = equalizer
@@ -575,11 +565,11 @@ class Player:
             A bool indicating if the player's paused state should be set to True or False.
         """
         if self.node.version == 3:
-            await self.node._send(op='pause', guildId=str(self.guild_id), pause=pause)
+            await self.node._send(op="pause", guildId=str(self.guild_id), pause=pause)
         else:
             await self.node.update_player(guild_id=self.guild_id, data={"paused": pause})
         self.paused = pause
-        __log__.debug(f'PLAYER | Set pause:: {self.paused} ({self.channel_id})')
+        __log__.debug(f"PLAYER | Set pause:: {self.paused} ({self.channel_id})")
 
     async def set_volume(self, vol: int) -> None:
         """|coro|
@@ -593,10 +583,10 @@ class Player:
         """
         self.volume = max(min(vol, 1000), 0)
         if self.node.version == 3:
-            await self.node._send(op='volume', guildId=str(self.guild_id), volume=self.volume)
+            await self.node._send(op="volume", guildId=str(self.guild_id), volume=self.volume)
         else:
             await self.node.update_player(guild_id=self.guild_id, data={"volume": vol})
-        __log__.debug(f'PLAYER | Set volume:: {self.volume} ({self.channel_id})')
+        __log__.debug(f"PLAYER | Set volume:: {self.volume} ({self.channel_id})")
 
     async def seek(self, position: int = 0) -> None:
         """Seek to the given position in the song.
@@ -608,7 +598,7 @@ class Player:
         """
 
         if self.node.version == 3:
-            await self.node._send(op='seek', guildId=str(self.guild_id), position=position)
+            await self.node._send(op="seek", guildId=str(self.guild_id), position=position)
         else:
             await self.node.update_player(self.guild_id, data={"position": int(position)})
 
@@ -631,7 +621,7 @@ class Player:
             if not node.is_available:
                 raise WavelinkException(f"Node unavailable:: {identifier}")
             if not node:
-                raise WavelinkException(f'No Nodes matching identifier:: {identifier}')
+                raise WavelinkException(f"No Nodes matching identifier:: {identifier}")
         else:
             self.node.close()
             node = None
@@ -647,15 +637,15 @@ class Player:
 
             if not node:
                 self.node.open()
-                raise WavelinkException('No Nodes available for changeover.')
+                raise WavelinkException("No Nodes available for changeover.")
 
-        #self.node.open()
+        # self.node.open()
 
         if self.node != node:
             old = self.node
             del old.players[self.guild_id]
             if old.version == 3:
-                await old._send(op='destroy', guildId=str(self.guild_id))
+                await old._send(op="destroy", guildId=str(self.guild_id))
             elif old.session_id:
                 try:
                     uri: str = f"{old.rest_uri}/v4/sessions/{old.session_id}/players/{self.guild_id}"
@@ -674,9 +664,11 @@ class Player:
 
         if self.current and not self.auto_pause:
             if self.node.version == 3:
-                await self.node._send(op='play', guildId=str(self.guild_id), track=self.current_encoded, startTime=int(self.position))
+                await self.node._send(
+                    op="play", guildId=str(self.guild_id), track=self.current_encoded, startTime=int(self.position)
+                )
                 if self.paused:
-                    await self.node._send(op='pause', guildId=str(self.guild_id), pause=self.paused)
+                    await self.node._send(op="pause", guildId=str(self.guild_id), pause=self.paused)
             else:
                 payload = {
                     "encodedTrack": self.current_encoded,
@@ -693,4 +685,4 @@ class Player:
             await self._dispatch_voice_update()
 
         if self.volume != 100 and self.node.version == 3:
-            await self.node._send(op='volume', guildId=str(self.guild_id), volume=self.volume)
+            await self.node._send(op="volume", guildId=str(self.guild_id), volume=self.volume)

@@ -10,13 +10,13 @@ lavalink_urls = {
     "non-ssl": "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/NoSSL/lavalink-without-ssl.md",
 }
 
-host_regex = re.compile(r'Host\s*:\s*(\S+)')
-port_regex = re.compile(r'Port\s*:\s*(\d+)')
+host_regex = re.compile(r"Host\s*:\s*(\S+)")
+port_regex = re.compile(r"Port\s*:\s*(\d+)")
 password_regex = re.compile(r'Password\s*:\s*"([^"]+)"')
-secure_regex = re.compile(r'Secure\s*:\s*(\S+)')
+secure_regex = re.compile(r"Secure\s*:\s*(\S+)")
+
 
 def extract_data_from_md(md):
-
     data = {}
 
     if not (host_match := host_regex.search(md)):
@@ -28,31 +28,31 @@ def extract_data_from_md(md):
     if not (password_match := password_regex.search(md)):
         return
 
-    data['host'] = host_match.group(1)
-    data['port'] = int(port_match.group(1))
-    data['password'] = password_match.group(1)
+    data["host"] = host_match.group(1)
+    data["port"] = int(port_match.group(1))
+    data["password"] = password_match.group(1)
 
-    if (secure_match := secure_regex.search(md)):
-        data['secure'] = True if secure_match.group(1).lower() == 'true' else False
+    if secure_match := secure_regex.search(md):
+        data["secure"] = True if secure_match.group(1).lower() == "true" else False
 
     return data
 
-def get_lavalink_servers():
 
+def get_lavalink_servers():
     config = ConfigParser()
 
     lavalink_nodes = {}
 
-    print(f"Baixando lista de servidores lavalink da fonte: https://lavalink-list.darrennathanael.com/\n"
-          "Nota: Devido a esses servidores lavalink serem públicos, os mesmos podem apresentar instabilidade.")
+    print(
+        f"Baixando lista de servidores lavalink da fonte: https://lavalink-list.darrennathanael.com/\n"
+        "Nota: Devido a esses servidores lavalink serem públicos, os mesmos podem apresentar instabilidade."
+    )
 
     for url_type, url in lavalink_urls.items():
-
         markdown = requests.get(url).content.decode("utf-8")
 
         for host in markdown.split("### Hosted by @ ")[1:]:
-
-            hostinfo = host.split('\n')[0].split("](")
+            hostinfo = host.split("\n")[0].split("](")
             host_owner = hostinfo[0][1:]
             host_url = hostinfo[1][:-1]
             blocks = host.split("```bash")[1:]
@@ -74,6 +74,7 @@ def get_lavalink_servers():
         traceback.print_exc()
 
     return lavalink_nodes
+
 
 if __name__ == "__main__":
     get_lavalink_servers()

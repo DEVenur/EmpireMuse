@@ -3,6 +3,7 @@
 Roda no mesmo processo, porta e loop do servidor web (``web_app``). ``make_router`` separa
 ``/painel`` do aplicativo principal (``/`` e ``/ws`` permanecem intactos).
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,8 +49,13 @@ def _log_request(handler: tornado.web.RequestHandler) -> None:
     logger.log(level, "%d %s %s", status, handler.request.method, handler.request.path)
 
 
-def build_panel_app(pool: BotPool, settings: PanelSettings, *, oauth_client: Optional[DiscordOAuthClient] = None,
-                    clock: Callable[[], float] = time.monotonic) -> Optional[tornado.web.Application]:
+def build_panel_app(
+    pool: BotPool,
+    settings: PanelSettings,
+    *,
+    oauth_client: Optional[DiscordOAuthClient] = None,
+    clock: Callable[[], float] = time.monotonic,
+) -> Optional[tornado.web.Application]:
     """Cria a aplicação do painel, ou ``None`` quando ele está desligado.
 
     ``oauth_client`` é injetável (testes); sem ele, o client_id vem de ``PANEL_OAUTH_CLIENT_ID`` ou da
@@ -104,8 +110,9 @@ def build_panel_app(pool: BotPool, settings: PanelSettings, *, oauth_client: Opt
     )
 
 
-def make_router(main_app: tornado.web.Application,
-                panel_app: Optional[tornado.web.Application]) -> tornado.routing.Router:
+def make_router(
+    main_app: tornado.web.Application, panel_app: Optional[tornado.web.Application]
+) -> tornado.routing.Router:
     """Envia ``/painel`` e ``/painel/...`` ao painel e todo o resto ao aplicativo principal."""
     rules = []
     if panel_app is not None:

@@ -9,7 +9,6 @@ from utils.music.models import LavalinkPlayer
 
 
 class LiteSkin:
-
     __slots__ = ("name", "preview")
 
     def __init__(self):
@@ -24,19 +23,16 @@ class LiteSkin:
         player.static = False
 
     def load(self, player: LavalinkPlayer) -> dict:
-
-        data = {
-            "content": None,
-            "embeds": []
-        }
+        data = {"content": None, "embeds": []}
 
         embed = disnake.Embed(color=player.bot.get_color(player.guild.me))
 
-        duration = "`🔴 Livestream`" if player.current.is_stream else \
-            time_format(player.current.duration)
+        duration = "`🔴 Livestream`" if player.current.is_stream else time_format(player.current.duration)
 
-        embed.description = f"> -# ▶️ **┃**[`{fix_characters(player.current.title, 45)}`]({player.current.uri or player.current.search_uri})\n" \
-                            f"> -# ℹ️ **┃**`{duration}`┃`{fix_characters(player.current.author, 18)}`┃"
+        embed.description = (
+            f"> -# ▶️ **┃**[`{fix_characters(player.current.title, 45)}`]({player.current.uri or player.current.search_uri})\n"
+            f"> -# ℹ️ **┃**`{duration}`┃`{fix_characters(player.current.author, 18)}`┃"
+        )
 
         if not player.current.autoplay:
             embed.description += f"<@{player.current.requester}>"
@@ -47,16 +43,23 @@ class LiteSkin:
                 embed.description = "`[Recomendada]`"
 
         if player.current.playlist_name:
-            embed.description += f"\n> -# 🎼 **┃ Playlist:** [`{player.current.playlist_name}`]({player.current.playlist_url})"
+            embed.description += (
+                f"\n> -# 🎼 **┃ Playlist:** [`{player.current.playlist_name}`]({player.current.playlist_url})"
+            )
 
         embed.set_thumbnail(player.current.thumb)
 
         data["embeds"].append(embed)
 
         if player.current_hint:
-            data["embeds"].append(disnake.Embed(color=player.bot.get_color(player.guild.me)).set_footer(text=f"💡 Dica: {player.current_hint}"))
+            data["embeds"].append(
+                disnake.Embed(color=player.bot.get_color(player.guild.me)).set_footer(
+                    text=f"💡 Dica: {player.current_hint}"
+                )
+            )
 
         return data
+
 
 def load():
     return LiteSkin()

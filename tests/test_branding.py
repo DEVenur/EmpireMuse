@@ -4,6 +4,7 @@ Os testes são escritos a partir do CONTRATO (BRIEFING-FASE1.md), não do códig
 atual. Obra derivada de MuseHeart-MusicBot (zRitsu), GPL-2.0: os créditos ao
 upstream são preservados (ver CREDITS.md e utils/branding.py).
 """
+
 import configparser
 import fnmatch
 import hashlib
@@ -36,8 +37,7 @@ EXPECTED_CONSTANTS = {
     "LAVALINK_JAR_SHA256": "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a",
     "LAVALINK_APPLICATION_YML_SHA256": "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95",
     "LAVALINK_PLUGIN_SHA256": {
-        "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar":
-            "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
+        "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar": "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
         "lavasrc-plugin-4.8.3.jar": "4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3",
         "lavalink-2.6.1.jar": "1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3",
     },
@@ -49,16 +49,35 @@ EXPECTED_CONSTANTS = {
 
 # Extensões/nomes considerados "arquivos de runtime" (R3).
 RUNTIME_PATTERNS = (
-    "*.py", "*.sh", "*.bat", "*.yml", "*.yaml", ".example.env", "*.config.example",
-    "Dockerfile", ".Dockerfile", "*.Dockerfile", ".replit", "*.html", "*.json",
-    "*.toml", "requirements*.txt",
+    "*.py",
+    "*.sh",
+    "*.bat",
+    "*.yml",
+    "*.yaml",
+    ".example.env",
+    "*.config.example",
+    "Dockerfile",
+    ".Dockerfile",
+    "*.Dockerfile",
+    ".replit",
+    "*.html",
+    "*.json",
+    "*.toml",
+    "requirements*.txt",
 )
 
 # I-7 Deploy (reativado): estes arquivos de deploy também devem estar com a identidade do EmpireMuse.
 DEPLOY_PATTERNS = (
-    "render.yaml", "discloud.config.example", "squarecloud.config.example",
-    ".replit", ".gitpod.yml", "Dockerfile", ".Dockerfile", "*.Dockerfile",
-    "replit.nix", "docker-compose*",
+    "render.yaml",
+    "discloud.config.example",
+    "squarecloud.config.example",
+    ".replit",
+    ".gitpod.yml",
+    "Dockerfile",
+    ".Dockerfile",
+    "*.Dockerfile",
+    "replit.nix",
+    "docker-compose*",
 )
 
 UPSTREAM_RESOURCE_PATTERNS = (
@@ -81,10 +100,9 @@ ASSET_URL_LITERAL_RE = re.compile(r"""asset_url\(\s*(["'])(?P<name>[^"']+)\1\s*\
 
 # --------------------------------------------------------------------------- helpers
 
+
 def _git_lines(*args: str) -> list[str]:
-    out = subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout
+    out = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     return [line for line in out.split("\0") if line]
 
 
@@ -142,6 +160,7 @@ def _runtime_files(*, deploy: bool) -> list[str]:
 
 # --------------------------------------------------------------------------- fixtures
 
+
 class _LazyBranding:
     """Importa utils.branding só no primeiro acesso, dentro do teste (falha individual, não erro de fixture)."""
 
@@ -175,6 +194,7 @@ def default_config(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- R1 Atualização
+
 
 def test_default_source_repo_points_to_empiremuse_git(default_config, branding):
     assert default_config["SOURCE_REPO"] == branding.SOURCE_REPO_GIT, (
@@ -221,14 +241,22 @@ def test_discloud_avatar_is_the_empiremuse_brand_asset(branding):
 
 
 def test_deploy_files_use_no_upstream_image_host():
-    hosts = ("i.ibb.co", "ibb.co", "i.imgur.com", "imgur.com", "iili.io", "cdn.discordapp.com/attachments/",
-             "media.discordapp.net/attachments/")
+    hosts = (
+        "i.ibb.co",
+        "ibb.co",
+        "i.imgur.com",
+        "imgur.com",
+        "iili.io",
+        "cdn.discordapp.com/attachments/",
+        "media.discordapp.net/attachments/",
+    )
     files = [p for p in _repo_files() if _is_deploy(p)]
     assert files, "nenhum arquivo de deploy encontrado"
     _fail_with("Host de imagem do upstream em arquivos de deploy", _scan(files, hosts))
 
 
 # --------------------------------------------------------------------------- R2 Lavalink
+
 
 def test_default_lavalink_file_url_is_mirrored_jar(default_config, branding):
     assert default_config["LAVALINK_FILE_URL"] == branding.LAVALINK_JAR_URL
@@ -254,19 +282,27 @@ def test_local_lavalink_does_not_use_upstream_binaries():
     _fail_with("local_lavalink.py ainda aponta para zRitsu/LL-binaries", violations)
 
 
-RENAMED_LL_REPO = "DiscordEmpireHub/LL-binaries"   # renomeado para DiscordEmpireHub/EmpireMuse-LL-binaries (301 no GitHub)
+RENAMED_LL_REPO = (
+    "DiscordEmpireHub/LL-binaries"  # renomeado para DiscordEmpireHub/EmpireMuse-LL-binaries (301 no GitHub)
+)
 
 
 def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
     """O CHANGELOG é histórico e pode citar o nome antigo; o restante (código, .example.env, docs, CREDITS) não."""
-    paths = [p for p in _repo_files()
-             if not p.startswith(("tests/", ".git/")) and p != "CHANGELOG.md"
-             and p.endswith((".py", ".md", ".env", ".yml", ".yaml", ".json", ".toml", ".txt", ".example"))]
+    paths = [
+        p
+        for p in _repo_files()
+        if not p.startswith(("tests/", ".git/"))
+        and p != "CHANGELOG.md"
+        and p.endswith((".py", ".md", ".env", ".yml", ".yaml", ".json", ".toml", ".txt", ".example"))
+    ]
     # utils/branding.py (fonte única de identidade) lista de propósito o nome ANTIGO entre as URLs oficiais de versões
     # anteriores, para que instalações com a URL antiga atualizem sozinhas; o upstream (zRitsu) segue proibido nele.
     others = [p for p in paths if p != "utils/branding.py"]
-    _fail_with("nome antigo do repositório de binários (use EmpireMuse-LL-binaries)",
-               _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan(["utils/branding.py"], ["zRitsu/LL-binaries"]))
+    _fail_with(
+        "nome antigo do repositório de binários (use EmpireMuse-LL-binaries)",
+        _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan(["utils/branding.py"], ["zRitsu/LL-binaries"]),
+    )
 
 
 def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror():
@@ -276,6 +312,7 @@ def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror(
 
 
 # --------------------------------------------------------------------------- R3 Recursos do upstream
+
 
 def _jishaku_exception(path: str, line: str) -> bool:
     return path == JISHAKU_EXCEPTION_FILE and "jishaku" in line.lower()
@@ -306,9 +343,7 @@ def test_runtime_files_have_no_upstream_resources():
     # Exceções: utils/branding.py (UPSTREAM_*), tests/**, a linha do jishaku em requirements.txt e o crédito
     # GPL-2.0 ao upstream no rodapé do painel (panel/templates/base.html).
     # Arquivos de deploy ficam fora (I-7 adiado) — ver teste pulado abaixo.
-    violations = _scan(
-        _runtime_files(deploy=False), UPSTREAM_RESOURCE_PATTERNS, ignore_line=_line_exception
-    )
+    violations = _scan(_runtime_files(deploy=False), UPSTREAM_RESOURCE_PATTERNS, ignore_line=_line_exception)
     _fail_with("Recursos do upstream em arquivos de runtime", violations)
 
 
@@ -318,6 +353,7 @@ def test_deploy_files_have_no_upstream_resources():
 
 
 # --------------------------------------------------------------------------- R4 Assets
+
 
 def _asset_files() -> list[Path]:
     if not ASSETS_DIR.is_dir():
@@ -384,6 +420,7 @@ def test_asset_url_rejects_invalid_names(branding, bad_name):
 
 # --------------------------------------------------------------------------- R5 Créditos
 
+
 def test_license_file_is_unchanged():
     digest = hashlib.sha256((ROOT / "LICENSE").read_bytes()).hexdigest()
     assert digest == LICENSE_SHA256, "LICENSE foi alterada (GPL-2.0 deve permanecer intacta)"
@@ -414,6 +451,7 @@ def test_about_command_links_repo_and_upstream():
 
 # --------------------------------------------------------------------------- R6 Nome antigo
 
+
 def _old_name_scan(paths) -> list[str]:
     violations = []
     for path in paths:
@@ -425,8 +463,7 @@ def _old_name_scan(paths) -> list[str]:
 
 def test_python_files_do_not_use_old_bot_name():
     py_files = [
-        p for p in _repo_files()
-        if p.endswith(".py") and not p.startswith("tests/") and p != "utils/branding.py"
+        p for p in _repo_files() if p.endswith(".py") and not p.startswith("tests/") and p != "utils/branding.py"
     ]
     _fail_with("Nome antigo (MuseHeart) em arquivos .py", _old_name_scan(py_files))
 
@@ -437,6 +474,9 @@ def test_deploy_files_do_not_use_old_bot_name():
 
 # --------------------------------------------------------------------------- R7 Constantes
 
+
 @pytest.mark.parametrize("const,expected", sorted(EXPECTED_CONSTANTS.items()))
 def test_branding_constant_has_contract_value(branding, const, expected):
-    assert getattr(branding, const, None) == expected, f"utils.branding.{const} ausente ou com valor diferente do contrato"
+    assert getattr(branding, const, None) == expected, (
+        f"utils.branding.{const} ausente ou com valor diferente do contrato"
+    )

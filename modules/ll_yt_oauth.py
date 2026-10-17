@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 
 
 class YtOauthView(disnake.ui.View):
-
     def __init__(self, bot: BotCore, ctx: CustomContext):
         super().__init__(timeout=300)
         self.ctx = ctx
@@ -28,8 +27,8 @@ class YtOauthView(disnake.ui.View):
         self.data = {}
 
         # dados obtidos no repositório: https://github.com/lavalink-devs/youtube-source/blob/main/common/src/main/java/dev/lavalink/youtube/http/YoutubeOauth2Handler.java#L34
-        self.client_id = '861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com'
-        self.client_secret = 'SboVhoG9s0rNafixCSGGKXAT'
+        self.client_id = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
+        self.client_secret = "SboVhoG9s0rNafixCSGGKXAT"
 
         self.interaction: Optional[disnake.MessageInteraction] = None
         self.exception_txt = ""
@@ -39,12 +38,11 @@ class YtOauthView(disnake.ui.View):
         self.add_item(btn)
 
     async def exchange_device_code(self, device_code: str, expire=1800):
-
         payload = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'code': device_code,
-            'grant_type': 'http://oauth.net/grant_type/device/1.0',
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": device_code,
+            "grant_type": "http://oauth.net/grant_type/device/1.0",
         }
 
         await asyncio.sleep(10)
@@ -52,12 +50,10 @@ class YtOauthView(disnake.ui.View):
         retries_count = 15
 
         while retries_count <= expire:
-
-            async with self.bot.session.post('https://oauth2.googleapis.com/token', data=payload) as response:
+            async with self.bot.session.post("https://oauth2.googleapis.com/token", data=payload) as response:
                 response_data = await response.json()
 
                 if response.status != 200:
-
                     if response_data["error"] != "authorization_pending":
                         self.exception_txt = f"**Falha ao aguardar autorização da conta:** `({response.status}) - {response_data['error_description']}`"
                         return
@@ -70,20 +66,21 @@ class YtOauthView(disnake.ui.View):
                 return
 
     async def get_device_code(self, session: aiohttp.ClientSession):
-
         async with session.post(
-                'https://oauth2.googleapis.com/device/code', data={
-                    'client_id': self.client_id,
-                    'scope': 'http://gdata.youtube.com https://www.googleapis.com/auth/youtube email profile',
-                    'device_id': str(uuid.uuid4()).replace("-", ""),
-                    'device_model': "ytlr::",
-                }
+            "https://oauth2.googleapis.com/device/code",
+            data={
+                "client_id": self.client_id,
+                "scope": "http://gdata.youtube.com https://www.googleapis.com/auth/youtube email profile",
+                "device_id": str(uuid.uuid4()).replace("-", ""),
+                "device_model": "ytlr::",
+            },
         ) as response:
-
             response_data = await response.json()
 
             if response.status != 200:
-                raise GenericError(f"**Falha ao solicitar código de dispositivo:** `({response.status}) - {response_data}`")
+                raise GenericError(
+                    f"**Falha ao solicitar código de dispositivo:** `({response.status}) - {response_data}`"
+                )
 
             return response_data
 
@@ -98,7 +95,6 @@ class YtOauthView(disnake.ui.View):
         return True
 
     async def send_authurl_callback(self, interaction: disnake.MessageInteraction):
-
         await interaction.response.defer(ephemeral=True, with_message=True)
 
         self.interaction = interaction
@@ -113,29 +109,31 @@ class YtOauthView(disnake.ui.View):
             verification_url = f"{data['verification_url']}?user_code={data['user_code']}"
 
         self.bot.pool.yt_oauth_loop = self.bot.loop.create_task(
-            self.check_session_loop(device_code=data['device_code'], expire_in=data['expires_in'])
+            self.check_session_loop(device_code=data["device_code"], expire_in=data["expires_in"])
         )
 
         await interaction.message.delete()
 
-        await interaction.send(embed=disnake.Embed(
-            color=self.bot.get_color(self.ctx.guild.me),
-            description=f"**Link para autenticar conta do google:**"
-                        f" ```\n{verification_url}``` "
-                        "`Caso já tenha autorizado a aplicação você deve aguardar até 15 segundos para "
-                        "essa mensagem atualizar confirmando o processo.`"),
+        await interaction.send(
+            embed=disnake.Embed(
+                color=self.bot.get_color(self.ctx.guild.me),
+                description=f"**Link para autenticar conta do google:**"
+                f" ```\n{verification_url}``` "
+                "`Caso já tenha autorizado a aplicação você deve aguardar até 15 segundos para "
+                "essa mensagem atualizar confirmando o processo.`",
+            ),
             components=[disnake.ui.Button(label="Abrir link", url=verification_url)],
-            ephemeral=True)
+            ephemeral=True,
+        )
+
 
 class YtOauthLL(commands.Cog):
-
     def __init__(self, bot: BotCore):
         self.bot = bot
 
     @commands.is_owner()
     @commands.command(hidden=True)
     async def ytoauth(self, ctx: CustomContext):
-
         try:
             self.bot.pool.yt_oauth_loop.cancel()
         except:
@@ -149,7 +147,6 @@ class YtOauthLL(commands.Cog):
         self.bot.pool.yt_oauth_loop_command = self.bot.loop.create_task(self.oauth_command(ctx))
 
     async def oauth_command(self, ctx: CustomContext):
-
         color = self.bot.get_color(ctx.guild.me)
 
         view = YtOauthView(bot=self.bot, ctx=ctx)
@@ -157,8 +154,8 @@ class YtOauthLL(commands.Cog):
         embed = disnake.Embed(
             color=color,
             description=f"## Obter refresh-token de uma conta do google\n\n"
-                        f"⚠️ **Cuidado!** Use (ou crie) uma conta descartável ao invés de prosseguir com uma conta de "
-                        f"uso pessoal devido a alta chance da conta ser banida pelo google (evite usar contas que podem conter algum número de telefone ou email de recuperação, caso crie uma agora evite colocar número de telefone e email de recuperação)."
+            f"⚠️ **Cuidado!** Use (ou crie) uma conta descartável ao invés de prosseguir com uma conta de "
+            f"uso pessoal devido a alta chance da conta ser banida pelo google (evite usar contas que podem conter algum número de telefone ou email de recuperação, caso crie uma agora evite colocar número de telefone e email de recuperação).",
         )
 
         msg = await ctx.send(embed=embed, view=view)
@@ -171,14 +168,13 @@ class YtOauthLL(commands.Cog):
         if view.exception_txt:
             raise GenericError(view.exception_txt)
 
-        if not (refresh_token:=view.data.get('refresh_token')):
+        if not (refresh_token := view.data.get("refresh_token")):
             raise GenericError("**Tempo para vincular conta do google esgotado!**")
 
         async with self.bot.session.get(
-                'https://www.googleapis.com/oauth2/v3/userinfo',
-                headers={'Authorization': f'Bearer {view.data["access_token"]}'}
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {view.data['access_token']}"},
         ) as resp:
-
             if resp.status != 200:
                 resp.raise_for_status()
 
@@ -189,17 +185,17 @@ class YtOauthLL(commands.Cog):
         else:
             func = msg.edit
 
-        name = data['name']
+        name = data["name"]
 
-        if (given_name:=data.get("given_name")) and given_name != name:
+        if (given_name := data.get("given_name")) and given_name != name:
             name = f"{given_name} ({name})"
 
         embed = disnake.Embed(
             color=color,
             description=f"## Confirmação de conta:\n"
-                        f"**Email autorizado:** ```ansi\n[31;1m{data['email']}[0m``` "
-                        f"**Nome:** ```ansi\n[31;1m{name}[0m``` "
-                        "⚠️ Cuidado! Caso essa conta seja de uso pessoal, clique no botão \"Não\" e use (ou crie) uma conta descartável!"
+            f"**Email autorizado:** ```ansi\n[31;1m{data['email']}[0m``` "
+            f"**Nome:** ```ansi\n[31;1m{name}[0m``` "
+            '⚠️ Cuidado! Caso essa conta seja de uso pessoal, clique no botão "Não" e use (ou crie) uma conta descartável!',
         ).set_thumbnail(data["picture"])
 
         view_confirm = AskView(ctx=ctx)
@@ -227,7 +223,7 @@ class YtOauthLL(commands.Cog):
             try:
                 await self.bot.pool.mongo_database.update_data(
                     id_="youtube_data",
-                    data={"refresh_tokens": {data['email']: refresh_token}},
+                    data={"refresh_tokens": {data["email"]: refresh_token}},
                     collection="global",
                     db_name="global",
                 )
@@ -235,37 +231,35 @@ class YtOauthLL(commands.Cog):
                 txts.append(f"Falha ao salvar refreshToken no MongoDB: {repr(e)}")
 
         if os.path.isfile("./application.yml"):
-
             try:
-
                 yaml = ruamel.yaml.YAML()
                 yaml.preserve_quotes = True
                 yaml.explicit_start = True
 
-                with open('./application.yml', 'r', encoding='utf-8') as file:
+                with open("./application.yml", "r", encoding="utf-8") as file:
                     yml_data = yaml.load(file.read())
 
-                new_value = {
-                    "enabled": True,
-                    "refreshToken": refresh_token
-                }
+                new_value = {"enabled": True, "refreshToken": refresh_token}
 
                 try:
-                    yml_data['plugins']['youtube']['oauth'].update(new_value)
+                    yml_data["plugins"]["youtube"]["oauth"].update(new_value)
                 except KeyError:
-                    yml_data['plugins']['youtube'] = {'oauth': new_value}
+                    yml_data["plugins"]["youtube"] = {"oauth": new_value}
 
-                with open('./application.yml', 'w') as file:
+                with open("./application.yml", "w") as file:
                     yaml.dump(yml_data, file)
 
                 if (node := self.bot.music.nodes.get("LOCAL")) and "youtube-plugin" in node.info["plugins"]:
                     resp = await self.bot.session.post(
-                        f"{node.rest_uri}/youtube", headers=node._websocket.headers,
-                        json={"refreshToken": refresh_token}
+                        f"{node.rest_uri}/youtube",
+                        headers=node._websocket.headers,
+                        json={"refreshToken": refresh_token},
                     )
 
                     if resp.status != 204:
-                        txts.append(f"Erro ao aplicar refreshToken no lavalink LOCAL: {resp.status} - {await resp.text()}")
+                        txts.append(
+                            f"Erro ao aplicar refreshToken no lavalink LOCAL: {resp.status} - {await resp.text()}"
+                        )
                     else:
                         txts.append("O refreshToken foi configurado automaticamente no servidor lavalink LOCAL")
 
@@ -278,13 +272,17 @@ class YtOauthLL(commands.Cog):
 
         txts.append("Evite mostrar esse token publicamente!")
 
-        await func(embed=disnake.Embed(
-            color=color,
-            description=f"### refreshToken da conta do google obtido com sucesso!\n```{refresh_token}``` "
-                        f"**Usuário autorizado:**  ```ansi\n[34;1m{name}[0m``` "
-                        f"**Email:** ```ansi\n[34;1m{data['email']}[0m``` "
-                        f"**Nota{'s'[:len(txts)^1]}:**\n" + "\n".join(f"* {t}" for t in txts)
-        ).set_thumbnail(data["picture"]), view=None)
+        await func(
+            embed=disnake.Embed(
+                color=color,
+                description=f"### refreshToken da conta do google obtido com sucesso!\n```{refresh_token}``` "
+                f"**Usuário autorizado:**  ```ansi\n[34;1m{name}[0m``` "
+                f"**Email:** ```ansi\n[34;1m{data['email']}[0m``` "
+                f"**Nota{'s'[: len(txts) ^ 1]}:**\n" + "\n".join(f"* {t}" for t in txts),
+            ).set_thumbnail(data["picture"]),
+            view=None,
+        )
+
 
 def setup(bot: BotCore):
     bot.add_cog(YtOauthLL(bot))

@@ -1,4 +1,5 @@
 """panel/oauth.py — PKCE, URL de autorização e cliente HTTP (com sessão aiohttp simulada)."""
+
 import asyncio
 import re
 from types import SimpleNamespace
@@ -19,6 +20,7 @@ def _oauth():
 
 # --------------------------------------------------------------------------- PKCE
 
+
 def test_pkce_pair_follows_rfc7636_s256():
     verifier, challenge = _oauth().make_pkce_pair()
     assert UNRESERVED.match(verifier), f"code_verifier fora de RFC 7636: {verifier!r}"
@@ -33,6 +35,7 @@ def test_pkce_pairs_are_unique():
 
 # --------------------------------------------------------------------------- authorize_url
 
+
 def _client(config=None):
     settings = load_settings(config or https_config())
     return settings, _oauth().DiscordOAuthClient(settings, CLIENT_ID)
@@ -46,9 +49,14 @@ def test_authorize_url_has_exact_parameters():
     params = {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()}
     assert set(params) == AUTHORIZE_PARAM_KEYS, f"parâmetros diferentes do contrato: {sorted(params)}"
     assert params == {
-        "response_type": "code", "client_id": CLIENT_ID, "scope": "identify guilds", "state": "state-123",
-        "redirect_uri": settings.redirect_uri, "code_challenge": "challenge-456",
-        "code_challenge_method": "S256", "prompt": "none",
+        "response_type": "code",
+        "client_id": CLIENT_ID,
+        "scope": "identify guilds",
+        "state": "state-123",
+        "redirect_uri": settings.redirect_uri,
+        "code_challenge": "challenge-456",
+        "code_challenge_method": "S256",
+        "prompt": "none",
     }
 
 
@@ -69,6 +77,7 @@ def test_discord_oauth_error_is_an_exception():
 
 
 # --------------------------------------------------------------------------- cliente HTTP com sessão simulada
+
 
 class _Response:
     def __init__(self, status, payload, url):
@@ -97,6 +106,7 @@ class _Response:
     def __await__(self):
         async def _self():
             return self
+
         return _self().__await__()
 
 
@@ -166,11 +176,20 @@ def test_exchange_code_posts_form_with_pkce_and_returns_access_token():
     assert OAUTH_SECRET not in url and CODE not in url, "segredo/código não podem ir na query string"
 
 
-@pytest.mark.parametrize("outcome", [
-    (400, {"error": "invalid_grant"}), (401, {"message": "401: Unauthorized"}), (429, {"retry_after": 1.0}),
-    (500, {}), (200, {"sem": "access_token"}), (200, ["lista"]),
-    aiohttp.ClientError("rede"), asyncio.TimeoutError(), OSError("rede"),
-])
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        (400, {"error": "invalid_grant"}),
+        (401, {"message": "401: Unauthorized"}),
+        (429, {"retry_after": 1.0}),
+        (500, {}),
+        (200, {"sem": "access_token"}),
+        (200, ["lista"]),
+        aiohttp.ClientError("rede"),
+        asyncio.TimeoutError(),
+        OSError("rede"),
+    ],
+)
 def test_exchange_code_failures_raise_discord_oauth_error_without_leaking(outcome):
     client, _ = _real_client(lambda m, u, k: outcome)
     with pytest.raises(_oauth().DiscordOAuthError) as excinfo:
@@ -201,10 +220,17 @@ def test_fetch_guilds_requests_limit_200_and_returns_list():
     assert kwargs.get("headers", {}).get("Authorization") == f"Bearer {ACCESS_TOKEN}"
 
 
-@pytest.mark.parametrize("method_name,outcome", [
-    ("fetch_user", (401, {})), ("fetch_user", (200, ["não é dict"])), ("fetch_user", aiohttp.ClientError("rede")),
-    ("fetch_guilds", (429, {})), ("fetch_guilds", (200, {"não": "lista"})), ("fetch_guilds", asyncio.TimeoutError()),
-])
+@pytest.mark.parametrize(
+    "method_name,outcome",
+    [
+        ("fetch_user", (401, {})),
+        ("fetch_user", (200, ["não é dict"])),
+        ("fetch_user", aiohttp.ClientError("rede")),
+        ("fetch_guilds", (429, {})),
+        ("fetch_guilds", (200, {"não": "lista"})),
+        ("fetch_guilds", asyncio.TimeoutError()),
+    ],
+)
 def test_fetch_failures_raise_discord_oauth_error_without_token(method_name, outcome):
     client, _ = _real_client(lambda m, u, k: outcome)
     with pytest.raises(_oauth().DiscordOAuthError) as excinfo:

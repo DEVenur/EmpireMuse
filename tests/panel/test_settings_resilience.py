@@ -1,4 +1,5 @@
 """E4a — resiliência: falha de efeito em memória depois de gravar não pode derrubar a resposta nem desfazer o dado."""
+
 from tests.panel.test_settings_http import HttpBase
 
 

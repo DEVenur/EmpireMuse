@@ -30,7 +30,7 @@ MAX_BODY_SIZE = 64 * 1024
 if TYPE_CHECKING:
     from utils.client import BotPool
 
-logging.getLogger('tornado.access').disabled = True
+logging.getLogger("tornado.access").disabled = True
 
 users_ws = {}
 bots_ws = []
@@ -63,22 +63,21 @@ def _logo_data_uri() -> str:
 
 
 class IndexHandler(tornado.web.RequestHandler):
-
     def set_default_headers(self):
         # Sem CSP: a página usa <style>/<script> embutidos. Estes três bastam contra sniffing, iframe e vazamento de URL.
         self.set_header("X-Content-Type-Options", "nosniff")
         self.set_header("X-Frame-Options", "DENY")
         self.set_header("Referrer-Policy", "same-origin")
 
-    def initialize(self, pool: Optional[BotPool] = None, message: str = "", config: dict = None,
-                   panel_enabled: bool = False):
+    def initialize(
+        self, pool: Optional[BotPool] = None, message: str = "", config: dict = None, panel_enabled: bool = False
+    ):
         self.message = message
         self.panel_enabled = panel_enabled
         self.pool = pool
         self.config = config
 
     async def prepare(self):
-
         bots = [asyncio.create_task(bot.wait_until_ready()) for bot in self.pool.bots if not bot.is_ready()]
 
         if bots:
@@ -87,7 +86,6 @@ class IndexHandler(tornado.web.RequestHandler):
             await asyncio.wait(bots, timeout=7)
 
     async def get(self):
-
         try:
             killing_state = self.pool.killing_state
         except:
@@ -99,43 +97,50 @@ class IndexHandler(tornado.web.RequestHandler):
         if killing_state is not True:
             for bot in sorted(self.pool.bots, key=lambda b: len(b.guilds)):
                 if bot.is_ready():
-                    ready_bots.append({
-                        "nome": str(bot.user),
-                        "avatar": bot.user.display_avatar.replace(size=256, static_format="png").url,
-                        "servidores": len(bot.guilds),
-                        "convite": disnake.utils.oauth_url(
-                            bot.user.id, permissions=disnake.Permissions(bot.config['INVITE_PERMISSIONS']),
-                            scopes=('bot', 'applications.commands')),
-                    })
+                    ready_bots.append(
+                        {
+                            "nome": str(bot.user),
+                            "avatar": bot.user.display_avatar.replace(size=256, static_format="png").url,
+                            "servidores": len(bot.guilds),
+                            "convite": disnake.utils.oauth_url(
+                                bot.user.id,
+                                permissions=disnake.Permissions(bot.config["INVITE_PERMISSIONS"]),
+                                scopes=("bot", "applications.commands"),
+                            ),
+                        }
+                    )
                 else:
                     pending_bots.append(bot.identifier)
 
         commit = self.pool.commit or ""
 
-        self.write(_status_loader().load("status.html").generate(
-            reiniciando=killing_state is True,
-            mensagem=self.message.split("\n") if self.message else [],
-            prontos=ready_bots,
-            pendentes=pending_bots,
-            falhas=[(str(k), str(v)) for k, v in self.pool.failed_bots.items()],
-            rpc_auth=bool(self.config["ENABLE_RPC_AUTH"]),
-            rpc_app_url=branding.RPC_APP_RELEASES_URL,
-            prefixo=self.pool.config['DEFAULT_PREFIX'],
-            commit=commit,
-            commit_url=f"{self.pool.remote_git_url}/commit/{commit}" if commit else "",
-            painel_url="/painel/" if self.panel_enabled else "",
-            suporte_url=branding.SUPPORT_SERVER_URL,
-            nome_bot=branding.BOT_NAME,
-            repo_url=branding.REPO_URL,
-            upstream_nome=branding.UPSTREAM_NAME,
-            upstream_autor=branding.UPSTREAM_AUTHOR,
-            upstream_url=branding.UPSTREAM_URL,
-            logo_src=_logo_data_uri(),
-        ))
+        self.write(
+            _status_loader()
+            .load("status.html")
+            .generate(
+                reiniciando=killing_state is True,
+                mensagem=self.message.split("\n") if self.message else [],
+                prontos=ready_bots,
+                pendentes=pending_bots,
+                falhas=[(str(k), str(v)) for k, v in self.pool.failed_bots.items()],
+                rpc_auth=bool(self.config["ENABLE_RPC_AUTH"]),
+                rpc_app_url=branding.RPC_APP_RELEASES_URL,
+                prefixo=self.pool.config["DEFAULT_PREFIX"],
+                commit=commit,
+                commit_url=f"{self.pool.remote_git_url}/commit/{commit}" if commit else "",
+                painel_url="/painel/" if self.panel_enabled else "",
+                suporte_url=branding.SUPPORT_SERVER_URL,
+                nome_bot=branding.BOT_NAME,
+                repo_url=branding.REPO_URL,
+                upstream_nome=branding.UPSTREAM_NAME,
+                upstream_autor=branding.UPSTREAM_AUTHOR,
+                upstream_url=branding.UPSTREAM_URL,
+                logo_src=_logo_data_uri(),
+            )
+        )
 
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_ids: list = []
@@ -145,7 +150,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self.auth_enabled = False
 
     def on_message(self, message):
-
         data = json.loads(message)
 
         ws_id = data.get("user_ids")
@@ -155,19 +159,17 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self.auth_enabled = data.pop("auth_enabled", False)
 
         if not ws_id:
-
             if not bot_id:
                 print(f"desconectando: por falta de id de usuario {self.request.remote_ip}\nDados: {data}")
-                self.write_message(json.dumps({"op": "disconnect", "reason": "Desconectando por falta de ids de usuario"}))
+                self.write_message(
+                    json.dumps({"op": "disconnect", "reason": "Desconectando por falta de ids de usuario"})
+                )
                 self.close(code=4200)
                 return
 
             try:
-
                 if self.auth_enabled:
-
                     if users_ws[data["user"]].token != token:
-
                         if users_ws[data["user"]].blocked:
                             return
 
@@ -175,7 +177,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                             {
                                 "op": "exception",
                                 "message": "token inválido! Por via das dúvidas gere um novo token usando o comando no "
-                                           "bot: /rich_presence."
+                                "bot: /rich_presence.",
                             }
                         )
 
@@ -205,19 +207,29 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             return
 
         if app_version < minimal_version:
-            self.write_message(json.dumps({"op": "disconnect", "reason": "Versão do app não suportado! Certifique-se de que está usando "
-                                         f"a versão mais recente do app ({minimal_version} ou superior)."}))
+            self.write_message(
+                json.dumps(
+                    {
+                        "op": "disconnect",
+                        "reason": "Versão do app não suportado! Certifique-se de que está usando "
+                        f"a versão mais recente do app ({minimal_version} ou superior).",
+                    }
+                )
+            )
             self.close(code=4200)
             return
 
         if len(ws_id) > 3:
-            self.write_message(json.dumps({"op": "disconnect", "reason": "Você está tentando conectar mais de 3 usuários consecutivamente..."}))
+            self.write_message(
+                json.dumps(
+                    {"op": "disconnect", "reason": "Você está tentando conectar mais de 3 usuários consecutivamente..."}
+                )
+            )
             self.close(code=4200)
             return
 
         if len(token) not in (0, 50):
-            self.write_message(
-                json.dumps({"op": "disconnect", "reason": f"O token precisa ter 50 caracteres..."}))
+            self.write_message(json.dumps({"op": "disconnect", "reason": f"O token precisa ter 50 caracteres..."}))
             self.close(code=4200)
             return
 
@@ -227,8 +239,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
         for u_id in ws_id:
             try:
-                users_ws[u_id].write_message(json.dumps({"op": "disconnect",
-                                               "reason": "Nova sessão iniciada em outro local..."}))
+                users_ws[u_id].write_message(
+                    json.dumps({"op": "disconnect", "reason": "Nova sessão iniciada em outro local..."})
+                )
                 users_ws[u_id].close(code=4200)
             except:
                 pass
@@ -237,7 +250,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self.token = token
 
         for w in bots_ws:
-
             try:
                 w.write_message(json.dumps(data))
             except Exception as e:
@@ -247,7 +259,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         return True
 
     def on_close(self):
-
         if self.user_ids:
             print("\n".join(f"👤 - Conexão Finalizada - User: {u}" for u in self.user_ids))
             for u_id in self.user_ids:
@@ -261,13 +272,11 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             print(f"Conexão Finalizada - IP: {self.request.remote_ip}")
 
         else:
-
             print(f"🌐 - Conexão Finalizada - Bot ID's: {self.bot_ids}")
 
             data = {"op": "close", "bot_id": self.bot_ids}
 
             for w in users_ws.values():
-
                 if w.blocked:
                     continue
 
@@ -275,13 +284,13 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                     w.write_message(data)
                 except Exception as e:
                     print(
-                        f"👤 - Erro ao processar dados do rpc para os usuários: [{', '.join(str(i) for i in w.user_ids)}]: {repr(e)}")
+                        f"👤 - Erro ao processar dados do rpc para os usuários: [{', '.join(str(i) for i in w.user_ids)}]: {repr(e)}"
+                    )
 
         bots_ws.remove(self)
 
 
 class WSClient:
-
     def __init__(self, url: str, pool: BotPool):
         self.url: str = url
         self.pool = pool
@@ -293,7 +302,6 @@ class WSClient:
         self.connect_task = []
 
     async def connect(self):
-
         for t in self.connect_task:
             try:
                 t.cancel()
@@ -319,7 +327,6 @@ class WSClient:
         return self.connection and not self.connection.closed
 
     async def connect_bot_rpc(self):
-
         bot_ids = set()
 
         for bot in self.all_bots:
@@ -336,7 +343,6 @@ class WSClient:
 
         for bot in self.all_bots:
             for player in bot.music.players.values():
-
                 if not player.guild.me.voice:
                     continue
 
@@ -346,7 +352,6 @@ class WSClient:
         print(f"🌐 - [RPC client] - Os dados de rpc foram sincronizados com sucesso.")
 
     async def send(self, data: dict):
-
         if not self.is_connected:
             return
 
@@ -356,7 +361,6 @@ class WSClient:
             print_exc()
 
     def clear_tasks(self):
-
         for t in self.connect_task:
             try:
                 t.cancel()
@@ -366,20 +370,21 @@ class WSClient:
         self.connect_task.clear()
 
     async def ws_loop(self):
-
         while True:
-
             try:
-
                 if not self.is_connected:
                     self.clear_tasks()
                     await self.connect()
 
             except Exception as e:
                 if isinstance(e, aiohttp.WSServerHandshakeError):
-                    print(f"🌐 - Falha ao conectar no servidor RPC, tentando novamente em {(b:=int(self.backoff))} segundo{'s'[:b^1]}.")
+                    print(
+                        f"🌐 - Falha ao conectar no servidor RPC, tentando novamente em {(b := int(self.backoff))} segundo{'s'[: b ^ 1]}."
+                    )
                 else:
-                    print(f"🌐 - Conexão com servidor RPC perdida - Reconectando em {(b:=int(self.backoff))} segundo{'s'[:b^1]}.")
+                    print(
+                        f"🌐 - Conexão com servidor RPC perdida - Reconectando em {(b := int(self.backoff))} segundo{'s'[: b ^ 1]}."
+                    )
 
                 await asyncio.sleep(self.backoff)
                 self.backoff *= 2.5
@@ -406,7 +411,6 @@ class WSClient:
             op = data.get("op")
 
             if op == "rpc_update":
-
                 for bot in self.all_bots:
                     for player in bot.music.players.values():
                         if not player.guild.me.voice:
@@ -434,7 +438,6 @@ def _build_panel(pool: BotPool, config: dict):
 
 
 def run_app(pool: BotPool, message: str = "", config: dict = None):
-
     if not config:
         try:
             config = pool.config
@@ -443,14 +446,20 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
 
     panel_app, trust_proxy = _build_panel(pool, config)
 
-    app = tornado.web.Application([
-        (r'/', IndexHandler, {'pool': pool, 'message': message, 'config': config,
-                              'panel_enabled': panel_app is not None}),
-        (r'/ws', WebSocketHandler),
-    ])
+    app = tornado.web.Application(
+        [
+            (
+                r"/",
+                IndexHandler,
+                {"pool": pool, "message": message, "config": config, "panel_enabled": panel_app is not None},
+            ),
+            (r"/ws", WebSocketHandler),
+        ]
+    )
 
-    server = tornado.httpserver.HTTPServer(make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy),
-                                           max_body_size=MAX_BODY_SIZE)
+    server = tornado.httpserver.HTTPServer(
+        make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy), max_body_size=MAX_BODY_SIZE
+    )
     server.listen(config.get("PORT") or environ.get("PORT", 80))
     return panel_app
 
@@ -475,5 +484,5 @@ def start(pool: BotPool, message="", config: dict = None):
         _shutdown_panel(panel_app)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     start(BotPool())

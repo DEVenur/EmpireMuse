@@ -67,12 +67,11 @@ def download_verified(url: str, filename: str, sha256: str, timeout=DOWNLOAD_TIM
 
 
 def download_file(url, filename):
-
     if os.path.isfile(filename):
         return
 
     r = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT)
-    total_size = int(r.headers.get('content-length', 0))
+    total_size = int(r.headers.get("content-length", 0))
     bytes_downloaded = 0
     previows_progress = 0
     start_time = time.time()
@@ -82,9 +81,8 @@ def download_file(url, filename):
     else:
         total_txt = f"{total_size / 1024:.2f} KB"
 
-    with open(f"{filename}.tmp", 'wb') as f:
-
-        for data in r.iter_content(chunk_size=2500*1024):
+    with open(f"{filename}.tmp", "wb") as f:
+        for data in r.iter_content(chunk_size=2500 * 1024):
             f.write(data)
             bytes_downloaded += len(data)
             try:
@@ -102,7 +100,9 @@ def download_file(url, filename):
                         speed_txt = "MB/s"
                     else:
                         speed_txt = "KB/s"
-                    print(f"Download do arquivo {filename} {current_progress}% concluído ({download_speed:.2f} {speed_txt} / {total_txt})")
+                    print(
+                        f"Download do arquivo {filename} {current_progress}% concluído ({download_speed:.2f} {speed_txt} / {total_txt})"
+                    )
                 except:
                     print(f"Download do arquivo {filename} {current_progress}% concluído")
 
@@ -112,15 +112,16 @@ def download_file(url, filename):
 
     return True
 
+
 def validate_java(cmd: str, debug: bool = False):
     try:
         java_info = subprocess.check_output(f"{cmd} -version", stderr=subprocess.STDOUT, text=True, shell=True)
-        if int(java_info.splitlines()[0].split()[2].strip('"').split('.')[0]) >= 17:
+        if int(java_info.splitlines()[0].split()[2].strip('"').split(".")[0]) >= 17:
             return cmd
     except Exception as e:
         if debug:
-            print(f"\nFalha ao obter versão do java...\n"
-                  f"Path: {cmd} | Erro: {repr(e)}\n")
+            print(f"\nFalha ao obter versão do java...\nPath: {cmd} | Erro: {repr(e)}\n")
+
 
 def _matches(path: str, sha256: str) -> bool:
     return os.path.isfile(path) and file_sha256(path) == sha256.lower()
@@ -136,15 +137,18 @@ def _resolve_jar_source(url: Optional[str], configured_sha256: Optional[str]) ->
     if not url or url == branding.LAVALINK_JAR_URL:
         return branding.LAVALINK_JAR_URL, branding.LAVALINK_JAR_SHA256
     if url in branding.LAVALINK_JAR_OFFICIAL_URLS:
-        logger.warning("LAVALINK_FILE_URL aponta para uma versão antiga do espelho oficial; usando a versão atual. "
-                       "Esvazie a variável LAVALINK_FILE_URL para seguir sempre o espelho oficial.")
+        logger.warning(
+            "LAVALINK_FILE_URL aponta para uma versão antiga do espelho oficial; usando a versão atual. "
+            "Esvazie a variável LAVALINK_FILE_URL para seguir sempre o espelho oficial."
+        )
         return branding.LAVALINK_JAR_URL, branding.LAVALINK_JAR_SHA256
     if not url.lower().startswith("https://"):
         raise LavalinkDownloadError("LAVALINK_FILE_URL precisa usar HTTPS (https://); outros esquemas são recusados.")
     if not (configured_sha256 or "").strip():
         raise LavalinkDownloadError(
             "LAVALINK_FILE_URL aponta para um endereço diferente do oficial: defina também LAVALINK_FILE_SHA256 "
-            "(SHA-256 do Lavalink.jar) para permitir o download.")
+            "(SHA-256 do Lavalink.jar) para permitir o download."
+        )
     return url, configured_sha256.strip()
 
 
@@ -179,8 +183,9 @@ def _prepare_plugins(directory: str) -> None:
             download_verified(f"{branding.LAVALINK_BINARIES_URL}/{name}", path, sha256)
 
 
-def prepare_lavalink_files(directory: str = ".", *, lavalink_file_url: str = None,
-                           lavalink_file_sha256: str = None) -> None:
+def prepare_lavalink_files(
+    directory: str = ".", *, lavalink_file_url: str = None, lavalink_file_sha256: str = None
+) -> None:
     """Garante ``Lavalink.jar``, ``application.yml`` e os plugins oficiais em ``directory``, todos verificados (SHA-256).
 
     Levanta ``LavalinkDownloadError`` (``IntegrityError`` se o hash não confere) antes de qualquer processo iniciar.
@@ -202,12 +207,33 @@ YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION = "PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATI
 
 # Únicas variáveis do ambiente do bot que o processo do Lavalink herda (o resto, como TOKEN, MONGO e *_SECRET, não).
 # SERVER_PORT é obrigatória: o bot fala com o Lavalink local nessa porta e o Spring a lê por relaxed binding.
-CHILD_ENV_ALLOWLIST = frozenset({
-    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TEMP", "TMP", "JAVA_HOME", "SERVER_PORT",
-})
-CHILD_ENV_ALLOWLIST_WINDOWS = frozenset({
-    "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
-})
+CHILD_ENV_ALLOWLIST = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TZ",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "JAVA_HOME",
+        "SERVER_PORT",
+    }
+)
+CHILD_ENV_ALLOWLIST_WINDOWS = frozenset(
+    {
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+    }
+)
 
 
 def lavalink_child_env(refresh_token: Optional[str], environ: Mapping[str, str] = os.environ) -> Dict[str, str]:
@@ -345,15 +371,15 @@ def _install_extracted_jdk(archive_path: str, java_root: str, java_dir: str, jdk
 
 
 def run_lavalink(
-        lavalink_file_url: str = None,
-        lavalink_initial_ram: int = 30,
-        lavalink_ram_limit: int = 100,
-        lavalink_additional_sleep: int = 0,
-        lavalink_cpu_cores: int = 1,
-        use_jabba: bool = False,
-        *,
-        lavalink_file_sha256: str = None,
-        youtube_oauth_refresh_token: str = None
+    lavalink_file_url: str = None,
+    lavalink_initial_ram: int = 30,
+    lavalink_ram_limit: int = 100,
+    lavalink_additional_sleep: int = 0,
+    lavalink_cpu_cores: int = 1,
+    use_jabba: bool = False,
+    *,
+    lavalink_file_sha256: str = None,
+    youtube_oauth_refresh_token: str = None,
 ):
     arch, osname = platform.architecture()
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
@@ -361,7 +387,6 @@ def run_lavalink(
     tmp_dir = tempfile.gettempdir() if os.name == "nt" else "."
 
     if not (java_cmd := validate_java("java")):
-
         dirs = []
 
         try:
@@ -381,7 +406,7 @@ def run_lavalink(
                 dirs.extend(
                     [
                         os.path.realpath("./.jabba/jdk/zulu@1.17.0-0/bin/java"),
-                        os.path.expanduser("./.jabba/jdk/zulu@1.17.0-0/bin/java")
+                        os.path.expanduser("./.jabba/jdk/zulu@1.17.0-0/bin/java"),
                     ]
                 )
                 try:
@@ -402,12 +427,10 @@ def run_lavalink(
                 break
 
         if not java_cmd:
-
             if os.name == "nt":
                 java_cmd = _install_jdk_windows(tmp_dir, jdk_platform, arch)
 
             elif use_jabba:
-
                 try:
                     shutil.rmtree("./.jabba/jdk/zulu@1.17.0-0")
                 except:
@@ -435,7 +458,6 @@ def run_lavalink(
         java_cmd += f" -Xms{lavalink_ram_limit}m"
 
     if os.name != "nt":
-
         if os.path.isdir("./.tempjar"):
             shutil.rmtree("./.tempjar")
 
@@ -445,8 +467,10 @@ def run_lavalink(
 
     java_cmd += " -jar Lavalink.jar"
 
-    print("🌋 - Iniciando o servidor Lavalink (dependendo da hospedagem o lavalink pode demorar iniciar, "
-          "o que pode ocorrer falhas em algumas tentativas de conexão até ele iniciar totalmente).")
+    print(
+        "🌋 - Iniciando o servidor Lavalink (dependendo da hospedagem o lavalink pode demorar iniciar, "
+        "o que pode ocorrer falhas em algumas tentativas de conexão até ele iniciar totalmente)."
+    )
 
     lavalink_process = subprocess.Popen(
         java_cmd.split(), stdout=subprocess.DEVNULL, env=lavalink_child_env(youtube_oauth_refresh_token)
@@ -457,6 +481,7 @@ def run_lavalink(
         time.sleep(lavalink_additional_sleep)
 
     return lavalink_process
+
 
 if __name__ == "__main__":
     run_lavalink()

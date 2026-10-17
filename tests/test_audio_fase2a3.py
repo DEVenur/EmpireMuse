@@ -10,6 +10,7 @@ Comportamento exigido de ``prepare_lavalink_files``/``run_lavalink`` (a API não
     aviso (logging.WARNING) sugerindo esvaziar a variável;
   - qualquer outra URL -> segue exigindo HTTPS + LAVALINK_FILE_SHA256, e é baixada exatamente como foi informada.
 """
+
 import hashlib
 import re
 from pathlib import Path
@@ -27,8 +28,14 @@ UPSTREAM_REPO = "https://github.com/zRitsu/LL-binaries/releases/download"
 
 JAR = b"JAR-OFICIAL-ATUAL"
 YML = b"yml atual\n"
-PLUGINS = {name: f"plugin {name}".encode() for name in
-           ("youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar", "lavasrc-plugin-4.8.3.jar", "lavalink-2.6.1.jar")}
+PLUGINS = {
+    name: f"plugin {name}".encode()
+    for name in (
+        "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
+        "lavasrc-plugin-4.8.3.jar",
+        "lavalink-2.6.1.jar",
+    )
+}
 
 
 def sha(data: bytes) -> str:
@@ -36,6 +43,7 @@ def sha(data: bytes) -> str:
 
 
 # ============================================================================ (1) .example.env
+
 
 def _example_env_text() -> str:
     return (ROOT / ".example.env").read_text(encoding="utf-8")
@@ -48,8 +56,11 @@ class TestExampleEnv:
         assert lines[0].split("=", 1)[1].strip().strip("'\"") == ""
 
     def test_no_active_line_pins_an_official_release_url(self):
-        pinned = [l for l in _example_env_text().splitlines()
-                  if not l.lstrip().startswith("#") and "LL-binaries/releases/download/" in l]
+        pinned = [
+            l
+            for l in _example_env_text().splitlines()
+            if not l.lstrip().startswith("#") and "LL-binaries/releases/download/" in l
+        ]
         assert pinned == [], f"o exemplo não pode fixar versão do espelho: {pinned}"
 
     def test_the_comment_explains_empty_means_official_and_when_to_fill_it(self):
@@ -69,10 +80,12 @@ class TestExampleEnv:
 
     def test_default_config_still_resolves_to_the_current_official_url(self):
         import config_loader
+
         assert config_loader.DEFAULT_CONFIG["LAVALINK_FILE_URL"] in ("", branding.LAVALINK_JAR_URL)
 
 
 # ============================================================================ fixtures (rede e processo falsos)
+
 
 class FakeResponse:
     def __init__(self, data):
@@ -257,14 +270,14 @@ class TestLegacyOfficialUrlsFollowTheCurrentRelease:
 
 NEED_HASH_URLS = [
     "https://example.test/Lavalink.jar",
-    f"{UPSTREAM_REPO}/0.0.2/Lavalink.jar",                                                   # upstream zRitsu
+    f"{UPSTREAM_REPO}/0.0.2/Lavalink.jar",  # upstream zRitsu
     "https://github.com.evil.test/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
     "https://evil.test/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
     "https://github.com@evil.test/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
     "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries-fork/releases/download/0.0.2/Lavalink.jar",
     "https://github.com/OutraOrg/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    f"{NEW_REPO}/0.0.2/application.yml",                                                     # outro arquivo do espelho
-    f"{NEW_REPO}/0.0.2/Lavalink.jar?arquivo=outro",                                          # parâmetros mudam a URL
+    f"{NEW_REPO}/0.0.2/application.yml",  # outro arquivo do espelho
+    f"{NEW_REPO}/0.0.2/Lavalink.jar?arquivo=outro",  # parâmetros mudam a URL
     f"{NEW_REPO}/0.0.2/Lavalink.jar.exe",
 ]
 
@@ -303,16 +316,21 @@ class TestEveryOtherUrlStaysStrict:
         prepare(tmp_path, url, sha(b"JAR-PROPRIO"))
         assert [r for r in warnings_of(caplog) if "LAVALINK_FILE_URL" in r.getMessage()] == []
 
-    @pytest.mark.parametrize("url", [
-        "http://example.test/Lavalink.jar",
-        f"http://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",   # oficial, mas HTTP
-        f"http://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/Lavalink.jar",
-        "ftp://example.test/Lavalink.jar",
-        "file:///etc/passwd",
-        "example.test/Lavalink.jar",
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://example.test/Lavalink.jar",
+            f"http://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",  # oficial, mas HTTP
+            f"http://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/Lavalink.jar",
+            "ftp://example.test/Lavalink.jar",
+            "file:///etc/passwd",
+            "example.test/Lavalink.jar",
+        ],
+    )
     @pytest.mark.parametrize("hash_value", [None, "valido"])
-    def test_non_https_is_refused_even_with_a_hash_and_even_when_it_looks_official(self, net, tmp_path, url, hash_value):
+    def test_non_https_is_refused_even_with_a_hash_and_even_when_it_looks_official(
+        self, net, tmp_path, url, hash_value
+    ):
         configured = sha(JAR) if hash_value else None
         with pytest.raises(ll.LavalinkDownloadError) as info:
             prepare(tmp_path, url, configured)

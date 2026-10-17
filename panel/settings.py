@@ -1,4 +1,5 @@
 """Configuração validada do painel web (variáveis ``PANEL_*``)."""
+
 from __future__ import annotations
 
 import logging
@@ -52,7 +53,9 @@ def _parse_base_url(raw: Any) -> tuple[str, str]:
     except ValueError:
         raise PanelConfigError("PANEL_BASE_URL inválida: informe uma URL absoluta http(s) válida.") from None
     if parts.scheme not in ("http", "https") or not host:
-        raise PanelConfigError("PANEL_BASE_URL inválida: use uma URL absoluta http(s) com host (ex.: https://painel.exemplo.com).")
+        raise PanelConfigError(
+            "PANEL_BASE_URL inválida: use uma URL absoluta http(s) com host (ex.: https://painel.exemplo.com)."
+        )
     if parts.path not in ("", "/") or parts.query or parts.fragment:
         raise PanelConfigError("PANEL_BASE_URL inválida: não deve conter caminho, query ou fragmento.")
     return value.rstrip("/"), host
@@ -72,7 +75,9 @@ def _bounded_int(config: Mapping[str, Any], key: str, default: int, bounds: tupl
 def _resolve_cookie_secret(raw: Any) -> str:
     secret = str(raw or "")
     if not secret:
-        logger.warning("PANEL_COOKIE_SECRET vazio: gerado um segredo aleatório; as sessões do painel não sobrevivem a reinícios.")
+        logger.warning(
+            "PANEL_COOKIE_SECRET vazio: gerado um segredo aleatório; as sessões do painel não sobrevivem a reinícios."
+        )
         return secrets.token_urlsafe(GENERATED_COOKIE_SECRET_BYTES)
     if len(secret) < COOKIE_SECRET_MIN_LENGTH:
         raise PanelConfigError(f"PANEL_COOKIE_SECRET deve ter no mínimo {COOKIE_SECRET_MIN_LENGTH} caracteres.")
@@ -82,7 +87,9 @@ def _resolve_cookie_secret(raw: Any) -> str:
 def _check_transport(base_url: str, host: str, insecure_cookies: bool) -> None:
     is_local = host in LOCAL_HOSTS
     if insecure_cookies and not is_local:
-        raise PanelConfigError("PANEL_INSECURE_COOKIES=true só é permitido com host local (localhost, 127.0.0.1 ou ::1).")
+        raise PanelConfigError(
+            "PANEL_INSECURE_COOKIES=true só é permitido com host local (localhost, 127.0.0.1 ou ::1)."
+        )
     if not base_url.startswith("https://") and not (insecure_cookies and is_local):
         raise PanelConfigError("PANEL_BASE_URL deve usar https (http só em localhost com PANEL_INSECURE_COOKIES=true).")
 

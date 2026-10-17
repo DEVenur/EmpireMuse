@@ -2,6 +2,7 @@
 
 Só HTTP: regras, validações e efeitos ficam em ``panel/services/``. Toda escrita reautoriza com ``fresh=True``.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,8 +11,15 @@ from typing import Any, Optional
 from urllib.parse import urlencode
 
 from panel.authz import BotRef, GuildAccess, GuildAccessDenied, ready_bots_with_guild
-from panel.handlers.servers import (MAX_BODY_BYTES, NOT_FOUND_MESSAGE, NOT_FOUND_TITLE, SERVERS_PATH,
-                                    AuthenticatedHandler, decode_args, initial_of)
+from panel.handlers.servers import (
+    MAX_BODY_BYTES,
+    NOT_FOUND_MESSAGE,
+    NOT_FOUND_TITLE,
+    SERVERS_PATH,
+    AuthenticatedHandler,
+    decode_args,
+    initial_of,
+)
 from panel.services.appearance import SkinsBotForm, SkinsGlobalForm
 from panel.services.base import DBModel, DIGITS, KIND_ERROR, ForbiddenAction, Formulario, FormContext, SettingsForm
 from panel.services.general import PrefixForm, VoiceStatusForm
@@ -85,8 +93,9 @@ class SettingsHandler(AuthenticatedHandler):
 
     # ------------------------------------------------------------------ resolução (autorização + bot)
 
-    async def _resolve(self, guild_id: str, category: str, *, fresh: bool,
-                       bot_id: Optional[str] = None) -> tuple[FormContext, GuildAccess, str]:
+    async def _resolve(
+        self, guild_id: str, category: str, *, fresh: bool, bot_id: Optional[str] = None
+    ) -> tuple[FormContext, GuildAccess, str]:
         if category not in CATEGORY_FORMS and category != CHANNEL_CATEGORY:
             raise GuildAccessDenied
         pool = self.application.settings["pool"]
@@ -134,8 +143,9 @@ class SettingsHandler(AuthenticatedHandler):
         self.set_status(429)
         self._render_fragment(state, access, ctx)
 
-    async def _respond(self, category: str, access: GuildAccess, ctx: FormContext, action: str,
-                       form: SettingsForm, outcome: Outcome) -> None:
+    async def _respond(
+        self, category: str, access: GuildAccess, ctx: FormContext, action: str, form: SettingsForm, outcome: Outcome
+    ) -> None:
         self.set_status(outcome.status)
         if self._is_htmx():
             self._render_fragment(outcome.form, access, ctx)
@@ -149,10 +159,16 @@ class SettingsHandler(AuthenticatedHandler):
         extras: dict[str, Any] = {}
         for state in states.values():
             extras.update(state.extras)
-        namespace = {**extras, "acesso": access, "inicial": initial_of(access.name),
-                     "bot_atual": self._bot_ref(access, ctx)}
+        namespace = {
+            **extras,
+            "acesso": access,
+            "inicial": initial_of(access.name),
+            "bot_atual": self._bot_ref(access, ctx),
+        }
         if "links" in states:
-            namespace["exportar_url"] = f"{SERVERS_PATH}/{access.guild_id}/links/exportar?" + urlencode({"bot": ctx.bot_id})
+            namespace["exportar_url"] = f"{SERVERS_PATH}/{access.guild_id}/links/exportar?" + urlencode(
+                {"bot": ctx.bot_id}
+            )
         return namespace
 
     @staticmethod
@@ -166,14 +182,18 @@ class SettingsHandler(AuthenticatedHandler):
         namespace = self._namespace({state.key: state}, access, ctx)
         self.render_page(state.template, form=state, **self._aliases({state.key: state}), **namespace)
 
-    def _render_full(self, category: str, access: GuildAccess, ctx: FormContext,
-                     states: dict[str, Formulario]) -> None:
+    def _render_full(self, category: str, access: GuildAccess, ctx: FormContext, states: dict[str, Formulario]) -> None:
         namespace = self._namespace(states, access, ctx)
         per_bot = category in PER_BOT_CATEGORIES
         if not per_bot:
             namespace["bot_atual"] = None
-        self.render_page(f"config_{category}.html", forms=states, mostrar_seletor=per_bot and len(access.bots) >= 2,
-                         **self._aliases(states), **namespace)
+        self.render_page(
+            f"config_{category}.html",
+            forms=states,
+            mostrar_seletor=per_bot and len(access.bots) >= 2,
+            **self._aliases(states),
+            **namespace,
+        )
 
 
 class LinksExportHandler(SettingsHandler):

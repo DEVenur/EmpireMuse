@@ -5,6 +5,7 @@ As regras e os efeitos no Discord ficam em ``utils/music/request_channel.py`` (c
 - o reset tem dois passos (confirmação com token assinado, 2 min, uso único);
 - os jobs entregam CÓPIA PROFUNDA dos dados ao módulo e rodam sob o lock do escopo ``(bot, servidor)``.
 """
+
 from __future__ import annotations
 
 import copy
@@ -23,10 +24,19 @@ from panel.services.tasks import Job, Task, TaskFailure, TaskRunner
 from utils import branding
 from utils.music.converters import perms_translations
 from utils.music.errors import GenericError
-from utils.music.request_channel import (MissingManagePermissions, apply_request_channel, build_channel_kwargs,
-                                         create_request_channel, ensure_can_create_channel, ensure_can_reset,
-                                         find_current_request_message, find_request_channel,
-                                         missing_channel_permissions, reset_request_channel, validate_request_target)
+from utils.music.request_channel import (
+    MissingManagePermissions,
+    apply_request_channel,
+    build_channel_kwargs,
+    create_request_channel,
+    ensure_can_create_channel,
+    ensure_can_reset,
+    find_current_request_message,
+    find_request_channel,
+    missing_channel_permissions,
+    reset_request_channel,
+    validate_request_target,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +44,12 @@ MODES = ("existente", "criar")
 KINDS = {"texto": "text", "voz": "voice", "palco": "stage"}
 FORUM_TITLE_MIN, FORUM_TITLE_MAX = 4, 30
 _ACCEPTED = (disnake.TextChannel, disnake.VoiceChannel, disnake.StageChannel, disnake.ForumChannel)
-_TYPE_NAMES = ((disnake.StageChannel, "palco"), (disnake.VoiceChannel, "voz"), (disnake.ForumChannel, "forum"),
-               (disnake.TextChannel, "texto"))
+_TYPE_NAMES = (
+    (disnake.StageChannel, "palco"),
+    (disnake.VoiceChannel, "voz"),
+    (disnake.ForumChannel, "forum"),
+    (disnake.TextChannel, "texto"),
+)
 
 MSG_MODE = "Escolha como configurar o canal de pedidos."
 MSG_CHANNEL = "Escolha um canal da lista."
@@ -43,14 +57,18 @@ MSG_TITLE = f"O título do post deve ter de {FORUM_TITLE_MIN} a {FORUM_TITLE_MAX
 MSG_TYPE = "Escolha o tipo de canal: texto, voz ou palco."
 MSG_STAGE = "Canais de palco só existem em servidores com o recurso Comunidade ativado."
 MSG_CATEGORY = "Escolha uma categoria da lista (ou deixe sem categoria)."
-MSG_PURGE = "Para limpar as mensagens, o bot precisa das permissões Gerenciar Mensagens e Mostrar histórico de mensagens."
+MSG_PURGE = (
+    "Para limpar as mensagens, o bot precisa das permissões Gerenciar Mensagens e Mostrar histórico de mensagens."
+)
 MSG_NO_CHANNEL = "Não há canal de pedidos configurado neste bot."
 MSG_NAME = "Digite o nome exato do canal para confirmar a exclusão."
 MSG_TOKEN = "A confirmação expirou ou é inválida. Peça a reinicialização de novo."
 MSG_BUSY = "Já existe uma operação em andamento neste servidor. Aguarde terminar e tente de novo."
 MSG_LIMIT = "Há operações demais em andamento. Aguarde um pouco e tente de novo."
-MSG_PARTIAL = ("O canal de pedidos foi reiniciado no banco de dados, mas ocorreu um erro ao atualizar o Discord. "
-               "Verifique o canal manualmente.")
+MSG_PARTIAL = (
+    "O canal de pedidos foi reiniciado no banco de dados, mas ocorreu um erro ao atualizar o Discord. "
+    "Verifique o canal manualmente."
+)
 MSG_SETUP_OK = "O canal de pedidos foi configurado com sucesso."
 MSG_RESET_OK = "O canal de pedidos foi reiniciado com sucesso."
 
@@ -74,8 +92,10 @@ def plain_message(text: str) -> str:
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
-MSG_MANAGE_PERMISSIONS = (f"O {branding.BOT_NAME} precisa da permissão Gerenciar permissões neste canal (ou de "
-                          "Administrador). Conceda a permissão ao cargo do bot ou escolha Criar um canal novo.")
+MSG_MANAGE_PERMISSIONS = (
+    f"O {branding.BOT_NAME} precisa da permissão Gerenciar permissões neste canal (ou de "
+    "Administrador). Conceda a permissão ao cargo do bot ou escolha Criar um canal novo."
+)
 
 
 def refusal_message(exc: GenericError) -> str:
@@ -86,6 +106,7 @@ def refusal_message(exc: GenericError) -> str:
 
 
 # ============================================================================ estruturas dos templates
+
 
 class ChannelItem(NamedTuple):
     id: str
@@ -141,6 +162,7 @@ class SetupPlan:
 @dataclass
 class Check:
     """Resultado de uma validação: ``errors`` vazio = pode executar. ``echo`` devolve o que o usuário enviou."""
+
     errors: dict[str, str]
     echo: dict[str, Any]
     missing: tuple[str, ...] = ()
@@ -149,9 +171,11 @@ class Check:
 
 # ============================================================================ serviço
 
+
 class ChannelService:
-    def __init__(self, runner: TaskRunner, settings: SettingsService, secret: str,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self, runner: TaskRunner, settings: SettingsService, secret: str, clock: Callable[[], float] = time.monotonic
+    ) -> None:
         self.runner, self._settings = runner, settings
         self.tokens = ResetTokens(secret, clock)
 
@@ -185,7 +209,9 @@ class ChannelService:
         name = str(channel.name) if channel is not None else None
         return CurrentChannel(True, name, name is None)
 
-    def choices(self, ctx: FormContext) -> tuple[tuple[ChannelGroup, ...], tuple[TypeOption, ...], tuple[CategoryOption, ...]]:
+    def choices(
+        self, ctx: FormContext
+    ) -> tuple[tuple[ChannelGroup, ...], tuple[TypeOption, ...], tuple[CategoryOption, ...]]:
         channels = self._guild_channels(ctx.guild)
         grouped: dict[Optional[str], list[ChannelItem]] = {}
         for channel in channels:
@@ -194,23 +220,32 @@ class ChannelService:
                 continue
             category = getattr(channel, "category", None)
             grouped.setdefault(str(category.name) if category is not None else None, []).append(
-                ChannelItem(str(channel.id), str(channel.name), kind))
-        groups = tuple(ChannelGroup(name, tuple(sorted(items, key=lambda i: i.nome.casefold())))
-                       for name, items in sorted(grouped.items(), key=lambda kv: (kv[0] is not None, (kv[0] or "").casefold())))
+                ChannelItem(str(channel.id), str(channel.name), kind)
+            )
+        groups = tuple(
+            ChannelGroup(name, tuple(sorted(items, key=lambda i: i.nome.casefold())))
+            for name, items in sorted(grouped.items(), key=lambda kv: (kv[0] is not None, (kv[0] or "").casefold()))
+        )
         types = [TypeOption("texto", "Canal de texto"), TypeOption("voz", "Canal de voz")]
         if "COMMUNITY" in ctx.guild.features:
             types.append(TypeOption("palco", "Canal de palco"))
-        categories = tuple(CategoryOption(str(c.id), str(c.name)) for c in channels
-                           if isinstance(c, disnake.CategoryChannel))
+        categories = tuple(
+            CategoryOption(str(c.id), str(c.name)) for c in channels if isinstance(c, disnake.CategoryChannel)
+        )
         return groups, tuple(types), categories
 
     # ------------------------------------------------------------------ validação (síncrona, sem efeitos)
 
     def validate_setup(self, ctx: FormContext, args: Args) -> Check:
         mode = first(args, "modo") or ""
-        echo = {"modo": mode, "canal": first(args, "canal") or "", "limpar_mensagens": flag(args, "limpar_mensagens"),
-                "titulo_forum": (first(args, "titulo_forum") or "").strip(), "tipo": first(args, "tipo") or "",
-                "categoria": first(args, "categoria") or ""}
+        echo = {
+            "modo": mode,
+            "canal": first(args, "canal") or "",
+            "limpar_mensagens": flag(args, "limpar_mensagens"),
+            "titulo_forum": (first(args, "titulo_forum") or "").strip(),
+            "tipo": first(args, "tipo") or "",
+            "categoria": first(args, "categoria") or "",
+        }
         if mode not in MODES:
             return Check({"modo": MSG_MODE}, echo)
         if mode == "existente":
@@ -308,6 +343,7 @@ class ChannelService:
             async with self._settings.lock(ctx.bot_id, ctx.guild_id):
                 await self._setup(ctx, plan)
             return MSG_SETUP_OK
+
         return job
 
     async def _setup(self, ctx: FormContext, plan: SetupPlan) -> None:
@@ -317,9 +353,18 @@ class ChannelService:
         try:
             target = await self._target(ctx, plan, channel_kwargs)
             await apply_request_channel(
-                ctx.bot, ctx.guild, PanelActor(ctx.user_id), target, existing_channel=plan.mode == "existente",
-                purge=plan.purge, channel_kwargs=channel_kwargs, channel_name=plan.title,
-                original_message=original_message, player=player, guild_data=guild_data)
+                ctx.bot,
+                ctx.guild,
+                PanelActor(ctx.user_id),
+                target,
+                existing_channel=plan.mode == "existente",
+                purge=plan.purge,
+                channel_kwargs=channel_kwargs,
+                channel_name=plan.title,
+                original_message=original_message,
+                player=player,
+                guild_data=guild_data,
+            )
         except GenericError as exc:
             raise TaskFailure(refusal_message(exc))
         self._audit(ctx, "setup")
@@ -341,6 +386,7 @@ class ChannelService:
             async with self._settings.lock(ctx.bot_id, ctx.guild_id):
                 await self._reset(ctx, delete)
             return MSG_RESET_OK
+
         return job
 
     async def _reset(self, ctx: FormContext, delete: bool) -> None:
@@ -352,8 +398,15 @@ class ChannelService:
         try:
             channel = await find_request_channel(ctx.bot, ctx.guild_id, guild_data)
             await reset_request_channel(
-                ctx.bot, ctx.guild, PanelActor(ctx.user_id), channel, delete_channel="sim" if delete else None,
-                channel_inter=self._detached_channel(ctx), guild_data=guild_data, notify=notify)
+                ctx.bot,
+                ctx.guild,
+                PanelActor(ctx.user_id),
+                channel,
+                delete_channel="sim" if delete else None,
+                channel_inter=self._detached_channel(ctx),
+                guild_data=guild_data,
+                notify=notify,
+            )
         except GenericError as exc:
             if "```" not in exc.text:
                 raise TaskFailure(refusal_message(exc))
@@ -370,8 +423,13 @@ class ChannelService:
     @staticmethod
     def _audit(ctx: FormContext, kind: str) -> None:
         # Só ids e o tipo da operação: título, nome de canal e token nunca vão para o log.
-        logger.info("Configuração alterada: usuario=%s servidor=%s escopo=%s categoria=canal campos=%s",
-                    ctx.user_id, ctx.guild_id, ctx.bot_id, kind)
+        logger.info(
+            "Configuração alterada: usuario=%s servidor=%s escopo=%s categoria=canal campos=%s",
+            ctx.user_id,
+            ctx.guild_id,
+            ctx.bot_id,
+            kind,
+        )
 
     # ------------------------------------------------------------------ exibição da tarefa
 
@@ -382,5 +440,9 @@ class ChannelService:
             title = "Não foi possível concluir"
         elif task.state == "ok":
             title = "Concluído"
-        message = task.message or ("Aguardando a vez…" if task.state == "pendente" else "Isso pode levar alguns segundos.")
-        return TaskView(f"/painel/servidores/{guild_id}/canal/tarefas/{task.id}", task.state, task.final, title, message)
+        message = task.message or (
+            "Aguardando a vez…" if task.state == "pendente" else "Isso pode levar alguns segundos."
+        )
+        return TaskView(
+            f"/painel/servidores/{guild_id}/canal/tarefas/{task.id}", task.state, task.final, title, message
+        )

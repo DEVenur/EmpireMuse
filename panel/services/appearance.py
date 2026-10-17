@@ -3,6 +3,7 @@
 As skins personalizadas do servidor não são lidas nem gravadas pelo painel: um valor atual "> custom_skin: X" só é
 exibido e mantido se o formulário reenviar exatamente esse valor.
 """
+
 from __future__ import annotations
 
 import logging
@@ -68,8 +69,10 @@ class SkinsBotForm(SettingsForm):
         doc["player_controller"].update(new)
 
     def display(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        return {"skin": current["skin"] or ctx.pool.default_skin,
-                "static_skin": current["static_skin"] or ctx.pool.default_static_skin}
+        return {
+            "skin": current["skin"] or ctx.pool.default_skin,
+            "static_skin": current["static_skin"] or ctx.pool.default_static_skin,
+        }
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
         return {"skins": allowed_skins(ctx.bot), "skins_estaticas": allowed_static_skins(ctx.bot)}
@@ -97,30 +100,49 @@ class SkinsGlobalForm(SettingsForm):
     markers = ("player_skin", "player_skin_static")
 
     def extract(self, doc: dict) -> dict[str, Any]:
-        return {"global_skin": bool(doc["global_skin"]), "player_skin": doc["player_skin"],
-                "player_skin_static": doc["player_skin_static"]}
+        return {
+            "global_skin": bool(doc["global_skin"]),
+            "player_skin": doc["player_skin"],
+            "player_skin_static": doc["player_skin_static"],
+        }
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
         doc.update(new)
 
     def display(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        return {"global_skin": current["global_skin"], "player_skin": current["player_skin"] or "",
-                "player_skin_static": current["player_skin_static"] or ""}
+        return {
+            "global_skin": current["global_skin"],
+            "player_skin": current["player_skin"] or "",
+            "player_skin_static": current["player_skin_static"] or "",
+        }
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
         return {"skins": allowed_skins(ctx.bot), "skins_estaticas": allowed_static_skins(ctx.bot)}
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
-        echo = {"global_skin": flag(args, "global_skin"),
-                "player_skin": first(args, "player_skin"), "player_skin_static": first(args, "player_skin_static")}
+        echo = {
+            "global_skin": flag(args, "global_skin"),
+            "player_skin": first(args, "player_skin"),
+            "player_skin_static": first(args, "player_skin_static"),
+        }
         lists = {"player_skin": allowed_skins(ctx.bot), "player_skin_static": allowed_static_skins(ctx.bot)}
-        errors = {name: MSG_SKIN for name, allowed in lists.items()
-                  if echo[name] is None or (echo[name] != "" and not _pick(echo[name], allowed, current[name]))}
+        errors = {
+            name: MSG_SKIN
+            for name, allowed in lists.items()
+            if echo[name] is None or (echo[name] != "" and not _pick(echo[name], allowed, current[name]))
+        }
         echo = {name: ("" if value is None else value) for name, value in echo.items()}
         if errors:
             return ParseResult({}, errors, echo)
-        return ParseResult({"global_skin": echo["global_skin"], "player_skin": echo["player_skin"] or None,
-                            "player_skin_static": echo["player_skin_static"] or None}, {}, echo)
+        return ParseResult(
+            {
+                "global_skin": echo["global_skin"],
+                "player_skin": echo["player_skin"] or None,
+                "player_skin_static": echo["player_skin_static"] or None,
+            },
+            {},
+            echo,
+        )
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
         for bot in ctx.pool.get_guild_bots(ctx.guild_id):
@@ -134,7 +156,9 @@ class SkinsGlobalForm(SettingsForm):
     async def _effective(ctx: FormContext, bot: Any, new: dict[str, Any]) -> tuple[str, str]:
         """Skins que o player do bot deve usar: as globais (modo global) ou as do próprio bot."""
         if new["global_skin"]:
-            return (new["player_skin"] or ctx.pool.default_skin,
-                    new["player_skin_static"] or ctx.pool.default_static_skin)
+            return (
+                new["player_skin"] or ctx.pool.default_skin,
+                new["player_skin_static"] or ctx.pool.default_static_skin,
+            )
         own = (await bot.get_data(ctx.guild_id, db_name=DBModel.guilds))["player_controller"]
         return own["skin"] or ctx.pool.default_skin, own["static_skin"] or ctx.pool.default_static_skin

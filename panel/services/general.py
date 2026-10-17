@@ -1,4 +1,5 @@
 """Categoria Geral: prefixo (G-12) e status automático do canal de voz (G-13)."""
+
 from __future__ import annotations
 
 import logging
@@ -15,8 +16,17 @@ logger = logging.getLogger(__name__)
 # Mesmos limites dos comandos: legacy_cmds.setprefix (5 caracteres) e SetStageTitle (496 caracteres, 9 placeholders).
 PREFIX_MAX_LENGTH = 5
 VOICE_STATUS_MAX_LENGTH = 496
-VOICE_PLACEHOLDERS = ("{track.title}", "{track.timestamp}", "{track.emoji}", "{track.author}", "{track.duration}",
-                      "{track.source}", "{track.playlist}", "{requester.name}", "{requester.id}")
+VOICE_PLACEHOLDERS = (
+    "{track.title}",
+    "{track.timestamp}",
+    "{track.emoji}",
+    "{track.author}",
+    "{track.duration}",
+    "{track.source}",
+    "{track.playlist}",
+    "{requester.name}",
+    "{requester.id}",
+)
 MSG_PREFIX_LENGTH = f"O prefixo pode ter no máximo {PREFIX_MAX_LENGTH} caracteres."
 MSG_PREFIX_CHARS = "O prefixo não pode conter espaços nem caracteres de controle."
 MSG_VOICE_PLACEHOLDER = "Use pelo menos um placeholder válido, como {track.title}."
@@ -93,8 +103,9 @@ class VoiceStatusForm(SettingsForm):
         player.stage_title_event = bool(text)
         player.stage_title_template = text
         player.start_time = disnake.utils.utcnow()
-        player.set_command_log(text="O painel " + ("ativou" if text else "desativou") + " o status automático.",
-                               emoji="📢")
+        player.set_command_log(
+            text="O painel " + ("ativou" if text else "desativou") + " o status automático.", emoji="📢"
+        )
         player.update = True
         await player.update_stage_topic(clear=not text)
         await player.process_save_queue()

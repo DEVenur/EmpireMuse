@@ -8,8 +8,8 @@ import nodriver
 from nodriver import start, cdp, loop
 import json
 
-class Browser:
 
+class Browser:
     def __init__(self):
         self.browser: Optional[nodriver.Browser] = None
         self.tab: Optional[nodriver.Tab] = None
@@ -18,7 +18,9 @@ class Browser:
         self.data = {}
 
     async def start(self, sandbox=True, browser_executable_path=None, **kwargs):
-        self.task = asyncio.create_task(self.main_session_gen(sandbox=sandbox, browser_executable_path=browser_executable_path, **kwargs))
+        self.task = asyncio.create_task(
+            self.main_session_gen(sandbox=sandbox, browser_executable_path=browser_executable_path, **kwargs)
+        )
         await self.event.wait()
         return self.data
 
@@ -27,7 +29,7 @@ class Browser:
         print("[INFO] launching browser.")
         self.tab = self.browser.main_tab
         self.tab.add_handler(cdp.network.RequestWillBeSent, self.send_handler)
-        await self.tab.get(f'https://www.youtube.com/embed/{kwargs.get("ytid") or "jNQXAC9IVRw"}')
+        await self.tab.get(f"https://www.youtube.com/embed/{kwargs.get('ytid') or 'jNQXAC9IVRw'}")
         await self.tab.wait(cdp.network.RequestWillBeSent)
         button_play = await self.tab.select("#movie_player")
         await button_play.click()
@@ -41,15 +43,15 @@ class Browser:
             post_data_json = json.loads(post_data)
             self.data = {
                 "visitor_data": post_data_json["context"]["client"]["visitorData"],
-                "po_token": post_data_json["serviceIntegrityDimensions"]["poToken"]
+                "po_token": post_data_json["serviceIntegrityDimensions"]["poToken"],
             }
             self.browser.stop()
             self.task.cancel()
             self.event.set()
         return
 
-if __name__ == '__main__':
 
+if __name__ == "__main__":
     b = Browser()
 
     try:

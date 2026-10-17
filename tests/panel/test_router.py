@@ -1,4 +1,5 @@
 """panel.make_router — separação entre /painel e o app atual."""
+
 import tornado.web
 from tornado.testing import AsyncHTTPTestCase
 
@@ -62,6 +63,7 @@ class RouterWithoutPanelTest(AsyncHTTPTestCase):
 
 def test_build_panel_app_returns_none_when_disabled():
     from tests.panel.helpers import fake_pool, load_settings
+
     settings = load_settings({"PANEL_ENABLED": False})
     assert require("panel").build_panel_app(fake_pool(), settings) is None
 

@@ -38,8 +38,15 @@ from utils.music.errors import GenericError
 from utils.music.lastfm_tools import LastFM
 from utils.music.lavalink_server_list import validated_server_list
 from utils.music.local_lavalink import run_lavalink
-from utils.music.models import music_mode, LavalinkPlayer, LavalinkPlaylist, LavalinkTrack, PartialTrack, \
-    native_sources, CustomYTDL
+from utils.music.models import (
+    music_mode,
+    LavalinkPlayer,
+    LavalinkPlaylist,
+    LavalinkTrack,
+    PartialTrack,
+    native_sources,
+    CustomYTDL,
+)
 from utils.music.remote_lavalink_serverlist import get_lavalink_servers
 from utils.others import CustomContext, token_regex, sort_dict_recursively
 from utils.owner_panel import PanelView
@@ -47,29 +54,29 @@ from web_app import WSClient, start
 
 if os.name != "nt":
     import uvloop
+
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-class BotPool:
 
+class BotPool:
     bots: List[BotCore] = []
     guild_bots: Dict[str, List[BotCore]] = {}
     killing_state = False
     command_sync_config = commands.CommandSyncFlags(
-                    allow_command_deletion=True,
-                    sync_commands=True,
-                    sync_commands_debug=True,
-                    sync_global_commands=True,
-                    sync_guild_commands=True
-                )
+        allow_command_deletion=True,
+        sync_commands=True,
+        sync_commands_debug=True,
+        sync_global_commands=True,
+        sync_guild_commands=True,
+    )
 
-    add_fav_embed_cooldown = commands.CooldownMapping.from_cooldown(rate=1, per=15,
-                                                                         type=commands.BucketType.user)
+    add_fav_embed_cooldown = commands.CooldownMapping.from_cooldown(rate=1, per=15, type=commands.BucketType.user)
 
-    enqueue_track_embed_cooldown = commands.CooldownMapping.from_cooldown(rate=2, per=9,
-                                                                               type=commands.BucketType.user)
+    enqueue_track_embed_cooldown = commands.CooldownMapping.from_cooldown(rate=2, per=9, type=commands.BucketType.user)
 
-    enqueue_playlist_embed_cooldown = commands.CooldownMapping.from_cooldown(rate=1, per=14,
-                                                                                  type=commands.BucketType.user)
+    enqueue_playlist_embed_cooldown = commands.CooldownMapping.from_cooldown(
+        rate=1, per=14, type=commands.BucketType.user
+    )
 
     song_select_cooldown = commands.CooldownMapping.from_cooldown(rate=2, per=15, type=commands.BucketType.member)
 
@@ -81,8 +88,10 @@ class BotPool:
         self.ws_client: Optional[WSClient] = None
         self.emoji_data = {}
         self.config = self.load_cfg()
-        self.playlist_cache = TTLCache(maxsize=self.config["PLAYLIST_CACHE_SIZE"], ttl=self.config["PLAYLIST_CACHE_TTL"])
-        self.partial_track_cache =  TTLCache(maxsize=1000, ttl=80400)
+        self.playlist_cache = TTLCache(
+            maxsize=self.config["PLAYLIST_CACHE_SIZE"], ttl=self.config["PLAYLIST_CACHE_TTL"]
+        )
+        self.partial_track_cache = TTLCache(maxsize=1000, ttl=80400)
         self.integration_cache = TTLCache(maxsize=500, ttl=7200)
         self.spotify: Optional[SpotifyClient] = None
         self.deezer = DeezerClient(self.playlist_cache)
@@ -107,36 +116,34 @@ class BotPool:
         self.default_controllerless_skin = self.config.get("DEFAULT_CONTROLLERLESS_SKIN", "default")
         self.default_idling_skin = self.config.get("DEFAULT_IDLING_SKIN", "default")
         self.cache_updater_task: Optional[asyncio.Task] = None
-        self.lyric_data_cache = TTLCache(maxsize=30000, ttl=600*10)
+        self.lyric_data_cache = TTLCache(maxsize=30000, ttl=600 * 10)
         self.ytdl = CustomYTDL(
             {
-                'format': 'webm[abr>0]/bestaudio/best',
-                'extract_flat': True,
-                'quiet': True,
-                'no_warnings': True,
-                'lazy_playlist': True,
-                'playlist_items': '1-700',
-                'simulate': True,
-                'download': False,
-                'cachedir': False,
-                'allowed_extractors': [
-                    r'.*youtube.*',
-                    r'.*soundcloud.*',
+                "format": "webm[abr>0]/bestaudio/best",
+                "extract_flat": True,
+                "quiet": True,
+                "no_warnings": True,
+                "lazy_playlist": True,
+                "playlist_items": "1-700",
+                "simulate": True,
+                "download": False,
+                "cachedir": False,
+                "allowed_extractors": [
+                    r".*youtube.*",
+                    r".*soundcloud.*",
                 ],
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': [
-                            'web',
-                            'android',
-                            'android_creator',
-                            'web_creator',
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": [
+                            "web",
+                            "android",
+                            "android_creator",
+                            "web_creator",
                         ],
-                        'max_comments': [0],
+                        "max_comments": [0],
                     },
-                    'youtubetab': {
-                        "skip": ["webpage", "authcheck"]
-                    }
-                }
+                    "youtubetab": {"skip": ["webpage", "authcheck"]},
+                },
             }
         )
 
@@ -146,23 +153,22 @@ class BotPool:
         self.current_useragent = generate_user_agent()
 
     def load_cache(self):
-
         if os.path.exists("./local_database/playlist_cache.pkl"):
-            with open("./local_database/playlist_cache.pkl", 'rb') as f:
+            with open("./local_database/playlist_cache.pkl", "rb") as f:
                 try:
                     self.playlist_cache.update(pickle.load(f))
                 except EOFError:
                     pass
 
         if os.path.exists("./local_database/partial_track_cache.pkl"):
-            with open("./local_database/partial_track_cache.pkl", 'rb') as f:
+            with open("./local_database/partial_track_cache.pkl", "rb") as f:
                 try:
                     self.partial_track_cache.update(pickle.load(f))
                 except EOFError:
                     pass
 
         if os.path.exists("./local_database/.lyric_cache_data"):
-            with open("./local_database/.lyric_cache_data", 'rb') as f:
+            with open("./local_database/.lyric_cache_data", "rb") as f:
                 try:
                     self.lyric_data_cache.update(pickle.load(f))
                 except EOFError:
@@ -171,11 +177,10 @@ class BotPool:
     async def cache_updater(self):
         while True:
             await asyncio.sleep(300)
-            async with aiofiles.open("./local_database/playlist_cache.pkl", 'wb') as f:
+            async with aiofiles.open("./local_database/playlist_cache.pkl", "wb") as f:
                 await f.write(pickle.dumps(self.playlist_cache))
 
     async def connect_lavalink_queue_task(self, identifier: str):
-
         delay_secs = int(self.config.get("LAVALINK_QUEUE_DELAY", 1.5))
 
         try:
@@ -191,11 +196,9 @@ class BotPool:
         return self.bots + self.guild_bots.get(str(guild_id), [])
 
     def get_all_bots(self) -> list:
-
         allbots = set()
 
         for botlist in self.guild_bots.values():
-
             allbots.update(botlist)
 
         allbots.update(self.bots)
@@ -204,14 +207,12 @@ class BotPool:
 
     @property
     def database(self) -> Union[LocalDatabase, MongoDatabase]:
-
         if self.config["MONGO"]:
             return self.mongo_database
 
         return self.local_database
 
     async def start_lavalink(self):
-
         if self.lavalink_instance:
             try:
                 self.lavalink_instance.kill()
@@ -223,31 +224,28 @@ class BotPool:
 
         try:
             self.lavalink_instance = await self.loop.run_in_executor(
-                None, lambda: run_lavalink(
-                    lavalink_file_url=self.config['LAVALINK_FILE_URL'],
-                    lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256'],
-                    youtube_oauth_refresh_token=self.config['YOUTUBE_OAUTH_REFRESH_TOKEN'],
-                    lavalink_initial_ram=self.config['LAVALINK_INITIAL_RAM'],
-                    lavalink_ram_limit=self.config['LAVALINK_RAM_LIMIT'],
-                    lavalink_additional_sleep=int(self.config['LAVALINK_ADDITIONAL_SLEEP']),
-                    use_jabba=self.config["USE_JABBA"]
-                )
+                None,
+                lambda: run_lavalink(
+                    lavalink_file_url=self.config["LAVALINK_FILE_URL"],
+                    lavalink_file_sha256=self.config["LAVALINK_FILE_SHA256"],
+                    youtube_oauth_refresh_token=self.config["YOUTUBE_OAUTH_REFRESH_TOKEN"],
+                    lavalink_initial_ram=self.config["LAVALINK_INITIAL_RAM"],
+                    lavalink_ram_limit=self.config["LAVALINK_RAM_LIMIT"],
+                    lavalink_additional_sleep=int(self.config["LAVALINK_ADDITIONAL_SLEEP"]),
+                    use_jabba=self.config["USE_JABBA"],
+                ),
             )
         except Exception:
             traceback.print_exc()
 
     async def start_bot(self, bot: BotCore):
-
         e = None
 
         try:
             await bot.start(bot.http.token)
         except disnake.HTTPException as error:
-
             if error.status == 429 or "429 Too Many Requests" in str(e):
-
                 if not self.config["KILL_ON_429"]:
-
                     if self.killing_state == "ratelimit":
                         return
 
@@ -259,10 +257,7 @@ class BotPool:
                 if self.killing_state is True:
                     return
 
-                print(
-                    "Aplicação com ratelimit do discord!\n"
-                    "Finalizando/Reiniciando o processo em 5 segundos..."
-                )
+                print("Aplicação com ratelimit do discord!\nFinalizando/Reiniciando o processo em 5 segundos...")
 
                 self.killing_state = True
 
@@ -278,26 +273,41 @@ class BotPool:
             e = error
 
         if e:
-
             if isinstance(e, disnake.PrivilegedIntentsRequired):
-                e = "Você não ativou as Privileged Intents na sua aplicação<br>" \
-                    "Acesse o discord developer portal:<br>" \
-                    "https://discord.com/developers/applications/<br>" \
-                    "e clique na sua aplicação e depois clique no menu \"bot\"<br>" \
-                    "e em seguida ative todas as intents.<br>" \
-                    f"Print de exemplo: {branding.asset_url('tutorial_intents_guide.png')}<br>" \
+                e = (
+                    "Você não ativou as Privileged Intents na sua aplicação<br>"
+                    "Acesse o discord developer portal:<br>"
+                    "https://discord.com/developers/applications/<br>"
+                    'e clique na sua aplicação e depois clique no menu "bot"<br>'
+                    "e em seguida ative todas as intents.<br>"
+                    f"Print de exemplo: {branding.asset_url('tutorial_intents_guide.png')}<br>"
                     "Após corrigir, reinicie a aplicação."
+                )
 
-                print(("=" * 30) + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n" + e.replace('<br>', '\n') + "\n" + ("=" * 30))
+                print(
+                    ("=" * 30)
+                    + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n"
+                    + e.replace("<br>", "\n")
+                    + "\n"
+                    + ("=" * 30)
+                )
 
             elif isinstance(e, disnake.LoginFailure) and "Improper token" in str(e):
-                e = "Foi utilizado um token inválido.<br>" \
-                    "Revise se o token informado está correto<br>" \
-                    "ou se o token foi resetado<br>" \
-                    f"ou copiado do local correto ( ex: {branding.asset_url('tutorial_token_guide.png')} )<br>" \
+                e = (
+                    "Foi utilizado um token inválido.<br>"
+                    "Revise se o token informado está correto<br>"
+                    "ou se o token foi resetado<br>"
+                    f"ou copiado do local correto ( ex: {branding.asset_url('tutorial_token_guide.png')} )<br>"
                     "Após corrigir, reinicie a aplicação."
+                )
 
-                print(("=" * 30) + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n" + e.replace('<br>', '\n') + "\n" + ( "=" * 30))
+                print(
+                    ("=" * 30)
+                    + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n"
+                    + e.replace("<br>", "\n")
+                    + "\n"
+                    + ("=" * 30)
+                )
 
             else:
                 traceback.print_tb(e.__traceback__)
@@ -309,12 +319,9 @@ class BotPool:
                 pass
 
     async def run_bots(self, bots: List[BotCore]):
-        await asyncio.gather(
-            *[self.start_bot(bot) for bot in bots]
-        )
+        await asyncio.gather(*[self.start_bot(bot) for bot in bots])
 
     async def connect_node(self, bot: BotCore, data: dict):
-
         while not bot.bot_ready:
             await asyncio.sleep(3)
 
@@ -323,17 +330,16 @@ class BotPool:
             await music_cog.connect_node(data)
 
     async def check_node(self, data: dict):
-
         data = deepcopy(data)
 
-        data['rest_uri'] = ("https" if data.get('secure') else "http") + f"://{data['host']}:{data['port']}"
+        data["rest_uri"] = ("https" if data.get("secure") else "http") + f"://{data['host']}:{data['port']}"
 
         try:
-            max_retries = int(data.get('retries')) or 1
+            max_retries = int(data.get("retries")) or 1
         except (TypeError, KeyError):
             max_retries = 1
 
-        headers = {'Authorization': data['password']}
+        headers = {"Authorization": data["password"]}
 
         backoff = 9
         retries = 0
@@ -344,14 +350,14 @@ class BotPool:
         while True:
             if retries >= max_retries:
                 print(
-                    f"❌ - Todas as tentativas de verificar o servidor [{data['identifier']}] falharam. Causa: {repr(exception)}")
+                    f"❌ - Todas as tentativas de verificar o servidor [{data['identifier']}] falharam. Causa: {repr(exception)}"
+                )
                 return
             else:
                 await asyncio.sleep(backoff)
                 try:
                     async with aiohttp.ClientSession() as session:
-                        async with session.get(f"{data['rest_uri']}/v4/info", timeout=45,
-                                                        headers=headers) as r:
+                        async with session.get(f"{data['rest_uri']}/v4/info", timeout=45, headers=headers) as r:
                             if r.status == 200:
                                 data["info"] = await r.json()
                                 data["info"]["check_version"] = 4
@@ -361,38 +367,44 @@ class BotPool:
                             elif r.status != 404:
                                 raise Exception(f"❌ - [{r.status}]: {await r.text()}"[:300])
                             else:
-                                data["info"] = {
-                                    "check_version": 3,
-                                    "sourceManagers": ["youtube", "soundcloud", "http"]
-                                }
+                                data["info"] = {"check_version": 3, "sourceManagers": ["youtube", "soundcloud", "http"]}
                             break
                 except Exception as e:
                     exception = e
                     if data["identifier"] != "LOCAL":
-                        print(f'⚠️ - Falha ao verificar o servidor [{data["identifier"]}], '
-                              f'nova tentativa [{retries}/{max_retries}] em {backoff} segundos.')
+                        print(
+                            f"⚠️ - Falha ao verificar o servidor [{data['identifier']}], "
+                            f"nova tentativa [{retries}/{max_retries}] em {backoff} segundos."
+                        )
                     backoff += 2
                     retries += 1
 
-        if data['identifier'] == 'LOCAL' and self.mongo_database and data["info"]["check_version"] > 3 and [i for i in data["info"].get("plugins", {}) if i["name"] == "youtube-plugin"]:
-
+        if (
+            data["identifier"] == "LOCAL"
+            and self.mongo_database
+            and data["info"]["check_version"] > 3
+            and [i for i in data["info"].get("plugins", {}) if i["name"] == "youtube-plugin"]
+        ):
             try:
-                mongo_data = await self.mongo_database._connect["global"]["global"].find_one({"_id": "youtube_data"}) or {}
+                mongo_data = (
+                    await self.mongo_database._connect["global"]["global"].find_one({"_id": "youtube_data"}) or {}
+                )
             except Exception:
                 traceback.print_exc()
             else:
-                if tokens:=mongo_data.get("refresh_tokens"):
+                if tokens := mongo_data.get("refresh_tokens"):
                     for v in tokens.values():
                         try:
                             async with ClientSession() as session:
                                 resp = await session.post(
-                                    f"{data['rest_uri']}/youtube", headers=headers,
-                                    json={"refreshToken": v}
+                                    f"{data['rest_uri']}/youtube", headers=headers, json={"refreshToken": v}
                                 )
                                 if resp.status != 204:
                                     resp.raise_for_status()
                         except Exception as e:
-                            print(f"🌋 - Falha ao aplicar o Youtube refreshToken no servidor lavalink: {data['identifier']} - {repr(e)}")
+                            print(
+                                f"🌋 - Falha ao aplicar o Youtube refreshToken no servidor lavalink: {data['identifier']} - {repr(e)}"
+                            )
                             break
                         else:
                             print(f"🌋 - Youtube refreshToken aplicado no servidor lavalink: {data['identifier']}")
@@ -403,18 +415,18 @@ class BotPool:
             await asyncio.sleep(1)
 
     def node_check(self, lavalink_servers: dict, start_local=True):
-
         if start_local and "LOCAL" not in lavalink_servers:
             localnode = {
-                'host': '127.0.0.1',
-                'port': os.environ.get("SERVER_PORT") or 8090,
-                'password': 'youshallnotpass',
-                'identifier': 'LOCAL',
-                'region': 'us_central',
-                'retries': 120,
-                'prefer_youtube_native_playback': self.config["PREFER_YOUTUBE_NATIVE_PLAYBACK"],
-                'only_use_native_search_providers': self.config["ONLY_USE_NATIVE_SEARCH_PROVIDERS"],
-                'search_providers': self.config["SEARCH_PROVIDERS"].strip().split() or ["ytsearch", "ytmsearch", "scsearch"]
+                "host": "127.0.0.1",
+                "port": os.environ.get("SERVER_PORT") or 8090,
+                "password": "youshallnotpass",
+                "identifier": "LOCAL",
+                "region": "us_central",
+                "retries": 120,
+                "prefer_youtube_native_playback": self.config["PREFER_YOUTUBE_NATIVE_PLAYBACK"],
+                "only_use_native_search_providers": self.config["ONLY_USE_NATIVE_SEARCH_PROVIDERS"],
+                "search_providers": self.config["SEARCH_PROVIDERS"].strip().split()
+                or ["ytsearch", "ytmsearch", "scsearch"],
             }
             self.loop.create_task(self.check_node(localnode))
 
@@ -422,28 +434,23 @@ class BotPool:
             self.loop.create_task(self.check_node(data))
 
     def process_track_cls(self, data: list, playlists: dict = None):
-
         if not playlists:
             playlists = {}
 
         tracks = []
 
         for info in data:
-
             if playlist := info.pop("playlist", None):
-
                 try:
                     playlist = playlists[playlist["url"]]
                 except KeyError:
                     playlist_cls = LavalinkPlaylist(
                         {
-                            'loadType': 'PLAYLIST_LOADED',
-                            'playlistInfo': {
-                                'name': playlist["name"],
-                                'selectedTrack': -1
-                            },
-                            'tracks': []
-                        }, url=playlist["url"]
+                            "loadType": "PLAYLIST_LOADED",
+                            "playlistInfo": {"name": playlist["name"], "selectedTrack": -1},
+                            "tracks": [],
+                        },
+                        url=playlist["url"],
                     )
                     playlists[playlist["url"]] = playlist_cls
                     playlist = playlist_cls
@@ -457,21 +464,28 @@ class BotPool:
             if info.get("is_partial"):
                 track = PartialTrack(info=info)
             else:
-                track = LavalinkTrack(id_=info.get("id", ""), info=info, playlist=playlist, requester=info["extra"]["requester"], pluginInfo=info.get("pluginInfo", {}))
+                track = LavalinkTrack(
+                    id_=info.get("id", ""),
+                    info=info,
+                    playlist=playlist,
+                    requester=info["extra"]["requester"],
+                    pluginInfo=info.get("pluginInfo", {}),
+                )
             tracks.append(track)
 
         return tracks, playlists
 
     async def connect_rpc_ws(self):
-
         if not self.config["RUN_RPC_SERVER"] and (
-                not self.config["RPC_SERVER"] or self.config["RPC_SERVER"].replace("$PORT", port := os.environ.get("PORT", "80")) == f"ws://localhost:{port}/ws"):
+            not self.config["RPC_SERVER"]
+            or self.config["RPC_SERVER"].replace("$PORT", port := os.environ.get("PORT", "80"))
+            == f"ws://localhost:{port}/ws"
+        ):
             pass
         else:
             await self.ws_client.ws_loop()
 
     def load_cfg(self):
-
         config = load_config()
 
         try:
@@ -488,7 +502,6 @@ class BotPool:
         return config
 
     def load_skins(self):
-
         for skin in os.listdir("./utils/music/skins/normal_player"):
             if not skin.endswith(".py"):
                 continue
@@ -533,7 +546,6 @@ class BotPool:
             self.default_static_skin = "default"
 
     def check_skin(self, skin: str):
-
         if skin is None:
             return self.default_skin
 
@@ -546,7 +558,6 @@ class BotPool:
         return skin
 
     def check_static_skin(self, skin: str):
-
         if skin is None:
             return self.default_static_skin
 
@@ -559,9 +570,9 @@ class BotPool:
         return skin
 
     async def setup_pool_extras(self):
-
         try:
             from dev.pool_dev import PoolDev
+
             await PoolDev(self).run()
         except ImportError:
             pass
@@ -569,24 +580,21 @@ class BotPool:
             print(traceback.format_exc())
 
     def setup(self):
-
         self.load_skins()
 
-        if self.config['ENABLE_LOGGER']:
-
+        if self.config["ENABLE_LOGGER"]:
             if not os.path.isdir("./.logs"):
                 os.makedirs("./.logs")
 
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
-            handler = logging.FileHandler(filename='./.logs/disnake.log', encoding='utf-8', mode='w')
-            handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+            handler = logging.FileHandler(filename="./.logs/disnake.log", encoding="utf-8", mode="w")
+            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
             logger.addHandler(handler)
 
         LAVALINK_SERVERS = {}
 
         if self.config["AUTO_DOWNLOAD_LAVALINK_SERVERLIST"]:
-
             try:
                 LAVALINK_SERVERS = get_lavalink_servers()
                 ini_file = None
@@ -604,13 +612,12 @@ class BotPool:
                     traceback.print_exc()
                     print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
                     server_list = validated_server_list(None, None)
-                with open("auto_lavalink.ini", 'wb') as f:
+                with open("auto_lavalink.ini", "wb") as f:
                     f.write(server_list)
         else:
             ini_file = "lavalink.ini"
 
         for key, value in self.config.items():
-
             if key.lower().startswith("lavalink_node_"):
                 try:
                     LAVALINK_SERVERS[key] = json.loads(value)
@@ -631,32 +638,44 @@ class BotPool:
                     value["secure"] = value.get("secure", "").lower() == "true"
                     value["port"] = value["port"].replace("{SERVER_PORT}", os.environ.get("SERVER_PORT") or "8090")
                     value["search"] = value.get("search", "").lower() != "false"
-                    value["prefer_youtube_native_playback"] = value.get("prefer_youtube_native_playback", "").lower() == "true"
-                    value["only_use_native_search_providers"] = value.get("only_use_native_search_providers", "").lower() == "true"
+                    value["prefer_youtube_native_playback"] = (
+                        value.get("prefer_youtube_native_playback", "").lower() == "true"
+                    )
+                    value["only_use_native_search_providers"] = (
+                        value.get("only_use_native_search_providers", "").lower() == "true"
+                    )
                     value["search_providers"] = value.get("search_providers", "").strip().split()
                     LAVALINK_SERVERS[key] = value
 
-        if start_local := (self.config['RUN_LOCAL_LAVALINK'] is True or not LAVALINK_SERVERS):
+        if start_local := (self.config["RUN_LOCAL_LAVALINK"] is True or not LAVALINK_SERVERS):
             pass
         else:
             start_local = False
 
-        intents = disnake.Intents(**{i[:-7].lower(): v for i, v in self.config.items() if i.lower().endswith("_intent")})
+        intents = disnake.Intents(
+            **{i[:-7].lower(): v for i, v in self.config.items() if i.lower().endswith("_intent")}
+        )
         intents.members = True
         intents.guilds = True
 
         mongo_key = self.config.get("MONGO")
 
         if mongo_key:
-            self.mongo_database = MongoDatabase(mongo_key, timeout=self.config["MONGO_TIMEOUT"],
-                                                cache_maxsize=self.config["DBCACHE_SIZE"],
-                                                cache_ttl=self.config["DBCACHE_TTL"])
+            self.mongo_database = MongoDatabase(
+                mongo_key,
+                timeout=self.config["MONGO_TIMEOUT"],
+                cache_maxsize=self.config["DBCACHE_SIZE"],
+                cache_ttl=self.config["DBCACHE_TTL"],
+            )
             print("🍃 - Database em uso: MongoDB")
         else:
-            print("🎲 - Database em uso: TinyMongo | Nota: Os arquivos da database serão salvos localmente na pasta: local_database")
+            print(
+                "🎲 - Database em uso: TinyMongo | Nota: Os arquivos da database serão salvos localmente na pasta: local_database"
+            )
 
-        self.local_database = LocalDatabase(cache_maxsize=self.config["DBCACHE_SIZE"],
-                                            cache_ttl=self.config["DBCACHE_TTL"])
+        self.local_database = LocalDatabase(
+            cache_maxsize=self.config["DBCACHE_SIZE"], cache_ttl=self.config["DBCACHE_TTL"]
+        )
 
         os.environ.update(
             {
@@ -664,18 +683,24 @@ class BotPool:
                 "JISHAKU_HIDE": "true",
                 "JISHAKU_NO_DM_TRACEBACK": "true",
                 "JISHAKU_NO_UNDERSCORE": "true",
-             }
+            }
         )
 
         try:
-            self.commit = check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
+            self.commit = check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
             print(f"📥 - Commit ver: {self.commit}")
         except:
             self.commit = None
 
         try:
-            self.remote_git_url = check_output(['git', 'remote', '-v']).decode(
-                'ascii').strip().split("\n")[0][7:].replace(".git", "").replace(" (fetch)", "")
+            self.remote_git_url = (
+                check_output(["git", "remote", "-v"])
+                .decode("ascii")
+                .strip()
+                .split("\n")[0][7:]
+                .replace(".git", "")
+                .replace(" (fetch)", "")
+            )
         except:
             pass
 
@@ -688,9 +713,9 @@ class BotPool:
 
         try:
             spotify_client = SpotifyClient(
-                client_id=self.config['SPOTIFY_CLIENT_ID'],
-                client_secret=self.config['SPOTIFY_CLIENT_SECRET'],
-                playlist_extra_page_limit=self.config['SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT']
+                client_id=self.config["SPOTIFY_CLIENT_ID"],
+                client_secret=self.config["SPOTIFY_CLIENT_SECRET"],
+                playlist_extra_page_limit=self.config["SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT"],
             )
         except Exception as e:
             print(f"⚠️ - Suporte interno ao spotify desativado: {repr(e)}")
@@ -704,7 +729,6 @@ class BotPool:
         all_tokens = {}
 
         for k, v in dict(os.environ, **self.config).items():
-
             if not isinstance(v, str):
                 continue
 
@@ -714,7 +738,6 @@ class BotPool:
             if len(tokens) > 1:
                 counter = 1
                 for t in tokens:
-
                     if t in all_tokens.values():
                         continue
 
@@ -725,7 +748,6 @@ class BotPool:
                 all_tokens[k] = token
 
         def load_bot(bot_name: str, token: str, guild_id: str = None, load_modules_log: bool = False):
-
             try:
                 token = token.split().pop()
             except:
@@ -750,27 +772,28 @@ class BotPool:
                 embed_color=self.config["EMBED_COLOR"],
                 default_prefix=self.config["DEFAULT_PREFIX"],
                 pool=self,
-                number=int(self.max_counter)
+                number=int(self.max_counter),
             )
 
             bot.http.token = token
 
             bot.load_extension("jishaku")
 
-            if bot.config['INTERACTION_COMMAND_ONLY']:
+            if bot.config["INTERACTION_COMMAND_ONLY"]:
 
                 @bot.check
                 async def check_commands(ctx: CustomContext):
-
                     if not (await bot.is_owner(ctx.author)):
-                        raise GenericError("**Os comandos de texto estão desativados!\n"
-                                           "Use os comandos de barra /**", self_delete=True, delete_original=15)
+                        raise GenericError(
+                            "**Os comandos de texto estão desativados!\nUse os comandos de barra /**",
+                            self_delete=True,
+                            delete_original=15,
+                        )
 
                     return True
 
             @bot.listen("on_resumed")
             async def clear_gc():
-
                 if self.processing_gc:
                     return
 
@@ -781,7 +804,6 @@ class BotPool:
 
             @bot.application_command_check(slash_commands=True, message_commands=True, user_commands=True)
             async def check(inter: disnake.ApplicationCommandInteraction):
-
                 kwargs = {}
 
                 try:
@@ -811,34 +833,38 @@ class BotPool:
                     try:
                         print(
                             f"cmd log: [user: {inter.author} - {inter.author.id}] - [guild: {inter.guild.name} - {inter.guild.id}]"
-                            f" - [cmd: {inter.data.name}] {datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M:%S')} (UTC) - {inter.filled_options}\n" + (
-                                        "-" * 15))
+                            f" - [cmd: {inter.data.name}] {datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M:%S')} (UTC) - {inter.filled_options}\n"
+                            + ("-" * 15)
+                        )
                     except:
                         traceback.print_exc()
 
                 if not inter.guild_id:
-
                     if allow_private:
                         return True
 
-                    raise GenericError("Esse comando não pode ser executado em mensagens privadas.\n"
-                                     "Use em algum servidor onde há bot compatível adicionado.")
+                    raise GenericError(
+                        "Esse comando não pode ser executado em mensagens privadas.\n"
+                        "Use em algum servidor onde há bot compatível adicionado."
+                    )
 
                 if not allow_private and not isinstance(inter.guild, disnake.Guild):
-
                     available_bot = False
 
                     for b in inter.bot.pool.get_guild_bots(inter.guild_id):
-                        if b.appinfo and (
-                                b.appinfo.bot_public or await b.is_owner(inter.author)) and b.get_guild(
-                                inter.guild_id):
+                        if (
+                            b.appinfo
+                            and (b.appinfo.bot_public or await b.is_owner(inter.author))
+                            and b.get_guild(inter.guild_id)
+                        ):
                             available_bot = True
                             break
 
                     if not available_bot:
                         raise GenericError(
                             "**Não há bots disponíveis no servidor, Adicione pelo menos um clicando no botão abaixo.**",
-                            components=[disnake.ui.Button(custom_id="bot_invite", label="Adicionar bots")])
+                            components=[disnake.ui.Button(custom_id="bot_invite", label="Adicionar bots")],
+                        )
 
                 if not kwargs:
                     kwargs["return_first"] = True
@@ -856,21 +882,20 @@ class BotPool:
 
                 @bot.listen("on_command")
                 async def command_log(ctx: CustomContext):
-
-                    if (await bot.is_owner(ctx.author)):
+                    if await bot.is_owner(ctx.author):
                         return
 
                     print(
                         f"cmd (prefix) log: [user: {ctx.author} - {ctx.author.id}] - [guild: {ctx.guild.name} - {ctx.guild.id}]"
-                        f" - [cmd: {ctx.message.content}] {datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M:%S')} (UTC)\n" + ("-" * 15)
+                        f" - [cmd: {ctx.message.content}] {datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M:%S')} (UTC)\n"
+                        + ("-" * 15)
                     )
 
             @bot.event
             async def on_ready():
-                print(f'🟢 - {bot.user} - [{bot.user.id}] Online.')
+                print(f"🟢 - {bot.user} - [{bot.user.id}] Online.")
 
             async def initial_setup():
-
                 await bot.wait_until_ready()
 
                 if bot.session is None:
@@ -940,7 +965,6 @@ class BotPool:
         self.loop.create_task(self.setup_pool_extras())
 
         if not self.bots:
-
             message = "O token do bot não foi configurado devidamente!"
 
             if os.environ.get("REPL_SLUG"):
@@ -958,7 +982,6 @@ class BotPool:
             message = f"\n\n{message}"
 
         else:
-
             if start_local:
                 self.loop.create_task(self.start_lavalink())
 
@@ -968,7 +991,6 @@ class BotPool:
             self.node_check(LAVALINK_SERVERS, start_local=start_local)
 
         if self.config["RUN_RPC_SERVER"]:
-
             self.cache_updater_task = self.loop.create_task(self.cache_updater())
 
             if not message:
@@ -984,24 +1006,20 @@ class BotPool:
             raise Exception(message)
 
         else:
-
             self.cache_updater_task = self.loop.create_task(self.cache_updater())
 
             self.loop.create_task(self.connect_rpc_ws())
 
             try:
-                self.loop.run_until_complete(
-                    self.run_bots(self.get_all_bots())
-                )
+                self.loop.run_until_complete(self.run_bots(self.get_all_bots()))
             except KeyboardInterrupt:
                 return
 
 
 class BotCore(commands.AutoShardedBot):
-
     def __init__(self, *args, **kwargs):
         self.session: Optional[aiohttp.ClientError] = None
-        self.pool: BotPool = kwargs.pop('pool')
+        self.pool: BotPool = kwargs.pop("pool")
         self.default_prefix = kwargs.pop("default_prefix", "!!")
         self.session: Optional[aiohttp.ClientSession] = None
         self.color = kwargs.pop("embed_color", None)
@@ -1019,7 +1037,6 @@ class BotCore(commands.AutoShardedBot):
         self.wavelink_node_reconnect_tasks = {}
 
         for i in self.config["OWNER_IDS"].split("||"):
-
             if not i:
                 continue
 
@@ -1028,12 +1045,10 @@ class BotCore(commands.AutoShardedBot):
             except ValueError:
                 print(f"Owner_ID inválido: {i}")
 
-    async def edit_voice_channel_status(
-            self, status: Optional[str], *, channel_id: int, reason: Optional[str] = None
-    ):
+    async def edit_voice_channel_status(self, status: Optional[str], *, channel_id: int, reason: Optional[str] = None):
         # Obtido do discord.py: https://github.com/Rapptz/discord.py/blob/9ce733321b445db245924bfd21fedf20a01a570b/discord/http.py#L1166
-        r = Route('PUT', '/channels/{channel_id}/voice-status', channel_id=channel_id)
-        payload = {'status': status}
+        r = Route("PUT", "/channels/{channel_id}/voice-status", channel_id=channel_id)
+        payload = {"status": status}
         return await self.http.request(r, reason=reason, json=payload)
 
     @property
@@ -1069,17 +1084,12 @@ class BotCore(commands.AutoShardedBot):
         return self.pool.ws_client
 
     async def get_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users]):
-        return await self.pool.database.get_data(
-            id_=id_, db_name=db_name, collection=str(self.user.id)
-        )
+        return await self.pool.database.get_data(id_=id_, db_name=db_name, collection=str(self.user.id))
 
     async def update_data(self, id_, data: dict, *, db_name: Union[DBModel.guilds, DBModel.users]):
-        return await self.pool.database.update_data(
-            id_=id_, data=data, db_name=db_name, collection=str(self.user.id)
-        )
+        return await self.pool.database.update_data(id_=id_, data=data, db_name=db_name, collection=str(self.user.id))
 
     async def get_global_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users]):
-
         data = await self.pool.database.get_data(
             id_=id_, db_name=db_name, collection="global", default_model=global_db_models
         )
@@ -1087,26 +1097,25 @@ class BotCore(commands.AutoShardedBot):
         return data
 
     async def update_global_data(self, id_, data: dict, *, db_name: Union[DBModel.guilds, DBModel.users]):
-
         return await self.pool.database.update_data(
             id_=id_, data=data, db_name=db_name, collection="global", default_model=global_db_models
         )
 
     async def is_owner(self, user: Union[disnake.User, disnake.Member]) -> bool:
-
         if user.id in self.env_owner_ids:
             return True
 
         return await super().is_owner(user)
 
     async def sync_app_commands(self, force=False):
-
         await self.wait_until_ready()
 
         if not self.command_sync_flags.sync_commands and not force:
             return
 
-        current_cmds = sorted([sort_dict_recursively(cmd.body.to_dict()) for cmd in self.application_commands], key=lambda k: k["name"])
+        current_cmds = sorted(
+            [sort_dict_recursively(cmd.body.to_dict()) for cmd in self.application_commands], key=lambda k: k["name"]
+        )
 
         try:
             with open(f"./.app_commands_sync_data/{self.user.id}.json") as f:
@@ -1137,17 +1146,17 @@ class BotCore(commands.AutoShardedBot):
             traceback.print_exc()
 
     def sync_command_cooldowns(self, force=False):
-
         for b in self.pool.get_all_bots():
-
             if b == self and force is False:
                 continue
 
             for cmd in b.commands:
                 cmd.ignore_extra = False
-                if cmd.extras.get("exclusive_cooldown"): continue
+                if cmd.extras.get("exclusive_cooldown"):
+                    continue
                 c = self.get_command(cmd.name)
-                if not c: continue
+                if not c:
+                    continue
                 c.ignore_extra = False
                 if self.pool.config["ENABLE_COMMANDS_COOLDOWN"] is False:
                     c._buckets._cooldown = None
@@ -1156,33 +1165,38 @@ class BotCore(commands.AutoShardedBot):
 
             for cmd in b.slash_commands:
                 c = self.get_slash_command(cmd.name)
-                if not c: continue
+                if not c:
+                    continue
                 if self.pool.config["ENABLE_COMMANDS_COOLDOWN"] is False:
                     c._buckets._cooldown = None
                 else:
-                    if c.extras.get("exclusive_cooldown"): continue
+                    if c.extras.get("exclusive_cooldown"):
+                        continue
                     c._buckets = cmd._buckets
 
             for cmd in b.user_commands:
                 c = self.get_user_command(cmd.name)
-                if not c: continue
+                if not c:
+                    continue
                 if self.pool.config["ENABLE_COMMANDS_COOLDOWN"] is False:
                     c._buckets._cooldown = None
                 else:
-                    if c.extras.get("exclusive_cooldown"): continue
+                    if c.extras.get("exclusive_cooldown"):
+                        continue
                     c._buckets = cmd._buckets
 
             for cmd in b.message_commands:
                 c = self.get_message_command(cmd.name)
-                if not c: continue
+                if not c:
+                    continue
                 if self.pool.config["ENABLE_COMMANDS_COOLDOWN"] is False:
                     c._buckets._cooldown = None
                 else:
-                    if c.extras.get("exclusive_cooldown"): continue
+                    if c.extras.get("exclusive_cooldown"):
+                        continue
                     c._buckets = cmd._buckets
 
     async def can_send_message(self, message: disnake.Message):
-
         if isinstance(message.channel, disnake.Thread):
             perm_check = message.channel.parent.permissions_for(message.guild.me).send_messages_in_threads
         else:
@@ -1195,7 +1209,6 @@ class BotCore(commands.AutoShardedBot):
         return True
 
     async def on_message(self, message: disnake.Message):
-
         if not self.bot_ready or not self.appinfo or self.is_closed():
             return
 
@@ -1218,8 +1231,7 @@ class BotCore(commands.AutoShardedBot):
         elif message.author.bot:
             return
 
-        elif message.content in (f"<@{self.user.id}>",  f"<@!{self.user.id}>"):
-
+        elif message.content in (f"<@{self.user.id}>", f"<@!{self.user.id}>"):
             if message.author.bot:
                 return
 
@@ -1228,7 +1240,7 @@ class BotCore(commands.AutoShardedBot):
 
             embed = disnake.Embed(color=self.get_color(message.guild.me))
 
-            prefix = (await self.get_prefix(message))
+            prefix = await self.get_prefix(message)
 
             if not isinstance(prefix, str):
                 prefix = prefix[-1]
@@ -1236,8 +1248,10 @@ class BotCore(commands.AutoShardedBot):
             embed.description = f"**Olá {message.author.mention}.**"
 
             if not self.config["INTERACTION_COMMAND_ONLY"]:
-                embed.description += f"\n\nMeu prefixo no servidor é: **{prefix}** `(minha menção também funciona como prefixo).`\n"\
-                                    f"Pra ver todos os meus comandos use **{prefix}help**"
+                embed.description += (
+                    f"\n\nMeu prefixo no servidor é: **{prefix}** `(minha menção também funciona como prefixo).`\n"
+                    f"Pra ver todos os meus comandos use **{prefix}help**"
+                )
 
             embed.description += "\n\n**Pra ver todos os meus comandos use: /**"
 
@@ -1245,7 +1259,11 @@ class BotCore(commands.AutoShardedBot):
                 "components": [
                     disnake.ui.Button(
                         label="Me adicione no seu servidor.",
-                        url=disnake.utils.oauth_url(self.user.id, permissions=disnake.Permissions(self.config['INVITE_PERMISSIONS']), scopes=('bot',))
+                        url=disnake.utils.oauth_url(
+                            self.user.id,
+                            permissions=disnake.Permissions(self.config["INVITE_PERMISSIONS"]),
+                            scopes=("bot",),
+                        ),
                     )
                 ]
             }
@@ -1263,8 +1281,12 @@ class BotCore(commands.AutoShardedBot):
         except:
             pass
 
-        if self.config["ENABLE_SONGREQUEST_MENTION"] and not ctx.valid and message.content.startswith(self.user.mention) and message.author.voice:
-
+        if (
+            self.config["ENABLE_SONGREQUEST_MENTION"]
+            and not ctx.valid
+            and message.content.startswith(self.user.mention)
+            and message.author.voice
+        ):
             query = str(message.content)
 
             for m in message.mentions:
@@ -1277,8 +1299,14 @@ class BotCore(commands.AutoShardedBot):
                 self.dispatch("pool_dispatch", ctx, self.user.id)
                 try:
                     await play_cmd.callback(
-                        inter=ctx, query=query, self=play_cmd.cog, position=0, options=False, force_play="no",
-                        manual_selection=False, server=None
+                        inter=ctx,
+                        query=query,
+                        self=play_cmd.cog,
+                        position=0,
+                        options=False,
+                        force_play="no",
+                        manual_selection=False,
+                        server=None,
                     )
                 except Exception as e:
                     self.dispatch("command_error", ctx, e)
@@ -1310,48 +1338,48 @@ class BotCore(commands.AutoShardedBot):
         await self.invoke(ctx)
 
     def check_bot_forum_post(
-            self,
-            channel: Union[disnake.ForumChannel, disnake.TextChannel, disnake.VoiceChannel, disnake.Thread],
-            raise_error=False,
+        self,
+        channel: Union[disnake.ForumChannel, disnake.TextChannel, disnake.VoiceChannel, disnake.Thread],
+        raise_error=False,
     ):
-
         try:
             if isinstance(channel.parent, disnake.ForumChannel):
-
-                if channel.owner_id in (bot.user.id for bot in self.pool.get_guild_bots(channel.guild.id) if bot.bot_ready):
-
+                if channel.owner_id in (
+                    bot.user.id for bot in self.pool.get_guild_bots(channel.guild.id) if bot.bot_ready
+                ):
                     if raise_error is False:
                         return False
 
-                    raise GenericError("**Você não pode usar comandos prefixed na postagem atual...**\n"
-                                       "`Use comando de barra (/) aqui.`", self_delete=True)
+                    raise GenericError(
+                        "**Você não pode usar comandos prefixed na postagem atual...**\n"
+                        "`Use comando de barra (/) aqui.`",
+                        self_delete=True,
+                    )
         except AttributeError:
             pass
 
         return True
 
     def get_color(self, me: Optional[disnake.Member] = None):
-
         if not me:
-            return self.color or 0x2b2d31
+            return self.color or 0x2B2D31
 
         if self.color:
             return self.color
 
         if me.color.value == 0:
-            return 0x2b2d31
+            return 0x2B2D31
 
         return me.color
 
     async def update_appinfo(self):
-
         await self.wait_until_ready()
 
         self.appinfo = await self.application_info()
 
         try:
             self.owner = self.appinfo.team.owner
-            owners =self.appinfo.team.members
+            owners = self.appinfo.team.members
         except AttributeError:
             self.owner = self.appinfo.owner
             owners = [self.appinfo.owner]
@@ -1367,27 +1395,31 @@ class BotCore(commands.AutoShardedBot):
                 if not [dev for dev in owners if check_member(dev, guild)]:
                     guilds.add(guild)
 
-            warn_msg = f"Atenção: O bot [{self.user}] (ID: {self.user.id}) foi configurado no portal do desenvolvedor " \
-                  "como bot público\n" \
-                  "lembrando que se caso o bot seja divulgado pra ser adicionado publicamente o mesmo terá que " \
-                  "estar sob as condições da licença GPL-2 " \
-                  f"(obra derivada de {branding.UPSTREAM_NAME}, de {branding.UPSTREAM_AUTHOR}): " \
-                  f"{branding.LICENSE_URL}\n" \
-                  "Caso não queira seguir as condições da licença no seu bot, você pode deixar o bot privado desmarcando a " \
-                  f"opção public bot acessando o link: https://discord.com/developers/applications/{self.user.id}/bot"
+            warn_msg = (
+                f"Atenção: O bot [{self.user}] (ID: {self.user.id}) foi configurado no portal do desenvolvedor "
+                "como bot público\n"
+                "lembrando que se caso o bot seja divulgado pra ser adicionado publicamente o mesmo terá que "
+                "estar sob as condições da licença GPL-2 "
+                f"(obra derivada de {branding.UPSTREAM_NAME}, de {branding.UPSTREAM_AUTHOR}): "
+                f"{branding.LICENSE_URL}\n"
+                "Caso não queira seguir as condições da licença no seu bot, você pode deixar o bot privado desmarcando a "
+                f"opção public bot acessando o link: https://discord.com/developers/applications/{self.user.id}/bot"
+            )
 
             if guilds:
-                warn_msg += "\n\nAtualmente o bot se encontra em servidores no qual o dono do bot (ou membro da equipe) não "\
-                            f"estão ou que não possuem permissão de gerenciar servidor pra adicionar o próprio bot " \
-                             f"[{self.user}] nos servidores abaixo:\n\n" + "\n".join(f"{g.name} [ID: {g.id}]" for g in list(guilds)[:10])
+                warn_msg += (
+                    "\n\nAtualmente o bot se encontra em servidores no qual o dono do bot (ou membro da equipe) não "
+                    f"estão ou que não possuem permissão de gerenciar servidor pra adicionar o próprio bot "
+                    f"[{self.user}] nos servidores abaixo:\n\n"
+                    + "\n".join(f"{g.name} [ID: {g.id}]" for g in list(guilds)[:10])
+                )
 
-                if (gcount:=len(guilds)) > 10:
-                    warn_msg += F"\ne em mais {gcount-10} servidor(es)."
+                if (gcount := len(guilds)) > 10:
+                    warn_msg += f"\ne em mais {gcount - 10} servidor(es)."
 
-            print(("="*50) + f"\n{warn_msg}\n" + ("="*50))
+            print(("=" * 50) + f"\n{warn_msg}\n" + ("=" * 50))
 
     async def on_application_command_autocomplete(self, inter: disnake.ApplicationCommandInteraction):
-
         if not self.bot_ready or not self.is_ready():
             return []
 
@@ -1400,7 +1432,6 @@ class BotCore(commands.AutoShardedBot):
         await super().on_application_command_autocomplete(inter)
 
     async def on_application_command(self, inter: disnake.ApplicationCommandInteraction):
-
         if not self.bot_ready or self.is_closed():
             await inter.send("Ainda estou inicializando...\nPor favor aguarde mais um pouco...", ephemeral=True)
             return
@@ -1408,7 +1439,6 @@ class BotCore(commands.AutoShardedBot):
         await super().on_application_command(inter)
 
     def load_modules(self, module_list: list = None, load_modules_log=False):
-
         modules_dir = ["modules", "modules_dev"]
 
         load_status = {
@@ -1420,17 +1450,15 @@ class BotCore(commands.AutoShardedBot):
         bot_name = self.user or self.identifier
 
         for module_dir in modules_dir:
-
             for item in os.walk(module_dir):
-                files = filter(lambda f: f.endswith('.py'), item[-1])
+                files = filter(lambda f: f.endswith(".py"), item[-1])
 
                 for file in files:
-
                     if module_list:
                         if not [i for i in module_list if file.endswith(i)]:
                             continue
                     filename, _ = os.path.splitext(file)
-                    module_filename = os.path.join(module_dir, filename).replace('\\', '.').replace('/', '.')
+                    module_filename = os.path.join(module_dir, filename).replace("\\", ".").replace("/", ".")
                     try:
                         self.unload_extension(module_filename)
                         self.load_extension(module_filename)
@@ -1460,8 +1488,10 @@ class BotCore(commands.AutoShardedBot):
             self.remove_slash_command("play_music_file")
 
         for c in self.slash_commands:
-            if (desc:=len(c.description)) > 100:
-                raise Exception(f"A descrição do comando {c.name} excedeu a quantidade de caracteres permitido "
-                                f"no discord (100), quantidade atual: {desc}")
+            if (desc := len(c.description)) > 100:
+                raise Exception(
+                    f"A descrição do comando {c.name} excedeu a quantidade de caracteres permitido "
+                    f"no discord (100), quantidade atual: {desc}"
+                )
 
         return load_status

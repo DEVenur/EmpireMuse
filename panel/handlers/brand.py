@@ -1,4 +1,5 @@
 """Arte de marca servida de ``assets/brand/`` por uma lista fechada de arquivos."""
+
 from __future__ import annotations
 
 import asyncio

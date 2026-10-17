@@ -2,14 +2,24 @@
 
 Interpretações (contrato BRIEFING-PAINEL-E3.md): ver o relatório. Tudo com dublês; relógio injetado; sem rede.
 """
+
 import asyncio
 import logging
 
 import aiohttp
 import pytest
 
-from tests.panel.helpers_servers import (USER_ID, FakeBot, FakeGuild, FakePool, forbidden, http_error, make_session,
-                                         not_found, run)
+from tests.panel.helpers_servers import (
+    USER_ID,
+    FakeBot,
+    FakeGuild,
+    FakePool,
+    forbidden,
+    http_error,
+    make_session,
+    not_found,
+    run,
+)
 from tests.panel.helpers_login import FakeClock
 from tests.panel.helpers import require
 
@@ -39,6 +49,7 @@ def authorize(authorizer, session=None, guild_id=GID, **kwargs):
 
 # --------------------------------------------------------------------------- modelos
 
+
 def test_guild_access_denied_is_an_exception():
     assert issubclass(authz().GuildAccessDenied, Exception)
 
@@ -59,6 +70,7 @@ def test_icon_url_is_none_when_guild_has_no_icon():
 
 def test_models_are_frozen():
     import dataclasses
+
     for model in (authz().BotRef, authz().GuildAccess):
         assert dataclasses.is_dataclass(model) and model.__dataclass_params__.frozen
 
@@ -77,17 +89,28 @@ def test_guild_whose_only_bot_is_not_ready_is_denied():
 
 # --------------------------------------------------------------------------- matriz de permissão
 
-@pytest.mark.parametrize("kwargs", [
-    {"owner": True}, {"admin": True}, {"manage": True}, {"admin": True, "manage": True}, {"owner": True, "admin": True},
-])
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"owner": True},
+        {"admin": True},
+        {"manage": True},
+        {"admin": True, "manage": True},
+        {"owner": True, "admin": True},
+    ],
+)
 def test_owner_administrator_or_manage_guild_is_authorized(kwargs):
     assert authorize(setup(**kwargs)[3]).guild_id == GID
 
 
-@pytest.mark.parametrize("kwargs", [
-    {},                      # membro comum
-    {"member": False},       # não é membro (get_member None e fetch NotFound)
-])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},  # membro comum
+        {"member": False},  # não é membro (get_member None e fetch NotFound)
+    ],
+)
 def test_plain_member_or_non_member_is_denied(kwargs):
     with pytest.raises(authz().GuildAccessDenied):
         authorize(setup(**kwargs)[3])
@@ -122,16 +145,25 @@ def test_uses_gateway_cache_before_fetching_member():
 
 def test_fetches_member_when_not_cached_and_accepts_admin():
     from tests.panel.helpers_servers import FakeMember
+
     guild, _, _, authorizer = setup(member=False)
     guild.fetchable[UID] = FakeMember(administrator=True)
     assert authorize(authorizer).guild_id == GID
     assert guild.calls["fetch_member"] == 1
 
 
-@pytest.mark.parametrize("failure", [
-    not_found, forbidden, http_error, asyncio.TimeoutError, lambda: OSError("rede caiu"),
-    lambda: aiohttp.ClientError("rede"),
-], ids=["NotFound", "Forbidden", "HTTPException", "timeout", "OSError", "aiohttp"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        not_found,
+        forbidden,
+        http_error,
+        asyncio.TimeoutError,
+        lambda: OSError("rede caiu"),
+        lambda: aiohttp.ClientError("rede"),
+    ],
+    ids=["NotFound", "Forbidden", "HTTPException", "timeout", "OSError", "aiohttp"],
+)
 def test_fetch_member_failures_deny_access(failure):
     guild, _, _, authorizer = setup(member=False)
     guild.fetchable[UID] = failure()
@@ -149,6 +181,7 @@ def test_network_error_is_logged_without_sensitive_data(caplog):
 
 
 # --------------------------------------------------------------------------- entrada: id inválido / fora da sessão
+
 
 @pytest.mark.parametrize("bad_id", ["", "abc", "12a", "-1", " 42", "42 ", "4 2", "1" * 21, "١٢٣", "42\n", "4.2", None])
 def test_invalid_guild_id_is_denied_without_any_discord_call(bad_id):
@@ -179,6 +212,7 @@ def test_bot_get_guild_receives_int_ids():
 
 
 # --------------------------------------------------------------------------- cache
+
 
 def test_positive_decision_is_cached_for_reads():
     guild, pool, _, authorizer = setup(admin=True)

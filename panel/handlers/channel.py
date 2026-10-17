@@ -2,6 +2,7 @@
 
 Só HTTP: validação, token e execução ficam em ``panel.services.channel.py`` e ``panel/services/tasks.py``.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -11,8 +12,18 @@ import tornado.web
 from panel.authz import GuildAccess, GuildAccessDenied
 from panel.handlers.servers import initial_of
 from panel.handlers.settings import MAX_BODY_BYTES, SettingsHandler, decode_args
-from panel.services.base import (CONFLICT_TEXT, HEX16, INVALID_TEXT, KIND_ERROR, Args, DBModel, FormContext, Formulario,
-                                 first, flag)
+from panel.services.base import (
+    CONFLICT_TEXT,
+    HEX16,
+    INVALID_TEXT,
+    KIND_ERROR,
+    Args,
+    DBModel,
+    FormContext,
+    Formulario,
+    first,
+    flag,
+)
 from panel.services.channel import MSG_BUSY, MSG_LIMIT, MSG_TOKEN, ChannelService, Check, Confirmation, TaskView
 from panel.services.tasks import Task, TaskBusy, TaskLimit, valid_task_id
 
@@ -22,8 +33,14 @@ PAGE_TEMPLATE = "config_canal.html"
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."
 _MSG_ACTION = "Ação desconhecida."
 _MSG_VERSION = "Não foi possível validar o formulário. Recarregue a página e tente novamente."
-_DEFAULT_VALUES = {"modo": "existente", "canal": "", "limpar_mensagens": False, "titulo_forum": "", "tipo": "texto",
-                   "categoria": ""}
+_DEFAULT_VALUES = {
+    "modo": "existente",
+    "canal": "",
+    "limpar_mensagens": False,
+    "titulo_forum": "",
+    "tipo": "texto",
+    "categoria": "",
+}
 
 
 class ChannelHandler(SettingsHandler):
@@ -67,8 +84,12 @@ class ChannelHandler(SettingsHandler):
         if self.channels.runner.active_for_guild(ctx.guild_id) is not None:
             # Antes do lock: a tarefa em andamento o segura até terminar e este POST não deve esperar por ela.
             doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
-            self._render(409, access, ctx, self._namespace_for(
-                ctx, doc, action, message=MSG_BUSY, task=self._own_active_task(ctx)))
+            self._render(
+                409,
+                access,
+                ctx,
+                self._namespace_for(ctx, doc, action, message=MSG_BUSY, task=self._own_active_task(ctx)),
+            )
             return
         async with self.application.settings["settings_service"].lock(ctx.bot_id, ctx.guild_id):
             status, namespace = await self._dispatch(ctx, action, args)
@@ -81,8 +102,11 @@ class ChannelHandler(SettingsHandler):
             return 422, self._namespace_for(ctx, doc, action, message=_MSG_VERSION)
         if sent != self.channels.version(doc):
             return 409, self._namespace_for(ctx, doc, action, message=CONFLICT_TEXT)
-        handler = {"configurar": self._configure, "reset": self._reset_step_one,
-                   "confirmar_reset": self._reset_confirm}.get(first(args, "acao") or "")
+        handler = {
+            "configurar": self._configure,
+            "reset": self._reset_step_one,
+            "confirmar_reset": self._reset_confirm,
+        }.get(first(args, "acao") or "")
         if handler is None:
             return 422, self._namespace_for(ctx, doc, action, message=_MSG_ACTION)
         return await handler(ctx, doc, action, args)
@@ -145,18 +169,43 @@ class ChannelHandler(SettingsHandler):
 
     # ------------------------------------------------------------------ montagem do que vai ao template
 
-    def _namespace_for(self, ctx: FormContext, doc: dict, action: str, *, values: Optional[dict] = None,
-                       errors: Optional[dict] = None, message: Optional[str] = None, task: Optional[Task] = None,
-                       confirmation: Optional[Confirmation] = None, missing: tuple[str, ...] = ()) -> dict[str, Any]:
+    def _namespace_for(
+        self,
+        ctx: FormContext,
+        doc: dict,
+        action: str,
+        *,
+        values: Optional[dict] = None,
+        errors: Optional[dict] = None,
+        message: Optional[str] = None,
+        task: Optional[Task] = None,
+        confirmation: Optional[Confirmation] = None,
+        missing: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
         groups, types, categories = self.channels.choices(ctx)
         text = message or (INVALID_TEXT if errors else None)
-        form = Formulario(key="canal", form_id="canal-conteudo", template=CHANNEL_TEMPLATE, acao=action,
-                          versao=self.channels.version(doc), valores={**_DEFAULT_VALUES, **(values or {})},
-                          erros=errors or {}, mensagem=text, mensagem_tipo=KIND_ERROR if text else None)
+        form = Formulario(
+            key="canal",
+            form_id="canal-conteudo",
+            template=CHANNEL_TEMPLATE,
+            acao=action,
+            versao=self.channels.version(doc),
+            valores={**_DEFAULT_VALUES, **(values or {})},
+            erros=errors or {},
+            mensagem=text,
+            mensagem_tipo=KIND_ERROR if text else None,
+        )
         view: Optional[TaskView] = self.channels.task_view(task, ctx.guild_id) if task is not None else None
-        return {"canal_atual": self.channels.current(ctx, doc), "formulario": form, "canais": groups, "tipos": types,
-                "categorias_discord": categories, "permissoes_faltando": tuple(missing), "tarefa": view,
-                "confirmacao": confirmation}
+        return {
+            "canal_atual": self.channels.current(ctx, doc),
+            "formulario": form,
+            "canais": groups,
+            "tipos": types,
+            "categorias_discord": categories,
+            "permissoes_faltando": tuple(missing),
+            "tarefa": view,
+            "confirmacao": confirmation,
+        }
 
     def _render(self, status: int, access: GuildAccess, ctx: FormContext, namespace: dict[str, Any]) -> None:
         self.set_status(status)

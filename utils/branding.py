@@ -3,6 +3,7 @@
 Obra derivada de MuseHeart-MusicBot (zRitsu), licenciada sob GPL-2.0: os créditos
 ao projeto original são preservados em ``UPSTREAM_*``, em ``CREDITS.md`` e em ``LICENSE``.
 """
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -23,19 +24,23 @@ LAVALINK_JAR_SHA256 = "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763
 LAVALINK_APPLICATION_YML_SHA256 = "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95"
 # URLs do Lavalink.jar de versões oficiais do espelho (inclusive sob o nome antigo do repositório). Quem as mantém no
 # .env (copiado de um .example.env antigo) é atualizado sozinho para a URL e o hash atuais; ver prepare_lavalink_files.
-LAVALINK_JAR_OFFICIAL_URLS = frozenset({
-    "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/Lavalink.jar",
-    "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.1/Lavalink.jar",
-    "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
-})
+LAVALINK_JAR_OFFICIAL_URLS = frozenset(
+    {
+        "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/Lavalink.jar",
+        "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.2/Lavalink.jar",
+        "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.1/Lavalink.jar",
+        "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
+        "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
+    }
+)
 # Versões oficiais do application.yml que o bot pode substituir (a 0.0.1, a 0.0.2 e a atual); qualquer outra é do dono.
-LAVALINK_APPLICATION_YML_KNOWN_SHA256 = frozenset({
-    "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3",
-    "0d17d65f3b7d7a889f2b23f2719bd8a1e1aac77b90e0b77e9dacdbd35ce94801",
-    LAVALINK_APPLICATION_YML_SHA256,
-})
+LAVALINK_APPLICATION_YML_KNOWN_SHA256 = frozenset(
+    {
+        "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3",
+        "0d17d65f3b7d7a889f2b23f2719bd8a1e1aac77b90e0b77e9dacdbd35ce94801",
+        LAVALINK_APPLICATION_YML_SHA256,
+    }
+)
 # JDK baixado quando não há Java 17+ no sistema: plataforma -> (URL oficial da BellSoft, SHA-256 fixo do arquivo).
 # Para atualizar: baixe o arquivo novo, confira o SHA-1 que a BellSoft publica e só então calcule o SHA-256.
 JDK_DOWNLOADS = {
@@ -58,8 +63,7 @@ JDK_DOWNLOADS = {
 }
 # Plugins do Lavalink (nome canônico em plugins/ -> SHA-256); a URL é LAVALINK_BINARIES_URL + "/" + nome.
 LAVALINK_PLUGIN_SHA256 = {
-    "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar":
-        "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
+    "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar": "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
     "lavasrc-plugin-4.8.3.jar": "4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3",
     "lavalink-2.6.1.jar": "1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3",
 }

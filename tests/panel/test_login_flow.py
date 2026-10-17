@@ -1,4 +1,5 @@
 """Fluxo de login com Discord (authorization code + state + PKCE) via HTTP, com dublê de DiscordOAuthClient."""
+
 import email.utils
 import logging
 from datetime import datetime, timezone
@@ -8,11 +9,31 @@ import pytest
 import tornado.web
 from tornado.testing import AsyncHTTPTestCase
 
-from tests.panel.helpers import (COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, XSRF_META_RE, https_config,
-                                 local_config, require)
-from tests.panel.helpers_login import (ACCESS_TOKEN, AUTHORIZE_PARAM_KEYS, CLIENT_ID, CODE, DEFAULT_USER, GATE,
-                                       Browser, FakeClock, authorize_params, build_app, cookie_attrs,
-                                       make_fake_oauth, s256, set_cookie_headers)
+from tests.panel.helpers import (
+    COOKIE_SECRET,
+    EXPECTED_SECURITY_HEADERS,
+    OAUTH_SECRET,
+    XSRF_META_RE,
+    https_config,
+    local_config,
+    require,
+)
+from tests.panel.helpers_login import (
+    ACCESS_TOKEN,
+    AUTHORIZE_PARAM_KEYS,
+    CLIENT_ID,
+    CODE,
+    DEFAULT_USER,
+    GATE,
+    Browser,
+    FakeClock,
+    authorize_params,
+    build_app,
+    cookie_attrs,
+    make_fake_oauth,
+    s256,
+    set_cookie_headers,
+)
 
 SESSION_COOKIE, LOGIN_COOKIE = "painel_sessao", "painel_login"
 ATTEMPT_TTL = 10 * 60
@@ -70,6 +91,7 @@ class LoginBase(AsyncHTTPTestCase):
 
 # ============================================================================ início do login
 
+
 class LoginStartTest(LoginBase):
     def test_login_redirects_to_discord_with_exact_parameters(self):
         response, params = self.start_login(self.browser())
@@ -125,9 +147,21 @@ class LoginStartTest(LoginBase):
         assert not failures, "next válido deveria ser mantido:\n  " + "\n  ".join(failures)
 
     def test_rejected_next_values_fall_back_to_panel_home(self):
-        rejected = ["https://evil.example/painel/", "//evil.example/painel/", "/\\evil.example", "/painel\\x",
-                    "/painel//evil.example", "/outro/caminho", "painel/servidores", "javascript:alert(1)", "/painel",
-                    "", "/", "http://localhost:8080/painel/x", "/painel/..\\x"]
+        rejected = [
+            "https://evil.example/painel/",
+            "//evil.example/painel/",
+            "/\\evil.example",
+            "/painel\\x",
+            "/painel//evil.example",
+            "/outro/caminho",
+            "painel/servidores",
+            "javascript:alert(1)",
+            "/painel",
+            "",
+            "/",
+            "http://localhost:8080/painel/x",
+            "/painel/..\\x",
+        ]
         failures = []
         for next_ in rejected:
             browser = self.browser()
@@ -139,6 +173,7 @@ class LoginStartTest(LoginBase):
 
 
 # ============================================================================ callback: sucesso
+
 
 class CallbackSuccessTest(LoginBase):
     def test_successful_login_creates_session_and_redirects_home(self):
@@ -207,15 +242,19 @@ class CallbackSuccessTest(LoginBase):
 
 # ============================================================================ callback: erros
 
+
 class CallbackErrorTest(LoginBase):
     def assert_friendly_error(self, response, *, status=(400, 403, 429, 500, 502, 503)):
         body = response.body.decode()
         assert response.code in status, f"status {response.code}"
         assert response.headers["Content-Type"].startswith("text/html")
-        for leak in ("Traceback", "DiscordOAuthError", "File \"", CODE, ACCESS_TOKEN, OAUTH_SECRET, COOKIE_SECRET):
+        for leak in ("Traceback", "DiscordOAuthError", 'File "', CODE, ACCESS_TOKEN, OAUTH_SECRET, COOKIE_SECRET):
             assert leak not in body, f"a página de erro vaza {leak!r}"
-        issued = [h for h in response.headers.get_list("Set-Cookie")
-                  if h.startswith(self.session_cookie_name() + "=") and not h.split("=", 1)[1].startswith(("; ", '"";'))]
+        issued = [
+            h
+            for h in response.headers.get_list("Set-Cookie")
+            if h.startswith(self.session_cookie_name() + "=") and not h.split("=", 1)[1].startswith(("; ", '"";'))
+        ]
         assert not issued, "uma falha de login não pode emitir cookie de sessão"
 
     def test_callback_without_attempt_cookie_is_rejected_without_calling_discord(self):
@@ -316,6 +355,7 @@ class GuildsReadFailureTest(LoginBase):
 
 # ============================================================================ segredos
 
+
 class NoSecretLeakTest(LoginBase):
     def _scan(self, texts, label):
         for secret in (ACCESS_TOKEN, CODE, OAUTH_SECRET, COOKIE_SECRET):
@@ -351,6 +391,7 @@ class NoSecretLeakOnFailureTest(LoginBase):
 
 # ============================================================================ guildas e usuário na sessão
 
+
 class GuildFilterTest(LoginBase):
     RAW = [
         {"id": "1", "name": "Dono", "icon": "ic1", "owner": True, "permissions": "0"},
@@ -359,8 +400,8 @@ class GuildFilterTest(LoginBase):
         {"id": "4", "name": "Os dois", "icon": None, "owner": False, "permissions": "40"},
         {"id": "5", "name": "Membro", "icon": None, "owner": False, "permissions": "1024"},
         {"id": "6", "name": "Canais", "icon": None, "owner": False, "permissions": "16"},
-        {"id": "7", "name": "Grande admin", "icon": None, "owner": False, "permissions": str(2 ** 44 | 8)},
-        {"id": "8", "name": "Grande sem", "icon": None, "owner": False, "permissions": str(2 ** 44)},
+        {"id": "7", "name": "Grande admin", "icon": None, "owner": False, "permissions": str(2**44 | 8)},
+        {"id": "8", "name": "Grande sem", "icon": None, "owner": False, "permissions": str(2**44)},
         {"id": "9", "name": "Zero", "icon": None, "owner": False, "permissions": "0"},
     ]
     fake_kwargs = {"guilds": RAW}
@@ -380,13 +421,18 @@ class GuildFilterTest(LoginBase):
         first = recorded["guilds"][0]
         assert (first.name, first.icon, first.owner, first.permissions) == ("Dono", "ic1", True, 0)
         assert recorded["guilds"][1].permissions == 8 and isinstance(recorded["guilds"][1].permissions, int)
-        assert recorded["guilds"][4].permissions == 2 ** 44 | 8
+        assert recorded["guilds"][4].permissions == 2**44 | 8
         user = recorded["user"]
         assert (user.id, user.username, user.global_name, user.avatar) == (
-            DEFAULT_USER["id"], DEFAULT_USER["username"], DEFAULT_USER["global_name"], DEFAULT_USER["avatar"])
+            DEFAULT_USER["id"],
+            DEFAULT_USER["username"],
+            DEFAULT_USER["global_name"],
+            DEFAULT_USER["avatar"],
+        )
 
 
 # ============================================================================ página inicial logada
+
 
 class IndexStateTest(LoginBase):
     def test_anonymous_index_shows_login_button_only(self):
@@ -420,6 +466,7 @@ class IndexStateTest(LoginBase):
 
 
 # ============================================================================ HTTPS
+
 
 class HttpsCookiesTest(LoginBase):
     config_factory = staticmethod(https_config)

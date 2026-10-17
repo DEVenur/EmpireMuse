@@ -1,5 +1,6 @@
 """E4a — categorias Player (G-01…G-04) e DJ (G-05): leitura, escrita só dos campos do formulário, validações
 contra o código dos comandos, escopo por bot e efeitos em memória."""
+
 import copy
 
 from tests.panel.helpers_settings import HOSTILE_ROLE, ROLE_IDS, command_allowed_volumes, parse_forms
@@ -39,12 +40,26 @@ class PlayerWriteTest(HttpBase):
         before = self.db.doc("1", 100)
         global_before = self.db.doc("global", 100)
         other_bot_before = self.db.doc("2", 800)
-        response = self.save(browser, 100, "player", "default_player_volume", default_player_volume="50",
-                             autoplay="on", check_other_bots_in_vc="on", enable_restrict_mode=None)
+        response = self.save(
+            browser,
+            100,
+            "player",
+            "default_player_volume",
+            default_player_volume="50",
+            autoplay="on",
+            check_other_bots_in_vc="on",
+            enable_restrict_mode=None,
+        )
         assert response.code == 200, f"status {response.code}"
         expected = copy.deepcopy(before)
-        expected.update({"default_player_volume": 50, "autoplay": True, "check_other_bots_in_vc": True,
-                         "enable_restrict_mode": False})
+        expected.update(
+            {
+                "default_player_volume": 50,
+                "autoplay": True,
+                "check_other_bots_in_vc": True,
+                "enable_restrict_mode": False,
+            }
+        )
         assert self.db.doc("1", 100) == expected, "demais campos, player_controller e ver devem ficar intactos"
         assert isinstance(self.db.doc("1", 100)["default_player_volume"], int)
         assert self.db.doc("global", 100) == global_before and self.db.doc("2", 800) == other_bot_before
@@ -78,7 +93,8 @@ class PlayerWriteTest(HttpBase):
                 assert self.db.doc("1", 100) == before, f"volume {volume} rejeitado não pode gravar"
         assert {v for v, _ in accepted} == allowed, (
             f"aceitos != conjunto do comando; a mais: {sorted({v for v, _ in accepted} - allowed)}, "
-            f"a menos: {sorted(allowed - {v for v, _ in accepted})}")
+            f"a menos: {sorted(allowed - {v for v, _ in accepted})}"
+        )
         assert all(code == 422 for _, code in rejected), f"rejeição deve ser 422: {rejected[:5]}"
 
     def test_non_numeric_volumes_are_rejected_without_writing(self):
@@ -109,8 +125,12 @@ class PlayerWriteTest(HttpBase):
         url, form, _ = self.open_form(browser, 100, "player", "default_player_volume")
         before = self.db.doc("1", 100)
         pairs = form.pairs(default_player_volume="40") + [
-            ("djroles", "5020"), ("player_controller.channel", "1"), ("ver", "9.9"), ("prefix", "hack"),
-            ("extra_flag", "mudou")]
+            ("djroles", "5020"),
+            ("player_controller.channel", "1"),
+            ("ver", "9.9"),
+            ("prefix", "hack"),
+            ("extra_flag", "mudou"),
+        ]
         response = self.submit(browser, url, form, pairs=pairs)
         assert response.code in (200, 422), f"status {response.code}"
         after = self.db.doc("1", 100)
@@ -132,6 +152,7 @@ class PlayerWriteTest(HttpBase):
         assert response.code == 200
         ver = self.db.doc("2", 200)["ver"]
         from utils.db import DBModel, db_models
+
         assert ver == db_models[DBModel.guilds]["ver"], "o painel nunca sobe `ver` (KI-09)"
 
 
@@ -165,6 +186,7 @@ class PlayerEffectsTest(HttpBase):
 
 
 # ============================================================================ DJ
+
 
 class DjReadTest(HttpBase):
     def test_offers_every_role_but_everyone_and_marks_the_current_ones(self):
@@ -225,10 +247,18 @@ class DjWriteTest(HttpBase):
     def test_invalid_ids_are_rejected_without_writing(self):
         before, writes = self.db.doc("1", 100), len(self.db.writes)
         cases = {
-            "cargo inexistente": ["999999999999"], "@everyone (id do servidor)": ["100"], "não numérico": ["abc"],
-            "dígitos árabes": ["٥٠٠١"], "espaço": ["5001 "], "negativo": ["-5001"],
-            "decimal": ["5001.0"], "hexadecimal": ["0x1389"], "válido + inválido": ["5001", "abc"],
-            "duplicado": ["5001", "5001"], "injeção": ["5001<script>"], "enorme": ["9" * 40],
+            "cargo inexistente": ["999999999999"],
+            "@everyone (id do servidor)": ["100"],
+            "não numérico": ["abc"],
+            "dígitos árabes": ["٥٠٠١"],
+            "espaço": ["5001 "],
+            "negativo": ["-5001"],
+            "decimal": ["5001.0"],
+            "hexadecimal": ["0x1389"],
+            "válido + inválido": ["5001", "abc"],
+            "duplicado": ["5001", "5001"],
+            "injeção": ["5001<script>"],
+            "enorme": ["9" * 40],
         }
 
         def check(item):
@@ -257,8 +287,12 @@ class DjWriteTest(HttpBase):
         browser = self.browser_cached()
         url, form, _ = self.open_form(browser, 100, "dj", "djroles")
         before = self.db.doc("1", 100)
-        pairs = form.pairs(djroles=["5004"]) + [("autoplay", "on"), ("default_player_volume", "5"),
-                                                ("player_controller.skin", "neon"), ("ver", "9.9")]
+        pairs = form.pairs(djroles=["5004"]) + [
+            ("autoplay", "on"),
+            ("default_player_volume", "5"),
+            ("player_controller.skin", "neon"),
+            ("ver", "9.9"),
+        ]
         assert self.submit(browser, url, form, pairs=pairs).code in (200, 422)
         after = self.db.doc("1", 100)
         for key in ("autoplay", "default_player_volume", "player_controller", "ver", "extra_flag"):

@@ -4,6 +4,7 @@ Garante que repositórios irmãos e diretórios locais/arquivados estejam
 devidamente ignorados pelo git, fora do contexto do Docker, omitidos
 da cobertura e mapeados corretamente no workspace multipasta do VSCode/IDE.
 """
+
 import json
 from pathlib import Path
 

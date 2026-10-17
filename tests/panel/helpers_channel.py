@@ -3,6 +3,7 @@
 Reaproveita os dublês de Discord de tests/helpers_request_channel.py (os mesmos da caracterização) e o FakeDB do
 painel (tests/panel/helpers_settings.py), que registra mutação do cache, gravação do próprio dict e ids não-int.
 """
+
 import asyncio
 import copy
 import re
@@ -10,8 +11,21 @@ from types import SimpleNamespace
 
 import tornado.web
 
-from tests.helpers_request_channel import (BOT_ID, BOT_MENTION, FakeBot, FakeCategoryChannel, FakeForum, FakeGuild,
-                                           FakeMessage, FakeStage, FakeText, FakeThreadInfo, FakeVoice, Journal, perms)
+from tests.helpers_request_channel import (
+    BOT_ID,
+    BOT_MENTION,
+    FakeBot,
+    FakeCategoryChannel,
+    FakeForum,
+    FakeGuild,
+    FakeMessage,
+    FakeStage,
+    FakeText,
+    FakeThreadInfo,
+    FakeVoice,
+    Journal,
+    perms,
+)
 from tests.panel.helpers import require
 from tests.panel.helpers_login import make_fake_oauth
 from tests.panel.helpers_servers import raw_guild
@@ -42,8 +56,12 @@ class PanelBot(FakeBot):
         super().__init__(journal, guild, None)
         self.world, self.ready = world, True
         self.application_id = BOT_ID
-        self.user = SimpleNamespace(id=BOT_ID, name="Bot Um", mention=BOT_MENTION,
-                                    display_avatar=SimpleNamespace(url="https://cdn.discordapp.com/avatars/7000/x.png"))
+        self.user = SimpleNamespace(
+            id=BOT_ID,
+            name="Bot Um",
+            mention=BOT_MENTION,
+            display_avatar=SimpleNamespace(url="https://cdn.discordapp.com/avatars/7000/x.png"),
+        )
         self.config = world.config
 
     def is_ready(self):
@@ -80,8 +98,12 @@ class ChannelWorld:
 
     def __init__(self, *, features=(), admin=False, manage_channels=True, manage_threads=True, history=True):
         self.j = Journal()
-        bot_perms = perms(administrator=admin, manage_channels=manage_channels, manage_threads=manage_threads,
-                          read_message_history=history)
+        bot_perms = perms(
+            administrator=admin,
+            manage_channels=manage_channels,
+            manage_threads=manage_threads,
+            read_message_history=history,
+        )
         self.config = {"INVITE_PERMISSIONS": 332892794064}
         self.guild = PanelGuild(self.j, bot_perms, features)
         self.db = FakeDB(self.j)
@@ -96,15 +118,23 @@ class ChannelWorld:
         self.stage = FakeStage(self.j, 44, "palco", g)
         self.forum = FakeForum(self.j, 55, "fórum", g)
         self.foreign = FakeText(self.j, 99, "alheio", SimpleNamespace(id=999, me=g.me))
-        for channel in (self.category, self.lobby, self.text, self.other, self.voice, self.stage, self.forum,
-                        self.foreign):
+        for channel in (
+            self.category,
+            self.lobby,
+            self.text,
+            self.other,
+            self.voice,
+            self.stage,
+            self.forum,
+            self.foreign,
+        ):
             self.bot.channels[channel.id] = channel
         g.channels = {c.id: c for c in self.bot.channels.values() if c is not self.foreign}
         self.raw = [raw_guild(GID, "Alfa", permissions="8")]
         self.next_message = 9000
-        self.gate = None          # asyncio.Event: se definido, o envio do embed ocioso espera por ele
+        self.gate = None  # asyncio.Event: se definido, o envio do embed ocioso espera por ele
         self.cancelled = False
-        self.fail_with = None     # exceção a levantar no envio do embed ocioso
+        self.fail_with = None  # exceção a levantar no envio do embed ocioso
         self.entered = 0
         self.db.seed(str(BOT_ID), GID, SettingsWorld.bot_doc())
         self.db.docs[(str(BOT_ID), GID)]["player_controller"].update({"channel": None, "message_id": None})
@@ -141,8 +171,7 @@ class ChannelWorld:
         self.db.baseline[(str(BOT_ID), GID)] = copy.deepcopy(doc)
 
     def configured_text(self, thread=True):
-        message = self.text.add_message(555, self.guild.me,
-                                        FakeThreadInfo(self.j, "song-requests") if thread else None)
+        message = self.text.add_message(555, self.guild.me, FakeThreadInfo(self.j, "song-requests") if thread else None)
         self.configure("22", "555")
         return message
 
@@ -165,8 +194,9 @@ class ChannelBase(SettingsBase):
         self.pool, self.db, self.events = self.world.pool, self.world.db, self.world.j
         self.fake = make_fake_oauth(settings, guilds=self.world.raw)
         request_channel = require("utils.music.request_channel")
-        self.monkeypatch.setitem(request_channel.apply_request_channel.__kwdefaults__, "send_idle_embed",
-                                 self.world.fake_send_idle_embed)
+        self.monkeypatch.setitem(
+            request_channel.apply_request_channel.__kwdefaults__, "send_idle_embed", self.world.fake_send_idle_embed
+        )
         app = panel.build_panel_app(self.pool, settings, oauth_client=self.fake, clock=self.clock)
         self.panel_app = app
         return panel.make_router(tornado.web.Application([]), app)

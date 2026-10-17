@@ -22,6 +22,7 @@ from tinymongo.serializers import DateTimeSerializer
 if TYPE_CHECKING:
     from utils.client import BotCore
 
+
 class DBModel:
     guilds = "guilds"
     users = "users"
@@ -43,20 +44,15 @@ db_models = {
         "enable_restrict_mode": False,
         "default_player_volume": 100,
         "enable_prefixed_commands": True,
-        "djroles": []
+        "djroles": [],
     },
     DBModel.users: {
         "ver": 1.0,
         "fav_links": {},
-    }
+    },
 }
 
-scrobble_model = {
-    DBModel.users: {
-        "ver": 1.0,
-        "tracks": []
-    }
-}
+scrobble_model = {DBModel.users: {"ver": 1.0, "tracks": []}}
 
 global_db_models = {
     DBModel.users: {
@@ -70,7 +66,7 @@ global_db_models = {
             "username": "",
             "sessionkey": "",
             "scrobble": False,
-        }
+        },
     },
     DBModel.guilds: {
         "ver": 1.4,
@@ -83,15 +79,11 @@ global_db_models = {
         "custom_skins_static": {},
         "listen_along_invites": {},
     },
-    DBModel.default: {
-        "ver": 1.0,
-        "extra_tokens": {}
-    }
+    DBModel.default: {"ver": 1.0, "extra_tokens": {}},
 }
 
 
 async def get_prefix(bot: BotCore, message: disnake.Message):
-
     if str(message.content).startswith((f"<@!{bot.user.id}> ", f"<@{bot.user.id}> ")):
         return commands.when_mentioned(bot, message)
 
@@ -121,7 +113,6 @@ async def get_prefix(bot: BotCore, message: disnake.Message):
 
 
 class BaseDB:
-
     def __init__(self, cache_maxsize: int = 1000, cache_ttl=300):
         self.cache = TTLCache(maxsize=cache_maxsize, ttl=cache_ttl)
 
@@ -134,7 +125,7 @@ class BaseDB:
 class DatetimeSerializer(Serializer):
     OBJ_CLASS = datetime
 
-    def __init__(self, format='%Y-%m-%dT%H:%M:%S', *args, **kwargs):
+    def __init__(self, format="%Y-%m-%dT%H:%M:%S", *args, **kwargs):
         super(DatetimeSerializer, self).__init__(*args, **kwargs)
         self._format = format
 
@@ -144,17 +135,16 @@ class DatetimeSerializer(Serializer):
     def decode(self, s):
         return datetime.strptime(s, self._format)
 
-class CustomTinyMongoClient(TinyMongoClient):
 
+class CustomTinyMongoClient(TinyMongoClient):
     @property
     def _storage(self):
         serialization = SerializationMiddleware()
-        serialization.register_serializer(DateTimeSerializer(), 'TinyDate')
+        serialization.register_serializer(DateTimeSerializer(), "TinyDate")
         return serialization
 
 
 class LocalDatabase(BaseDB):
-
     def __init__(self, dir_="./local_database", cache_maxsize=1000, cache_ttl=300):
         super().__init__(cache_maxsize=cache_maxsize, cache_ttl=cache_ttl)
 
@@ -163,9 +153,9 @@ class LocalDatabase(BaseDB):
 
         self._connect = CustomTinyMongoClient(dir_)
 
-    async def get_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users],
-                       collection: str, default_model: dict = None):
-
+    async def get_data(
+        self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users], collection: str, default_model: dict = None
+    ):
         if not default_model:
             default_model = db_models
 
@@ -189,14 +179,20 @@ class LocalDatabase(BaseDB):
 
         return data
 
-    async def update_data(self, id_, data: dict, *, db_name: Union[DBModel.guilds, DBModel.users],
-                          collection: str, default_model: dict = None):
-
+    async def update_data(
+        self,
+        id_,
+        data: dict,
+        *,
+        db_name: Union[DBModel.guilds, DBModel.users],
+        collection: str,
+        default_model: dict = None,
+    ):
         id_ = str(id_)
         data["_id"] = id_
 
         try:
-            if not self._connect[collection][db_name].update_one({'_id': id_}, {'$set': data}).raw_result:
+            if not self._connect[collection][db_name].update_one({"_id": id_}, {"$set": data}).raw_result:
                 self._connect[collection][db_name].insert_one(data)
         except:
             traceback.print_exc()
@@ -210,7 +206,7 @@ class LocalDatabase(BaseDB):
 
     async def delete_data(self, id_, db_name: str, collection: str):
         try:
-            self._connect[collection][db_name].delete_one({'_id': str(id_)})
+            self._connect[collection][db_name].delete_one({"_id": str(id_)})
         except TypeError:
             return
 
@@ -221,7 +217,6 @@ class LocalDatabase(BaseDB):
 
 
 class MongoDatabase(BaseDB):
-
     def __init__(self, token: str, timeout=30, cache_maxsize=1000, cache_ttl=300):
         super().__init__(cache_maxsize=cache_maxsize, cache_ttl=cache_ttl)
 
@@ -231,35 +226,27 @@ class MongoDatabase(BaseDB):
             parse_result = urlparse(token)
             parameters = parse_qs(parse_result.query)
 
-            parameters.update(
-                {
-                    'ssl': ['true'],
-                    'tlsAllowInvalidCertificates': ['true']
-                }
-            )
+            parameters.update({"ssl": ["true"], "tlsAllowInvalidCertificates": ["true"]})
 
             token = urlunparse(parse_result._replace(query=urlencode(parameters, doseq=True)))
 
-        self._connect = AsyncIOMotorClient(token.strip("<>"), connectTimeoutMS=timeout*1000)
+        self._connect = AsyncIOMotorClient(token.strip("<>"), connectTimeoutMS=timeout * 1000)
 
     async def push_data(self, data, *, db_name: Union[DBModel.guilds, DBModel.users], collection: str):
         await self._connect[collection][db_name].insert_one(data)
 
     async def update_from_json(self):
-
         if not os.path.isdir("./local_dbs/backups"):
             os.makedirs("./local_dbs/backups")
 
         for f in os.listdir("./local_dbs"):
-
             if not f.endswith(".json"):
                 continue
 
-            with open(f'./local_dbs/{f}') as file:
+            with open(f"./local_dbs/{f}") as file:
                 data = json.load(file)
 
             for db_name, db_data in data.items():
-
                 if not db_data:
                     continue
 
@@ -271,9 +258,9 @@ class MongoDatabase(BaseDB):
                 except:
                     traceback.print_exc()
 
-    async def get_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users],
-                       collection: str, default_model: dict = None):
-
+    async def get_data(
+        self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users], collection: str, default_model: dict = None
+    ):
         if not default_model:
             default_model = db_models
 
@@ -294,9 +281,15 @@ class MongoDatabase(BaseDB):
 
         return data
 
-    async def update_data(self, id_, data: dict, *, db_name: Union[DBModel.guilds, DBModel.users, str],
-                          collection: str, default_model: dict = None):
-
+    async def update_data(
+        self,
+        id_,
+        data: dict,
+        *,
+        db_name: Union[DBModel.guilds, DBModel.users, str],
+        collection: str,
+        default_model: dict = None,
+    ):
         self.cache[f"{collection}:{db_name}:{id_}"] = data
 
         try:
@@ -304,7 +297,7 @@ class MongoDatabase(BaseDB):
         except KeyError:
             pass
 
-        await self._connect[collection][db_name].update_one({'_id': str(id_)}, {'$set': data}, upsert=True)
+        await self._connect[collection][db_name].update_one({"_id": str(id_)}, {"$set": data}, upsert=True)
         return data
 
     async def query_data(self, db_name: str, collection: str, filter: dict = None, limit=100) -> list:
@@ -315,7 +308,7 @@ class MongoDatabase(BaseDB):
             self.cache.pop(f"{collection}:{db_name}:{id_}")
         except KeyError:
             pass
-        return await self._connect[collection][db_name].delete_one({'_id': str(id_)})
+        return await self._connect[collection][db_name].delete_one({"_id": str(id_)})
 
 
 def update_values(d, u):

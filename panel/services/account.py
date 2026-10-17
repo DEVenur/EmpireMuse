@@ -5,6 +5,7 @@ Como em ``panel/services/service.py``: o documento do cache é só leitura (a gr
 nos campos da seção; ``ver`` fica intacto) e a auditoria registra usuário, ação e NOMES de campos — nunca valores,
 URLs, nomes de favoritos, token ou sessionkey.
 """
+
 from __future__ import annotations
 
 import copy
@@ -14,8 +15,20 @@ from typing import Any, NamedTuple, Optional
 from panel.services.account_base import ACCOUNT_PATH, AccountContext, AccountSection, Parsed
 from panel.services.account_links import FavoritesSection, IntegrationsSection
 from panel.services.account_misc import LastFmSection, PrefixSection, RpcTokenSection
-from panel.services.base import (CONFLICT_TEXT, HEX16, INVALID_TEXT, KIND_ERROR, KIND_OK, SAVED_TEXT, VERSION_TEXT,
-                                 Args, DBModel, Formulario, first, version_of)
+from panel.services.base import (
+    CONFLICT_TEXT,
+    HEX16,
+    INVALID_TEXT,
+    KIND_ERROR,
+    KIND_OK,
+    SAVED_TEXT,
+    VERSION_TEXT,
+    Args,
+    DBModel,
+    Formulario,
+    first,
+    version_of,
+)
 from panel.services.service import STATUS_CONFLICT, STATUS_INVALID, STATUS_OK, SettingsService
 
 logger = logging.getLogger(__name__)
@@ -31,8 +44,13 @@ class AccountOutcome(NamedTuple):
 class AccountService:
     def __init__(self, settings_service: SettingsService) -> None:
         self._locks = settings_service
-        self.sections: tuple[AccountSection, ...] = (PrefixSection(), FavoritesSection(), IntegrationsSection(),
-                                                     LastFmSection(), RpcTokenSection())
+        self.sections: tuple[AccountSection, ...] = (
+            PrefixSection(),
+            FavoritesSection(),
+            IntegrationsSection(),
+            LastFmSection(),
+            RpcTokenSection(),
+        )
         self._by_action = {action: section for section in self.sections for action in section.actions}
 
     def section_for(self, action: Optional[str]) -> Optional[AccountSection]:
@@ -48,22 +66,39 @@ class AccountService:
         """Documento do cache do banco: somente leitura (nunca mutar nem regravar este objeto)."""
         return await ctx.bot.get_global_data(ctx.user_id, db_name=DBModel.users)
 
-    async def build(self, section: AccountSection, ctx: AccountContext, doc: dict, *,
-                    echo: Optional[dict[str, Any]] = None, errors: Optional[dict[str, str]] = None,
-                    message: Optional[str] = None, kind: Optional[str] = None,
-                    shown: Optional[dict[str, Any]] = None) -> Formulario:
+    async def build(
+        self,
+        section: AccountSection,
+        ctx: AccountContext,
+        doc: dict,
+        *,
+        echo: Optional[dict[str, Any]] = None,
+        errors: Optional[dict[str, str]] = None,
+        message: Optional[str] = None,
+        kind: Optional[str] = None,
+        shown: Optional[dict[str, Any]] = None,
+    ) -> Formulario:
         extras = {**await section.extras(ctx, doc), **(shown or {})}
-        return Formulario(key=section.key, form_id=section.form_id, template=section.template, acao=ACCOUNT_PATH,
-                          versao=version_of(section.version_fields(doc)),
-                          valores={**section.defaults(doc), **(echo or {})}, erros=errors or {}, mensagem=message,
-                          mensagem_tipo=kind, extras=extras)
+        return Formulario(
+            key=section.key,
+            form_id=section.form_id,
+            template=section.template,
+            acao=ACCOUNT_PATH,
+            versao=version_of(section.version_fields(doc)),
+            valores={**section.defaults(doc), **(echo or {})},
+            erros=errors or {},
+            mensagem=message,
+            mensagem_tipo=kind,
+            extras=extras,
+        )
 
     async def read_all(self, ctx: AccountContext) -> dict[str, Formulario]:
         doc = await self.load(ctx)
         return {section.key: await self.build(section, ctx, doc) for section in self.sections}
 
-    async def read(self, section: AccountSection, ctx: AccountContext, *, message: Optional[str] = None,
-                   kind: Optional[str] = None) -> Formulario:
+    async def read(
+        self, section: AccountSection, ctx: AccountContext, *, message: Optional[str] = None, kind: Optional[str] = None
+    ) -> Formulario:
         return await self.build(section, ctx, await self.load(ctx), message=message, kind=kind)
 
     # ------------------------------------------------------------------ escrita
@@ -84,18 +119,21 @@ class AccountService:
                 return await self._invalid(section, ctx, doc, parsed)
             return await self._save(section, ctx, doc, action, parsed)
 
-    async def _fail(self, status: int, section: AccountSection, ctx: AccountContext, doc: dict, *,
-                    message: str) -> AccountOutcome:
+    async def _fail(
+        self, status: int, section: AccountSection, ctx: AccountContext, doc: dict, *, message: str
+    ) -> AccountOutcome:
         return AccountOutcome(status, await self.build(section, ctx, doc, message=message, kind=KIND_ERROR))
 
     async def _invalid(self, section: AccountSection, ctx: AccountContext, doc: dict, parsed: Parsed) -> AccountOutcome:
         message = parsed.errors.get("acao") or INVALID_TEXT
-        form = await self.build(section, ctx, doc, echo=parsed.echo, errors=parsed.errors, message=message,
-                                kind=KIND_ERROR)
+        form = await self.build(
+            section, ctx, doc, echo=parsed.echo, errors=parsed.errors, message=message, kind=KIND_ERROR
+        )
         return AccountOutcome(STATUS_INVALID, form)
 
-    async def _save(self, section: AccountSection, ctx: AccountContext, doc: dict, action: str,
-                    parsed: Parsed) -> AccountOutcome:
+    async def _save(
+        self, section: AccountSection, ctx: AccountContext, doc: dict, action: str, parsed: Parsed
+    ) -> AccountOutcome:
         current = section.values(doc)
         changed = tuple(name for name, value in parsed.new.items() if current.get(name) != value)
         if not changed:

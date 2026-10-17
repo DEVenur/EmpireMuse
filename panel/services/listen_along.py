@@ -3,6 +3,7 @@
 Adicionar convites fica fora da v1 (exige ``fetch_invite`` e voz). Remover é capacidade nova do painel; exige a mesma
 permissão do comando (``manage_channels``), reavaliada na escrita.
 """
+
 from __future__ import annotations
 
 import logging
@@ -10,7 +11,7 @@ from typing import Any, NamedTuple, Optional
 
 import disnake
 
-from panel.services.base import (DIGITS, Args, ForbiddenAction, FormContext, ParseResult, SettingsForm, first)
+from panel.services.base import DIGITS, Args, ForbiddenAction, FormContext, ParseResult, SettingsForm, first
 from panel.services.player import active_player
 
 logger = logging.getLogger(__name__)
@@ -86,8 +87,10 @@ class ListenAlongForm(SettingsForm):
         return None
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        rows = tuple(InviteRow(channel_id, self._channel_name(ctx, channel_id), str(invite))
-                     for channel_id, invite in current["listen_along_invites"].items())
+        rows = tuple(
+            InviteRow(channel_id, self._channel_name(ctx, channel_id), str(invite))
+            for channel_id, invite in current["listen_along_invites"].items()
+        )
         return {"itens": rows, "pode_remover": bool(current["pode_remover"])}
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:

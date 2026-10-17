@@ -1,8 +1,8 @@
-__title__ = 'WaveLink'
-__author__ = 'EvieePy'
-__license__ = 'MIT'
-__copyright__ = 'Copyright 2019-2021 (c) PythonistaGuild'
-__version__ = '0.9.15'
+__title__ = "WaveLink"
+__author__ = "EvieePy"
+__license__ = "MIT"
+__copyright__ = "Copyright 2019-2021 (c) PythonistaGuild"
+__version__ = "0.9.15"
 
 from .client import Client
 from .eqs import *

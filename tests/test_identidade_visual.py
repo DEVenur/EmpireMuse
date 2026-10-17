@@ -2,6 +2,7 @@
 
 Escritos a partir do contrato (BRIEFING-FASE1_1.md), antes da implementação (RED).
 """
+
 import logging
 import re
 import struct
@@ -35,10 +36,12 @@ def _branding():
 def _config_loader(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     import config_loader
+
     return config_loader
 
 
 # --------------------------------------------------------------------------- 1. branding
+
 
 def test_branding_support_server_url_matches_contract():
     assert getattr(_branding(), "SUPPORT_SERVER_URL", None) == INVITE
@@ -49,6 +52,7 @@ def test_branding_embed_color_hex_is_violet_of_palette():
 
 
 # --------------------------------------------------------------------------- 2. DEFAULT_CONFIG
+
 
 def test_default_config_support_server_uses_branding_constant(monkeypatch, tmp_path):
     config = _config_loader(monkeypatch, tmp_path)
@@ -62,6 +66,7 @@ def test_default_config_embed_color_uses_branding_constant(monkeypatch, tmp_path
 
 # --------------------------------------------------------------------------- 3. parse_embed_color
 
+
 def _parse(monkeypatch, tmp_path, value):
     config = _config_loader(monkeypatch, tmp_path)
     parse = getattr(config, "parse_embed_color", None)
@@ -73,6 +78,7 @@ def _parse(monkeypatch, tmp_path, value):
 @pytest.mark.parametrize("value", ["8B5CF6", "8b5cf6", "#8B5CF6", "#8b5cf6"])
 def test_parse_embed_color_accepts_valid_hex(monkeypatch, tmp_path, value):
     import disnake
+
     assert _parse(monkeypatch, tmp_path, value) == disnake.Color(0x8B5CF6)
 
 
@@ -106,11 +112,16 @@ def test_parse_embed_color_warning_does_not_leak_invalid_value(monkeypatch, tmp_
     assert result is None
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert warnings, "valor inválido deve emitir WARNING"
-    leaked = [r.getMessage() for r in caplog.records if marker.lower() in (r.getMessage() + str(r.args) + str(r.exc_info)).lower()]
+    leaked = [
+        r.getMessage()
+        for r in caplog.records
+        if marker.lower() in (r.getMessage() + str(r.args) + str(r.exc_info)).lower()
+    ]
     assert not leaked, f"o valor inválido vazou no log: {leaked}"
 
 
 # --------------------------------------------------------------------------- 4. .example.env
+
 
 def test_example_env_has_support_server_invite():
     assert f"SUPPORT_SERVER='{INVITE}'" in _read(".example.env").splitlines()
@@ -121,6 +132,7 @@ def test_example_env_has_default_embed_color():
 
 
 # --------------------------------------------------------------------------- 5. logo.svg
+
 
 def _svg_root():
     path = ROOT / "assets/brand/logo.svg"
@@ -151,7 +163,9 @@ def test_logo_svg_has_no_active_content(forbidden):
 def test_logo_svg_has_no_external_href():
     root, _ = _svg_root()
     external = [
-        value for el in root.iter() for key, value in el.attrib.items()
+        value
+        for el in root.iter()
+        for key, value in el.attrib.items()
         if _local(key) == "href" and re.match(r"\s*(https?:)?//", value, re.IGNORECASE)
     ]
     assert not external, f"href externo em logo.svg: {external}"
@@ -164,6 +178,7 @@ def test_logo_svg_has_no_external_imports_or_urls():
 
 
 # --------------------------------------------------------------------------- 6/7. PNGs
+
 
 def _png_size(rel: str, max_bytes: int):
     path = ROOT / rel
@@ -185,6 +200,7 @@ def test_banner_png_is_1500_by_600_under_4mb():
 
 
 # --------------------------------------------------------------------------- 8-11. docs e governança
+
 
 def test_readme_has_invite_and_logo_without_todo():
     text = _read("README.md")
@@ -218,22 +234,37 @@ def test_issue_template_config_links_support_and_security_advisory():
 # --------------------------------------------------------------------------- 12. CODEOWNERS
 
 CODEOWNERS_SENSITIVE_PATHS = [
-    "/data/", "/utils/branding.py", "/utils/music/local_lavalink.py", "/utils/music/lavalink_server_list.py",
-    "/source_update.sh", "/source_quick_update.sh", "/requirements*.txt", "/.github/", "/LICENSE", "/SECURITY.md",
-    "/config_loader.py", "/web_app.py", "/modules/legacy_cmds.py", "/utils/owner_panel.py", "/utils/db.py",
+    "/data/",
+    "/utils/branding.py",
+    "/utils/music/local_lavalink.py",
+    "/utils/music/lavalink_server_list.py",
+    "/source_update.sh",
+    "/source_quick_update.sh",
+    "/requirements*.txt",
+    "/.github/",
+    "/LICENSE",
+    "/SECURITY.md",
+    "/config_loader.py",
+    "/web_app.py",
+    "/modules/legacy_cmds.py",
+    "/utils/owner_panel.py",
+    "/utils/db.py",
     "/pyproject.toml",
 ]
 
 
 @pytest.mark.parametrize("pattern", CODEOWNERS_SENSITIVE_PATHS)
 def test_codeowners_covers_sensitive_path_with_owner(pattern):
-    lines = [l.split() for l in _read(".github/CODEOWNERS").splitlines() if l.strip() and not l.lstrip().startswith("#")]
+    lines = [
+        l.split() for l in _read(".github/CODEOWNERS").splitlines() if l.strip() and not l.lstrip().startswith("#")
+    ]
     owners = [parts[1:] for parts in lines if parts[0] == pattern]
     assert owners, f"CODEOWNERS não cobre {pattern}"
     assert "@Or4cu1o" in owners[0], f"{pattern} sem @Or4cu1o em CODEOWNERS"
 
 
 # --------------------------------------------------------------------------- 13. docs
+
 
 @pytest.mark.parametrize("color", PALETTE)
 def test_identity_doc_lists_palette_color(color):

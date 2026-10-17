@@ -21,11 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__all__ = ('TrackEnd',
-           'TrackException',
-           'TrackStuck',
-           'TrackStart',
-           'WebsocketClosed')
+__all__ = ("TrackEnd", "TrackException", "TrackStuck", "TrackStart", "WebsocketClosed")
 
 
 class TrackEnd:
@@ -41,17 +37,17 @@ class TrackEnd:
         The reason the TrackEnd event was dispatched.
     """
 
-    __slots__ = ('track', 'player', 'node', 'reason', 'data')
+    __slots__ = ("track", "player", "node", "reason", "data")
 
     def __init__(self, data: dict):
-        self.track = data.pop('track', None)
-        self.player = data.pop('player', None)
-        self.node = data.pop('node', None)
-        self.reason = data.pop('reason', '').upper()
+        self.track = data.pop("track", None)
+        self.player = data.pop("player", None)
+        self.node = data.pop("node", None)
+        self.reason = data.pop("reason", "").upper()
         self.data = data
 
     def __str__(self):
-        return 'TrackEndEvent'
+        return "TrackEndEvent"
 
 
 class TrackException:
@@ -67,21 +63,21 @@ class TrackException:
         The error reason dispatched with the event.
     """
 
-    __slots__ = ('track', 'player', 'node', 'error', 'data', 'exception', 'cause', 'message', 'severity')
+    __slots__ = ("track", "player", "node", "error", "data", "exception", "cause", "message", "severity")
 
     def __init__(self, data: dict):
-        self.track = data.get('track')
-        self.player = data.get('player')
-        self.node = data.get('node')
-        self.error = data.get('error')
-        self.exception = data.get('exception', {})
-        self.cause = self.exception.get('cause', '')
-        self.message = self.exception.get('message', '')
-        self.severity = self.exception.get('severity', '')
+        self.track = data.get("track")
+        self.player = data.get("player")
+        self.node = data.get("node")
+        self.error = data.get("error")
+        self.exception = data.get("exception", {})
+        self.cause = self.exception.get("cause", "")
+        self.message = self.exception.get("message", "")
+        self.severity = self.exception.get("severity", "")
         self.data = data
 
     def __str__(self):
-        return 'TrackExceptionEvent'
+        return "TrackExceptionEvent"
 
 
 class TrackStuck:
@@ -97,17 +93,17 @@ class TrackStuck:
         The threshold associated with the event.
     """
 
-    __slots__ = ('track', 'player', 'node', 'threshold', 'data')
+    __slots__ = ("track", "player", "node", "threshold", "data")
 
     def __init__(self, data: dict):
-        self.track = data.pop('track', None)
-        self.player = data.pop('player', None)
-        self.node = data.pop('node', None)
-        self.threshold = int(data.pop('thresholdMs', 0))
+        self.track = data.pop("track", None)
+        self.player = data.pop("player", None)
+        self.node = data.pop("node", None)
+        self.threshold = int(data.pop("thresholdMs", 0))
         self.data = data
 
     def __str__(self):
-        return 'TrackStuckEvent'
+        return "TrackStuckEvent"
 
 
 class TrackStart:
@@ -121,16 +117,16 @@ class TrackStart:
         The track associated with the event.
     """
 
-    __slots__ = ('track', 'player', 'node', 'data')
+    __slots__ = ("track", "player", "node", "data")
 
     def __init__(self, data: dict):
-        self.track = data.pop('track', None)
-        self.player = data.pop('player', None)
-        self.node = data.pop('node', None)
+        self.track = data.pop("track", None)
+        self.player = data.pop("player", None)
+        self.node = data.pop("node", None)
         self.data = data
 
     def __str__(self):
-        return 'TrackStartEvent'
+        return "TrackStartEvent"
 
 
 class WebsocketClosed:
@@ -148,14 +144,14 @@ class WebsocketClosed:
         The guild ID associated with the disconnect.
     """
 
-    __slots__ = ('player', 'reason', 'code', 'guild_id', 'data')
+    __slots__ = ("player", "reason", "code", "guild_id", "data")
 
     def __init__(self, data: dict):
-        self.player = data.pop('player', None)
-        self.reason = data.pop('reason', None)
-        self.code = data.pop('code', None)
-        self.guild_id = data.pop('guildID', None)
+        self.player = data.pop("player", None)
+        self.reason = data.pop("reason", None)
+        self.code = data.pop("code", None)
+        self.guild_id = data.pop("guildID", None)
         self.data = data
 
     def __str__(self):
-        return 'WebsocketClosedEvent'
+        return "WebsocketClosedEvent"

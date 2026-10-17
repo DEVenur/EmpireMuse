@@ -1,15 +1,34 @@
 """Aplicação do painel: rotas, 404 genérico, cabeçalhos, cookie _xsrf e marca."""
+
 import json
 
 import pytest
 import tornado.web
 from tornado.testing import AsyncHTTPTestCase
 
-from tests.panel.helpers import (BRAND_DIR, EXPECTED_CSP, EXPECTED_SECURITY_HEADERS, ROOT, XSRF_META_RE,
-                                 fake_pool, https_config, load_settings, local_config, require)
+from tests.panel.helpers import (
+    BRAND_DIR,
+    EXPECTED_CSP,
+    EXPECTED_SECURITY_HEADERS,
+    ROOT,
+    XSRF_META_RE,
+    fake_pool,
+    https_config,
+    load_settings,
+    local_config,
+    require,
+)
 
-HEADER_PATHS = ["/painel", "/painel/", "/painel/saude", "/painel/nao-existe", "/painel/marca/logo.svg",
-                "/painel/marca/avatar.png", "/painel/static/vendor/htmx.min.js", "/painel/static/nao-existe.css"]
+HEADER_PATHS = [
+    "/painel",
+    "/painel/",
+    "/painel/saude",
+    "/painel/nao-existe",
+    "/painel/marca/logo.svg",
+    "/painel/marca/avatar.png",
+    "/painel/static/vendor/htmx.min.js",
+    "/painel/static/nao-existe.css",
+]
 
 
 class _Main(tornado.web.RequestHandler):
@@ -90,8 +109,9 @@ class PanelRoutesTest(PanelTestBase):
             assert response.code == 200, f"status {response.code}"
             assert kind in response.headers["Content-Type"], response.headers["Content-Type"]
 
-        self.assert_all([("/painel/static/vendor/htmx.min.js", "javascript"),
-                         ("/painel/static/vendor/pico.min.css", "css")], check)
+        self.assert_all(
+            [("/painel/static/vendor/htmx.min.js", "javascript"), ("/painel/static/vendor/pico.min.css", "css")], check
+        )
 
 
 class PanelSecurityHeadersTest(PanelTestBase):
@@ -157,8 +177,9 @@ class PanelXsrfTest(PanelTestBase):
         page = self.get_page()
         token = XSRF_META_RE.search(page.body.decode()).group(1)
         cookie = _xsrf_cookie(page).split(";")[0]
-        response = self.fetch("/painel/", method="POST", body="", follow_redirects=False,
-                              headers={"X-XSRFToken": token, "Cookie": cookie})
+        response = self.fetch(
+            "/painel/", method="POST", body="", follow_redirects=False, headers={"X-XSRFToken": token, "Cookie": cookie}
+        )
         assert response.code != 403 and response.code < 500, f"status inesperado: {response.code}"
 
 
@@ -174,20 +195,20 @@ class PanelBrandTest(PanelTestBase):
         self.assert_all([("logo.svg", "image/svg+xml"), ("avatar.png", "image/png")], check)
 
     BRAND_BLOCKED_PATHS = [
-            "/painel/marca/banner.png",            # existe em assets/brand/, mas fora da lista fechada
-            "/painel/marca/",
-            "/painel/marca",
-            "/painel/marca/LOGO.SVG",
-            "/painel/marca/logo.svg/",
-            "/painel/marca/logo.svg%00.png",
-            "/painel/marca/..%2fanother",
-            "/painel/marca/..%2f..%2fconfig_loader.py",
-            "/painel/marca/%2e%2e/%2e%2e/LICENSE",
-            "/painel/marca/..%5c..%5cLICENSE",
-            "/painel/marca/../../config_loader.py",
-            "/painel/marca/%2e%2e%2f%2e%2e%2fLICENSE",
-            "/painel/marca/sub/logo.svg",
-        ]
+        "/painel/marca/banner.png",  # existe em assets/brand/, mas fora da lista fechada
+        "/painel/marca/",
+        "/painel/marca",
+        "/painel/marca/LOGO.SVG",
+        "/painel/marca/logo.svg/",
+        "/painel/marca/logo.svg%00.png",
+        "/painel/marca/..%2fanother",
+        "/painel/marca/..%2f..%2fconfig_loader.py",
+        "/painel/marca/%2e%2e/%2e%2e/LICENSE",
+        "/painel/marca/..%5c..%5cLICENSE",
+        "/painel/marca/../../config_loader.py",
+        "/painel/marca/%2e%2e%2f%2e%2e%2fLICENSE",
+        "/painel/marca/sub/logo.svg",
+    ]
 
     def test_brand_route_is_a_closed_list_without_path_traversal(self):
         def check(path):
@@ -199,10 +220,10 @@ class PanelBrandTest(PanelTestBase):
         self.assert_all(self.BRAND_BLOCKED_PATHS, check)
 
     STATIC_BLOCKED_PATHS = [
-            "/painel/static/../../config_loader.py",
-            "/painel/static/%2e%2e/%2e%2e/LICENSE",
-            "/painel/static/..%2f..%2fconfig_loader.py",
-        ]
+        "/painel/static/../../config_loader.py",
+        "/painel/static/%2e%2e/%2e%2e/LICENSE",
+        "/painel/static/..%2f..%2fconfig_loader.py",
+    ]
 
     def test_static_route_blocks_path_traversal(self):
         def check(path):

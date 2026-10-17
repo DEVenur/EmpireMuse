@@ -20,6 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+
 import asyncio
 import logging
 from json import dumps
@@ -39,16 +40,16 @@ class Client:
     """The main WaveLink client."""
 
     def __new__(cls, *args, **kwargs):
-        cls.__qualname__ = 'wavelink.Client'
+        cls.__qualname__ = "wavelink.Client"
 
         try:
-            bot = kwargs['bot']
+            bot = kwargs["bot"]
         except KeyError:
-            msg = 'wavelink.Client: bot is a required keyword only argument which is missing.'
+            msg = "wavelink.Client: bot is a required keyword only argument which is missing."
             raise WavelinkException(msg)
 
         if not isinstance(bot, (commands.Bot, commands.AutoShardedBot)):
-            msg = f'wavelink.Client expected type <commands.Bot or commands.AutoShardedBot> not {type(bot)}'
+            msg = f"wavelink.Client expected type <commands.Bot or commands.AutoShardedBot> not {type(bot)}"
             raise TypeError(msg)
 
         return super().__new__(cls)
@@ -65,7 +66,7 @@ class Client:
         if not hasattr(bot, "music"):
             bot.music = self
 
-        bot.add_listener(self.update_handler, 'on_socket_response')
+        bot.add_listener(self.update_handler, "on_socket_response")
 
     @property
     def shard_count(self) -> int:
@@ -286,10 +287,10 @@ class Client:
 
         guild = self.bot.get_guild(guild_id)
         if not guild:
-            raise InvalidIDProvided(f'A guild with the id <{guild_id}> can not be located.')
+            raise InvalidIDProvided(f"A guild with the id <{guild_id}> can not be located.")
 
         if not self.nodes:
-            raise ZeroConnectedNodes('There are not any currently connected nodes.')
+            raise ZeroConnectedNodes("There are not any currently connected nodes.")
 
         if not cls:
             cls = Player
@@ -298,7 +299,7 @@ class Client:
             node = self.get_node(identifier=node_id)
 
             if not node:
-                raise InvalidIDProvided(f'A Node with the identifier <{node_id}> does not exist.')
+                raise InvalidIDProvided(f"A Node with the identifier <{node_id}> does not exist.")
 
             player = cls(self.bot, guild_id, node, **kwargs)
             node.players[guild_id] = player
@@ -338,9 +339,22 @@ class Client:
 
         return player
 
-    async def initiate_node(self, host: str, port: int, *, rest_uri: str, password: str, region: str, identifier: str,
-                            shard_id: int = None, secure: bool = False, heartbeat: float = None,
-                            user_agent: str = None, auto_reconnect: bool = True, **kwargs) -> Node:
+    async def initiate_node(
+        self,
+        host: str,
+        port: int,
+        *,
+        rest_uri: str,
+        password: str,
+        region: str,
+        identifier: str,
+        shard_id: int = None,
+        secure: bool = False,
+        heartbeat: float = None,
+        user_agent: str = None,
+        auto_reconnect: bool = True,
+        **kwargs,
+    ) -> Node:
         """|coro|
 
         Initiate a Node and connect to the provided server.
@@ -380,28 +394,33 @@ class Client:
 
         if identifier in self.nodes:
             node = self.nodes[identifier]
-            raise NodeOccupied(f'Node with identifier ({identifier}) already exists >> {node.__repr__()}')
+            raise NodeOccupied(f"Node with identifier ({identifier}) already exists >> {node.__repr__()}")
 
-        node = Node(host, port, self.shard_count, self.user_id,
-                    rest_uri=rest_uri,
-                    password=password,
-                    region=region,
-                    identifier=identifier,
-                    shard_id=shard_id,
-                    session=self.session,
-                    client=self,
-                    secure=secure,
-                    heartbeat=heartbeat,
-                    user_agent=user_agent,
-                    auto_reconnect=auto_reconnect,
-                    dumps=self._dumps,
-                    version=kwargs.pop("version", 3),
-                    **kwargs)
+        node = Node(
+            host,
+            port,
+            self.shard_count,
+            self.user_id,
+            rest_uri=rest_uri,
+            password=password,
+            region=region,
+            identifier=identifier,
+            shard_id=shard_id,
+            session=self.session,
+            client=self,
+            secure=secure,
+            heartbeat=heartbeat,
+            user_agent=user_agent,
+            auto_reconnect=auto_reconnect,
+            dumps=self._dumps,
+            version=kwargs.pop("version", 3),
+            **kwargs,
+        )
 
         node.available = True
         self.nodes[identifier] = node
 
-        __log__.info(f'CLIENT | New node initiated:: {node.__repr__()} ')
+        __log__.info(f"CLIENT | New node initiated:: {node.__repr__()} ")
         return node
 
     async def destroy_node(self, *, identifier: str) -> None:
@@ -420,35 +439,35 @@ class Client:
         try:
             node = self.nodes[identifier]
         except KeyError:
-            raise ZeroConnectedNodes(f'A node with identifier:: {identifier}, does not exist.')
+            raise ZeroConnectedNodes(f"A node with identifier:: {identifier}, does not exist.")
 
         await node.destroy()
 
     async def update_handler(self, data) -> None:
-        if not data or 't' not in data:
+        if not data or "t" not in data:
             return
 
-        if data['t'] == 'VOICE_SERVER_UPDATE':
-            guild_id = int(data['d']['guild_id'])
+        if data["t"] == "VOICE_SERVER_UPDATE":
+            guild_id = int(data["d"]["guild_id"])
 
             try:
                 player = self.players[guild_id]
             except KeyError:
                 pass
             else:
-                await player._voice_server_update(data['d'])
+                await player._voice_server_update(data["d"])
 
-        elif data['t'] == 'VOICE_STATE_UPDATE':
-            if int(data['d']['user_id']) != int(self.user_id):
+        elif data["t"] == "VOICE_STATE_UPDATE":
+            if int(data["d"]["user_id"]) != int(self.user_id):
                 return
 
-            guild_id = int(data['d']['guild_id'])
+            guild_id = int(data["d"]["guild_id"])
             try:
                 player = self.players[guild_id]
             except KeyError:
                 pass
             else:
-                await player._voice_state_update(data['d'])
+                await player._voice_state_update(data["d"])
 
     def set_serializer(self, serializer_function) -> None:
         """Sets the JSON dumps function for use in the websocket.

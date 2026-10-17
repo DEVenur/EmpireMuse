@@ -1,4 +1,5 @@
 """Tipos e base comuns dos formulários de configuração (versão otimista, contexto, estado exibido)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -15,8 +16,7 @@ Args = Mapping[str, Sequence[str]]
 HEX16 = re.compile(r"[0-9a-f]{16}", re.ASCII)
 DIGITS = re.compile(r"[0-9]{1,20}", re.ASCII)
 SAVED_TEXT = "Configurações salvas."
-CONFLICT_TEXT = ("Estas configurações foram alteradas em outro lugar. "
-                 "Recarregue a página para ver os valores atuais.")
+CONFLICT_TEXT = "Estas configurações foram alteradas em outro lugar. Recarregue a página para ver os valores atuais."
 INVALID_TEXT = "Corrija os campos destacados e tente novamente."
 VERSION_TEXT = "Não foi possível validar o formulário. Recarregue a página e tente novamente."
 KIND_OK = "sucesso"
@@ -63,6 +63,7 @@ def load_json_object(raw: str) -> Optional[dict]:
 @dataclass(frozen=True)
 class FormContext:
     """Quem edita o quê: bot escolhido (acesso a dados), servidor do cache desse bot e usuário do painel."""
+
     pool: Any
     bot: Any
     guild: Any
@@ -87,6 +88,7 @@ class ParseResult(NamedTuple):
 @dataclass(frozen=True)
 class Formulario:
     """Estado de um formulário entregue ao template (nomes em pt-BR acordados com o Frontend)."""
+
     key: str
     form_id: str
     template: str

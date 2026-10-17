@@ -45,29 +45,31 @@ class AuthorizationFailure(WavelinkException):
 class BuildTrackError(WavelinkException):
     """Exception raised when a track is failed to be decoded and re-built."""
 
+
 class TrackNotFound(WavelinkException):
     pass
 
-class MissingSessionID(WavelinkException):
 
-    __slots__ = ('node')
+class MissingSessionID(WavelinkException):
+    __slots__ = "node"
 
     def __init__(self, node):
         self.node = node
 
+
 class TrackLoadError(WavelinkException):
     """There was an error while loading a track."""
 
-    __slots__ = ('error', 'node', 'severity', 'cause')
+    __slots__ = ("error", "node", "severity", "cause")
 
     def __init__(self, node, error, data):
         self.error = error
         self.node = node
         self.data = data
-        self.exception = data.get('exception', {})
-        self.severity = self.exception.get('severity')
+        self.exception = data.get("exception", {})
+        self.severity = self.exception.get("severity")
         self.message = f"{self.node.identifier} - {self.exception.get('message')}"
-        self.cause = self.exception.get('cause', '')
+        self.cause = self.exception.get("cause", "")
 
     def __repr__(self):
         return self.message

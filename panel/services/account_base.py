@@ -3,6 +3,7 @@
 Os dados são sempre os do usuário da sessão (``DBModel.users``, escopo global). Segredos (``lastfm.sessionkey`` e
 ``token``) nunca entram em ``version_fields``/``extras``/``defaults``: só ``values`` os compara, internamente.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ ACTION_UNKNOWN_TEXT = "Ação desconhecida."
 @dataclass(frozen=True)
 class AccountContext:
     """Bot de entrada (primeiro bot pronto do pool) e id ``int`` do usuário da sessão."""
+
     pool: Any
     bot: Any
     user_id: int

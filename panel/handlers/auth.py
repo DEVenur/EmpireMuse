@@ -1,4 +1,5 @@
 """Login com Discord (authorization code + state + PKCE), callback e logout."""
+
 from __future__ import annotations
 
 import hmac
@@ -11,8 +12,7 @@ import tornado.web
 
 from panel.handlers.base import SESSION_COOKIE, PanelHandler
 from panel.handlers.pages import INDEX_PATH
-from panel.oauth import (DiscordOAuthClient, DiscordOAuthError, make_pkce_pair, parse_managed_guilds,
-                         parse_user)
+from panel.oauth import DiscordOAuthClient, DiscordOAuthError, make_pkce_pair, parse_managed_guilds, parse_user
 from panel.sessions import LoginAttempt
 
 logger = logging.getLogger(__name__)
@@ -24,20 +24,32 @@ NEXT_MAX_LENGTH = 200
 _SAFE_NEXT = re.compile(r"/painel/[A-Za-z0-9\-._~/%?=&+,:@]*", re.ASCII)
 _ENCODED_TRAVERSAL = re.compile(r"%(?:2e|2f|5c)", re.IGNORECASE)  # '.', '/' e '\\' codificados
 
-_MSG_EXPIRED = ("Link de login expirado",
-                "Sua tentativa de login expirou ou já foi usada. Volte ao início e entre novamente.")
-_MSG_DENIED = ("Acesso negado",
-               "Você cancelou a autorização no Discord. Para usar o painel, entre novamente e autorize o acesso.")
-_MSG_DISCORD = ("Discord indisponível",
-                "Não foi possível falar com o Discord agora. Tente novamente em alguns instantes.")
+_MSG_EXPIRED = (
+    "Link de login expirado",
+    "Sua tentativa de login expirou ou já foi usada. Volte ao início e entre novamente.",
+)
+_MSG_DENIED = (
+    "Acesso negado",
+    "Você cancelou a autorização no Discord. Para usar o painel, entre novamente e autorize o acesso.",
+)
+_MSG_DISCORD = (
+    "Discord indisponível",
+    "Não foi possível falar com o Discord agora. Tente novamente em alguns instantes.",
+)
 _MSG_RATE = ("Muitas tentativas", "Você tentou entrar muitas vezes seguidas. Aguarde um minuto e tente de novo.")
 _MSG_UNAVAILABLE = ("Login indisponível", "O login com Discord não está disponível no momento.")
 
 
 def safe_next_path(value: str) -> str:
     """Aceita só caminhos internos ``/painel/...``; qualquer outra coisa volta para o início."""
-    if (not value or len(value) > NEXT_MAX_LENGTH or "//" in value or ".." in value
-            or _ENCODED_TRAVERSAL.search(value) or not _SAFE_NEXT.fullmatch(value)):
+    if (
+        not value
+        or len(value) > NEXT_MAX_LENGTH
+        or "//" in value
+        or ".." in value
+        or _ENCODED_TRAVERSAL.search(value)
+        or not _SAFE_NEXT.fullmatch(value)
+    ):
         return INDEX_PATH
     return value
 
@@ -75,8 +87,13 @@ class LoginHandler(AuthHandler):
         verifier, challenge = make_pkce_pair()
         next_path = safe_next_path(self.get_argument("next", ""))
         attempt_id = self.application.settings["attempt_store"].create(state, verifier, next_path)
-        self.set_signed_cookie(self.cookie_name(LOGIN_COOKIE), attempt_id, expires_days=None,
-                               max_age=ATTEMPT_COOKIE_MAX_AGE, **self.cookie_kwargs())
+        self.set_signed_cookie(
+            self.cookie_name(LOGIN_COOKIE),
+            attempt_id,
+            expires_days=None,
+            max_age=ATTEMPT_COOKIE_MAX_AGE,
+            **self.cookie_kwargs(),
+        )
         self.redirect(oauth.authorize_url(state, challenge))
 
 
@@ -92,8 +109,7 @@ class CallbackHandler(AuthHandler):
             return
         code = self.get_argument("code", "")
         state = self.get_argument("state", "")
-        if attempt is None or not code or not state or not hmac.compare_digest(
-                state.encode(), attempt.state.encode()):
+        if attempt is None or not code or not state or not hmac.compare_digest(state.encode(), attempt.state.encode()):
             self.render_error(400, *_MSG_EXPIRED)
             return
         oauth = self.oauth_client()
@@ -139,8 +155,7 @@ class CallbackHandler(AuthHandler):
         store = self.application.settings["session_store"]
         store.destroy(self.session_id)  # nunca reaproveita um id anterior (sem fixação de sessão)
         session_id = store.create(user, guilds)
-        self.set_signed_cookie(self.cookie_name(SESSION_COOKIE), session_id, expires_days=None,
-                               **self.cookie_kwargs())
+        self.set_signed_cookie(self.cookie_name(SESSION_COOKIE), session_id, expires_days=None, **self.cookie_kwargs())
 
 
 class LogoutHandler(AuthHandler):

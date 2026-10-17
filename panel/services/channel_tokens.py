@@ -1,4 +1,5 @@
 """Token assinado da confirmação do reset do canal de pedidos (HMAC, 2 min, uso único)."""
+
 from __future__ import annotations
 
 import hashlib

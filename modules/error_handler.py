@@ -18,33 +18,21 @@ if TYPE_CHECKING:
 
 
 class ErrorHandler(commands.Cog):
-
     def __init__(self, bot: BotCore):
         self.bot = bot
         self.components = []
         self.webhook_max_concurrency = commands.MaxConcurrency(1, per=commands.BucketType.guild, wait=True)
 
         if not self.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] and self.bot.config["ERROR_REPORT_WEBHOOK"]:
-            self.components.append(
-                disnake.ui.Button(
-                    label="Reporte esse erro",
-                    custom_id="report_error",
-                    emoji="⚠️"
-                )
-            )
+            self.components.append(disnake.ui.Button(label="Reporte esse erro", custom_id="report_error", emoji="⚠️"))
 
         if self.bot.config["SUPPORT_SERVER"]:
             self.components.append(
-                disnake.ui.Button(
-                    label="Servidor de suporte",
-                    url=self.bot.config["SUPPORT_SERVER"],
-                    emoji="💻"
-                )
+                disnake.ui.Button(label="Servidor de suporte", url=self.bot.config["SUPPORT_SERVER"], emoji="💻")
             )
 
-    @commands.Cog.listener('on_interaction_player_error')
+    @commands.Cog.listener("on_interaction_player_error")
     async def on_inter_player_error(self, inter: disnake.ApplicationCommandInteraction, error: Exception):
-
         if not isinstance(error, commands.MaxConcurrencyReached):
             try:
                 await inter.application_command._max_concurrency.release(inter)
@@ -72,23 +60,27 @@ class ErrorHandler(commands.Cog):
         except:
             pass"""
 
-    @commands.Cog.listener('on_custom_error')
-    async def custom_error_event(self, ctx: Union[disnake.ApplicationCommandInteraction, CustomContext], error: Exception):
+    @commands.Cog.listener("on_custom_error")
+    async def custom_error_event(
+        self, ctx: Union[disnake.ApplicationCommandInteraction, CustomContext], error: Exception
+    ):
         if isinstance(ctx, (CustomContext, disnake.Message)):
             await self.on_legacy_command_error(ctx=ctx, error=error, resp_msg=False)
         else:
             await self.process_interaction_error(inter=ctx, error=error, resp_msg=False)
 
-    @commands.Cog.listener('on_custom_slash_command_error')
-    @commands.Cog.listener('on_user_command_error')
-    @commands.Cog.listener('on_message_command_error')
-    @commands.Cog.listener('on_slash_command_error')
-    async def on_interaction_command_error(self, inter: disnake.ApplicationCommandInteraction, error: Exception, **kwargs):
-
+    @commands.Cog.listener("on_custom_slash_command_error")
+    @commands.Cog.listener("on_user_command_error")
+    @commands.Cog.listener("on_message_command_error")
+    @commands.Cog.listener("on_slash_command_error")
+    async def on_interaction_command_error(
+        self, inter: disnake.ApplicationCommandInteraction, error: Exception, **kwargs
+    ):
         await self.process_interaction_error(inter=inter, error=error, **kwargs)
 
-    async def process_interaction_error(self, inter: disnake.ApplicationCommandInteraction, error: Exception, resp_msg = True, **kwargs):
-
+    async def process_interaction_error(
+        self, inter: disnake.ApplicationCommandInteraction, error: Exception, resp_msg=True, **kwargs
+    ):
         if isinstance(error, PoolException):
             return
 
@@ -108,13 +100,12 @@ class ErrorHandler(commands.Cog):
             pass
 
         if not error_msg:
-
             components = self.components
 
             kwargs["embed"] = disnake.Embed(
                 color=color,
-                title = "Ocorreu um erro no comando:",
-                description=f"```py\n{repr(error)[:2030].replace(self.bot.http.token, 'mytoken')}```"
+                title="Ocorreu um erro no comando:",
+                description=f"```py\n{repr(error)[:2030].replace(self.bot.http.token, 'mytoken')}```",
             )
 
             if self.bot.config["AUTO_ERROR_REPORT_WEBHOOK"]:
@@ -122,7 +113,6 @@ class ErrorHandler(commands.Cog):
                 kwargs["embed"].description += " `Meu desenvolvedor será notificado sobre o problema.`"
 
         else:
-
             kwargs["embeds"] = []
 
             for p in paginator(error_msg):
@@ -132,7 +122,7 @@ class ErrorHandler(commands.Cog):
             try:
                 await send_message(inter, components=components, **kwargs)
             except:
-                print(("-"*50) + f"\n{error_msg}\n" + ("-"*50))
+                print(("-" * 50) + f"\n{error_msg}\n" + ("-" * 50))
                 traceback.print_exc()
         else:
             send_webhook = True
@@ -149,7 +139,7 @@ class ErrorHandler(commands.Cog):
 
             await self.send_webhook(
                 embed=self.build_report_embed(inter),
-                file=string_to_file(full_error_msg, "error_traceback_interaction.txt")
+                file=string_to_file(full_error_msg, "error_traceback_interaction.txt"),
             )
 
             await asyncio.sleep(20)
@@ -160,7 +150,6 @@ class ErrorHandler(commands.Cog):
             traceback.print_exc()
 
     async def do_playcmd(self, ctx: CustomContext):
-
         if not self.bot.pool.config["ENABLE_SONGREQUEST_MENTION"]:
             # em testes
             ctx.bot.dispatch("custom_message", ctx.message)
@@ -174,15 +163,19 @@ class ErrorHandler(commands.Cog):
         query = query.strip()
 
         if query:
-
             play_cmd = self.bot.get_slash_command("play")
 
             try:
                 await check_cmd(play_cmd, ctx)
                 await play_cmd.callback(
-                    inter=ctx, query=query,
-                    self=play_cmd.cog, position=0, options=False, force_play="no",
-                    manual_selection=False, server=None
+                    inter=ctx,
+                    query=query,
+                    self=play_cmd.cog,
+                    position=0,
+                    options=False,
+                    force_play="no",
+                    manual_selection=False,
+                    server=None,
                 )
             except commands.CommandNotFound:
                 return
@@ -191,12 +184,11 @@ class ErrorHandler(commands.Cog):
 
     @commands.Cog.listener("on_command_error")
     async def on_legacy_command_error(self, ctx: CustomContext, error: Exception, resp_msg=True):
-
         """if not isinstance(error, commands.MaxConcurrencyReached):
-            try:
-                await ctx.command._max_concurrency.release(ctx.message)
-            except:
-                pass"""
+        try:
+            await ctx.command._max_concurrency.release(ctx.message)
+        except:
+            pass"""
 
         if isinstance(error, PoolException):
             return
@@ -245,25 +237,25 @@ class ErrorHandler(commands.Cog):
             kwargs["content"] = ctx.author.mention
 
         if not error_msg:
-
             components = self.components
 
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(
                     color=disnake.Colour.red(),
                     title="Ocorreu um erro no comando:",
-                    description=f"```py\n{repr(error)[:2030].replace(self.bot.http.token, 'mytoken')}```"
+                    description=f"```py\n{repr(error)[:2030].replace(self.bot.http.token, 'mytoken')}```",
                 )
                 if self.bot.config["AUTO_ERROR_REPORT_WEBHOOK"]:
                     send_webhook = True
                     kwargs["embed"].description += " `Meu desenvolvedor será notificado sobre o problema.`"
 
             else:
-                kwargs["content"] += "\n**Ocorreu um erro no comando:**\n" \
-                                     f"```py\n{repr(error)[:2030].replace(self.bot.http.token, 'mytoken')}```"
+                kwargs["content"] += (
+                    "\n**Ocorreu um erro no comando:**\n"
+                    f"```py\n{repr(error)[:2030].replace(self.bot.http.token, 'mytoken')}```"
+                )
 
         else:
-
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(color=disnake.Colour.red(), description=error_msg)
             else:
@@ -281,7 +273,6 @@ class ErrorHandler(commands.Cog):
             pass
 
         if resp_msg:
-
             if hasattr(ctx, "inter"):
                 if ctx.inter.response.is_done():
                     func = ctx.inter.edit_original_message
@@ -310,8 +301,7 @@ class ErrorHandler(commands.Cog):
             await self.webhook_max_concurrency.acquire(ctx)
 
             await self.send_webhook(
-                embed=self.build_report_embed(ctx),
-                file=string_to_file(full_error_msg, "error_traceback_prefixed.txt")
+                embed=self.build_report_embed(ctx), file=string_to_file(full_error_msg, "error_traceback_prefixed.txt")
             )
 
             await asyncio.sleep(20)
@@ -323,7 +313,6 @@ class ErrorHandler(commands.Cog):
 
     @commands.Cog.listener("on_button_click")
     async def on_error_report(self, inter: disnake.MessageInteraction):
-
         if inter.data.custom_id != "report_error":
             return
 
@@ -340,30 +329,29 @@ class ErrorHandler(commands.Cog):
                     label="Detalhes",
                     custom_id="error_details",
                     max_length=1900,
-                    required=True
+                    required=True,
                 ),
                 disnake.ui.TextInput(
                     style=disnake.TextInputStyle.short,
                     label="Link de imagem/print do erro (Opcional)",
                     custom_id="image_url",
                     max_length=300,
-                    required=False
-                )
-            ]
+                    required=False,
+                ),
+            ],
         )
 
     @commands.Cog.listener("on_modal_submit")
     async def on_report_submit(self, inter: disnake.ModalInteraction):
-
         if not inter.custom_id.startswith("error_report_submit"):
             return
 
         if not inter.message.embeds:
             await inter.response.edit_message(
                 embed=disnake.Embed(
-                    title="A embed da mensagem foi removida!",
-                    description=inter.text_values["error_details"]
-                ), view=None
+                    title="A embed da mensagem foi removida!", description=inter.text_values["error_details"]
+                ),
+                view=None,
             )
             return
 
@@ -371,26 +359,24 @@ class ErrorHandler(commands.Cog):
 
         if image_url and not URL_REG.match(image_url):
             await inter.send(
-                embed=disnake.Embed(
-                    title="Link de imagem inválida!",
-                    description=inter.text_values["error_details"]
-                ), ephemeral=True
+                embed=disnake.Embed(title="Link de imagem inválida!", description=inter.text_values["error_details"]),
+                ephemeral=True,
             )
             return
 
         embed = disnake.Embed(
             color=self.bot.get_color(inter.guild.me),
             description=inter.text_values["error_details"],
-            title="Report de erro"
+            title="Report de erro",
         )
 
         embed.add_field(name="Log:", value=inter.message.embeds[0].description)
 
         await inter.response.edit_message(
             embed=disnake.Embed(
-                description="**Erro reportado com sucesso!**",
-                color=self.bot.get_color(inter.guild.me)
-            ), view=None
+                description="**Erro reportado com sucesso!**", color=self.bot.get_color(inter.guild.me)
+            ),
+            view=None,
         )
 
         try:
@@ -413,11 +399,7 @@ class ErrorHandler(commands.Cog):
         await self.send_webhook(embed=embed)
 
     def build_report_embed(self, ctx):
-
-        embed = disnake.Embed(
-            title="Ocorreu um erro em um servidor:",
-            timestamp=disnake.utils.utcnow()
-        )
+        embed = disnake.Embed(title="Ocorreu um erro em um servidor:", timestamp=disnake.utils.utcnow())
 
         try:
             bot = ctx.bot
@@ -427,30 +409,38 @@ class ErrorHandler(commands.Cog):
         if ctx.guild:
             embed.colour = bot.get_color(ctx.guild.me)
             embed.add_field(
-                name="Servidor:", inline=False,
-                value=f"```\n{disnake.utils.escape_markdown(ctx.guild.name)}\nID: {ctx.guild.id}```"
+                name="Servidor:",
+                inline=False,
+                value=f"```\n{disnake.utils.escape_markdown(ctx.guild.name)}\nID: {ctx.guild.id}```",
             )
 
             embed.add_field(
-                name="Canal de texto:", inline=False,
-                value=f"```\n{disnake.utils.escape_markdown(ctx.channel.name)}\nID: {ctx.channel.id}```"
+                name="Canal de texto:",
+                inline=False,
+                value=f"```\n{disnake.utils.escape_markdown(ctx.channel.name)}\nID: {ctx.channel.id}```",
             )
 
             if vc := ctx.author.voice:
                 embed.add_field(
-                    name="Canal de voz (user):", inline=False,
-                    value=f"```\n{disnake.utils.escape_markdown(vc.channel.name)}" +
-                          (f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})"
-                           if vc.channel.user_limit else "") + f"\nID: {vc.channel.id}```"
+                    name="Canal de voz (user):",
+                    inline=False,
+                    value=f"```\n{disnake.utils.escape_markdown(vc.channel.name)}"
+                    + (f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})" if vc.channel.user_limit else "")
+                    + f"\nID: {vc.channel.id}```",
                 )
 
             if vcbot := ctx.guild.me.voice:
                 if vc and vcbot.channel != vc.channel:
                     embed.add_field(
-                        name="Canal de voz (bot):", inline=False,
-                        value=f"{vc.channel.name}" +
-                              (f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})"
-                               if vc.channel.user_limit else "") + f"\nID: {vc.channel.id}```"
+                        name="Canal de voz (bot):",
+                        inline=False,
+                        value=f"{vc.channel.name}"
+                        + (
+                            f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})"
+                            if vc.channel.user_limit
+                            else ""
+                        )
+                        + f"\nID: {vc.channel.id}```",
                     )
             if ctx.guild.icon:
                 embed.set_thumbnail(url=ctx.guild.icon.with_static_format("png").url)
@@ -461,54 +451,46 @@ class ErrorHandler(commands.Cog):
                 guild_id = ctx.guild_id
             except AttributeError:
                 guild_id = ctx.guild.id
-            embed.add_field(
-                name="Servidor [ID]:", inline=False,
-                value=f"```\n{guild_id}```"
-            )
+            embed.add_field(name="Servidor [ID]:", inline=False, value=f"```\n{guild_id}```")
 
         embed.set_footer(
-            text=f"{ctx.author} [{ctx.author.id}]",
-            icon_url=ctx.author.display_avatar.with_static_format("png").url
+            text=f"{ctx.author} [{ctx.author.id}]", icon_url=ctx.author.display_avatar.with_static_format("png").url
         )
 
         try:
-
             embed.description = f"**Slash Command:**```\n{ctx.data.name}``` "
 
             if ctx.filled_options:
-                embed.description += "**Options**```\n" + \
-                                     "\n".join(f"{k} -> {disnake.utils.escape_markdown(str(v))}"
-                                               for k, v in ctx.filled_options.items()) + "```"
+                embed.description += (
+                    "**Options**```\n"
+                    + "\n".join(
+                        f"{k} -> {disnake.utils.escape_markdown(str(v))}" for k, v in ctx.filled_options.items()
+                    )
+                    + "```"
+                )
 
         except AttributeError:
             if self.bot.intents.message_content and not ctx.author.bot:
-
                 try:
                     message = ctx.message
-                    type_ ="Comando"
+                    type_ = "Comando"
                 except AttributeError:
                     message = ctx
                     type_ = "Mensagem"
 
-                embed.description = f"**{type_}:**```\n" \
-                                    f"{message.content}" \
-                                    f"```"
+                embed.description = f"**{type_}:**```\n{message.content}```"
 
         return embed
 
     async def send_webhook(
-            self,
-            content: str = None,
-            embed: Optional[disnake.Embed] = None,
-            file: Optional[disnake.File] = None
+        self, content: str = None, embed: Optional[disnake.Embed] = None, file: Optional[disnake.File] = None
     ):
-
         if not self.bot.config["AUTO_ERROR_REPORT_WEBHOOK"]:
             return
 
         kwargs = {
             "username": self.bot.user.name,
-            "avatar_url": self.bot.user.display_avatar.replace(static_format='png').url,
+            "avatar_url": self.bot.user.display_avatar.replace(static_format="png").url,
         }
 
         if content:
@@ -523,6 +505,7 @@ class ErrorHandler(commands.Cog):
         async with ClientSession() as session:
             webhook = disnake.Webhook.from_url(self.bot.config["AUTO_ERROR_REPORT_WEBHOOK"], session=session)
             await webhook.send(**kwargs)
+
 
 def setup(bot: BotCore):
     bot.add_cog(ErrorHandler(bot))

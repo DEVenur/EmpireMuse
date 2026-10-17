@@ -32,11 +32,7 @@ def parse_embed_color(value: str | None) -> disnake.Color | None:
     return disnake.Color(int(match.group(1), 16))
 
 
-bools = {
-    "true": True,
-    "false": False,
-    "none": None
-}
+bools = {"true": True, "false": False, "none": None}
 
 DEFAULT_CONFIG = {
     "DEFAULT_PREFIX": "!!",
@@ -44,10 +40,10 @@ DEFAULT_CONFIG = {
     "OWNER_IDS": "",
     "COMMAND_LOG": False,
     "EMBED_COLOR": branding.EMBED_COLOR_HEX,
-    "BOT_ADD_REMOVE_LOG": '',
+    "BOT_ADD_REMOVE_LOG": "",
     "BOT_ADD_REMOVE_LOG_CHANNEL_ID": 0,
-    "ERROR_REPORT_WEBHOOK": '',
-    "AUTO_ERROR_REPORT_WEBHOOK": '',
+    "ERROR_REPORT_WEBHOOK": "",
+    "AUTO_ERROR_REPORT_WEBHOOK": "",
     "INTERACTION_COMMAND_ONLY": False,
     "PRESENCE_INTERVAL": 900,
     "SOURCE_REPO": branding.SOURCE_REPO_GIT,
@@ -59,14 +55,12 @@ DEFAULT_CONFIG = {
     "PREFIXED_POOL_TIMEOUT": 4,
     "ENABLE_COMMANDS_COOLDOWN": True,
     "GIT_DIR": "./.git",
-
     ################
     ### Database ###
     ################
     "MONGO": "",
     "MONGO_TIMEOUT": 30,
     "SENSITIVE_INFO_WARN": True,
-
     #########################
     ### Sistema de música ###
     #########################
@@ -85,8 +79,8 @@ DEFAULT_CONFIG = {
     "MAX_USER_INTEGRATIONS": 10,
     "EXTRA_HINTS": "",
     "HINT_RATE": 4,
-    "IGNORE_SKINS": '',
-    "IGNORE_STATIC_SKINS": '',
+    "IGNORE_SKINS": "",
+    "IGNORE_STATIC_SKINS": "",
     "GUILD_DEAFEN_WARN": True,
     "ENABLE_DISCORD_URLS_PLAYBACK": True,
     "PLAYER_INFO_BACKUP_INTERVAL": 45,
@@ -99,14 +93,12 @@ DEFAULT_CONFIG = {
     "PLAYLIST_CACHE_TTL": 1800,
     "USE_YTM_TRACKINFO_SCROBBLE": False,
     "ENABLE_SONGREQUEST_MENTION": True,
-
     ##############################################
     ### Sistema de música - Suporte ao spotify ###
     ##############################################
-    "SPOTIFY_CLIENT_ID": '',
-    "SPOTIFY_CLIENT_SECRET": '',
+    "SPOTIFY_CLIENT_ID": "",
+    "SPOTIFY_CLIENT_SECRET": "",
     "SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT": 0,
-
     ################################################
     ### Sistema de música - RPC (Rich Presence): ###
     ################################################
@@ -116,7 +108,6 @@ DEFAULT_CONFIG = {
     "RPC_PUBLIC_URL": "",
     "ENABLE_RPC_COMMAND": False,
     "ENABLE_RPC_AUTH": False,
-
     ##################################################
     ### Painel web (OAuth2 Discord, sob /painel):  ###
     ##################################################
@@ -129,7 +120,6 @@ DEFAULT_CONFIG = {
     "PANEL_SESSION_IDLE_MINUTES": 60,
     "PANEL_TRUST_PROXY": False,
     "PANEL_INSECURE_COOKIES": False,
-
     ##################################################
     ### Sistema de música - Local lavalink stuffs: ###
     ##################################################
@@ -146,14 +136,11 @@ DEFAULT_CONFIG = {
     "SEARCH_PROVIDERS": "ytsearch ytmsearch scsearch",
     "PREFER_YOUTUBE_NATIVE_PLAYBACK": True,
     "ONLY_USE_NATIVE_SEARCH_PROVIDERS": True,
-
     ##################################################
     ### Sistema de música - Integração com Last.fm ###
     ##################################################
-
     "LASTFM_KEY": "",
     "LASTFM_SECRET": "",
-
     ##########################
     ##### Bot presences: #####
     ##########################
@@ -162,7 +149,6 @@ DEFAULT_CONFIG = {
     "PLAYING_PRESENCES": "",
     "STREAMING_PRESENCES": "",
     "CUSTOM_STATUS_PRESENCES": "",
-
     ###############
     ### Intents ###
     ###############
@@ -180,14 +166,12 @@ DEFAULT_CONFIG = {
     "INVITES_INTENT": True,
     "VOICE_STATES_INTENT": True,
     "WEBHOOKS_INTENT": False,
-
     ##########################
     ### Privileged Intents ###
     ##########################
     "MEMBERS_INTENT": False,
     "PRESENCES_INTENT": False,
     "MESSAGE_CONTENT_INTENT": True,
-
     ##############
     ### Tests ####
     ##############
@@ -195,12 +179,11 @@ DEFAULT_CONFIG = {
     "YOUTUBE_TRACK_COOLDOWN": 20,
     "SILENT_PUBLICBOT_WARNING": False,
     "DBCACHE_SIZE": 1000,
-    "DBCACHE_TTL": 300
+    "DBCACHE_TTL": 300,
 }
 
 
 def load_config():
-
     CONFIG = dict(DEFAULT_CONFIG)
 
     for cfg in list(CONFIG) + ["TOKEN", "MONGO"]:
@@ -259,7 +242,6 @@ def load_config():
         "PANEL_SESSION_TTL_HOURS",
         "PANEL_SESSION_IDLE_MINUTES",
     ]:
-
         if not CONFIG[i]:
             CONFIG[i] = DEFAULT_CONFIG[i]
             continue
@@ -291,7 +273,6 @@ def load_config():
         "SENSITIVE_INFO_WARN",
         "ENABLE_DEFER_TYPING",
         "ENABLE_COMMANDS_COOLDOWN",
-
         "BANS_INTENT",
         "DM_MESSAGES_INTENT",
         "DM_REACTIONS_INTENT",
@@ -306,11 +287,9 @@ def load_config():
         "INVITES_INTENT",
         "VOICE_STATES_INTENT",
         "WEBHOOKS_INTENT",
-
         "MEMBERS_INTENT",
         "PRESENCES_INTENT",
         "MESSAGE_CONTENT_INTENT",
-
         "PREFER_YOUTUBE_NATIVE_PLAYBACK",
         "ONLY_USE_NATIVE_SEARCH_PROVIDERS",
         "USE_YTM_TRACKINFO_SCROBBLE",
@@ -318,7 +297,6 @@ def load_config():
         "SILENT_PUBLICBOT_WARNING",
         "ENABLE_SONGREQUEST_MENTION",
     ]:
-
         if CONFIG[i] in (True, False, None, ""):
             CONFIG[i] = DEFAULT_CONFIG[i]
             continue

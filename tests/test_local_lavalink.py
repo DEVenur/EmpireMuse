@@ -12,6 +12,7 @@ API exigida do Backend (nomes fixados pelos testes):
                       prepare_lavalink_files(directory=".", *, lavalink_file_url=None, lavalink_file_sha256=None);
                       run_lavalink(..., lavalink_file_sha256=None) chama prepare_lavalink_files no diretório atual.
 """
+
 import hashlib
 import re
 from pathlib import Path
@@ -22,7 +23,7 @@ from utils import branding
 from utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
-OLD_YML_SHA256 = "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3"   # application.yml da release 0.0.1
+OLD_YML_SHA256 = "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3"  # application.yml da release 0.0.1
 
 JAR = b"JAR-OFICIAL"
 YML = b"lavalink: novo\n"
@@ -51,6 +52,7 @@ class FakeResponse:
             self.path_check()
         if self.fail_midway:
             import requests
+
             raise requests.ConnectionError("queda no meio do download")
         yield self.data[half:]
 
@@ -106,10 +108,12 @@ def plugin_dir(base: Path) -> Path:
 
 # ============================================================================ constantes reais (release 0.0.2)
 
+
 class TestOfficialConstants:
     def test_known_yml_hashes_include_the_001_release(self):
-        assert OLD_YML_SHA256 in branding.LAVALINK_APPLICATION_YML_KNOWN_SHA256, \
+        assert OLD_YML_SHA256 in branding.LAVALINK_APPLICATION_YML_KNOWN_SHA256, (
             "o application.yml da 0.0.1 é uma versão oficial conhecida (pode ser substituído)"
+        )
 
     def test_plugin_table_has_exactly_the_three_canonical_names(self):
         assert set(branding.LAVALINK_PLUGIN_SHA256) == set(PLUGINS)
@@ -118,6 +122,7 @@ class TestOfficialConstants:
 
 
 # ============================================================================ download_verified
+
 
 class TestDownloadVerified:
     def test_good_hash_moves_the_file_into_place_atomically_without_leftovers(self, net, tmp_path):
@@ -154,8 +159,10 @@ class TestDownloadVerified:
         monkeypatch.setattr(ll.os, "replace", lambda src, dst: (moves.append((str(src), str(dst))), real(src, dst))[1])
         dest = tmp_path / "Lavalink.jar"
         ll.download_verified("https://example.test/Lavalink.jar", str(dest), sha(JAR))
-        (src, dst), = moves
-        assert dst == str(dest) and src != dst and src.startswith(str(dest)), "mover o temporário vizinho do destino (atômico)"
+        ((src, dst),) = moves
+        assert dst == str(dest) and src != dst and src.startswith(str(dest)), (
+            "mover o temporário vizinho do destino (atômico)"
+        )
 
     def test_http_error_and_dropped_connection_become_a_clear_download_error(self, net, tmp_path, monkeypatch):
         import requests
@@ -177,17 +184,18 @@ class TestDownloadVerified:
 
     def test_every_request_has_a_timeout(self, net, tmp_path):
         ll.download_verified("https://example.test/Lavalink.jar", str(tmp_path / "Lavalink.jar"), sha(JAR))
-        (_, kwargs), = net.calls
+        ((_, kwargs),) = net.calls
         assert kwargs.get("timeout"), "requests.get sem timeout trava o boot do bot"
 
     def test_legacy_download_file_for_the_jdk_also_has_a_timeout(self, net, tmp_path):
         net.files["java.zip"] = b"JDK"
         assert ll.download_file("https://example.test/java.zip", str(tmp_path / "java.zip")) is True
-        (_, kwargs), = net.calls
+        ((_, kwargs),) = net.calls
         assert kwargs.get("timeout")
 
 
 # ============================================================================ prepare_lavalink_files
+
 
 class TestFreshInstall:
     def test_downloads_jar_yml_and_the_three_plugins_with_canonical_names(self, net, tmp_path):
@@ -214,10 +222,13 @@ class TestFreshInstall:
 
 
 class TestIntegrityAborts:
-    @pytest.mark.parametrize("attr, name", [
-        ("LAVALINK_JAR_SHA256", "Lavalink.jar"),
-        ("LAVALINK_APPLICATION_YML_SHA256", "application.yml"),
-    ])
+    @pytest.mark.parametrize(
+        "attr, name",
+        [
+            ("LAVALINK_JAR_SHA256", "Lavalink.jar"),
+            ("LAVALINK_APPLICATION_YML_SHA256", "application.yml"),
+        ],
+    )
     def test_wrong_jar_or_yml_hash_aborts_and_leaves_no_file_of_it(self, net, tmp_path, monkeypatch, attr, name):
         monkeypatch.setattr(branding, attr, sha(b"errado"))
         with pytest.raises(ll.IntegrityError):
@@ -330,11 +341,12 @@ class TestUserOverriddenUrl:
 
 # ============================================================================ run_lavalink (ponta a ponta, sem Java)
 
+
 @pytest.fixture
 def run(monkeypatch, tmp_path, net):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
-    monkeypatch.setattr(ll.platform, "architecture", lambda *a, **k: ("64bit", "ELF"))   # platform usa subprocess
+    monkeypatch.setattr(ll.platform, "architecture", lambda *a, **k: ("64bit", "ELF"))  # platform usa subprocess
     started = []
 
     class FakePopen:
@@ -349,8 +361,9 @@ class TestRunLavalink:
     def test_starts_only_after_everything_is_verified_and_plugins_are_kept(self, run, tmp_path):
         ll.run_lavalink(lavalink_file_url=branding.LAVALINK_JAR_URL)
         assert len(run) == 1 and "Lavalink.jar" in run[0]
-        assert sorted(p.name for p in plugin_dir(tmp_path).iterdir()) == sorted(PLUGINS), \
+        assert sorted(p.name for p in plugin_dir(tmp_path).iterdir()) == sorted(PLUGINS), (
             "a limpeza de plugins/ não pode apagar os plugins verificados"
+        )
 
     def test_plugins_survive_when_the_jar_is_refreshed(self, run, tmp_path):
         ll.run_lavalink(lavalink_file_url=branding.LAVALINK_JAR_URL)
@@ -372,16 +385,19 @@ class TestRunLavalink:
 
     def test_accepts_the_sha256_parameter(self, run, net, tmp_path):
         net.files["Lavalink.jar"] = b"JAR-PERSONALIZADO"
-        ll.run_lavalink(lavalink_file_url="https://example.test/x/Lavalink.jar",
-                        lavalink_file_sha256=sha(b"JAR-PERSONALIZADO"))
+        ll.run_lavalink(
+            lavalink_file_url="https://example.test/x/Lavalink.jar", lavalink_file_sha256=sha(b"JAR-PERSONALIZADO")
+        )
         assert len(run) == 1 and (tmp_path / "Lavalink.jar").read_bytes() == b"JAR-PERSONALIZADO"
 
 
 # ============================================================================ configuração
 
+
 class TestConfig:
     def test_default_config_has_an_empty_file_sha256_and_example_env_documents_it(self):
         import config_loader
+
         assert config_loader.DEFAULT_CONFIG.get("LAVALINK_FILE_SHA256") == ""
         example = (ROOT / ".example.env").read_text(encoding="utf-8")
         assert re.search(r"^LAVALINK_FILE_SHA256=", example, re.MULTILINE)
@@ -393,21 +409,30 @@ class TestConfig:
 
 # ============================================================================ pedidos do MAESTRO pós-aprovação (observações 1 e 2)
 
+
 class TestRunLavalinkSignature:
     def test_sha256_is_keyword_only_and_after_all_positional_parameters(self):
         # Fase 2 A2: youtube_oauth_refresh_token também é keyword-only e entra depois; o sha256 deixa de ser o último.
         import inspect
+
         params = list(inspect.signature(ll.run_lavalink).parameters.values())
         sha_param = next(p for p in params if p.name == "lavalink_file_sha256")
         assert sha_param.kind is inspect.Parameter.KEYWORD_ONLY
         assert sha_param.default in (None, "")
-        assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in params[params.index(sha_param):])
+        assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in params[params.index(sha_param) :])
 
     def test_existing_positional_order_is_preserved(self):
         import inspect
+
         names = [p.name for p in inspect.signature(ll.run_lavalink).parameters.values()]
-        assert names[:6] == ["lavalink_file_url", "lavalink_initial_ram", "lavalink_ram_limit",
-                             "lavalink_additional_sleep", "lavalink_cpu_cores", "use_jabba"]
+        assert names[:6] == [
+            "lavalink_file_url",
+            "lavalink_initial_ram",
+            "lavalink_ram_limit",
+            "lavalink_additional_sleep",
+            "lavalink_cpu_cores",
+            "use_jabba",
+        ]
 
     def test_client_still_calls_by_keyword_with_the_sha256(self):
         source = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
@@ -415,23 +440,28 @@ class TestRunLavalinkSignature:
 
 
 class TestOnlyHttpsForUserUrl:
-    @pytest.mark.parametrize("url", ["http://example.test/Lavalink.jar", "HTTP://example.test/Lavalink.jar",
-                                     "  http://example.test/Lavalink.jar"])
+    @pytest.mark.parametrize(
+        "url",
+        ["http://example.test/Lavalink.jar", "HTTP://example.test/Lavalink.jar", "  http://example.test/Lavalink.jar"],
+    )
     def test_http_url_is_refused_before_any_request_even_with_the_right_hash(self, net, tmp_path, url):
         with pytest.raises(ll.LavalinkDownloadError) as info:
             ll.prepare_lavalink_files(tmp_path, lavalink_file_url=url, lavalink_file_sha256=sha(JAR))
         assert net.calls == [] and tree(tmp_path) == []
         assert "HTTPS" in str(info.value)
 
-    @pytest.mark.parametrize("url", ["ftp://example.test/Lavalink.jar", "file:///etc/passwd", "example.test/Lavalink.jar"])
+    @pytest.mark.parametrize(
+        "url", ["ftp://example.test/Lavalink.jar", "file:///etc/passwd", "example.test/Lavalink.jar"]
+    )
     def test_other_schemes_are_refused_too(self, net, tmp_path, url):
         with pytest.raises(ll.LavalinkDownloadError):
             ll.prepare_lavalink_files(tmp_path, lavalink_file_url=url, lavalink_file_sha256=sha(JAR))
         assert net.calls == []
 
     def test_https_url_with_hash_is_still_accepted(self, net, tmp_path):
-        ll.prepare_lavalink_files(tmp_path, lavalink_file_url="https://example.test/meu/Lavalink.jar",
-                                  lavalink_file_sha256=sha(JAR))
+        ll.prepare_lavalink_files(
+            tmp_path, lavalink_file_url="https://example.test/meu/Lavalink.jar", lavalink_file_sha256=sha(JAR)
+        )
         assert (tmp_path / "Lavalink.jar").read_bytes() == JAR
 
     def test_run_lavalink_refuses_http_and_never_starts_the_process(self, run):
@@ -442,8 +472,9 @@ class TestOnlyHttpsForUserUrl:
     def test_http_is_refused_even_if_an_official_looking_jar_already_exists(self, net, tmp_path):
         (tmp_path / "Lavalink.jar").write_bytes(JAR)
         with pytest.raises(ll.LavalinkDownloadError):
-            ll.prepare_lavalink_files(tmp_path, lavalink_file_url="http://example.test/Lavalink.jar",
-                                      lavalink_file_sha256=sha(JAR))
+            ll.prepare_lavalink_files(
+                tmp_path, lavalink_file_url="http://example.test/Lavalink.jar", lavalink_file_sha256=sha(JAR)
+            )
 
     def test_official_urls_are_https(self):
         assert branding.LAVALINK_JAR_URL.startswith("https://")

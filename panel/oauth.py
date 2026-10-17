@@ -1,4 +1,5 @@
 """Cliente OAuth2 do Discord (authorization code + PKCE S256). Tokens e segredos nunca vão para logs ou erros."""
+
 from __future__ import annotations
 
 import asyncio
@@ -41,34 +42,41 @@ def make_pkce_pair() -> tuple[str, str]:
 
 
 class DiscordOAuthClient:
-    def __init__(self, settings: PanelSettings, client_id: str,
-                 session_factory: Callable[[], Any] = _default_session) -> None:
+    def __init__(
+        self, settings: PanelSettings, client_id: str, session_factory: Callable[[], Any] = _default_session
+    ) -> None:
         self._settings = settings
         self._client_id = client_id
         self._session_factory = session_factory
 
     def authorize_url(self, state: str, code_challenge: str) -> str:
-        query = urlencode({
-            "response_type": "code",
-            "client_id": self._client_id,
-            "scope": OAUTH_SCOPE,
-            "state": state,
-            "redirect_uri": self._settings.redirect_uri,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-            "prompt": "none",
-        })
+        query = urlencode(
+            {
+                "response_type": "code",
+                "client_id": self._client_id,
+                "scope": OAUTH_SCOPE,
+                "state": state,
+                "redirect_uri": self._settings.redirect_uri,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+                "prompt": "none",
+            }
+        )
         return f"{AUTHORIZE_URL}?{query}"
 
     async def exchange_code(self, code: str, code_verifier: str) -> str:
-        data = await self._request("POST", "/oauth2/token", data={
-            "client_id": self._client_id,
-            "client_secret": self._settings.oauth_client_secret,
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": self._settings.redirect_uri,
-            "code_verifier": code_verifier,
-        })
+        data = await self._request(
+            "POST",
+            "/oauth2/token",
+            data={
+                "client_id": self._client_id,
+                "client_secret": self._settings.oauth_client_secret,
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": self._settings.redirect_uri,
+                "code_verifier": code_verifier,
+            },
+        )
         token = data.get("access_token") if isinstance(data, dict) else None
         if not isinstance(token, str) or not token:
             raise DiscordOAuthError("Resposta do Discord sem token de acesso.")
@@ -81,19 +89,24 @@ class DiscordOAuthClient:
         return data
 
     async def fetch_guilds(self, access_token: str) -> list[dict]:
-        data = await self._request("GET", "/users/@me/guilds", headers=_bearer(access_token),
-                                   params={"limit": GUILDS_PAGE_LIMIT})
+        data = await self._request(
+            "GET", "/users/@me/guilds", headers=_bearer(access_token), params={"limit": GUILDS_PAGE_LIMIT}
+        )
         if not isinstance(data, list):
             raise DiscordOAuthError("Resposta inesperada do Discord ao ler os servidores.")
         return data
 
     async def revoke(self, access_token: str) -> None:
-        await self._request("POST", "/oauth2/token/revoke", data={
-            "token": access_token,
-            "token_type_hint": "access_token",
-            "client_id": self._client_id,
-            "client_secret": self._settings.oauth_client_secret,
-        })
+        await self._request(
+            "POST",
+            "/oauth2/token/revoke",
+            data={
+                "token": access_token,
+                "token_type_hint": "access_token",
+                "client_id": self._client_id,
+                "client_secret": self._settings.oauth_client_secret,
+            },
+        )
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
@@ -123,8 +136,9 @@ def resolve_client_id(pool: Any, settings: PanelSettings) -> str:
     return ""
 
 
-def make_client_provider(pool: Any, settings: PanelSettings,
-                         oauth_client: Optional[DiscordOAuthClient] = None) -> Callable[[], Optional[DiscordOAuthClient]]:
+def make_client_provider(
+    pool: Any, settings: PanelSettings, oauth_client: Optional[DiscordOAuthClient] = None
+) -> Callable[[], Optional[DiscordOAuthClient]]:
     """Devolve uma função que entrega o cliente OAuth, resolvendo o client_id só no primeiro uso
     (os bots podem ainda não estar prontos quando o servidor web sobe)."""
     cache: list[DiscordOAuthClient] = [oauth_client] if oauth_client else []
@@ -166,8 +180,13 @@ def parse_managed_guilds(raw: list[dict]) -> tuple[ManagedGuild, ...]:
             if not isinstance(guild_id, str) or not _GUILD_ID.fullmatch(guild_id):
                 continue  # só ids de servidor numéricos (str de dígitos ASCII)
             permissions = int(item.get("permissions", 0))
-            guild = ManagedGuild(id=guild_id, name=str(item["name"]), icon=item.get("icon") or None,
-                                 permissions=permissions, owner=bool(item.get("owner", False)))
+            guild = ManagedGuild(
+                id=guild_id,
+                name=str(item["name"]),
+                icon=item.get("icon") or None,
+                permissions=permissions,
+                owner=bool(item.get("owner", False)),
+            )
         except (AttributeError, KeyError, TypeError, ValueError):
             continue
         if guild.owner or permissions & MANAGEMENT_PERMISSIONS:

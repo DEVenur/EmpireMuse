@@ -1,4 +1,5 @@
 """Base dos handlers do painel: cabeçalhos de segurança e páginas de erro genéricas."""
+
 from __future__ import annotations
 
 import logging
@@ -40,7 +41,7 @@ _ERROR_TEXTS = {
     500: ("Erro interno", "Algo deu errado do nosso lado. Tente novamente em instantes."),
 }
 _DEFAULT_ERROR_TEXT = ("Não foi possível concluir", "Não foi possível concluir a solicitação.")
-_FALLBACK_ERROR_BODY = "<!doctype html><meta charset=\"utf-8\"><title>Erro</title><p>Erro {code}.</p>"
+_FALLBACK_ERROR_BODY = '<!doctype html><meta charset="utf-8"><title>Erro</title><p>Erro {code}.</p>'
 
 
 def avatar_url_for(user: Optional[PanelUser]) -> str:

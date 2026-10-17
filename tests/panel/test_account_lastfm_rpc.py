@@ -4,6 +4,7 @@ Last.fm: `lastfm.sessionkey` é segredo (nunca na página, nos logs, na auditori
 `lastfm.scrobble` e só com conta vinculada. Token RPC: gerado no servidor com `secrets` (50 caracteres [A-Za-z0-9], como o
 comando), mostrado UMA vez na resposta do POST e nunca mais.
 """
+
 import html
 import random
 import re
@@ -23,7 +24,7 @@ class LastFmTest(AccountCase):
         body = self.body(browser)
         assert acao_form(body, "lastfm_scrobble") is None
         assert "vincul" in html.unescape(body).lower(), "explica que a vinculação é feita no Discord"
-        form = self.form(browser, "prefixo")                       # só para ter _xsrf/versao válidos
+        form = self.form(browser, "prefixo")  # só para ter _xsrf/versao válidos
         before = self.world.doc()
         response = self.submit(browser, URL, form, acao="lastfm_scrobble", scrobble="on")
         assert response.code == 422 and self.world.doc() == before and self.db.writes == []
@@ -54,9 +55,12 @@ class LastFmTest(AccountCase):
     def test_the_session_key_never_reaches_the_page_or_any_response_header(self):
         self.world.link_lastfm()
         browser = self.logged_in()
-        responses = [browser.get(URL), self.act(browser, "lastfm_scrobble", scrobble=None),
-                     self.act(browser, "lastfm_scrobble", htmx=True, scrobble="on"),
-                     self.act(browser, "prefixo", custom_prefix="a b")]
+        responses = [
+            browser.get(URL),
+            self.act(browser, "lastfm_scrobble", scrobble=None),
+            self.act(browser, "lastfm_scrobble", htmx=True, scrobble="on"),
+            self.act(browser, "prefixo", custom_prefix="a b"),
+        ]
         for response in responses:
             assert SESSIONKEY not in response.body.decode() and SESSIONKEY[:10] not in response.body.decode()
             assert SESSIONKEY not in str(response.headers)
@@ -71,7 +75,7 @@ class LastFmTest(AccountCase):
         self.caplog.clear()
         form = self.form(browser, "lastfm_scrobble")
         self.submit(browser, URL, form, scrobble=None)
-        self.submit(browser, URL, form, scrobble=None)           # 409
+        self.submit(browser, URL, form, scrobble=None)  # 409
         logs = self.all_log_text()
         assert SESSIONKEY not in logs and SESSIONKEY[:10] not in logs
         audit = self.audit_text()
@@ -97,8 +101,9 @@ class LastFmTest(AccountCase):
         before = self.world.doc()
         for acao in ("lastfm_desvincular", "lastfm_vincular"):
             assert self.submit(browser, URL, form, acao=acao).code == 422
-        assert self.submit(browser, URL, form, pairs=form.pairs(scrobble="on") + [("sessionkey", "NOVA"),
-                                                                                 ("username", "x")]).code in (200, 422)
+        assert self.submit(
+            browser, URL, form, pairs=form.pairs(scrobble="on") + [("sessionkey", "NOVA"), ("username", "x")]
+        ).code in (200, 422)
         assert self.world.doc()["lastfm"]["sessionkey"] == before["lastfm"]["sessionkey"] == SESSIONKEY
         assert self.world.doc()["lastfm"]["username"] == "usuario_lfm"
 
@@ -121,8 +126,14 @@ class RpcTokenTest(AccountCase):
 
         def check(item):
             label, overrides = item
-            self.world.config.update({"ENABLE_RPC_COMMAND": True, "ENABLE_RPC_AUTH": True,
-                                      "RPC_PUBLIC_URL": "wss://rpc.example.com/ws", "RPC_SERVER": ""})
+            self.world.config.update(
+                {
+                    "ENABLE_RPC_COMMAND": True,
+                    "ENABLE_RPC_AUTH": True,
+                    "RPC_PUBLIC_URL": "wss://rpc.example.com/ws",
+                    "RPC_SERVER": "",
+                }
+            )
             browser = self.logged_in()
             form = self.form(browser, "rpc_token_gerar")
             self.world.config.update(overrides)
@@ -157,9 +168,11 @@ class RpcTokenTest(AccountCase):
         token = self.world.doc()["token"]
         body = self.body(browser)
         assert token not in body and "Token configurado" in html.unescape(body) and "Nenhum token" not in body
-        for response in (self.act(browser, "prefixo", htmx=True, custom_prefix="a b"),
-                         self.act(browser, "prefixo", custom_prefix=">>"),
-                         browser.get(URL + "/favoritos/exportar")):
+        for response in (
+            self.act(browser, "prefixo", htmx=True, custom_prefix="a b"),
+            self.act(browser, "prefixo", custom_prefix=">>"),
+            browser.get(URL + "/favoritos/exportar"),
+        ):
             assert token not in response.body.decode()
         assert not TOKEN.search(body) or token not in body
 
@@ -269,7 +282,9 @@ class RpcTokenTest(AccountCase):
         self.generate(browser)
         token = self.world.doc()["token"]
         logs = self.all_log_text()
-        assert token not in logs and RPC_TOKEN_OLD not in logs and OAUTH_SECRET not in logs and COOKIE_SECRET not in logs
+        assert (
+            token not in logs and RPC_TOKEN_OLD not in logs and OAUTH_SECRET not in logs and COOKIE_SECRET not in logs
+        )
         audit = self.audit_text()
         assert str(UID) in audit and "rpc_token_gerar" in audit and "token" in audit
 

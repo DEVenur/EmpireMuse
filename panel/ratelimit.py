@@ -1,4 +1,5 @@
 """Limite de requisições por chave (IP) em janela deslizante, em memória."""
+
 from __future__ import annotations
 
 import time
@@ -11,8 +12,12 @@ MAX_TRACKED_KEYS = 10_000
 
 
 class RateLimiter:
-    def __init__(self, limit: int = DEFAULT_LIMIT, window: float = DEFAULT_WINDOW_SECONDS,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        limit: int = DEFAULT_LIMIT,
+        window: float = DEFAULT_WINDOW_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._limit = limit
         self._window = window
         self._clock = clock

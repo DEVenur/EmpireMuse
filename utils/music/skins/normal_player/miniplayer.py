@@ -10,7 +10,6 @@ from utils.others import PlayerControls
 
 
 class MiniPlayer:
-
     __slots__ = ("name", "preview")
 
     def __init__(self):
@@ -25,7 +24,6 @@ class MiniPlayer:
         player.static = False
 
     def load(self, player: LavalinkPlayer) -> dict:
-
         data = {
             "content": None,
             "embeds": [],
@@ -36,7 +34,7 @@ class MiniPlayer:
         embed = disnake.Embed(
             color=embed_color,
             description=f"-# [{fix_characters(player.current.single_title, 48)}]({player.current.uri or player.current.search_uri})\n"
-                        f"-# **Uploader:** `{fix_characters(player.current.author, 17)}`\n"
+            f"-# **Uploader:** `{fix_characters(player.current.author, 17)}`\n",
         )
 
         if player.current.thumb:
@@ -46,14 +44,13 @@ class MiniPlayer:
             embed.description += f"-# **Pedido por:** <@{player.current.requester}>\n"
         else:
             try:
-                embed.description += f"-# **Adicionado via:** [`[Recomendação]`]({player.current.info['extra']['related']['uri']})\n"
+                embed.description += (
+                    f"-# **Adicionado via:** [`[Recomendação]`]({player.current.info['extra']['related']['uri']})\n"
+                )
             except:
                 embed.description += "-# **Adicionado via:** `[Recomendação]`\n"
 
-        embed.set_author(
-            name="Tocando Agora:",
-            icon_url=music_source_image(player.current.info["sourceName"])
-        )
+        embed.set_author(name="Tocando Agora:", icon_url=music_source_image(player.current.info["sourceName"]))
 
         if player.command_log:
             embed.description += f"-# {player.command_log_emoji} ⠂**Última Interação:** {player.command_log}"
@@ -74,6 +71,7 @@ class MiniPlayer:
         ]
 
         return data
+
 
 def load():
     return MiniPlayer()
