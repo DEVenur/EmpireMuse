@@ -30,7 +30,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-01 | `requirements.txt` (`tinymongo`), `empiremuse/utils/db.py` (import de `tinydb_serialization`) | `tinymongo` sem o extra `serialization`, mas `empiremuse/utils/db.py` importa `tinydb_serialization`. | Instalação limpa falha ao iniciar o bot. Contorno: `uv pip install -r requirements.txt "tinymongo[serialization]"` (ver `development.md`). | alto |
+| KI-01 | `requirements.txt` (`tinymongo`), `empiremuse/utils/db.py` (import de `tinydb_serialization`) | [Resolvido] `tinymongo` sem o extra `serialization`, mas `empiremuse/utils/db.py` importa `tinydb_serialization`. | Resolvido na Fase 3 (F3-1): o `requirements.txt` declara o extra `serialization`. | alto |
 | KI-02 | `.Dockerfile` | [Resolvido] Imagem com `python:3.10-slim` e OpenJDK 11, desatualizada e incompatível com o runtime Python 3.13 e Lavalink atual. | Resolvido no Bloco D1 (remoção do `.Dockerfile` legado e artefatos de deploy obsoletos; padronização com Dockerfile moderno na Fase D). | baixo |
 | KI-03 | `render.yaml` | [Resolvido] Arquivo de deploy de terceiros legado. | Resolvido no Bloco D1 (remoção completa de artefatos legados de plataformas como Render, Replit, Gitpod e scripts `source_*`). | baixo |
 | KI-04 | `BotPool.shutdown` (`empiremuse/utils/client.py`), `empiremuse/cogs/error_handler.py` | [Resolvido] O reinício do processo é feito com `kill 1` (PID 1 do contêiner). | Resolvido no Bloco D1: reinício por encerramento ordenado do pool e saída com código de retorno, deixando o supervisor (Docker/systemd) reiniciar o processo. | baixo |
@@ -48,7 +48,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-09 | `empiremuse/utils/db.py` (`update_values`) | `update_values` ignora valores do tipo lista (`elif not isinstance(v, list)`) ao migrar a versão do esquema. | Ao subir o `ver` de um modelo, listas salvas (p.ex. `djroles`, `last_tracks`) são substituídas pelo padrão vazio: **perda de dados** dos usuários. | alto |
+| KI-09 | `empiremuse/utils/db.py` (`update_values`) | [Resolvido] `update_values` ignora valores do tipo lista (`elif not isinstance(v, list)`) ao migrar a versão do esquema. | Resolvido na Fase 3 (F3-1): a migração preserva listas e chaves do usuário. | alto |
 | KI-10 | `empiremuse/utils/db.py` (`LocalDatabase.update_data`) | `LocalDatabase.update_data` captura qualquer exceção, imprime e segue, atualizando o cache como se tivesse gravado. | Falha de gravação no TinyMongo fica invisível; o dado some após o cache expirar. | médio |
 
 ## Pool de bots e inicialização
@@ -64,7 +64,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-15 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_access_token`) | Em erro de token, `get_access_token` zera as credenciais e chama a si mesma, mas `token_refresh` ainda é `True`: a chamada entra no laço `while self.token_refresh` e **espera para sempre**. | Com credenciais inválidas, qualquer comando que dependa do Spotify trava sem erro. | alto |
+| KI-15 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_access_token`) | [Resolvido] Em erro de token, `get_access_token` zera as credenciais e chama a si mesma, mas `token_refresh` ainda é `True`: a chamada entra no laço `while self.token_refresh` e **espera para sempre**. | Resolvido na Fase 3 (F3-1): credenciais inválidas do Spotify geram erro claro, sem travar. | alto |
 | KI-16 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | Páginas extras começam em `offset = 101`; a primeira página já traz os itens 0–99. | A 101ª faixa (índice 100) de playlists grandes é pulada. | médio |
 | KI-17 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | Condição `page_count <= playlist_extra_page_limit` (deveria ser `<`). | Carrega uma página extra além do limite configurado. | baixo |
 | KI-18 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.track_search`) | `quote(query)` é aplicado antes de passar `params=` ao aiohttp, que codifica de novo. | Buscas com espaços/acentos/símbolos são enviadas com dupla codificação e retornam resultado ruim. | médio |
