@@ -77,12 +77,18 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   python main.py
   ```
 - **Lint e Testes Automatizados**:
-  - Testes com `pytest` (config mínima em `pyproject.toml`; dependências em `requirements-dev.txt`):
+  - Testes com `pytest` (config em `pyproject.toml`; dependências em `requirements-dev.txt`):
     ```bash
     uv pip install -r requirements-dev.txt
     .venv/bin/python -m pytest
     ```
-  - Ferramentas alvo restantes (`ruff`, `mypy`/`pyright`) **estão a configurar na fase de saneamento**; não invente nem execute comandos dessas ferramentas antes disso.
+  - Lint e formatação com `ruff` (configurado em `pyproject.toml`):
+    ```bash
+    .venv/bin/ruff check .                  # verificação estática de lint
+    .venv/bin/ruff format --check .         # verificação de conformidade de formatação
+    .venv/bin/ruff format .                 # formatação automática
+    ```
+  - Ferramentas restantes de tipagem (`mypy`/`pyright`) estão a configurar em blocos posteriores; não execute comandos dessas ferramentas antes de sua homologação.
   - Para validação sintática estática básica:
     ```bash
     python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink

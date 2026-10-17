@@ -87,8 +87,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Padrão de Git Worktrees e Isolamento de Branches (Task B-01 / Fase B)**:
   - Documentação formal em `docs/development.md` (seção 9) e em `AGENTS.md` (seções 4 e 5) estabelecendo o padrão obrigatório de Git Worktrees para trabalho paralelo de agentes autônomos e desenvolvedores.
   - Fixação da árvore de trabalho principal permanentemente na branch `main` (proibindo trocas de branch no repositório raiz) e isolamento compulsório de branches (`feat/*`, `fix/*`, `refactor/*`) sob `worktrees/` com ciclo de vida e comandos de limpeza pós-merge (`git worktree remove`, `git branch -d` e `git worktree prune`).
+- **Padronização de Código, Linting e CI Mínima (Bloco C1 / Saneamento)**:
+  - Configuração do linter e formatador **Ruff** em `pyproject.toml` (target Python 3.13, limite de 120 colunas, conjunto conservador de regras `E4`, `E7`, `E9` e `F`) e inclusão no `requirements-dev.txt`.
+  - Esteira de integração contínua (CI) mínima no GitHub Actions (`.github/workflows/ci.yml`), executando checagem de lint (`ruff check .`), conferência de formatação (`ruff format --check .`), compilação de bytecode (`compileall`) e suíte de testes (`pytest`) em pushes e Pull Requests para a branch `main`.
+  - Criação do arquivo `.git-blame-ignore-revs` contendo o hash do commit de formatação em massa (`fc4b7f8f034071ccb08803c153511afbe5a2c9e9`), preservando o histórico de autoria original nas anotações de blame do Git.
+  - Revisão e alinhamento dos arquivos `.editorconfig` e `.gitignore` para padronização de formatação e exclusão consistente de pastas locais, worktrees e repositórios satélites.
 
 ### Alterado
+- **Formatação de Código em Massa com Ruff (Bloco C1)**:
+  - Aplicação de formatação automatizada via `ruff format` em toda a base de código Python (`main.py`, `app.py`, `config_loader.py`, `web_app.py`, `modules/`, `utils/`, `wavelink/` e `tests/`), padronizando estilo, indentação e limite de 120 colunas sem alterações semânticas de comportamento.
 - **Atualização da Stack de Áudio e Lavalink (Fase 2 / Release 0.0.3)**:
   - Servidor de áudio atualizado para o **Lavalink 4.2.2 oficial** (substituindo builds SNAPSHOT de desenvolvimento), com suporte a Java 17+ e protocolo de voz **DAVE (E2EE)**.
   - Artefatos e plugins espelhados na release `0.0.3` do repositório [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) (`youtube-plugin` snapshot `2be8e542`, `LavaSrc 4.8.3` e `lyrics 2.6.1`), baixados diretamente para `plugins/` com verificação de SHA-256 e dispensando requisições dinâmicas ao Maven em tempo de execução.

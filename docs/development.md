@@ -123,25 +123,34 @@ ser commitados.
 
 ## 6. Testes e ferramentas
 
-Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/test_branding.py`, `tests/test_identidade_visual.py`), validação de listas de servidores Lavalink, filtros de URLs, a suíte completa do painel web (`tests/panel/`) e caracterização de canais de pedidos (`tests/test_request_channel_*.py`). O `pyproject.toml` define a configuração do pytest e da medição de cobertura (`pytest-cov`).
+Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/test_branding.py`, `tests/test_identidade_visual.py`), validação de listas de servidores Lavalink, filtros de URLs, a suíte completa do painel web (`tests/panel/`) e caracterização de canais de pedidos (`tests/test_request_channel_*.py`). O `pyproject.toml` define a configuração do pytest, da medição de cobertura (`pytest-cov`) e do linter/formatador `ruff`.
 
 ```bash
-uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio e pytest-cov
+uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio, pytest-cov e ruff
 .venv/bin/python -m pytest               # executa a suíte de testes (Windows: .venv\Scripts\python -m pytest)
 .venv/bin/python -m pytest --cov         # executa testes medindo a cobertura de código
+.venv/bin/ruff check .                   # verificação estática de linting
+.venv/bin/ruff format --check .          # verificação de conformidade de formatação
+.venv/bin/ruff format .                  # formatação automática de arquivos
 ```
 
-Padrão alvo da refatoração (demais ferramentas ainda **não** configuradas):
+### Status das ferramentas no projeto:
 
-| Ferramenta | Uso |
-|---|---|
-| `ruff` | Lint e formatação (`ruff check .`, `ruff format .`), com regra para proibir `except:` nu (`E722`). |
-| `pytest` + `pytest-asyncio` + `pytest-cov` | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
-| `mypy` ou `pyright` | Tipagem gradual nos módulos novos. |
-| `uv` | Dependências e *lockfile* quando o projeto migrar para `pyproject.toml`. |
+| Ferramenta | Status | Uso |
+|---|---|---|
+| `ruff` | **Ativo** | Linter e formatador configurado em `pyproject.toml` (target Python 3.13, line-length 120, regras `E4`, `E7`, `E9`, `F`). |
+| `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
+| `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q ...`). |
+| `mypy` ou `pyright` | Planejado | Tipagem gradual nos módulos novos (etapa posterior de saneamento). |
+| `uv` | Planejado | Dependências e *lockfile* completo quando o projeto migrar dependências para o `pyproject.toml`. |
 
-Além dos testes, valide mudanças com `python -m compileall -q .` e testes manuais com um bot de teste em um
-servidor de teste (`TEST_GUILDS_*`). Convenções de código: `.claude/rules/empiremuse/python-disnake.md`.
+A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa automaticamente em todos os pushes e PRs para a branch `main`:
+1. `ruff check .` (linting);
+2. `ruff format --check .` (formatação);
+3. `python -m compileall -q ...` (validação de compilação de bytecode);
+4. `pytest -q` (execução da suíte de testes).
+
+Convenções de código adicionais: `.claude/rules/empiremuse/python-disnake.md`.
 
 ## 7. Regenerar o pacote ECC dos agentes Antigravity
 
