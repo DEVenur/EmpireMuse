@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "name": "EmpireMuse",
+      "path": "."
+    },
+    {
+      "name": "EmpireMuse-LL-binaries",
+      "path": "repos/EmpireMuse-LL-binaries"
+    },
+    {
+      "name": "EmpireMuse-RPC-app",
+      "path": "repos/EmpireMuse-RPC-app"
+    }
+  ],
+  "settings": {
+    "search.exclude": {
+      ".venv": true,
+      ".java": true,
+      "local_database": true,
+      "worktrees": true,
+      "repos": true,
+      ".arquivo": true,
+      ".local": true
+    }
+  }
+}

@@ -183,6 +183,9 @@ NodeLink/
 config.js
 
 # EmpireMuse / ferramentas de agentes
+repos/
+worktrees/
+.arquivo/
 .maestri/
 .agents/
 .claude/ecc/

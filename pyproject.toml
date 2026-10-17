@@ -11,6 +11,12 @@ source = [
     "panel",
     "utils.music.request_channel",
 ]
+omit = [
+    'repos/*',
+    'worktrees/*',
+    '.arquivo/*',
+    '.local/*',
+]
 
 [tool.coverage.report]
 show_missing = true

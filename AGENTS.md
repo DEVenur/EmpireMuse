@@ -59,6 +59,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
 - `tests/`: Testes automatizados (pytest).
+- `repos/`: Repositórios irmãos clonados (`EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app`), ignorados pelo git do repositório principal.
 
 ---
 
@@ -163,6 +164,9 @@ Uma funcionalidade, correção ou tarefa só é considerada **concluída** após
 - **Claude Code**: Carrega automaticamente `.claude/rules/ecc/{common,python}` e `.claude/rules/empiremuse/*`.
 - **Antigravity CLI**: Descobre e carrega `AGENTS.md` na raiz do repositório e utiliza o pacote local `.agents/` (não versionado; regenerável via script indicado em `docs/development.md`).
 - **Ordem de Precedência**: As regras específicas do EmpireMuse ([`.claude/rules/empiremuse/*`](.claude/rules/empiremuse/) e este `AGENTS.md`) possuem **precedência absoluta** sobre as diretrizes genéricas do ECC caso haja divergência.
+- **Repositórios Irmãos (`repos/*`)**:
+  - Para agentes ou sessões abertas dentro de `repos/*`, as regras e convenções do repositório filho prevalecem sobre as do repositório pai (`EmpireMuse`).
+  - Commits, branches e PRs de alterações feitas nos ecossistemas satélites devem ser realizados **estritamente dentro do próprio repositório filho** correspondente.
 
 ---
 

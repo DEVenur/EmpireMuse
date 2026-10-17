@@ -158,3 +158,21 @@ node ~/.claude/plugins/cache/ecc/ecc/<versão>/scripts/install-apply.js --target
   (`node …/install-apply.js --help` lista os alvos).
 - Regras do Claude Code ficam em `.claude/rules/ecc/` (alvo `claude-project`). Revise o diff antes de
   commitar e não misture a atualização do ECC com mudanças de código.
+
+## 8. Workspace multipasta e repositórios irmãos (`repos/`)
+
+Para facilitar o desenvolvimento integrado entre o bot principal e seus ecossistemas satélites, o repositório adota um layout com arquivo de workspace multipasta para VS Code / Cursor:
+
+- `EmpireMuse.code-workspace`: arquivo de configuração na raiz que mapeia:
+  1. `.` — o repositório principal do **EmpireMuse**;
+  2. `repos/EmpireMuse-LL-binaries` — repositório dos binários e plugins do Lavalink;
+  3. `repos/EmpireMuse-RPC-app` — aplicativo de presença rica (RPC) para desktop.
+- **Isolamento e Ignorados**: a pasta `repos/` (bem como `worktrees/`, `.arquivo/` e `.local/`) é estritamente ignorada no `.gitignore`, excluída de builds no `.dockerignore` e omitida das métricas de cobertura no `pyproject.toml`.
+- **Desempenho da IDE**: o workspace configura exclusões de indexação e busca (`search.exclude`) para pastas pesadas ou locais como `.venv`, `.java`, `local_database`, `worktrees`, `repos`, `.arquivo` e `.local`.
+- **Clonagem dos irmãos**: para clonar ou atualizar os repositórios irmãos em `repos/`:
+  ```bash
+  mkdir -p repos
+  git clone https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries repos/EmpireMuse-LL-binaries
+  git clone https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app repos/EmpireMuse-RPC-app
+  ```
+
