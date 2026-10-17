@@ -1,0 +1,33 @@
+services:
+  bot:
+    build: .
+    image: ${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:local}
+    restart: unless-stopped
+    env_file: .env
+    mem_limit: ${EMPIREMUSE_MEM_LIMIT:-768m}
+    volumes:
+      - empiremuse-data:/data
+    ports:
+      - "${EMPIREMUSE_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  mongo:
+    profiles:
+      - mongo
+    image: mongo:8.0.34@sha256:4a4ab5d4834207389e0d7270fac988e21ffedccecba77991a552f755df229907
+    restart: unless-stopped
+    volumes:
+      - empiremuse-mongo:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?}
+
+volumes:
+  empiremuse-data:
+  empiremuse-mongo:
