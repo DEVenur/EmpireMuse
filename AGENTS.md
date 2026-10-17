@@ -118,7 +118,11 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 | **Repetitive Runner** | Execução mecânica rápida | Tarefas mecânicas repetitivas, geração de esqueletos, mocks, formatações em lote e configs. **Nunca recebe arquivos críticos de segurança/infra.** | Antigravity · Gemini 3.8 Flash |
 | **Git & Documentation Keeper** | Governança de documentação | Governança de documentação, `CHANGELOG.md`, ADRs, padronização de commits e branches. | Antigravity · Claude Sonnet 5.5 |
 
-- **Isolamento de Escopo**: Cada agente deve modificar **estritamente os arquivos atribuídos à sua tarefa**. Alterações em arquivos de outros agentes devem ser solicitadas no relatório.
+- **Isolamento de Escopo e Padrão de Git Worktrees**:
+  - Cada agente deve modificar **estritamente os arquivos atribuídos à sua tarefa**. Alterações em arquivos de outros agentes devem ser solicitadas no relatório.
+  - **Árvore principal intocável**: Agentes autônomos e desenvolvedores **NUNCA** trocam de branch na árvore principal (`/home/admin/projects/EmpireMuse`), que permanece permanentemente em `main`.
+  - **Uso obrigatório de Worktrees**: Demandas que exijam branches de funcionalidades (`feat/*`), correções (`fix/*`), refatorações (`refactor/*`) ou trabalho paralelo devem operar exclusivamente em uma worktree dedicada sob `worktrees/` (criada a partir de `main`: `git worktree add worktrees/<nome-da-branch> -b <nome-da-branch> origin/main`). O diretório `worktrees/` é estritamente ignorado pelo git.
+  - **Limpeza pós-merge**: Após a conclusão e merge do PR correspondente pelo MAESTRO, a worktree deve ser limpa a partir da raiz com `git worktree remove worktrees/<nome-da-branch>`, a branch local excluída com `git branch -d <nome-da-branch>` e as referências limpas com `git worktree prune`.
 - **Mediação e Prevenção de Loops**: Caso qualquer agente tente a mesma solução mais de duas vezes sem sucesso ou entre em loop, sua execução é interrompida imediatamente e o impasse é encaminhado para avaliação do **Devil's Advocate**.
 
 ---
@@ -142,10 +146,10 @@ A metodologia padrão do projeto utiliza o framework **Everything Claude Code (E
      - Comandos administrativos de owner (`modules/legacy_cmds.py`, `utils/owner_panel.py`) ou execução de subprocessos.
    - **Checagem Rápida**: Verificação de ausência de segredos expostos e aderência estrita de escopo nas demais demandas (ex.: documentação pura, formatação ou textos estáticos).
 5. **Documentação e Changelog**: Atualização dos documentos técnicos correlatos e inclusão das mudanças na seção `[Unreleased]` de [`CHANGELOG.md`](CHANGELOG.md).
-6. **Padronização de Commits**:
+6. **Padronização de Commits e Branches**:
    - Commits, pushes e merges são **terminantemente proibidos** sem a autorização prévia e explícita do MAESTRO.
    - Padrão **Conventional Commits** (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`).
-   - Branches nomeadas no formato `tipo/descricao-curta` criadas a partir de `main`.
+   - Branches nomeadas no formato `tipo/descricao-curta` criadas a partir de `main` e isoladas em `worktrees/<nome-da-branch>`, preservando a árvore principal sempre em `main`.
 
 ---
 

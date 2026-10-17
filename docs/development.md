@@ -176,3 +176,31 @@ Para facilitar o desenvolvimento integrado entre o bot principal e seus ecossist
   git clone https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app repos/EmpireMuse-RPC-app
   ```
 
+## 9. Padrão de Git Worktrees e Isolamento de Branches
+
+Para permitir o trabalho paralelo e simultâneo de múltiplos agentes autônomos e desenvolvedores sem colisão de estado ou sujeira no ambiente, o projeto adota compulsoriamente o padrão de **Git Worktrees**:
+
+### Diretrizes de Isolamento
+- **Árvore principal intocável**: A árvore de trabalho principal (`/home/admin/projects/EmpireMuse`) permanece **permanentemente na branch `main`**. Desenvolvedores e agentes **NUNCA** devem trocar de branch na raiz da árvore principal (`git checkout <branch>` ou `git switch <branch>`).
+- **Diretório `worktrees/`**: Todas as branches de novas funcionalidades (`feat/*`), correções (`fix/*`), refatorações (`refactor/*`) ou tarefas paralelas devem ser desenvolvidas em worktrees dedicadas criadas dentro de `worktrees/` (exemplo: `worktrees/fix-nome-da-tarefa`). Esse diretório é estritamente ignorado no `.gitignore`, no `.dockerignore` e nas métricas de cobertura.
+
+### Ciclo Operacional
+
+1. **Criar a worktree a partir da `main` atualizada**:
+   ```bash
+   git fetch origin main
+   git worktree add worktrees/<nome-da-branch> -b <nome-da-branch> origin/main
+   ```
+
+2. **Desenvolvimento e testes**:
+   Navegue até a worktree correspondente (`cd worktrees/<nome-da-branch>`). Todo o desenvolvimento, execução de testes e commits acontecem exclusivamente dentro da pasta da worktree. O ambiente virtual `.venv` da raiz pode ser utilizado diretamente (`../../.venv/bin/python -m pytest`).
+
+3. **Limpeza pós-merge**:
+   Após o término da demanda, abertura do Pull Request e conclusão do merge na `main` pelo MAESTRO, remova a worktree e sincronize o repositório a partir da raiz:
+   ```bash
+   git worktree remove worktrees/<nome-da-branch>
+   git branch -d <nome-da-branch>
+   git worktree prune
+   ```
+
+
