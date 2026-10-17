@@ -55,7 +55,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar e banner).
 - `data/`: Dados estáticos do projeto (`lavalink_servers.ini`, lista de servidores Lavalink).
 - `docs/`: Documentação técnica, guias de setup e Registros de Decisão de Arquitetura (ADRs).
-- `docs/guides/`: Guias de hospedagem e configuração (adaptados da wiki/gist do upstream).
+- `docs/guides/`: Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web e Spotify).
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
 - `tests/`: Testes automatizados (pytest).

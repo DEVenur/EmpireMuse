@@ -94,8 +94,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Revisão e alinhamento dos arquivos `.editorconfig` e `.gitignore` para padronização de formatação e exclusão consistente de pastas locais, worktrees e repositórios satélites.
 - **Testes de Caracterização Comportamental (Bloco C2 / Saneamento)**:
   - Adição de testes de caracterização comportamental em `tests/test_residuos_c2.py` assegurando a integridade da API pública do WaveLink, resolução de instâncias no listenalong e isolamento contra dependências expurgadas.
+- **Testes de Caracterização de Mensagens e Branding (Bloco C3 / Task C-15)**:
+  - Adição de teste automatizado em `tests/test_branding.py` garantindo a ausência de referências legadas à Repl.it na mensagem de token do bot.
 
 ### Alterado
+- **Alinhamento e Coerência de Documentação Técnica (Bloco C3 / Task C-17)**:
+  - `CONTRIBUTING.md`: checklist de Pull Requests atualizado para refletir os comandos reais e ativos da suíte `pytest`, checagem de lint e formatação com `ruff` e compilação de bytecode com `compileall`.
+  - `AGENTS.md` e `docs/architecture.md`: inventários e tabelas alinhados aos 4 guias técnicos oficiais mantidos em `docs/guides/` (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
+  - `docs/architecture.md`: seção 11 (Implantação) atualizada registrando o expurgo dos tutoriais legados de hospedagem de terceiros no Bloco C3 e o mapeamento dos artefatos de deploy para a Fase D.
+- **Neutralização da Mensagem de Ausência de Token (Bloco C3 / Task C-16)**:
+  - Substituição da mensagem legada com menções à Repl.it por texto neutro e direto em `utils/client.py`, indicando a configuração da variável `TOKEN` (ou `TOKEN_BOT_*`) no `.env`.
 - **Reestruturação do README com Escopo Oficial EmpireHub (Bloco C3 / Task C-13)**:
   - Redesenho completo do `README.md` apresentando o bot oficial da comunidade EmpireHUB, recursos centrais, visão geral de arquitetura e diretrizes de desenvolvimento/contribuição, removendo tutoriais legados de hospedagem de terceiros e preservando créditos GPL-2.0 a zRitsu e ao MuseHeart-MusicBot.
 - **Tipagem de Re-exports no WaveLink (Bloco C2 / PEP 484)**:

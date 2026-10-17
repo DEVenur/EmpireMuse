@@ -250,13 +250,12 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `utils/branding.py` | Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`); só stdlib, sem efeitos colaterais no import | — |
 | `assets/` | Imagens re-hospedadas (previews, skins, ícones, tutoriais) + `SHA256SUMS`; servidas via `ASSETS_BASE_URL` | — |
 | `data/lavalink_servers.ini` | Lista de servidores Lavalink públicos (origem: gist do upstream, com crédito no cabeçalho) | — |
-| `docs/guides/` | Guias de hospedagem e configuração adaptados da wiki/gist do upstream | — |
+| `docs/guides/` | Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web e Spotify) | — |
 | `docs/painel/` | Pesquisas técnicas e inventários de requisitos do painel web | — |
 | `tests/` | Testes automatizados (pytest e pytest-cov); testes de marca, regras e painel web | — |
 
 ## 11. Implantação
 
-Há scripts `source_*.sh/.bat` (criam `venv`, instalam e iniciam), `.Dockerfile`, `render.yaml`,
-`discloud.config.example`, `squarecloud.config.example`, `.replit` e `.gitpod.yml`. O `.Dockerfile` usa
-`python:3.10-slim` e OpenJDK 11, **incompatíveis** com Python 3.13 e Lavalink (Java ≥ 17); `render.yaml`
-fixa Python 3.11.7. Detalhes em `known-issues.md`.
+Os tutoriais genéricos de hospedagem de terceiros (Heroku, Repl.it e guias legados de MongoDB) foram completamente expurgados da documentação no Bloco C3 em favor do escopo oficial do bot para a comunidade EmpireHub.
+
+Quanto à infraestrutura e artefatos de deploy, existem scripts legados `source_*.sh/.bat` (criam `venv`, instalam e iniciam), `.Dockerfile`, `render.yaml`, `discloud.config.example`, `squarecloud.config.example`, `.replit` e `.gitpod.yml`. O `.Dockerfile` usa `python:3.10-slim` e OpenJDK 11, **incompatíveis** com Python 3.13 e Lavalink (Java ≥ 17); `render.yaml` fixa Python 3.11.7. Esses artefatos legados de deploy e conteinerização estão mapeados para modernização e saneamento na Fase D (detalhes adicionais em `known-issues.md`).
