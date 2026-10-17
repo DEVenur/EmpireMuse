@@ -8,6 +8,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Orquestração com Docker Compose e MongoDB Opcional (Bloco D3 / Fase D)**:
+  - Adicionado arquivo `docker-compose.yml` para orquestração declarativa e endurecida da aplicação, com o contêiner do bot configurado com sistema de arquivos somente leitura (`read_only: true`), `/tmp` em memória (`tmpfs`), descarte total de capacidades Linux (`cap_drop: [ALL]`), proibição de novos privilégios (`no-new-privileges:true`) e publicação restrita apenas da porta HTTP 8080 (Lavalink nunca exposto).
+  - Suporte a serviço opcional de MongoDB em contêiner (`mongo:8.0.34` com imagem fixada por digest imutável) gerenciado via perfil do Compose (`--profile mongo`), com isolamento de credenciais administrativas em arquivo de ambiente próprio obrigatório (`.env.mongo`), exigido apenas quando o perfil estiver ativo e com porta do banco não publicada no host.
+  - Documentação da orquestração com Docker Compose e exemplos práticos de execução incluídos no guia `docs/guides/docker.md`.
 - **Imagem Docker Oficial e Suporte a Lavalink Pré-instalado (Bloco D2 / Fase D)**:
   - Criação da imagem Docker multi-stage oficial baseada em `python:3.13-slim` e `eclipse-temurin:21-jre`, executando o bot e o Lavalink 4.2.2 no mesmo contêiner sob usuário não-root dedicado (`10001:10001`), com inicializador `tini` (PID 1), código da aplicação em `/app` estritamente somente leitura e persistência de dados isolada no volume `/data`.
   - Suporte completo a Lavalink pré-instalado configurável via variáveis de ambiente: `LAVALINK_JAVA_PATH` (caminho fixo do executável Java sem disparar download de JDK), `LAVALINK_HOME` (pasta com os binários validados do Lavalink) e `LAVALINK_OFFLINE` (modo estritamente offline que apenas verifica os hashes SHA-256 dos arquivos locais e recusa a inicialização se ausentes ou divergentes).
