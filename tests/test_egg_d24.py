@@ -22,8 +22,15 @@ PACKAGE = ROOT / "empiremuse"
 IMAGENS = {"EmpireMuse 0.1": "or4cu1o/empiremuse:0.1", "EmpireMuse latest": "or4cu1o/empiremuse:latest"}
 STARTUP = "python -m empiremuse"
 
-# Ambiente fixo do Pterodactyl, entregue como variáveis não editáveis (o startup do egg fica só com o comando).
-FIXAS = {"EMPIREMUSE_HOME": "/home/container", "PORT": "{{SERVER_PORT}}"}
+# Ambiente fixo do Pterodactyl, entregue como variável não editável (o startup do egg fica só com o comando).
+# O Wings cria o container sem Cmd e sem WorkingDir: o bot muda o cwd para EMPIREMUSE_HOME (o /data da imagem não é
+# gravável pelo usuário do nó).
+FIXAS = {"EMPIREMUSE_HOME": "/home/container"}
+
+# Variáveis que NÃO podem existir no egg. O Wings entrega o valor das variáveis LITERALMENTE (não interpola
+# ``{{SERVER_PORT}}``), e já exporta SERVER_PORT/SERVER_IP/P_SERVER_* por conta própria; o bot usa SERVER_PORT quando
+# PORT não existe. Uma variável PORT chegaria ao bot como o texto ``{{SERVER_PORT}}``.
+PROIBIDAS_NO_EGG = {"PORT": "o Wings não interpola o default; o bot usa o SERVER_PORT que o próprio Wings exporta"}
 
 # Chaves que vêm do ENV da imagem: uma variável do egg (mesmo vazia) seria exportada pelo Wings e SOBRESCREVERIA o ENV.
 DA_IMAGEM = {"LAVALINK_OFFLINE", "LAVALINK_HOME", "LAVALINK_JAVA_PATH"}
@@ -274,6 +281,15 @@ class TestCoberturaDoExampleEnv:
             assert chave in por_env, f"falta a variável fixa {chave}"
             assert por_env[chave]["default_value"] == valor
             assert por_env[chave]["user_editable"] is False, f"{chave} não pode ser editável pelo usuário"
+
+    @pytest.mark.parametrize("chave", sorted(PROIBIDAS_NO_EGG))
+    def test_variaveis_proibidas_no_egg(self, por_env, chave):
+        assert chave not in por_env, f"{chave} não pode ser variável do egg: {PROIBIDAS_NO_EGG[chave]}"
+
+    def test_nenhum_default_value_depende_de_interpolacao_do_painel(self, variaveis):
+        """O Wings exporta o default_value como está: '{{...}}' chegaria ao bot como texto literal."""
+        com_chaves = [v["env_variable"] for v in variaveis if "{{" in v["default_value"] or "}}" in v["default_value"]]
+        assert not com_chaves, f"default_value com interpolação '{{{{...}}}}' (não resolvida pelo Wings): {com_chaves}"
 
 
 class TestRegrasPorTipo:
