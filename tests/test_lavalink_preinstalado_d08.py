@@ -919,3 +919,96 @@ class TestGuardaDosComandosDeOwner:
         await comando(nome)(cog, ctx, *argumentos)
 
         pool.start_lavalink.assert_awaited_once()
+
+
+# ============================================================================ (9) D-11: sem consulta ao Maven na partida
+
+
+OVERRIDE_RELATIVO = Path(".lavalink") / "plugins-override.yml"
+PREFIXO_OVERRIDE = "-Dspring.config.additional-location=file:"
+
+
+def carregar_yaml_seguro(caminho: Path):
+    from ruamel.yaml import YAML
+
+    return YAML(typ="safe").load(caminho.read_text(encoding="utf-8"))
+
+
+def arvore(raiz: Path) -> dict:
+    return {str(p.relative_to(raiz)): (p.stat().st_size if p.is_file() else None) for p in sorted(raiz.rglob("*"))}
+
+
+class TestSemConsultaAoMaven:
+    """O Lavalink consulta o Maven a cada partida por plugin do application.yml; sem rede isso derruba o boot."""
+
+    @pytest.mark.parametrize("offline", [False, True], ids=["online", "offline"])
+    def test_o_java_recebe_o_override_com_caminho_absoluto_em_runtime_dir_antes_do_jar(
+        self, runtime, popen, proibidos, monkeypatch, offline
+    ):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+
+        ll.run_lavalink(lavalink_offline=offline)
+
+        args = popen[0][0]
+        esperado = f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve()}"
+        assert esperado in args
+        assert args.index(esperado) < args.index("-jar"), "a propriedade precisa vir antes do -jar"
+        assert Path(esperado.removeprefix(PREFIXO_OVERRIDE)).is_absolute()
+
+    def test_o_arquivo_tem_exatamente_a_lista_de_plugins_vazia(self, runtime, popen, proibidos, monkeypatch):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+
+        ll.run_lavalink(lavalink_offline=True)
+
+        assert carregar_yaml_seguro(runtime / OVERRIDE_RELATIVO) == {"lavalink": {"plugins": []}}
+
+    def test_arquivo_divergente_e_reescrito_e_nao_sobra_temporario(self, runtime, popen, proibidos, monkeypatch):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+        alvo = runtime / OVERRIDE_RELATIVO
+        alvo.parent.mkdir(parents=True)
+        alvo.write_text("lavalink:\n  plugins:\n    - dependency: com.exemplo:plugin:1.0\n", encoding="utf-8")
+
+        ll.run_lavalink(lavalink_offline=True)
+
+        assert carregar_yaml_seguro(alvo) == {"lavalink": {"plugins": []}}
+        assert sorted(p.name for p in alvo.parent.iterdir()) == [alvo.name]
+
+    def test_arquivo_correto_nao_e_reescrito(self, runtime, popen, proibidos, monkeypatch):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+        ll.run_lavalink(lavalink_offline=True)
+        alvo = runtime / OVERRIDE_RELATIVO
+        antes = alvo.stat().st_mtime_ns
+
+        ll.run_lavalink(lavalink_offline=True)
+
+        assert alvo.stat().st_mtime_ns == antes
+
+    def test_com_lavalink_home_somente_leitura_nada_e_escrito_nele(self, runtime, popen, proibidos, monkeypatch):
+        pre_instalado = runtime.parent / "opt-lavalink"
+        instalar_binarios(pre_instalado, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+        antes = arvore(pre_instalado)
+        pre_instalado.chmod(0o555)
+        try:
+            ll.run_lavalink(lavalink_home=str(pre_instalado), lavalink_offline=True)
+        finally:
+            pre_instalado.chmod(0o755)
+
+        assert arvore(pre_instalado) == antes
+        assert (runtime / OVERRIDE_RELATIVO).is_file(), "o override mora em RUNTIME_DIR, nunca em LAVALINK_HOME"
+        args = popen[0][0]
+        assert f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve()}" in args
+
+    def test_falha_ao_gravar_o_override_e_erro_claro_citando_o_arquivo(self, runtime, popen, proibidos, monkeypatch):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+        (runtime / ".lavalink").write_text("é um arquivo, não uma pasta")
+
+        with pytest.raises(ll.LavalinkDownloadError, match="plugins-override.yml"):
+            ll.run_lavalink(lavalink_offline=True)
+
+        assert popen == []

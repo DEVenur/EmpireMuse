@@ -25,6 +25,8 @@ HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
 VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
 LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
+PLUGINS_OVERRIDE_RELATIVE = ".lavalink/plugins-override.yml"
+PLUGINS_OVERRIDE_CONTENT = "lavalink:\n  plugins: []\n"  # constante: sem hash, é regravada se divergir
 
 
 class LavalinkDownloadError(Exception):
@@ -515,6 +517,42 @@ def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool) ->
     return os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
 
 
+def _has_override_content(path: str) -> bool:
+    """Ausente, ilegível ou divergente => False (o arquivo é então regravado)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read() == PLUGINS_OVERRIDE_CONTENT
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def _ensure_plugins_override() -> str:
+    """Grava (de forma atômica, só se divergir) o YAML que zera ``lavalink.plugins`` e devolve o caminho absoluto.
+
+    O Lavalink consulta o Maven a cada partida por plugin com ``dependency`` no application.yml (que tem SHA-256 fixo e
+    não pode mudar); sem rede isso é fatal. Os jars continuam vindo de ``plugins/``, verificados por SHA-256.
+    Fica sempre em RUNTIME_DIR (volume gravável), nunca em LAVALINK_HOME.
+    """
+    path = os.path.abspath(paths.RUNTIME_DIR / PLUGINS_OVERRIDE_RELATIVE)
+    if _has_override_content(path):
+        return path
+
+    temp_path = f"{path}.tmp"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(PLUGINS_OVERRIDE_CONTENT)
+        os.replace(temp_path, path)
+    except OSError as e:
+        with suppress(OSError):  # limpeza do temporário: não pode mascarar o erro original
+            os.remove(temp_path)
+        raise LavalinkDownloadError(
+            f"Não foi possível gravar {os.path.basename(path)} em {os.path.dirname(path)} (RUNTIME_DIR): "
+            f"{type(e).__name__}"
+        ) from e
+    return path
+
+
 def _logging_args(home: str) -> List[str]:
     """Com LAVALINK_HOME fora de RUNTIME_DIR (talvez somente leitura) os logs do Lavalink vão para o volume gravável.
 
@@ -551,7 +589,8 @@ def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, i
 
         args.append(f"-Djava.io.tmpdir={tempjar_dir}")
 
-    return [*args, *_logging_args(home), "-jar", "Lavalink.jar"]
+    override_arg = f"-Dspring.config.additional-location=file:{_ensure_plugins_override()}"
+    return [*args, *_logging_args(home), override_arg, "-jar", "Lavalink.jar"]
 
 
 def run_lavalink(
