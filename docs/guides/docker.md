@@ -55,9 +55,70 @@ docker run -d \
 
 ---
 
-## 3. Variáveis de Ambiente e Recursos
+## 3. Docker Compose
 
-### 3.1 Variáveis Padrão da Imagem
+O repositório inclui um arquivo [`docker-compose.yml`](../../docker-compose.yml) pronto para uso, oferecendo orquestração declarativa, isolamento seguro e suporte opcional a banco de dados MongoDB em contêiner dedicado.
+
+> [!WARNING]
+> A orquestração via Docker Compose foi validada estruturalmente com `docker compose config` e testes estáticos, mas **ainda não foi testada com o bot conectado (teste real pendente)** (validação com instância real agendada para a etapa D-16).
+
+### 3.1 Executando Apenas o Bot
+
+Para executar o bot com o servidor Lavalink local integrado e persistência em banco local (TinyMongo):
+
+1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais;
+2. Execute:
+   ```bash
+   docker compose up -d --build
+   ```
+
+### 3.2 Executando com MongoDB Dedicado (Perfil `mongo`)
+
+Para utilizar um contêiner oficial do MongoDB (`mongo:8.0.34`, fixado por digest imutável) como camada de persistência:
+
+1. Crie o arquivo `.env.mongo` na raiz do projeto (**nunca versione este arquivo**; ele já está incluído no `.gitignore`):
+   ```env
+   MONGO_INITDB_ROOT_USERNAME=empiremuse_admin
+   MONGO_INITDB_ROOT_PASSWORD=sua_senha_segura_aqui
+   ```
+2. No seu arquivo `.env`, configure a variável `MONGO` apontando para o serviço interno `mongo`:
+   ```env
+   MONGO='mongodb://empiremuse_admin:sua_senha_segura_aqui@mongo:27017/?authSource=admin'
+   ```
+   > [!NOTE]
+   > O parâmetro `?authSource=admin` é necessário na URL de conexão porque o usuário root inicial do Mongo é criado no banco de autenticação `admin`.
+3. Inicie a stack ativando o perfil `mongo`:
+   ```bash
+   docker compose --profile mongo up -d --build
+   ```
+
+### 3.3 Variáveis de Configuração do Compose
+
+Você pode customizar o comportamento do Compose através do seu arquivo `.env` ou de variáveis de ambiente no host:
+
+| Variável | Valor Padrão | Descrição |
+| :--- | :--- | :--- |
+| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:local` | Nome da imagem Docker a ser utilizada. |
+| `EMPIREMUSE_MEM_LIMIT` | `768m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
+| `EMPIREMUSE_PORT` | `8080` | Mapeamento da porta HTTP exposta no host para o bot. |
+
+> [!TIP]
+> Se o bot estiver atrás de um proxy reverso (como Nginx, Caddy ou Traefik) rodando no mesmo host, publique a porta apenas na interface de loopback definindo `EMPIREMUSE_PORT=127.0.0.1:8080`. Isso restringe o acesso externo e garante que apenas o proxy converse com o bot.
+
+### 3.4 Garantias de Segurança do Compose
+
+O arquivo `docker-compose.yml` aplica uma política rigorosa de segurança defensiva:
+
+- **Exposição Mínima de Portas**: Apenas a porta HTTP 8080 do bot é publicada no host. O Lavalink (vinculado estritamente em `127.0.0.1` dentro do contêiner) e o serviço `mongo` (porta 27017 acessível exclusivamente na rede interna do Compose) **nunca** têm portas publicadas para fora.
+- **Sistema de Arquivos Somente Leitura**: O contêiner do bot roda com `read_only: true`. Diretórios temporários de escrita utilizam `/tmp` montado em memória (`tmpfs`).
+- **Isolamento de Privilégios**: `security_opt: [no-new-privileges:true]` previne escalada de privilégios e `cap_drop: [ALL]` descarta todas as capacidades Linux (Linux Capabilities).
+- **Volumes Nomeados**: Os dados são isolados nos volumes `empiremuse-data` (para `/data` do bot) e `empiremuse-mongo` (para `/data/db` do MongoDB).
+
+---
+
+## 4. Variáveis de Ambiente e Recursos
+
+### 4.1 Variáveis Padrão da Imagem
 
 A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente operacionais:
 
@@ -70,7 +131,7 @@ A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente o
 | `LAVALINK_JAVA_PATH` | `/opt/java/openjdk/bin/java` | Caminho do executável do runtime Java 21 JRE pré-instalado. |
 | `PORT` | `8080` | Porta do servidor HTTP Tornado (status, RPC e painel). |
 
-### 3.2 Dimensionamento de Memória (RAM)
+### 4.2 Dimensionamento de Memória (RAM)
 
 O uso de memória do contêiner é a soma de dois componentes principais:
 1. **Processo do Bot (Python)**: Consumo estimado entre ~200 MB e ~300 MB dependendo do número de servidores e filas ativas.
@@ -83,7 +144,7 @@ Ao configurar um limite de memória para o contêiner (como a flag `--memory` do
 
 ---
 
-## 4. O que Fica Persistido em `/data`
+## 5. O que Fica Persistido em `/data`
 
 O contêiner executa a partir do diretório `/data` (`WORKDIR /data`), de modo que todos os dados que precisam sobreviver a reinicializações e atualizações de imagem são armazenados no volume persistente:
 
@@ -95,7 +156,7 @@ O contêiner executa a partir do diretório `/data` (`WORKDIR /data`), de modo q
 
 ---
 
-## 5. Comportamento de Reinício e Resiliência
+## 6. Comportamento de Reinício e Resiliência
 
 O EmpireMuse possui um mecanismo integrado de supervisão do processo de áudio:
 
@@ -105,20 +166,20 @@ O EmpireMuse possui um mecanismo integrado de supervisão do processo de áudio:
 
 ---
 
-## 6. Como Atualizar
+## 7. Como Atualizar
 
 No modelo de contêineres, o ciclo de vida da aplicação é declarativo e imutável:
 
 1. O antigo comando de atualização em tempo de execução via Git (`@bot update`) foi **desativado** por segurança arquitetural.
 2. Para atualizar o bot:
    - Baixe ou construa a nova imagem (`docker pull` ou `docker build`);
-   - Pare e remova o contêiner em execução (`docker stop empiremuse && docker rm empiremuse`);
-   - Inicie o novo contêiner mantendo o mesmo volume persistente (`-v empiremuse-data:/data`) e o mesmo arquivo `.env`.
+   - Pare e remova o contêiner em execução (`docker stop empiremuse && docker rm empiremuse` ou `docker compose down`);
+   - Inicie o novo contêiner mantendo o mesmo volume persistente (`-v empiremuse-data:/data` ou via compose) e o mesmo arquivo `.env`.
 
 Seus dados, favoritos, configurações de servidores e histórico permanecerão intactos no volume `/data`.
 
 ---
 
-## 7. Licença e Créditos
+## 8. Licença e Créditos
 
 A imagem oficial contém cópias completas dos arquivos [`LICENSE`](file:///app/LICENSE) e [`CREDITS.md`](file:///app/CREDITS.md) sob o diretório `/app`. O **EmpireMuse** é disponibilizado sob a licença **GPL-2.0**, sendo uma obra derivada do projeto original [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) desenvolvido por **zRitsu**.
