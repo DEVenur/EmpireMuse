@@ -74,9 +74,10 @@ RUN uv pip install --no-cache -r /tmp/requirements.txt "tinymongo[serialization]
 FROM ${PYTHON_IMAGE} AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/DiscordEmpireHub/EmpireMuse" \
+      org.opencontainers.image.documentation="https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/CREDITS.md" \
       org.opencontainers.image.licenses="GPL-2.0-only" \
       org.opencontainers.image.title="EmpireMuse" \
-      org.opencontainers.image.authors="EmpireMuse Team (upstream: zRitsu/MuseHeart-MusicBot)"
+      org.opencontainers.image.authors="DiscordEmpireHub"
 
 # Instalar tini do repositório Debian e ca-certificates
 RUN apt-get update && \
@@ -106,6 +107,8 @@ COPY main.py ./
 COPY assets/ ./assets/
 COPY data/ ./data/
 COPY requirements.txt ./
+COPY LICENSE ./
+COPY CREDITS.md ./
 RUN chmod -R a+rX /app
 
 # O runtime opera a partir do volume /data para que arquivos em cwd caiam em /data
