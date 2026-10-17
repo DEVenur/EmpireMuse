@@ -601,9 +601,8 @@ class Owner(commands.Cog):
 
         try:
             embed = disnake.Embed(
-                description="**Não envie o arquivo source.zip ou o arquivo .env pra ninguém e muito cuidado ao postar "
-                "print's do conteudo do arquivo .env e não adicione esse arquivo em locais públicos como "
-                "github, repl.it, glitch.com, etc.**",
+                description="**Não envie o arquivo source.zip ou o arquivo .env para terceiros, tenha cuidado ao postar "
+                "capturas de tela do conteúdo do arquivo .env e não compartilhe esse arquivo em locais públicos.**",
                 color=self.bot.get_color(ctx.guild.me),
             )
             embed.set_footer(text="Por medida de segurança, esta mensagem será deletada em 2 minutos.")

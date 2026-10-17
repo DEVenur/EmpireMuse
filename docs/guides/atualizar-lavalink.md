@@ -95,14 +95,12 @@ Para forçar o recarregamento do arquivo `Lavalink.jar` oficial e verificar a in
 2. O bot baixará a versão oficial mais recente homologada pelo projeto, validará o hash SHA-256 e atualizará os arquivos necessários.
 3. Reinicie o processo do bot para que o novo servidor de áudio seja iniciado.
 
-### Atualização do Código do Bot (`@bot update`)
-Para puxar as alterações mais recentes do repositório oficial do EmpireMuse:
-1. Mencione o bot com o comando de atualização:
-   ```text
-   @teubot update
-   ```
-2. O bot executará a rotina de atualização Git (`source_update.sh`).
-3. Reinicie a aplicação após a conclusão para carregar os módulos atualizados.
+### Atualização do Código do Bot
+O comando legado de atualização em tempo de execução via Git (`@bot update` / `source_update.sh`) foi desativado por razões de segurança e previsibilidade operacional.
+
+Para atualizar o EmpireMuse:
+- **Ambientes conteinerizados (Docker)**: Realize o pull da nova imagem/release oficial e recrie o contêiner.
+- **Desenvolvimento local**: Execute `git pull origin main` no terminal com a aplicação parada e atualize as dependências com `uv pip install -r requirements.txt`.
 
 ### Atualizar o JDK
 Quando for necessário atualizar a versão ou a release dos pacotes portáteis do JDK da BellSoft para novas versões homologadas:

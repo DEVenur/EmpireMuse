@@ -536,7 +536,7 @@ SINK_NAMES = frozenset(
 )
 SENSITIVE_IDENTIFIERS = frozenset({CONFIG_KEY, "youtube_oauth_refresh_token", "oauth_refresh_token", "refresh_token"})
 PRODUCTION_DIRS = ("empiremuse",)
-PRODUCTION_FILES = ("main.py", "app.py")
+PRODUCTION_FILES = ("main.py",)
 
 
 def _production_python_files():
