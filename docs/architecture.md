@@ -136,10 +136,10 @@ licença MIT — mantenha o cabeçalho). Foi estendido para o Lavalink **v4** e 
 
 ### Lavalink local
 
-`utils/music/local_lavalink.py` valida Java ≥ 17 (`utils/music/local_lavalink.py:63`), baixa JDK/`Lavalink.jar`/`application.yml`/plugins se
-necessário (o jar, o yml e os plugins vêm do espelho `DiscordEmpireHub/EmpireMuse-LL-binaries` `0.0.3`, veja `utils/branding.py`, com validação de integridade por SHA-256; a 0.0.3 traz o cliente TV no `application.yml`, OAuth desligado por padrão e log do `YoutubeOauth2Handler` em WARN) e inicia o processo com `subprocess.Popen` (`utils/music/local_lavalink.py:264`). É chamado em executor para não bloquear o
-loop (`utils/client.py:219-233`). O node local usa identificador `LOCAL`, host `127.0.0.1` e porta
-`SERVER_PORT` ou `8090` (`utils/client.py:401-415`).
+`utils/music/local_lavalink.py` valida Java ≥ 17 (`utils/music/local_lavalink.py:115`), baixa JDK/`Lavalink.jar`/`application.yml`/plugins se
+necessário (o jar, o yml e os plugins vêm do espelho `DiscordEmpireHub/EmpireMuse-LL-binaries` `0.0.3`, veja `utils/branding.py`, com validação de integridade por SHA-256; a 0.0.3 traz o cliente TV no `application.yml`, OAuth desligado por padrão e log do `YoutubeOauth2Handler` em WARN; pacotes do JDK baixados sob demanda têm SHA-256 fixo em `branding.JDK_DOWNLOADS` com extração atômica e segura no Linux).
+
+O processo é iniciado com `subprocess.Popen` em executor para não bloquear o loop (`utils/client.py:219-233`). Em vez de herdar o ambiente completo do bot (`os.environ`), o Lavalink local recebe um ambiente estritamente isolado via `lavalink_child_env` (`utils/music/local_lavalink.py:213`), repassando somente variáveis essenciais do sistema (*allowlist*: `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `TEMP`, `TMP`, `JAVA_HOME`, `SERVER_PORT` e variáveis essenciais no Windows). As variáveis `PLUGINS_YOUTUBE_OAUTH_*` só são inseridas se houver um `YOUTUBE_OAUTH_REFRESH_TOKEN` não vazio. Tokens do bot, bancos de dados e opções de JVM do ambiente (`JAVA_TOOL_OPTIONS`/`_JAVA_OPTIONS`) não chegam ao subprocesso. O node local usa identificador `LOCAL`, host `127.0.0.1` e porta `SERVER_PORT` ou `8090` (`utils/client.py:401-415`).
 
 ## 7. Servidor web, RPC e Painel Web (`web_app.py` e `panel/`)
 

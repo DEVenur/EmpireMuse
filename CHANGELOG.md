@@ -122,6 +122,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Link do commit** no `/about` e no painel não inclui mais `.git`.
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
 
+### Segurança
+- **Verificação de Integridade e Download Fixo do JDK (Fase 2.1)**:
+  - Download do JDK da BellSoft passa a exigir estritamente hash SHA-256 fixo em `utils/branding.py` (`JDK_DOWNLOADS`) cobrindo as 4 plataformas homologadas (`windows-amd64`, `windows-i586`, `linux-amd64` e `linux-i586`), com conferência de integridade prévia obrigatória (`download_verified`).
+  - Arquivos compactados do JDK pré-existentes em disco não são reaproveitados sem validação completa do hash SHA-256.
+  - Extração atômica e segura no Linux: membros do arquivo compactado contendo componentes de caminho relativo (`..`) ou caminhos absolutos são recusados previamente antes da extração (com aplicação do filtro seguro `data` do módulo `tarfile`). A extração é realizada em diretório temporário isolado e promovida para o diretório final por substituição atômica (`os.replace`) somente após conclusão integral com sucesso.
+  - Instalações parciais ou corrompidas nunca são reaproveitadas; uma instalação existente só é considerada válida e utilizável se o binário `bin/java` existir e possuir permissão explícita de execução.
+- **Isolamento de Ambiente do Lavalink Local via Allowlist (Fase 2.1)**:
+  - O processo do Lavalink local deixa de herdar o ambiente completo do processo do bot (`os.environ`), recebendo exclusivamente uma lista restrita de variáveis essenciais do sistema operacional (*allowlist*): `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `TEMP`, `TMP`, `JAVA_HOME` e `SERVER_PORT` (necessária para que o bot se comunique com o servidor local e lida pelo Spring via *relaxed binding*). No Windows, inclui também variáveis essenciais do sistema (`SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`, tratadas sem diferenciação de maiúsculas/minúsculas).
+  - O trio de propriedades de autenticação `PLUGINS_YOUTUBE_OAUTH_ENABLED`, `PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN` e `PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION` só é injetado no ambiente do subprocesso quando a variável `YOUTUBE_OAUTH_REFRESH_TOKEN` estiver preenchida com um token não vazio. Sem token, nenhuma dessas variáveis é repassada, mesmo que existam no ambiente hospedeiro do bot.
+  - **Nota de mudança / Compatibilidade**: Variáveis de ambiente como `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, configurações de proxy de rede (`HTTP_PROXY`, `HTTPS_PROXY`), `LAVALINK_SERVER_PASSWORD` ou prefixos genéricos `PLUGINS_*` definidos no ambiente do bot não são mais repassados ao processo do Lavalink local. Caso necessite configurar opções de inicialização da JVM, senhas ou configurações de plugins, declare-as explicitamente no arquivo `application.yml`.
+
 ### Adiado
 - **Deploy em 1 clique**: reativação dos botões de deploy em 1 clique (Render, Gitpod, Repl.it e Heroku) nos guias e no README mantida para fase posterior de revisão e validação das hospedagens.
 

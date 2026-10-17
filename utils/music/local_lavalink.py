@@ -5,11 +5,13 @@ import os
 import platform
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
 import zipfile
 from contextlib import suppress
-from typing import Optional, Tuple
+from pathlib import PurePosixPath
+from typing import Dict, Mapping, Optional, Tuple
 
 import requests
 
@@ -198,23 +200,148 @@ YOUTUBE_OAUTH_ENV_ENABLED = "PLUGINS_YOUTUBE_OAUTH_ENABLED"
 YOUTUBE_OAUTH_ENV_REFRESH_TOKEN = "PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"
 YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION = "PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION"
 
+# Únicas variáveis do ambiente do bot que o processo do Lavalink herda (o resto, como TOKEN, MONGO e *_SECRET, não).
+# SERVER_PORT é obrigatória: o bot fala com o Lavalink local nessa porta e o Spring a lê por relaxed binding.
+CHILD_ENV_ALLOWLIST = frozenset({
+    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TEMP", "TMP", "JAVA_HOME", "SERVER_PORT",
+})
+CHILD_ENV_ALLOWLIST_WINDOWS = frozenset({
+    "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA",
+})
 
-def _youtube_oauth_popen_kwargs(refresh_token: Optional[str]) -> dict:
-    """Argumentos extras do Popen que entregam o refresh token ao Lavalink só pelo ambiente do processo filho.
 
-    Sem token: nada muda (o filho herda o ambiente do bot e o OAuth segue desligado). Com token: cópia do ambiente do
-    bot (o PATH precisa seguir para o java ser encontrado) mais as variáveis do plugin; o os.environ do próprio bot,
-    a linha de comando, os arquivos e os logs nunca recebem o valor.
+def lavalink_child_env(refresh_token: Optional[str], environ: Mapping[str, str] = os.environ) -> Dict[str, str]:
+    """Ambiente do processo do Lavalink: só a allowlist (nomes sem distinguir caixa no Windows) e, com token, o OAuth.
+
+    Função pura: devolve um dict novo, não altera ``environ`` e nunca registra o ambiente nem o token. Sem token, as
+    variáveis ``PLUGINS_YOUTUBE_OAUTH_*`` não existem no resultado, mesmo que estejam no ambiente do bot.
     """
+    is_windows = os.name == "nt"
+    allowed = CHILD_ENV_ALLOWLIST | CHILD_ENV_ALLOWLIST_WINDOWS if is_windows else CHILD_ENV_ALLOWLIST
+    child_env: Dict[str, str] = {}
+    seen = set()
+    for name, value in environ.items():
+        key = name.upper() if is_windows else name
+        if key in allowed and key not in seen:
+            seen.add(key)
+            child_env[name] = value
+
     token = (refresh_token or "").strip()
-    if not token:
-        return {}
-    return {"env": {
-        **os.environ,
-        YOUTUBE_OAUTH_ENV_ENABLED: "true",
-        YOUTUBE_OAUTH_ENV_REFRESH_TOKEN: token,
-        YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION: "true",
-    }}
+    if token:
+        child_env[YOUTUBE_OAUTH_ENV_ENABLED] = "true"
+        child_env[YOUTUBE_OAUTH_ENV_REFRESH_TOKEN] = token
+        child_env[YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION] = "true"
+    return child_env
+
+
+def _fetch_verified_jdk(archive_path: str, url: str, sha256: str) -> None:
+    """Garante em ``archive_path`` o arquivo do JDK com o SHA-256 fixo; um arquivo já existente só vale se conferir."""
+    if os.path.isfile(archive_path):
+        if file_sha256(archive_path) == sha256.lower():
+            return
+        os.remove(archive_path)
+    download_verified(url, archive_path, sha256)
+
+
+def _jdk_download(system: str, arch: str) -> Tuple[str, str]:
+    return branding.JDK_DOWNLOADS[f"{system}-{'amd64' if arch == '64bit' else 'i586'}"]
+
+
+def _strip_top_dir(members):
+    """Membros do tar sem a pasta raiz (equivale a --strip-components=1).
+
+    Antes de devolver qualquer membro, recusa o arquivo inteiro se algum tiver nome absoluto ou ``..`` como primeiro
+    componente (a raiz sumiria no strip e o resto do caminho escaparia da validação óbvia); nada é extraído nesse caso.
+    """
+    stripped = []
+    for member in members:
+        path = PurePosixPath(member.name)
+        if path.is_absolute() or member.name.startswith("/") or (path.parts and path.parts[0] == ".."):
+            raise LavalinkDownloadError("O arquivo do JDK contém um caminho inseguro e foi recusado.")
+        changes = {"name": "/".join(path.parts[1:])}
+        if member.islnk():
+            changes["linkname"] = "/".join(PurePosixPath(member.linkname).parts[1:])
+        if changes["name"]:
+            stripped.append(member.replace(**changes, deep=False))
+    return stripped
+
+
+def _extract_tar_without_top_dir(archive_path: str, destination: str) -> None:
+    """Extrai o .tar.gz (já verificado) sem a pasta raiz, com o filtro seguro ``data``."""
+    with tarfile.open(archive_path, "r:gz") as archive:
+        members = _strip_top_dir(archive.getmembers())
+        archive.extractall(destination, members=members, filter="data")
+
+
+def _jdk_is_usable(java_dir: str) -> bool:
+    """Um JDK instalado só vale se ``bin/java`` existir, for arquivo (symlink válido serve) e executável."""
+    java = os.path.join(java_dir, "bin", "java")
+    return os.path.isfile(java) and os.access(java, os.X_OK)
+
+
+def _install_jdk_windows(tmp_dir: str, jdk_platform: str, arch: str) -> str:
+    url, sha256 = _jdk_download("windows", arch)
+    archive_path = f"{tmp_dir}/java.zip"
+    _fetch_verified_jdk(archive_path, url, sha256)
+
+    shutil.rmtree(f"{tmp_dir}/.java", ignore_errors=True)
+    os.makedirs(f"{tmp_dir}/.java/{jdk_platform}", exist_ok=True)
+
+    try:
+        with zipfile.ZipFile(archive_path, "r") as zip_ref:
+            zip_ref.extractall(f"{tmp_dir}/.java")
+    finally:
+        with suppress(FileNotFoundError):
+            os.remove(archive_path)
+
+    extracted_folder = None
+    java_dirs = os.listdir(f"{tmp_dir}/.java")
+
+    for d in java_dirs:
+        if d != jdk_platform and os.path.isfile(f"{tmp_dir}/.java/{d}/bin/java.exe"):
+            extracted_folder = f"{tmp_dir}/.java/{d}"
+
+    if not extracted_folder:
+        raise Exception(f"JDK não encontrando no diretório: {tmp_dir}/.java\n" + "\n".join(java_dirs))
+
+    for item in os.listdir(extracted_folder):
+        os.rename(os.path.join(extracted_folder, item), os.path.join(f"{tmp_dir}/.java/{jdk_platform}", item))
+
+    shutil.rmtree(extracted_folder, ignore_errors=True)
+
+    return os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
+
+
+def _install_jdk_linux(tmp_dir: str, jdk_platform: str, arch: str) -> str:
+    java_dir = f"{tmp_dir}/.java/{jdk_platform}"
+
+    if not _jdk_is_usable(java_dir):
+        url, sha256 = _jdk_download("linux", arch)
+        archive_path = f"{tmp_dir}/java.tar.gz"
+        _fetch_verified_jdk(archive_path, url, sha256)
+        try:
+            _install_extracted_jdk(archive_path, f"{tmp_dir}/.java", java_dir, jdk_platform)
+        finally:
+            with suppress(FileNotFoundError):
+                os.remove(archive_path)
+
+    return os.path.realpath(f"{java_dir}/bin/java")
+
+
+def _install_extracted_jdk(archive_path: str, java_root: str, java_dir: str, jdk_platform: str) -> None:
+    """Extrai num diretório temporário irmão e só o promove a ``java_dir`` (os.replace) se tudo deu certo.
+
+    Qualquer falha (inclusive Ctrl+C) apaga o temporário e não mexe em outras instalações de ``java_root``.
+    """
+    os.makedirs(java_root, exist_ok=True)
+    staging = tempfile.mkdtemp(prefix=f"{jdk_platform}.", suffix=".tmp", dir=java_root)
+    try:
+        os.chmod(staging, 0o755)
+        _extract_tar_without_top_dir(archive_path, staging)
+        shutil.rmtree(java_dir, ignore_errors=True)  # instalação quebrada: é trocada por inteiro
+        os.replace(staging, java_dir)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def run_lavalink(
@@ -277,57 +404,7 @@ def run_lavalink(
         if not java_cmd:
 
             if os.name == "nt":
-
-                try:
-                    shutil.rmtree(f"{tmp_dir}/.java")
-                except:
-                    pass
-
-                if platform.architecture()[0] == "64bit":
-                    jdk_url = "https://download.bell-sw.com/java/17.0.13+12/bellsoft-jdk17.0.13+12-windows-amd64.zip"
-                else:
-                    jdk_url = "https://download.bell-sw.com/java/17.0.13+12/bellsoft-jdk17.0.13+12-windows-i586.zip"
-
-                jdk_filename = "java.zip"
-
-                download_file(jdk_url, f"{tmp_dir}/{jdk_filename}")
-
-                os.makedirs(f"{tmp_dir}/.java/{jdk_platform}", exist_ok=True)
-
-                with zipfile.ZipFile(os.path.normpath(f"{tmp_dir}/{jdk_filename}"), 'r') as zip_ref:
-                    try:
-                        zip_ref.extractall(f"{tmp_dir}/.java")
-                    except Exception as e:
-                        if isinstance(e, zipfile.BadZipFile):
-                            os.remove(f"{tmp_dir}/{jdk_filename}")
-                        raise e
-
-                extracted_folder = None
-
-                java_dirs = os.listdir(f"{tmp_dir}/.java")
-
-                for d in os.listdir(f"{tmp_dir}/.java"):
-                    if d == jdk_platform:
-                        continue
-                    if os.path.isfile(f"{tmp_dir}/.java/{d}/bin/java.exe"):
-                        extracted_folder = f"{tmp_dir}/.java/{d}"
-
-                if not extracted_folder:
-                    raise Exception(
-                        f"JDK não encontrando no diretório: {tmp_dir}/.java\n" + "\n".join(java_dirs)
-                    )
-
-                for item in os.listdir(extracted_folder):
-                    item_path = os.path.join(extracted_folder, item)
-                    dest_path = os.path.join(f"{tmp_dir}/.java/{jdk_platform}", item)
-                    os.rename(item_path, dest_path)
-
-                with suppress(FileNotFoundError):
-                    os.remove(f"{tmp_dir}/{jdk_filename}")
-                with suppress(AttributeError):
-                    shutil.rmtree(extracted_folder)
-
-                java_cmd = os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
+                java_cmd = _install_jdk_windows(tmp_dir, jdk_platform, arch)
 
             elif use_jabba:
 
@@ -344,37 +421,7 @@ def run_lavalink(
                 java_cmd = os.path.expanduser("./.jabba/jdk/zulu@1.17.0-0/bin/java")
 
             else:
-                if not os.path.isdir(f"{tmp_dir}/.java/{jdk_platform}"):
-
-                    try:
-                        shutil.rmtree(f"{tmp_dir}/.java")
-                    except:
-                        pass
-
-                    if platform.architecture()[0] != "64bit":
-                        jdk_url = "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-i586-lite.tar.gz"
-                    else:
-                        jdk_url = "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-amd64-lite.tar.gz"
-
-                    java_cmd = os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
-
-                    jdk_filename = "java.tar.gz"
-
-                    download_file(jdk_url, jdk_filename)
-
-                    try:
-                        shutil.rmtree(f"{tmp_dir}/.java")
-                    except:
-                        pass
-
-                    os.makedirs(f"{tmp_dir}/.java/{jdk_platform}")
-
-                    p = subprocess.Popen(["tar", "--strip-components=1", "-zxvf", "java.tar.gz", "-C", f"{tmp_dir}/.java/{jdk_platform}"])
-                    p.wait()
-                    os.remove(f"./{jdk_filename}")
-
-                else:
-                    java_cmd = os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
+                java_cmd = _install_jdk_linux(tmp_dir, jdk_platform, arch)
 
     prepare_lavalink_files(".", lavalink_file_url=lavalink_file_url, lavalink_file_sha256=lavalink_file_sha256)
 
@@ -402,7 +449,7 @@ def run_lavalink(
           "o que pode ocorrer falhas em algumas tentativas de conexão até ele iniciar totalmente).")
 
     lavalink_process = subprocess.Popen(
-        java_cmd.split(), stdout=subprocess.DEVNULL, **_youtube_oauth_popen_kwargs(youtube_oauth_refresh_token)
+        java_cmd.split(), stdout=subprocess.DEVNULL, env=lavalink_child_env(youtube_oauth_refresh_token)
     )
 
     if lavalink_additional_sleep:

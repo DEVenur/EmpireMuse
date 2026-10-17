@@ -30,8 +30,21 @@ Os artefatos homologados são distribuídos no espelho oficial da organização:
 Para garantir a confiabilidade dos binários executados localmente, o EmpireMuse aplica validações rigorosas em `utils/music/local_lavalink.py`:
 
 ### Verificação Obrigatória por SHA-256
-- Cada arquivo oficial (`Lavalink.jar`, `application.yml` e plugins) possui seu hash SHA-256 pré-computado e fixado no código (`utils/branding.py`).
-- O download é realizado em arquivo temporário isolado e movido atomicamente para a pasta final somente após confirmação do hash. Em caso de divergência, o arquivo corrompido é excluído e o processo é abortado imediatamente.
+- Cada arquivo oficial (`Lavalink.jar`, `application.yml`, plugins e pacotes portáteis do JDK) possui seu hash SHA-256 pré-computado e fixado no código (`utils/branding.py`).
+- O download é realizado em arquivo temporário isolado e movido atomicamente para o destino final somente após confirmação do hash. Em caso de divergência, o arquivo corrompido é excluído e o processo é abortado imediatamente.
+
+### Download Seguro e Extração Atômica do JDK
+Caso Java 17+ não esteja disponível no sistema operacional do host, o bot gerencia o download de um JDK portátil da BellSoft Liberica com salvaguardas rigorosas:
+- **Hash SHA-256 fixo**: O arquivo compactado (`.zip` no Windows, `.tar.gz` no Linux) é baixado via `download_verified` e conferido estritamente contra `JDK_DOWNLOADS` de `utils/branding.py`. Arquivos já presentes no disco só são aproveitados se o SHA-256 conferir na íntegra.
+- **Extração segura no Linux**: Membros do arquivo com componentes relativos (`..`) ou caminhos absolutos são rejeitados antes de qualquer extração, utilizando o filtro seguro `data` da biblioteca padrão `tarfile`.
+- **Atomicidade e integridade**: A descompactação ocorre em diretório temporário isolado e só é promovida para a pasta definitiva através de substituição atômica (`os.replace`) após conclusão bem-sucedida. Instalações quebradas ou interrompidas são substituídas por completo e uma instalação existente só é considerada utilizável se `bin/java` existir e for executável.
+
+### Isolamento do Ambiente do Subprocesso (Allowlist)
+Ao iniciar o Lavalink local, o processo Java não herda as variáveis de ambiente arbitrárias do bot:
+- **Allowlist restrita**: Passam apenas as variáveis essenciais do sistema operacional (`PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `TEMP`, `TMP`, `JAVA_HOME` e `SERVER_PORT`; no Windows também `SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`).
+- **Credenciais do bot isoladas**: Tokens de bot, chaves de API, URIs de banco de dados e segredos de sessão nunca chegam ao processo do Lavalink.
+- **Trio OAuth condicional**: As propriedades `PLUGINS_YOUTUBE_OAUTH_*` só são inseridas quando `YOUTUBE_OAUTH_REFRESH_TOKEN` contiver um token válido.
+- **Configurações personalizadas da JVM e plugins**: Variáveis como `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, proxies de rede, `LAVALINK_SERVER_PASSWORD` ou prefixos genéricos `PLUGINS_*` presentes no ambiente do bot não são repassadas ao Lavalink. Caso precise configurá-las, defina-as diretamente no arquivo `application.yml`.
 
 ### URLs do Jar e Regras de Download (`LAVALINK_FILE_URL` e `LAVALINK_FILE_SHA256`)
 O parâmetro `LAVALINK_FILE_URL` define a origem do binário `Lavalink.jar`:
@@ -90,6 +103,27 @@ Para puxar as alterações mais recentes do repositório oficial do EmpireMuse:
    ```
 2. O bot executará a rotina de atualização Git (`source_update.sh`).
 3. Reinicie a aplicação após a conclusão para carregar os módulos atualizados.
+
+### Atualizar o JDK
+Quando for necessário atualizar a versão ou a release dos pacotes portáteis do JDK da BellSoft para novas versões homologadas:
+1. **Baixar o arquivo da BellSoft**:
+   Baixe o pacote oficial da plataforma desejada (Windows amd64/i586 `.zip`, Linux amd64/i586 `.tar.gz`) em um diretório temporário isolado (por exemplo, via `mktemp -d`), sem executar nem descompactar os arquivos.
+2. **Conferir o SHA-1 publicado**:
+   Valide a autenticidade do arquivo baixado contra o hash publicado pela BellSoft, consultando:
+   - A API pública da BellSoft: `https://api.bell-sw.com/v1/liberica/releases` (verificando o campo `sha1` ou correspondente do artefato); ou
+   - O arquivo `sha1sum.txt` oficial disponibilizado na página de release da BellSoft.
+3. **Calcular o SHA-256**:
+   Calcule o hash SHA-256 do arquivo baixado localmente no terminal:
+   ```bash
+   sha256sum bellsoft-jdk*.tar.gz  # ou CertUtil -hashfile java.zip SHA256 no Windows
+   ```
+4. **Editar `branding.JDK_DOWNLOADS`**:
+   No arquivo `utils/branding.py`, atualize a tupla `(url, sha256)` da respectiva plataforma no dicionário `JDK_DOWNLOADS` com a URL oficial da BellSoft e a sequência de 64 caracteres hexadecimais em minúsculas do SHA-256 conferido.
+5. **Rodar os testes**:
+   Execute os testes automatizados para certificar a conformidade dos metadados e das rotinas de verificação:
+   ```bash
+   .venv/bin/python -m pytest tests/test_branding.py tests/test_audio_fase2_1.py tests/test_audio_fase2_1_instalacao.py
+   ```
 
 ---
 
