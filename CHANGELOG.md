@@ -132,6 +132,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Limpeza de Código Morto e Imports Não Utilizados (Bloco C2)**:
   - Remoção de código inalcançável em `wavelink/node.py` (instrução de log posterior ao `return`).
   - Remoção de imports órfãos e variáveis mortas em `modules/music.py`, `modules/music_settings.py`, `panel/handlers/auth.py`, `utils/music/models.py` e arquivos de testes (`tests/panel/`, `tests/test_audio_fase2a.py` e `tests/test_request_channel_characterization.py`).
+- **Expurgo de Guias Obsoletos de Hospedagem de Terceiros (Bloco C3 / Task C-14)**:
+  - Remoção de 6 tutoriais legados de hospedagem em `docs/guides/` (`heroku-hosting.md`, `mongodb.md`, `replit-atualizar.md`, `replit-hosting.md`, `replit-hosting-opcionais.md` e `replit-token.md`), reorganizando o índice em `docs/guides/README.md` exclusivamente em torno dos 4 guias técnicos oficiais do projeto (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
 
 ### Corrigido
 - **Atualização Automática de URLs Oficiais do Lavalink**:
