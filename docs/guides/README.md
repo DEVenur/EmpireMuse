@@ -34,4 +34,5 @@ Tutorial: Hospedar na discloud (em breve...)
 - [mongodb.md](mongodb.md): criar um banco MongoDB e obter o link de conexão.
 - [spotify-keys.md](spotify-keys.md): obter o Spotify CLIENT_ID e CLIENT_SECRET.
 - [atualizar-lavalink.md](atualizar-lavalink.md): guia do Lavalink local, versões, integridade SHA-256, plugins e fontes de áudio.
+- [youtube-oauth.md](youtube-oauth.md): guia de configuração do YouTube OAuth no Lavalink local, cliente TV e conta descartável.
 - [painel-web.md](painel-web.md): configuração, Developer Portal e uso do painel web.
