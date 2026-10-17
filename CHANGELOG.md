@@ -8,6 +8,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Workspace Multipasta e Repositórios Irmãos (Fase A)**:
+  - Adicionado layout de workspace para VS Code/Cursor em `EmpireMuse.code-workspace` integrando a raiz do projeto e repositórios irmãos em `repos/` (`EmpireMuse-LL-binaries` e `EmpireMuse-RPC-app`).
+  - Configuração de regras estritas de ignorar no `.gitignore` e `.dockerignore`, cobrindo `repos/`, `worktrees/`, `.arquivo/` e `.local/`.
+  - Exclusão das pastas de workspace e dados locais da medição de cobertura no `pyproject.toml` (`tool.coverage.run.omit`).
+  - Documentação completa em `docs/development.md` e regras de governança e precedência de agentes registradas em `AGENTS.md`.
 - **Página de Status Principal (`web_app.py`)**:
   - Redesenho completo da página inicial `/` adotando a identidade visual "Nebulosa" (paleta de cores, tipografia, logo e responsividade harmonizados com o painel web).
   - Exibição em tempo real do estado de cada bot do pool (nome, avatar, latência, total de servidores e botão de convite), link direto para o painel web quando ativo, servidor de suporte oficial e créditos à licença GPL-2.0.
