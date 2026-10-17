@@ -12,7 +12,7 @@ players, a fila, a interface (embeds, botões, selects) e a persistência.
 
 ```mermaid
 flowchart LR
-    entry["main.py / app.py<br/>python -m empiremuse"] --> pool["BotPool<br/>empiremuse/utils/client.py"]
+    entry["main.py<br/>python -m empiremuse"] --> pool["BotPool<br/>empiremuse/utils/client.py"]
     pool --> b1["BotCore #1<br/>(token A)"]
     pool --> b2["BotCore #2<br/>(token B)"]
     pool --> web["empiremuse/web_app.py<br/>tornado: /, /ws e /painel"]
@@ -31,7 +31,7 @@ flowchart LR
 ## 2. Processo e inicialização
 
 1. `python -m empiremuse` instancia `BotPool()` e chama `pool.setup()` via `empiremuse/__main__.py:7-14`.
-   Na raiz, `main.py` e `app.py` atuam como atalhos diretos chamando `empiremuse.__main__.main()` (`main.py:1-4` e `app.py:1-2`).
+   Na raiz, `main.py` atua como atalho direto chamando `empiremuse.__main__.main()` (`main.py:1-4`).
 2. A resolução de diretórios é centralizada em `empiremuse/paths.py`:
    - `PROJECT_DIR`: raiz do repositório, onde residem os diretórios de dados estáticos `data/` (servidores Lavalink) e `assets/` (imagens e marca).
    - `PACKAGE_DIR`: raiz do pacote `empiremuse/`, contendo código-fonte e templates compartilhados (`empiremuse/templates/status.html`).
@@ -223,7 +223,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 
 | Módulo | Responsabilidade | Linhas |
 |---|---|---|
-| `main.py` / `app.py` | Atalhos de inicialização na raiz (chamam `empiremuse.__main__`) | 4 / 1 |
+| `main.py` | Atalho de inicialização na raiz (chama `empiremuse.__main__`) | 4 |
 | `empiremuse/__main__.py` | Ponto de entrada canônico do pacote (`python -m empiremuse`) | 14 |
 | `empiremuse/paths.py` | Resolução central de diretórios (`PROJECT_DIR`, `PACKAGE_DIR`, `RUNTIME_DIR`) | 22 |
 | `empiremuse/config_loader.py` | Padrões, leitura de env/`config.json`/`.env`, conversão de tipos | 333 |
@@ -263,4 +263,4 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 
 Os tutoriais genéricos de hospedagem de terceiros (Heroku, Repl.it e guias legados de MongoDB) foram completamente expurgados da documentação no Bloco C3 em favor do escopo oficial do bot para a comunidade EmpireHub.
 
-Quanto à infraestrutura e artefatos de deploy, existem scripts legados `source_*.sh/.bat` (criam `venv`, instalam e iniciam), `.Dockerfile`, `render.yaml`, `discloud.config.example`, `squarecloud.config.example`, `.replit` e `.gitpod.yml`. O `.Dockerfile` usa `python:3.10-slim` e OpenJDK 11, **incompatíveis** com Python 3.13 e Lavalink (Java ≥ 17); `render.yaml` fixa Python 3.11.7. Esses artefatos legados de deploy e conteinerização estão mapeados para modernização e saneamento na Fase D (detalhes adicionais em `known-issues.md`).
+Quanto à infraestrutura e artefatos de deploy, os scripts legados (`source_*.sh/.bat`), configurações desatualizadas de hospedagens (`.Dockerfile`, `render.yaml`, `discloud.config.example`, `squarecloud.config.example`, `.replit`, `replit.nix`, `.gitpod.yml`, `deploy_handlers/`) e atalhos redundantes (`app.py`) foram inteiramente expurgados na Fase D (Bloco D1). A execução oficial do projeto é consolidada em torno do pacote canônico `empiremuse` via Python 3.13 (`python -m empiremuse` ou `python main.py`), contêineres Docker oficiais e Docker Compose (modernizados no Bloco D2).

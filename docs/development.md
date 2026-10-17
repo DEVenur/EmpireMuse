@@ -32,8 +32,6 @@ uv pip install -r requirements.txt "tinymongo[serialization]"
 
 Observações:
 
-- Os scripts `source_setup.sh`/`source_quick_setup.sh` do projeto original usam `pip` e a pasta `venv/`;
-  nada neles é necessário se você usar `uv`. Eles também sofrem do bug acima.
 - O `disnake` está fixado em um commit Git anterior à 2.12.0 (`requirements.txt:1`); a atualização para a
   versão estável está planejada para fases futuras.
 - Dependências obsoletas expurgadas (Bloco C2): 8 bibliotecas declaradas sem nenhum uso no código (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`) foram removidas de `requirements.txt`, saneando a superfície de dependências e resolvendo o item KI-05 (ver [`known-issues.md`](known-issues.md)).
@@ -70,7 +68,7 @@ na inicialização (bug listado em `known-issues.md`).
 | `OWNER_IDS` | IDs de donos extras, separados por `\|\|` (`empiremuse/utils/client.py:1060`). |
 | `MONGO` | URL do MongoDB. **Vazio = TinyMongo local** em `local_database` sob o diretório de dados/runtime (configurável via `EMPIREMUSE_HOME`; `./local_database` por padrão em desenvolvimento). |
 | `PLAYER_SESSIONS_MONGODB` | Guardar sessões de players no Mongo (exige `MONGO`). |
-| `RUN_RPC_SERVER` / `PORT` | Liga a página de status e o WebSocket do RPC (tornado). O padrão do código é `true` (`empiremuse/config_loader.py:86`), mas o `.example.env` define `false`. Ligue `RUN_RPC_SERVER=true` só se for testar o RPC (com `PORT=8080`; a porta padrão é a 80); use `ENABLE_RPC_AUTH=true` e não exponha a porta publicamente (no Gitpod, mantenha a porta privada). |
+| `RUN_RPC_SERVER` / `PORT` | Liga a página de status e o WebSocket do RPC (tornado). O padrão do código é `true` (`empiremuse/config_loader.py:86`), mas o `.example.env` define `false`. Ligue `RUN_RPC_SERVER=true` só se for testar o RPC (com `PORT=8080`; a porta padrão é a 80); use `ENABLE_RPC_AUTH=true` e não exponha a porta publicamente (em ambientes compartilhados, mantenha a porta privada). |
 | `RUN_LOCAL_LAVALINK` | Inicia um Lavalink local (ver seção 5). |
 | `AUTO_DOWNLOAD_LAVALINK_SERVERLIST` | Baixa a lista pública de Lavalink (ver seção 5). |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Credenciais do app Spotify (*client credentials*). Sem elas, o suporte interno ao Spotify fica desativado (`empiremuse/utils/client.py:726-734`). |
@@ -92,7 +90,7 @@ source .venv/bin/activate
 python -m empiremuse
 ```
 
-O comando canônico de execução é `python -m empiremuse` (via módulo `empiremuse.__main__`). Os arquivos `main.py` e `app.py` na raiz do repositório funcionam como atalhos diretos (`python main.py`).
+O comando canônico de execução é `python -m empiremuse` (via módulo `empiremuse.__main__`). O arquivo `main.py` na raiz do repositório funciona como atalho direto (`python main.py`).
 
 ### Diretório de execução e dados (`EMPIREMUSE_HOME`)
 
@@ -150,14 +148,14 @@ uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio, pytest-
 |---|---|---|
 | `ruff` | **Ativo** | Linter e formatador configurado em `pyproject.toml` (target Python 3.13, line-length 120, regras `E4`, `E7`, `E9`, `F`). |
 | `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
-| `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q main.py app.py empiremuse`). |
+| `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q main.py empiremuse`). |
 | `mypy` ou `pyright` | Planejado | Tipagem gradual nos módulos novos (etapa posterior de saneamento). |
 | `uv` | Planejado | Dependências e *lockfile* completo quando o projeto migrar dependências para o `pyproject.toml`. |
 
 A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa automaticamente em todos os pushes e PRs para a branch `main`:
 1. `ruff check .` (linting);
 2. `ruff format --check .` (formatação);
-3. `python -m compileall -q main.py app.py empiremuse` (validação de compilação de bytecode);
+3. `python -m compileall -q main.py empiremuse` (validação de compilação de bytecode);
 4. `pytest -q` (execução da suíte de testes).
 
 Convenções de código adicionais: `.claude/rules/empiremuse/python-disnake.md`.

@@ -123,8 +123,8 @@ paths:
   o ambiente (`env`, `printenv`, `set`).
 - Imagens Docker: imagem base com versão fixa (de preferência por digest), usuário não root e
   `.dockerignore` excluindo `.env`, `config.json`, `.git`, `local_database/` e caches.
-- Arquivos YAML de deploy (`render.yaml`, `.gitpod.yml` e similares) nunca contêm valores de
-  segredo. Use variáveis secretas da plataforma (por exemplo, `sync: false` no Render).
+- Arquivos YAML de automação e implantação (Docker Compose, GitHub Actions e similares) nunca contêm valores de
+  segredo. Use variáveis de ambiente e arquivos `.env` locais (estritamente ignorados pelo Git).
 - Workflows do GitHub Actions (quando existirem): actions fixadas por SHA, `permissions:` mínimas
   e nada de `pull_request_target` executando código do PR.
 - Opções novas de segurança entram com o **valor seguro como padrão** em `empiremuse/config_loader.py` e
