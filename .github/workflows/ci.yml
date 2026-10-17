@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI (Lint, Compile e Testes)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Configurar Python 3.13
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.13"
+
+      - name: Instalar uv
+        run: python -m pip install --upgrade uv
+
+      - name: Instalar dependências
+        run: |
+          uv pip install --system -r requirements.txt -r requirements-dev.txt "tinymongo[serialization]"
+
+      - name: Verificação de lint (ruff check)
+        run: ruff check .
+
+      - name: Verificação de formatação (ruff format)
+        run: ruff format --check .
+
+      - name: Verificação de compilação de bytecode
+        run: python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink
+
+      - name: Execução dos testes automatizados (pytest)
+        run: pytest -q
