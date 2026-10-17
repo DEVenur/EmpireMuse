@@ -71,7 +71,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   ```bash
   uv venv --python 3.13
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
-  uv pip install -r requirements.txt "tinymongo[serialization]"
+  uv pip install -r requirements.txt
   cp .example.env .env
   ```
 - **Execução do Bot**:

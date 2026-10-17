@@ -100,6 +100,7 @@ class BotPool:
         self.partial_track_cache = TTLCache(maxsize=1000, ttl=80400)
         self.integration_cache = TTLCache(maxsize=500, ttl=7200)
         self.spotify: Optional[SpotifyClient] = None
+        self.spotify_token_task: Optional[asyncio.Task] = None
         self.deezer = DeezerClient(self.playlist_cache)
         self.lavalink_instance: Optional[subprocess.Popen] = None
         self.lavalink_watcher: Optional[threading.Thread] = None
@@ -657,6 +658,15 @@ class BotPool:
 
         return skin
 
+    async def refresh_spotify_token(self) -> None:
+        """Tarefa de partida: obtém o token do Spotify e registra a falha em vez de deixá-la solta na task."""
+        try:
+            await self.spotify.get_access_token()
+        except GenericError as e:
+            logger.error("Spotify: não foi possível obter o token de acesso na partida: %s", e.text)
+        except (aiohttp.ClientError, OSError, KeyError, ValueError) as e:
+            logger.error("Spotify: falha ao obter o token de acesso na partida (%s).", type(e).__name__, exc_info=True)
+
     async def setup_pool_extras(self):
         try:
             from dev.pool_dev import PoolDev
@@ -1066,7 +1076,7 @@ class BotPool:
                 self.loop.create_task(self.start_lavalink())
 
             if self.spotify and not self.spotify.spotify_cache:
-                self.loop.create_task(self.spotify.get_access_token())
+                self.spotify_token_task = self.loop.create_task(self.refresh_spotify_token())
 
             self.node_check(LAVALINK_SERVERS, start_local=start_local)
 

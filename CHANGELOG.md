@@ -128,6 +128,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Atualização de Documentação e Referências por Símbolo (Fase 3 / F3-0)**:
+  - As regras de desenvolvimento (`.claude/rules/empiremuse/python-disnake.md`) e o catálogo de problemas conhecidos (`docs/known-issues.md`) passam a apontar referências de código por símbolos canônicos (nomes de classes, funções e métodos) em vez de números fixos de linha, evitando desatualização conforme o código evolui.
+  - Remoção da variável residual e não utilizada `PARTIALTRACK_FIRST` do arquivo `.example.env` e dos testes estáticos.
 - **Entrada em Diretório de Dados e Resolução de Porta de Hospedagem (Bloco D5 / Tarefa D-23)**:
   - O bot passa a mudar o diretório de trabalho (`os.chdir`) para `EMPIREMUSE_HOME` ao iniciar (`enter_runtime_dir` em `empiremuse/__main__.py`), garantindo persistência e permissões adequadas em contêineres criados sem `WorkingDir` (como no Pterodactyl Wings), com mensagens de erro claras em caso de diretório inexistente ou inválido.
   - O carregador de configurações (`config_loader.resolve_port`) passa a utilizar a porta definida em `SERVER_PORT` quando a variável `PORT` não estiver definida, atendendo à alocação primária de portas do Pterodactyl para o servidor HTTP Tornado e o WebSocket do RPC.
@@ -196,6 +199,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Remoção de 6 tutoriais legados de hospedagem em `docs/guides/` (`heroku-hosting.md`, `mongodb.md`, `replit-atualizar.md`, `replit-hosting.md`, `replit-hosting-opcionais.md` e `replit-token.md`), reorganizando o índice em `docs/guides/README.md` exclusivamente em torno dos 4 guias técnicos oficiais do projeto (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
 
 ### Corrigido
+- **Correção de Bugs Altos de Inicialização, Migração de Dados e Spotify (Fase 3 / F3-1)**:
+  - **KI-01 (`requirements.txt`)**: Adição do extra `serialization` na dependência `tinymongo` (`tinymongo[serialization]`), eliminando falhas de importação do `tinydb_serialization` em instalações limpas do projeto.
+  - **KI-09 (`empiremuse/utils/db.py`)**: Correção na função `update_values` para que migrações de versão do modelo de banco preservem listas e coleções salvas pelo usuário (como cargos de DJ e histórico de faixas), garantindo que dados persistidos não sejam substituídos pelo padrão vazio e preservando chaves legadas.
+  - **KI-15 (`empiremuse/utils/music/audio_sources/spotify.py`)**: Tratamento de erro na autenticação com a API do Spotify em caso de credenciais inválidas ou recusadas, emitindo mensagem de erro clara em português e encerrando o fluxo sem entrar em espera concorrente infinita, com tratamento adequado de ausência de token e captura de falhas no carregamento do cliente no `BotPool`.
 - **Atualização Automática de URLs Oficiais do Lavalink**:
   - Correção do defeito de atualização onde instalações com `LAVALINK_FILE_URL` preenchido com a URL oficial de versões anteriores do espelho (como `0.0.2` ou sob o nome antigo `LL-binaries`) falhavam ao verificar integridade após atualização do código do bot. O bot agora reconhece URLs oficiais anteriores em `LAVALINK_JAR_OFFICIAL_URLS` e atualiza automaticamente para a versão oficial atual com aviso no log.
   - O hash do `application.yml` da release `0.0.2` foi incluído em `LAVALINK_APPLICATION_YML_KNOWN_SHA256`, permitindo a atualização transparente do arquivo oficial enquanto preserva configurações personalizadas do usuário.

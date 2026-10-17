@@ -46,7 +46,6 @@ NAO_SE_APLICA = {
     "LAVALINK_FILE_SHA256": "par da LAVALINK_FILE_URL: sem download de jar próprio, o hash não tem uso",
     "USE_JABBA": "instalaria o Java por um script baixado (jabba); a imagem já traz o JRE e roda offline",
     "GIT_DIR": "só serve a comandos de git; o container não tem repositório e a atualização por git foi removida (D1)",
-    "PARTIALTRACK_FIRST": "resíduo do .example.env: não existe no DEFAULT_CONFIG do config_loader, logo não tem efeito",
 }
 
 SEGREDOS_EXPLICITOS = {

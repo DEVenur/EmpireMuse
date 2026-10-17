@@ -22,13 +22,8 @@ cd EmpireMuse
 uv venv --python 3.13
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
-uv pip install -r requirements.txt "tinymongo[serialization]"
+uv pip install -r requirements.txt
 ```
-
-> **Bug conhecido — `requirements.txt:7`:** a linha declara `tinymongo` sem o extra `serialization`, mas
-> `empiremuse/utils/db.py:18` importa `tinydb_serialization`. Numa instalação limpa, sem o contorno acima o bot falha
-> ao importar `empiremuse.utils.db`. O contorno (`"tinymongo[serialization]"` na linha de comando) vale **até a
-> correção do arquivo**, que está fora do escopo da fase de documentação.
 
 Observações:
 
