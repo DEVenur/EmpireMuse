@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os.path
 import re
 import time
@@ -29,6 +30,8 @@ spotify_link_regex = re.compile(r"(?i)https?:\/\/spotify\.link\/?(?P<id>[a-zA-Z0
 spotify_regex_w_user = re.compile("https://open.spotify.com?.+(album|playlist|artist|track|user)/([a-zA-Z0-9]+)")
 
 spotify_cache_file = os.path.join(gettempdir(), ".spotify_cache.json")
+
+logger = logging.getLogger(__name__)
 
 
 class SpotifyClient:
@@ -152,11 +155,12 @@ class SpotifyClient:
                     data = await response.json()
 
                 if data.get("error"):
-                    print(f"⚠️ - Spotify: Ocorreu um erro ao obter token: {data['error_description']}")
-                    self.client_id = None
-                    self.client_secret = None
-                    await self.get_access_token()
-                    return
+                    motivo = data.get("error_description") or data["error"]
+                    logger.warning("Spotify: o servidor recusou as credenciais ao obter o token (%s).", motivo)
+                    raise GenericError(
+                        "**Não foi possível autenticar no Spotify: confira SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET "
+                        f"(motivo informado pelo Spotify: {motivo}).**"
+                    )
 
                 self.spotify_cache = data
 
@@ -168,19 +172,23 @@ class SpotifyClient:
 
                 print("🎶 - Access token do spotify obtido com sucesso via API Oficial.")
 
-        except Exception as e:
+        finally:
             self.token_refresh = False
-            raise e
-
-        self.token_refresh = False
 
         async with aiofiles.open(spotify_cache_file, "w") as f:
             await f.write(json.dumps(self.spotify_cache))
 
     async def get_valid_access_token(self):
-        if time.time() >= self.spotify_cache["expires_at"]:
+        if time.time() >= self.spotify_cache.get("expires_at", 0):
             await self.get_access_token()
-        return self.spotify_cache["access_token"]
+
+        try:
+            return self.spotify_cache["access_token"]
+        except KeyError:
+            raise GenericError(
+                "**Não foi possível obter o token de acesso do Spotify (confira SPOTIFY_CLIENT_ID e "
+                "SPOTIFY_CLIENT_SECRET).**"
+            ) from None
 
     async def get_tracks(
         self, bot: BotCore, requester: int, query: str, search: bool = True, check_title: float = None
