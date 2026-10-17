@@ -226,6 +226,7 @@ class BotPool:
                 None, lambda: run_lavalink(
                     lavalink_file_url=self.config['LAVALINK_FILE_URL'],
                     lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256'],
+                    youtube_oauth_refresh_token=self.config['YOUTUBE_OAUTH_REFRESH_TOKEN'],
                     lavalink_initial_ram=self.config['LAVALINK_INITIAL_RAM'],
                     lavalink_ram_limit=self.config['LAVALINK_RAM_LIMIT'],
                     lavalink_additional_sleep=int(self.config['LAVALINK_ADDITIONAL_SLEEP']),

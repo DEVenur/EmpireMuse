@@ -394,12 +394,14 @@ class TestConfig:
 # ============================================================================ pedidos do MAESTRO pós-aprovação (observações 1 e 2)
 
 class TestRunLavalinkSignature:
-    def test_sha256_is_the_last_parameter_and_keyword_only(self):
+    def test_sha256_is_keyword_only_and_after_all_positional_parameters(self):
+        # Fase 2 A2: youtube_oauth_refresh_token também é keyword-only e entra depois; o sha256 deixa de ser o último.
         import inspect
         params = list(inspect.signature(ll.run_lavalink).parameters.values())
-        assert params[-1].name == "lavalink_file_sha256"
-        assert params[-1].kind is inspect.Parameter.KEYWORD_ONLY
-        assert params[-1].default in (None, "")
+        sha_param = next(p for p in params if p.name == "lavalink_file_sha256")
+        assert sha_param.kind is inspect.Parameter.KEYWORD_ONLY
+        assert sha_param.default in (None, "")
+        assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in params[params.index(sha_param):])
 
     def test_existing_positional_order_is_preserved(self):
         import inspect

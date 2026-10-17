@@ -30,11 +30,11 @@ EXPECTED_CONSTANTS = {
     "GUIDES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/docs/guides",
     "RPC_APP_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app",
     "RPC_APP_RELEASES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app/releases",
-    "LAVALINK_BINARIES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2",
-    "LAVALINK_JAR_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    "LAVALINK_APPLICATION_YML_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/application.yml",
+    "LAVALINK_BINARIES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3",
+    "LAVALINK_JAR_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
+    "LAVALINK_APPLICATION_YML_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/application.yml",
     "LAVALINK_JAR_SHA256": "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a",
-    "LAVALINK_APPLICATION_YML_SHA256": "0d17d65f3b7d7a889f2b23f2719bd8a1e1aac77b90e0b77e9dacdbd35ce94801",
+    "LAVALINK_APPLICATION_YML_SHA256": "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95",
     "LAVALINK_PLUGIN_SHA256": {
         "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar":
             "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
@@ -262,13 +262,17 @@ def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
     paths = [p for p in _repo_files()
              if not p.startswith(("tests/", ".git/")) and p != "CHANGELOG.md"
              and p.endswith((".py", ".md", ".env", ".yml", ".yaml", ".json", ".toml", ".txt", ".example"))]
+    # utils/branding.py (fonte única de identidade) lista de propósito o nome ANTIGO entre as URLs oficiais de versões
+    # anteriores, para que instalações com a URL antiga atualizem sozinhas; o upstream (zRitsu) segue proibido nele.
+    others = [p for p in paths if p != "utils/branding.py"]
     _fail_with("nome antigo do repositório de binários (use EmpireMuse-LL-binaries)",
-               _scan(paths, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]))
+               _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan(["utils/branding.py"], ["zRitsu/LL-binaries"]))
 
 
-def test_example_env_points_the_jar_to_the_release_002_of_the_renamed_repo():
-    match = re.search(r"^LAVALINK_FILE_URL=['\"]?([^'\"\n]+)", _read(".example.env"), re.MULTILINE)
-    assert match and match.group(1) == EXPECTED_CONSTANTS["LAVALINK_JAR_URL"]
+def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror():
+    # Fase 2 (defeito de atualização): uma URL fixa no .env quebrava a cada versão nova. Detalhes: tests/test_audio_fase2a3.py.
+    match = re.search(r"^LAVALINK_FILE_URL=(.*)$", _read(".example.env"), re.MULTILINE)
+    assert match and match.group(1).strip().strip("'\"") == ""
 
 
 # --------------------------------------------------------------------------- R3 Recursos do upstream

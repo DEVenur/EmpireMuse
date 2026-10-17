@@ -9,6 +9,7 @@ import tempfile
 import time
 import zipfile
 from contextlib import suppress
+from typing import Optional, Tuple
 
 import requests
 
@@ -123,17 +124,26 @@ def _matches(path: str, sha256: str) -> bool:
     return os.path.isfile(path) and file_sha256(path) == sha256.lower()
 
 
-def _jar_hash(url: str, configured_sha256: str) -> str:
-    """Hash do jar: o oficial usa o fixo do projeto; outro endereço exige ``LAVALINK_FILE_SHA256``."""
-    if url == branding.LAVALINK_JAR_URL:
-        return branding.LAVALINK_JAR_SHA256
+def _resolve_jar_source(url: Optional[str], configured_sha256: Optional[str]) -> Tuple[str, str]:
+    """Devolve ``(url, sha256)`` do jar a baixar.
+
+    Vazio ou URL oficial (atual ou de versão anterior do espelho) usa a URL e o hash fixos do projeto, ignorando o hash
+    configurado; as anteriores geram um aviso. Qualquer outro endereço exige HTTPS e ``LAVALINK_FILE_SHA256``.
+    """
+    url = (url or "").strip()
+    if not url or url == branding.LAVALINK_JAR_URL:
+        return branding.LAVALINK_JAR_URL, branding.LAVALINK_JAR_SHA256
+    if url in branding.LAVALINK_JAR_OFFICIAL_URLS:
+        logger.warning("LAVALINK_FILE_URL aponta para uma versão antiga do espelho oficial; usando a versão atual. "
+                       "Esvazie a variável LAVALINK_FILE_URL para seguir sempre o espelho oficial.")
+        return branding.LAVALINK_JAR_URL, branding.LAVALINK_JAR_SHA256
     if not url.lower().startswith("https://"):
         raise LavalinkDownloadError("LAVALINK_FILE_URL precisa usar HTTPS (https://); outros esquemas são recusados.")
     if not (configured_sha256 or "").strip():
         raise LavalinkDownloadError(
             "LAVALINK_FILE_URL aponta para um endereço diferente do oficial: defina também LAVALINK_FILE_SHA256 "
             "(SHA-256 do Lavalink.jar) para permitir o download.")
-    return configured_sha256.strip()
+    return url, configured_sha256.strip()
 
 
 def _prepare_yml(directory: str) -> None:
@@ -174,14 +184,37 @@ def prepare_lavalink_files(directory: str = ".", *, lavalink_file_url: str = Non
     Levanta ``LavalinkDownloadError`` (``IntegrityError`` se o hash não confere) antes de qualquer processo iniciar.
     """
     directory = str(directory)
-    url = lavalink_file_url or branding.LAVALINK_JAR_URL
-    jar_sha256 = _jar_hash(url, lavalink_file_sha256)
+    url, jar_sha256 = _resolve_jar_source(lavalink_file_url, lavalink_file_sha256)
     jar_path = os.path.join(directory, "Lavalink.jar")
     if not _matches(jar_path, jar_sha256):
         download_verified(url, jar_path, jar_sha256)
         _remove_unlisted_plugins(os.path.join(directory, PLUGINS_DIR))
     _prepare_yml(directory)
     _prepare_plugins(directory)
+
+
+# Variáveis (relaxed binding do Spring) que ligam o OAuth do plugin do YouTube; o token só viaja pelo ambiente do Popen.
+YOUTUBE_OAUTH_ENV_ENABLED = "PLUGINS_YOUTUBE_OAUTH_ENABLED"
+YOUTUBE_OAUTH_ENV_REFRESH_TOKEN = "PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"
+YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION = "PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION"
+
+
+def _youtube_oauth_popen_kwargs(refresh_token: Optional[str]) -> dict:
+    """Argumentos extras do Popen que entregam o refresh token ao Lavalink só pelo ambiente do processo filho.
+
+    Sem token: nada muda (o filho herda o ambiente do bot e o OAuth segue desligado). Com token: cópia do ambiente do
+    bot (o PATH precisa seguir para o java ser encontrado) mais as variáveis do plugin; o os.environ do próprio bot,
+    a linha de comando, os arquivos e os logs nunca recebem o valor.
+    """
+    token = (refresh_token or "").strip()
+    if not token:
+        return {}
+    return {"env": {
+        **os.environ,
+        YOUTUBE_OAUTH_ENV_ENABLED: "true",
+        YOUTUBE_OAUTH_ENV_REFRESH_TOKEN: token,
+        YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION: "true",
+    }}
 
 
 def run_lavalink(
@@ -192,7 +225,8 @@ def run_lavalink(
         lavalink_cpu_cores: int = 1,
         use_jabba: bool = False,
         *,
-        lavalink_file_sha256: str = None
+        lavalink_file_sha256: str = None,
+        youtube_oauth_refresh_token: str = None
 ):
     arch, osname = platform.architecture()
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
@@ -367,7 +401,9 @@ def run_lavalink(
     print("🌋 - Iniciando o servidor Lavalink (dependendo da hospedagem o lavalink pode demorar iniciar, "
           "o que pode ocorrer falhas em algumas tentativas de conexão até ele iniciar totalmente).")
 
-    lavalink_process = subprocess.Popen(java_cmd.split(), stdout=subprocess.DEVNULL)
+    lavalink_process = subprocess.Popen(
+        java_cmd.split(), stdout=subprocess.DEVNULL, **_youtube_oauth_popen_kwargs(youtube_oauth_refresh_token)
+    )
 
     if lavalink_additional_sleep:
         print(f"🕙 - Aguarde {lavalink_additional_sleep} segundos...")
