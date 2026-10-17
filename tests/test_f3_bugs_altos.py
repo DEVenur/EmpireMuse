@@ -23,6 +23,7 @@ KI-15  ``SpotifyClient.get_access_token`` com credenciais inválidas zera as cre
 
 import ast
 import asyncio
+import base64
 import copy
 import re
 import sys
@@ -502,6 +503,32 @@ class TestKI15SpotifyCredenciaisInvalidas:
             pass  # erro claro para o usuário; ou retorno vazio se o cliente se desativar
 
         assert cliente.token_refresh is False
+
+    @pytest.mark.asyncio
+    async def test_falha_nao_corrompe_o_cache_do_token_nem_apaga_as_credenciais(self, spotify_fake, tmp_path):
+        """Uma resposta de erro do Spotify não pode virar o 'token': o cache anterior e as credenciais ficam como estavam."""
+        cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
+        anterior = {"access_token": "anterior", "expires_at": 123.0}
+        cliente.spotify_cache = copy.deepcopy(anterior)
+
+        with pytest.raises(GenericError):
+            await _terminar(cliente.get_access_token())
+
+        assert cliente.spotify_cache == anterior, "a resposta de erro sobrescreveu o cache do token"
+        assert (cliente.client_id, cliente.client_secret) == (ID_FAKE, SEGREDO_FAKE), "as credenciais foram apagadas"
+        assert not (tmp_path / ".spotify_cache.json").exists(), "a falha gravou o arquivo de cache"
+
+    @pytest.mark.asyncio
+    async def test_credenciais_nao_vazam_para_logs_nem_para_a_saida(self, spotify_fake, caplog, capsys):
+        cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
+        basic = base64.b64encode(f"{ID_FAKE}:{SEGREDO_FAKE}".encode()).decode()
+
+        with caplog.at_level(0), pytest.raises(GenericError):
+            await _terminar(cliente.get_access_token())
+
+        saida = capsys.readouterr()
+        tudo = f"{caplog.text} {saida.out} {saida.err}"
+        assert SEGREDO_FAKE not in tudo and ID_FAKE not in tudo and basic not in tudo
 
     @pytest.mark.asyncio
     async def test_falha_de_rede_libera_o_token_refresh_e_propaga_o_erro(self, spotify_fake):

@@ -1,7 +1,9 @@
 """F3-1 / KI-15 — a tarefa de partida que obtém o token do Spotify captura e registra a falha (sem segredos no log)."""
 
+import ast
 import asyncio
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -23,7 +25,7 @@ def _pool(erro: BaseException | None):
 @pytest.mark.parametrize(
     "erro",
     [
-        GenericError("**Não foi possível autenticar no Spotify.**"),
+        GenericError("**Credenciais recusadas.**"),  # sem a palavra Spotify: o contexto tem de vir do próprio log
         ClientError("sem rede (simulado)"),
         OSError("disco cheio (simulado)"),
     ],
@@ -49,6 +51,31 @@ async def test_sucesso_nao_registra_erro(caplog):
 
     pool.spotify.get_access_token.assert_awaited_once()
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def _chamadas_de_create_task() -> list[ast.Call]:
+    arvore = ast.parse(
+        (Path(__file__).resolve().parent.parent / "empiremuse" / "utils" / "client.py").read_text("utf-8")
+    )
+    return [
+        no
+        for no in ast.walk(arvore)
+        if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) and no.func.attr == "create_task" and no.args
+    ]
+
+
+def _nome_chamado(no: ast.AST) -> str | None:
+    return no.func.attr if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) else None
+
+
+def test_a_partida_agenda_a_tarefa_que_captura_a_falha_e_nao_o_get_access_token_solto():
+    """Ligação em BotPool.setup: o bug original era um create_task(get_access_token()) sem tratamento de exceção."""
+    alvos = [_nome_chamado(no.args[0]) for no in _chamadas_de_create_task()]
+
+    assert "refresh_spotify_token" in alvos, "a partida não agenda refresh_spotify_token()"
+    assert "get_access_token" not in alvos, (
+        "create_task(get_access_token()) solto: a falha vira 'Task exception never retrieved'"
+    )
 
 
 @pytest.mark.asyncio
