@@ -375,6 +375,9 @@ class _RespostaFake:
         return False
 
     async def json(self, *args, **kwargs):
+        # cede o controle ao event loop, como uma resposta de rede de verdade: sem isso a 1ª chamada termina antes de a
+        # 2ª começar e o caminho "esperar a renovação em andamento" nunca seria exercitado
+        await asyncio.sleep(0.05)
         return copy.deepcopy(self._corpo)
 
 
