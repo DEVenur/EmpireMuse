@@ -8,7 +8,7 @@ import pytest
 
 
 def test_dotenv_values_is_neutralized_for_every_test():
-    import config_loader
+    import empiremuse.config_loader as config_loader
 
     if config_loader.dotenv_values() != {}:
         pytest.fail(
@@ -18,7 +18,7 @@ def test_dotenv_values_is_neutralized_for_every_test():
 
 
 def test_load_config_ignores_the_developers_real_dot_env(monkeypatch, tmp_path):
-    import config_loader
+    import empiremuse.config_loader as config_loader
 
     monkeypatch.chdir(tmp_path)
     for key in (
@@ -41,7 +41,7 @@ def test_load_config_ignores_the_developers_real_dot_env(monkeypatch, tmp_path):
 
 
 def test_a_test_can_still_provide_its_own_dot_env(monkeypatch, tmp_path):
-    import config_loader
+    import empiremuse.config_loader as config_loader
     import dotenv
 
     monkeypatch.chdir(tmp_path)

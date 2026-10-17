@@ -596,7 +596,7 @@ class LinksEffectsTest(LinksBase):
     atualiza o embed ocioso do canal de pedidos (no-op se há player ativo). Guild 200 (bot 2) não tem player."""
 
     def recorder(self):
-        from utils.music import interactions
+        from empiremuse.utils.music import interactions
 
         calls = []
 

@@ -26,8 +26,8 @@ from unittest import mock
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGING_ENV = os.environ.get("EMPIREMUSE_STAGING")
@@ -99,7 +99,7 @@ class TestBrandingRelease003:
         offenders = []
         # branding.py e local_lavalink.py podem listar URLs antigas de propósito (URLs oficiais de versões anteriores são
         # reconhecidas e atualizadas sozinhas — tests/test_audio_fase2a3.py); aqui só o que escolhe a versão atual.
-        for rel in ("config_loader.py", "utils/client.py"):
+        for rel in ("empiremuse/config_loader.py", "empiremuse/utils/client.py"):
             for lineno, line in enumerate((ROOT / rel).read_text("utf-8").splitlines(), start=1):
                 if "EmpireMuse-LL-binaries/releases/download/0.0.2" in line:
                     offenders.append(f"{rel}:{lineno}")
@@ -165,7 +165,7 @@ def _example_env_lines() -> list:
 
 class TestConfigKey:
     def test_default_config_declares_it_empty_and_as_text(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         assert config_loader.DEFAULT_CONFIG.get(CONFIG_KEY, "<ausente>") == ""
         assert type(config_loader.DEFAULT_CONFIG[CONFIG_KEY]) is str
@@ -188,7 +188,7 @@ class TestConfigKey:
     @staticmethod
     def _isolated_loader(monkeypatch, tmp_path, dot_env_text=None):
         """`dotenv_values()` procura o .env a partir do módulo (não do cwd): sem isto o .env REAL do dono entraria no teste."""
-        import config_loader
+        import empiremuse.config_loader as config_loader
         import dotenv
 
         monkeypatch.chdir(tmp_path)
@@ -212,7 +212,7 @@ class TestConfigKey:
         assert loader.load_config()[CONFIG_KEY] == ""
 
     def test_the_token_is_never_hardcoded_in_the_repo_example_or_default(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         assert FAKE_TOKEN not in (ROOT / ".example.env").read_text("utf-8")
         assert not re.search(r"1//0[0-9A-Za-z_-]{20,}", (ROOT / ".example.env").read_text("utf-8"))
@@ -402,11 +402,11 @@ class TestRunLavalinkSignatureA2:
         assert params["lavalink_file_sha256"].kind is inspect.Parameter.KEYWORD_ONLY
 
     def test_client_passes_the_configured_token_by_keyword(self):
-        source = (ROOT / "utils" / "client.py").read_text("utf-8").replace('"', "'")
+        source = (ROOT / "empiremuse" / "utils" / "client.py").read_text("utf-8").replace('"', "'")
         assert "youtube_oauth_refresh_token=self.config['YOUTUBE_OAUTH_REFRESH_TOKEN']" in source
 
     def test_client_keeps_passing_the_sha256(self):
-        source = (ROOT / "utils" / "client.py").read_text("utf-8").replace('"', "'")
+        source = (ROOT / "empiremuse" / "utils" / "client.py").read_text("utf-8").replace('"', "'")
         assert "lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256']" in source
 
 
@@ -416,7 +416,7 @@ class TestRunLavalinkSignatureA2:
 @pytest.fixture
 def export_env(monkeypatch, tmp_path):
     """Roda `Owner.exportsource` sem Discord/git: captura o conteúdo do .env que iria dentro do source.zip."""
-    from modules import legacy_cmds
+    from empiremuse.cogs import legacy_cmds
 
     monkeypatch.chdir(tmp_path)
     shutil.copyfile(ROOT / ".example.env", tmp_path / ".example.env")
@@ -620,14 +620,19 @@ class TestNoOutputSinkReceivesTheToken:
         )
 
     def test_only_the_expected_modules_reference_the_token(self):
-        allowed = {"config_loader.py", "utils/client.py", "utils/music/local_lavalink.py", "modules/legacy_cmds.py"}
+        allowed = {
+            "empiremuse/config_loader.py",
+            "empiremuse/utils/client.py",
+            "empiremuse/utils/music/local_lavalink.py",
+            "empiremuse/cogs/legacy_cmds.py",
+        }
         found = set()
         for path in _production_python_files():
             if CONFIG_KEY in path.read_text("utf-8"):
                 found.add(str(path.relative_to(ROOT)))
         assert found <= allowed, f"módulos inesperados leem o refresh token: {sorted(found - allowed)}"
-        assert "config_loader.py" in found, "config_loader.py deve declarar a chave"
-        assert "utils/client.py" in found, "client.py deve entregar o token ao Lavalink local"
+        assert "empiremuse/config_loader.py" in found, "config_loader.py deve declarar a chave"
+        assert "empiremuse/utils/client.py" in found, "client.py deve entregar o token ao Lavalink local"
 
     def test_the_token_is_not_stored_in_a_bot_or_pool_attribute(self):
         """Guarda: o valor só atravessa a chamada de run_lavalink; nada o copia para um atributo de longa vida."""

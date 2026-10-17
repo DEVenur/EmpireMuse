@@ -577,6 +577,13 @@ def _tree(relative):
     from tests.panel.helpers import ROOT
 
     path = ROOT / relative
+    if not path.is_file():
+        if relative.startswith("utils/"):
+            path = ROOT / "empiremuse" / relative
+        elif relative.startswith("modules/"):
+            path = ROOT / "empiremuse" / "cogs" / relative.removeprefix("modules/")
+        elif relative in ("config_loader.py", "web_app.py"):
+            path = ROOT / "empiremuse" / relative
     source = path.read_text(encoding="utf-8")
     return source, ast.parse(source)
 

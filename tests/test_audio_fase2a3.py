@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -79,7 +79,7 @@ class TestExampleEnv:
         assert "https" in text, "deve citar HTTPS para jar próprio"
 
     def test_default_config_still_resolves_to_the_current_official_url(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         assert config_loader.DEFAULT_CONFIG["LAVALINK_FILE_URL"] in ("", branding.LAVALINK_JAR_URL)
 

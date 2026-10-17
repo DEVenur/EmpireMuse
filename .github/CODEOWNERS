@@ -2,18 +2,18 @@
 # Caminhos sensíveis e críticos de segurança e infraestrutura exigem revisão obrigatória do mantenedor.
 
 /data/ @Or4cu1o
-/utils/branding.py @Or4cu1o
-/utils/music/local_lavalink.py @Or4cu1o
-/utils/music/lavalink_server_list.py @Or4cu1o
+/empiremuse/utils/branding.py @Or4cu1o
+/empiremuse/utils/music/local_lavalink.py @Or4cu1o
+/empiremuse/utils/music/lavalink_server_list.py @Or4cu1o
 /source_update.sh @Or4cu1o
 /source_quick_update.sh @Or4cu1o
 /requirements*.txt @Or4cu1o
 /.github/ @Or4cu1o
 /LICENSE @Or4cu1o
 /SECURITY.md @Or4cu1o
-/config_loader.py @Or4cu1o
-/web_app.py @Or4cu1o
-/modules/legacy_cmds.py @Or4cu1o
-/utils/owner_panel.py @Or4cu1o
-/utils/db.py @Or4cu1o
+/empiremuse/config_loader.py @Or4cu1o
+/empiremuse/web_app.py @Or4cu1o
+/empiremuse/cogs/legacy_cmds.py @Or4cu1o
+/empiremuse/utils/owner_panel.py @Or4cu1o
+/empiremuse/utils/db.py @Or4cu1o
 /pyproject.toml @Or4cu1o

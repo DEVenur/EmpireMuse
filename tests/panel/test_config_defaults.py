@@ -25,7 +25,7 @@ def _config_loader(monkeypatch, tmp_path):
     )  # isola o config.json real; o .env real é isolado pelo fixture autouse de tests/conftest.py
     for key in EXPECTED_DEFAULTS:
         monkeypatch.delenv(key, raising=False)
-    import config_loader
+    import empiremuse.config_loader as config_loader
 
     return config_loader
 

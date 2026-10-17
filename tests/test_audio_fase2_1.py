@@ -27,8 +27,8 @@ from types import MappingProxyType
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -132,7 +132,7 @@ class TestJdkDownloadsConstant:
         assert not any(len(set(d)) <= 2 for d in digests), "hash com cara de placeholder (0000…, aaaa…)"
 
     def test_local_lavalink_no_longer_hardcodes_the_bellsoft_urls_or_downloads_the_jdk_unverified(self):
-        source = (ROOT / "utils/music/local_lavalink.py").read_text(encoding="utf-8")
+        source = (ROOT / "empiremuse/utils/music/local_lavalink.py").read_text(encoding="utf-8")
         assert "download.bell-sw.com" not in source, "as URLs do JDK passam a viver em branding.JDK_DOWNLOADS"
         assert not re.search(r"download_file\(\s*jdk_url", source), (
             "JDK não pode mais passar por download_file (sem verificação)"

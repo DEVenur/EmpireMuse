@@ -149,7 +149,7 @@ def _fail_with(title: str, violations: list[str]) -> None:
 def _runtime_files(*, deploy: bool) -> list[str]:
     selected = []
     for path in _repo_files():
-        if path.startswith("tests/") or path == "utils/branding.py":
+        if path.startswith("tests/") or path in ("utils/branding.py", "empiremuse/utils/branding.py"):
             continue
         if _is_deploy(path) != deploy:
             continue
@@ -166,7 +166,7 @@ class _LazyBranding:
 
     def __getattr__(self, name):
         try:
-            from utils import branding as module
+            from empiremuse.utils import branding as module
         except ImportError as exc:
             pytest.fail(f"utils/branding.py ainda não existe ou não importa (RED esperado): {exc}", pytrace=False)
         return getattr(module, name)
@@ -175,7 +175,7 @@ class _LazyBranding:
 class _LazyDefaultConfig:
     def __getitem__(self, key):
         try:
-            import config_loader
+            import empiremuse.config_loader as config_loader
         except ImportError as exc:
             pytest.fail(f"config_loader não importa isolado: {exc}", pytrace=False)
         return config_loader.DEFAULT_CONFIG[key]
@@ -278,7 +278,12 @@ def test_lavalink_servers_ini_exists_and_is_valid_ini():
 
 
 def test_local_lavalink_does_not_use_upstream_binaries():
-    violations = _scan(["utils/music/local_lavalink.py"], ["zRitsu/LL-binaries"])
+    path = (
+        "empiremuse/utils/music/local_lavalink.py"
+        if (ROOT / "empiremuse/utils/music/local_lavalink.py").is_file()
+        else "utils/music/local_lavalink.py"
+    )
+    violations = _scan([path], ["zRitsu/LL-binaries"])
     _fail_with("local_lavalink.py ainda aponta para zRitsu/LL-binaries", violations)
 
 
@@ -298,10 +303,13 @@ def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
     ]
     # utils/branding.py (fonte única de identidade) lista de propósito o nome ANTIGO entre as URLs oficiais de versões
     # anteriores, para que instalações com a URL antiga atualizem sozinhas; o upstream (zRitsu) segue proibido nele.
-    others = [p for p in paths if p != "utils/branding.py"]
+    branding_path = (
+        "empiremuse/utils/branding.py" if (ROOT / "empiremuse/utils/branding.py").is_file() else "utils/branding.py"
+    )
+    others = [p for p in paths if p not in ("utils/branding.py", "empiremuse/utils/branding.py")]
     _fail_with(
         "nome antigo do repositório de binários (use EmpireMuse-LL-binaries)",
-        _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan(["utils/branding.py"], ["zRitsu/LL-binaries"]),
+        _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan([branding_path], ["zRitsu/LL-binaries"]),
     )
 
 
@@ -318,7 +326,11 @@ def _jishaku_exception(path: str, line: str) -> bool:
     return path == JISHAKU_EXCEPTION_FILE and "jishaku" in line.lower()
 
 
-PANEL_CREDIT_FILE = "panel/templates/base.html"
+PANEL_CREDIT_FILE = (
+    "empiremuse/panel/templates/base.html"
+    if (ROOT / "empiremuse/panel/templates/base.html").is_file()
+    else "panel/templates/base.html"
+)
 UPSTREAM_REPO_URL = "https://github.com/zRitsu/MuseHeart-MusicBot"
 ATTRIBUTION_RE = re.compile(r"zRitsu(?!/)")
 OTHER_UPSTREAM_PATTERNS = tuple(p for p in UPSTREAM_RESOURCE_PATTERNS if p != "zRitsu")
@@ -398,7 +410,11 @@ def test_assets_sha256sums_hashes_match_files():
 def test_asset_url_literals_point_to_existing_assets():
     missing = []
     for path in _repo_files():
-        if not path.endswith(".py") or path.startswith("tests/") or path == "utils/branding.py":
+        if (
+            not path.endswith(".py")
+            or path.startswith("tests/")
+            or path in ("utils/branding.py", "empiremuse/utils/branding.py")
+        ):
             continue
         for lineno, line in enumerate(_read(path).splitlines(), start=1):
             for match in ASSET_URL_LITERAL_RE.finditer(line):
@@ -441,7 +457,8 @@ def test_upstream_constants_match_contract(branding, const):
 
 
 def test_about_command_links_repo_and_upstream():
-    content = _read("modules/misc.py")
+    misc_path = "empiremuse/cogs/misc.py" if (ROOT / "empiremuse/cogs/misc.py").is_file() else "modules/misc.py"
+    content = _read(misc_path)
     for label, const in (("REPO_URL", "REPO_URL"), ("UPSTREAM_URL", "UPSTREAM_URL")):
         literal = EXPECTED_CONSTANTS[const]
         assert f"branding.{label}" in content or literal in content, (
@@ -463,7 +480,11 @@ def _old_name_scan(paths) -> list[str]:
 
 def test_python_files_do_not_use_old_bot_name():
     py_files = [
-        p for p in _repo_files() if p.endswith(".py") and not p.startswith("tests/") and p != "utils/branding.py"
+        p
+        for p in _repo_files()
+        if p.endswith(".py")
+        and not p.startswith("tests/")
+        and p not in ("utils/branding.py", "empiremuse/utils/branding.py")
     ]
     _fail_with("Nome antigo (MuseHeart) em arquivos .py", _old_name_scan(py_files))
 
@@ -487,7 +508,7 @@ def test_branding_constant_has_contract_value(branding, const, expected):
 
 def test_client_bot_token_message_has_no_replit_reference():
     """Garante que a mensagem de erro de token em utils/client.py não contém referências à Replit (C-15/C-16)."""
-    client_py = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
+    client_py = (ROOT / "empiremuse" / "utils" / "client.py").read_text(encoding="utf-8")
     assert "REPL_SLUG" not in client_py, "utils/client.py ainda contém ramificação específica para REPL_SLUG"
     assert "replit-token.md" not in client_py, "utils/client.py ainda referencia replit-token.md"
     assert "secrets da replit" not in client_py, "utils/client.py ainda contém mensagem legada da Replit"

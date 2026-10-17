@@ -23,7 +23,7 @@ from tests.panel.helpers_login import DEFAULT_USER
 from tests.panel.helpers_settings import NOT_FOUND_TEXT, UID, acao_form
 from tests.panel.test_channel_page import CanalBase
 from tests.panel.test_settings_http import Each, external_change
-from utils.music.errors import GenericError
+from empiremuse.utils.music.errors import GenericError
 
 TASK_URL = re.compile(r"/painel/servidores/(\d+)/canal/tarefas/([A-Za-z0-9_-]{32})")
 FINAL = ("ok", "erro")

@@ -80,7 +80,9 @@ class HttpBase(SettingsBase):
 
     def audit_text(self):
         return "\n".join(
-            r.getMessage() for r in self.caplog.records if r.levelno == logging.INFO and r.name.startswith("panel")
+            r.getMessage()
+            for r in self.caplog.records
+            if r.levelno == logging.INFO and (r.name.startswith("panel") or r.name.startswith("empiremuse.panel"))
         )
 
     def all_log_text(self):

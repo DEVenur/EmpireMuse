@@ -17,9 +17,9 @@ from tests.panel.helpers_settings import (
     version_of,
 )
 
-LEGACY = (ROOT / "modules/legacy_cmds.py").read_text(encoding="utf-8")
-SETTINGS = (ROOT / "modules/music_settings.py").read_text(encoding="utf-8")
-INTERACTIONS = (ROOT / "utils/music/interactions.py").read_text(encoding="utf-8")
+LEGACY = (ROOT / "empiremuse/cogs/legacy_cmds.py").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "empiremuse/cogs/music_settings.py").read_text(encoding="utf-8")
+INTERACTIONS = (ROOT / "empiremuse/utils/music/interactions.py").read_text(encoding="utf-8")
 
 
 class TestCommandRules:
@@ -73,7 +73,7 @@ class TestCommandRules:
         )
 
     def test_models_hold_the_fields_the_panel_writes(self):
-        from utils.db import DBModel, db_models, global_db_models
+        from empiremuse.utils.db import DBModel, db_models, global_db_models
 
         guild = db_models[DBModel.guilds]
         assert {

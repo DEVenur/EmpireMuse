@@ -276,7 +276,7 @@ class CanalSetupValidationTest(CanalBase):
 
     def test_missing_manage_permissions_is_explained_in_panel_terms_not_with_the_commands_text(self):
         """Fase 2 / Trilha C: o texto do /setup ("use o comando sem selecionar um canal de destino") não serve ao painel."""
-        from utils import branding
+        from empiremuse.utils import branding
 
         self.world.text._perms = perms(**{k: v for k, v in FULL_TEXT.items() if k != "manage_permissions"})
         body = " ".join(html.unescape(self.check_422(modo="existente", canal="22")).split())

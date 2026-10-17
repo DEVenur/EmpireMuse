@@ -17,7 +17,7 @@ class TestWaveLinkPublicApi:
     """Verifica se a API pública exposta por wavelink permanece intacta."""
 
     def test_wavelink_reexports_are_accessible(self):
-        import wavelink
+        import empiremuse.wavelink as wavelink
 
         # Classes e símbolos centrais reexportados
         assert hasattr(wavelink, "Client")
@@ -33,7 +33,7 @@ class TestWaveLinkPublicApi:
 
     def test_wavelink_node_tracks_return(self):
         """Verifica a estrutura sintática de wavelink/node.py no método de carregamento de faixas."""
-        node_py = (ROOT / "wavelink" / "node.py").read_text(encoding="utf-8")
+        node_py = (ROOT / "empiremuse" / "wavelink" / "node.py").read_text(encoding="utf-8")
         assert "async def get_tracks" in node_py
         assert "track_cls(id_=track[encoded_name]" in node_py
 
@@ -44,11 +44,11 @@ class TestModulesImportability:
     @pytest.mark.parametrize(
         "module_name",
         [
-            "modules.music",
-            "modules.music_settings",
-            "panel.handlers.auth",
-            "utils.music.models",
-            "wavelink.node",
+            "empiremuse.cogs.music",
+            "empiremuse.cogs.music_settings",
+            "empiremuse.panel.handlers.auth",
+            "empiremuse.utils.music.models",
+            "empiremuse.wavelink.node",
         ],
     )
     def test_module_can_be_imported(self, module_name):

@@ -29,7 +29,7 @@ class TestDefaultSearchProviders:
     EXPECTED = ["ytsearch", "ytmsearch", "scsearch"]
 
     def test_config_loader_default(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         assert config_loader.DEFAULT_CONFIG["SEARCH_PROVIDERS"].split() == self.EXPECTED
 
@@ -40,7 +40,7 @@ class TestDefaultSearchProviders:
         assert match.group(1).split() == self.EXPECTED
 
     def test_both_defaults_agree(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         text = (ROOT / ".example.env").read_text(encoding="utf-8")
         env = re.search(r'^SEARCH_PROVIDERS=["\']?([^"\'\n]*)', text, re.MULTILINE).group(1).split()
@@ -64,7 +64,7 @@ def make_node(source_managers, search_providers, original=None):
 
 
 def call_node_ready(node):
-    from modules.music import Music
+    from empiremuse.cogs.music import Music
 
     cog = SimpleNamespace(bot=SimpleNamespace(user="bot"))
     cog.add_provider = lambda *a: Music.add_provider(cog, *a)
@@ -112,8 +112,8 @@ def search_cog(exceptions):
 
 
 def failing_search(exceptions):
-    from modules.music import Music
-    from utils.music.errors import GenericError
+    from empiremuse.cogs.music import Music
+    from empiremuse.utils.music.errors import GenericError
 
     with pytest.raises(GenericError) as info:
         run(
@@ -150,8 +150,8 @@ class TestSearchFailureMessage:
         assert "Não houve resultados" in failing_search(set()).text
 
     def test_lastfm_mix_failure_has_no_repr(self):
-        from modules.music import Music
-        from utils.music.errors import GenericError
+        from empiremuse.cogs.music import Music
+        from empiremuse.utils.music.errors import GenericError
 
         class Boom:
             async def get_similar_tracks(self, **kw):
@@ -200,7 +200,7 @@ def make_channel(permissions, send_error=None):
 
 
 def welcome(channel):
-    from modules.misc import Misc
+    from empiremuse.cogs.misc import Misc
 
     bot = SimpleNamespace(
         pool=SimpleNamespace(bots=[]),
@@ -243,7 +243,7 @@ class TestWelcomeMessagePermissions:
 
     @pytest.mark.parametrize("where", ["public_updates_channel", "rules_channel"])
     def test_fallback_channels_also_need_embed_links(self, where):
-        from modules.misc import Misc
+        from empiremuse.cogs.misc import Misc
 
         bad, good = make_channel(perms(embed_links=False)), make_channel(perms())
         guild = make_guild(None)
@@ -260,7 +260,7 @@ class TestWelcomeMessagePermissions:
         assert bad.sent == [] and good.sent == []
 
     def test_no_bare_except_in_guild_add(self):
-        tree = ast.parse((ROOT / "modules" / "misc.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "empiremuse" / "cogs" / "misc.py").read_text(encoding="utf-8"))
         func = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "guild_add")
         bare = [h.lineno for h in ast.walk(func) if isinstance(h, ast.ExceptHandler) and h.type is None]
         assert not bare, f"except: nu em guild_add nas linhas {bare}"
@@ -284,7 +284,7 @@ class FakeResponse:
 
 
 def make_decode_node(version, payload, status=200):
-    from wavelink.node import Node
+    from empiremuse.wavelink.node import Node
 
     node = object.__new__(Node)
     node.rest_uri, node.password, node.version = "http://127.0.0.1:2333", "senha", version
@@ -313,7 +313,7 @@ class TestDecodeTrack:
         assert track.title == "Faixa de teste" and track.id == "QUJD"
 
     def test_v4_error_raises_build_track_error(self):
-        from wavelink.errors import BuildTrackError
+        from empiremuse.wavelink.errors import BuildTrackError
 
         node, _ = make_decode_node(4, {"status": 400, "error": "Bad Request", "message": "x"}, status=400)
         with pytest.raises(BuildTrackError):
@@ -332,7 +332,7 @@ class TestDecodeTrack:
 
 
 def make_player(version, channel_id, voice_state):
-    from wavelink.player import Player
+    from empiremuse.wavelink.player import Player
 
     player = object.__new__(Player)
     player.guild_id = 1
@@ -384,5 +384,5 @@ class TestVoiceUpdate:
         assert len(sent) == 1 and sent[0]["op"] == "voiceUpdate", "a regra de channel_id é só da rota v4"
 
     def test_player_module_does_not_use_pprint(self):
-        source = (ROOT / "wavelink" / "player.py").read_text(encoding="utf-8")
+        source = (ROOT / "empiremuse" / "wavelink" / "player.py").read_text(encoding="utf-8")
         assert "pprint" not in source

@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from panel.services import tasks
-from panel.services.tasks import TaskBusy, TaskFailure, TaskLimit, TaskRunner
+from empiremuse.panel.services import tasks
+from empiremuse.panel.services.tasks import TaskBusy, TaskFailure, TaskLimit, TaskRunner
 from tests.panel.helpers_login import FakeClock
 
 

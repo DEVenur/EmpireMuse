@@ -41,7 +41,7 @@ class UserFakeDB(FakeDB):
 
     async def get(self, scope, gid, db_name):
         if (scope, gid) not in self.docs:
-            from utils.db import DBModel, global_db_models
+            from empiremuse.utils.db import DBModel, global_db_models
 
             self.seed(scope, gid, copy.deepcopy(global_db_models[DBModel.users]))
         return await super().get(scope, gid, db_name)
@@ -143,7 +143,7 @@ class AccountWorld:
 
     @staticmethod
     def user_doc(prefix="", favs=None, integrations=None, token="", lastfm=None):
-        from utils.db import DBModel, global_db_models
+        from empiremuse.utils.db import DBModel, global_db_models
 
         doc = copy.deepcopy(global_db_models[DBModel.users])
         doc.update(

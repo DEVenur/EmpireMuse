@@ -2,7 +2,7 @@
 
 import pytest
 
-from modules.music import is_discord_attachment_url
+from empiremuse.cogs.music import is_discord_attachment_url
 
 
 @pytest.mark.parametrize(

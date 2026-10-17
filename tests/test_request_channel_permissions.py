@@ -18,8 +18,8 @@ from tests.helpers_request_channel import (
     Journal,
     perms,
 )
-from utils.music import request_channel
-from utils.music.errors import GenericError
+from empiremuse.utils.music import request_channel
+from empiremuse.utils.music.errors import GenericError
 
 TEXT_NEEDS = ("send_messages", "embed_links", "view_channel")
 FORUM_NEEDS = ("send_messages", "send_messages_in_threads", "embed_links", "view_channel")
@@ -28,7 +28,7 @@ ESC = "\x1b"
 
 def exact(channel, missing):
     """Mensagem EXATA esperada (bloco ```ansi com ESC[0;33m … ESC[0m, na ordem de iteração de Permissions)."""
-    from utils.music.converters import perms_translations
+    from empiremuse.utils.music.converters import perms_translations
 
     ordered = [name for name, _ in channel.permissions_for(None) if name in missing]
     lines = "\n".join(f"{ESC}[0;33m{perms_translations.get(name, name)}{ESC}[0m" for name in ordered)

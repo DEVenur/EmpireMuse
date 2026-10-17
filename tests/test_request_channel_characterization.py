@@ -12,7 +12,7 @@ import disnake
 import pytest
 from disnake.ext import commands
 
-import modules.music_settings as ms
+import empiremuse.cogs.music_settings as ms
 from tests.helpers_request_channel import (
     ACTOR_MENTION,
     BOT_MENTION,
@@ -35,7 +35,7 @@ from tests.helpers_request_channel import (
     ModalInter,
     perms,
 )
-from utils.music.errors import GenericError
+from empiremuse.utils.music.errors import GenericError
 
 INVERTER_APOS_E4C = "comportamento ruim registrado de propósito: a E4c inverte este teste (ver BRIEFING-PAINEL-E4)"
 
@@ -57,7 +57,7 @@ FORUM_MANAGE_THREADS_TEXT = (
 def ansi_permissions_message(mention, channel, missing):
     """Mensagem EXATA de check_channel_perm: bloco ```ansi com uma linha amarela (ESC[0;33m … ESC[0m) por permissão,
     na ordem em que `Permissions` itera. Os bytes ESC fazem parte do contrato (o Discord só colore com eles)."""
-    from utils.music.converters import perms_translations
+    from empiremuse.utils.music.converters import perms_translations
 
     ordered = [name for name, _ in channel.permissions_for(None) if name in missing]
     lines = "\n".join(f"{ESC}[0;33m{perms_translations.get(name, name)}{ESC}[0m" for name in ordered)
@@ -995,7 +995,7 @@ class TestPermissionMessageIsByteExact:
         assert text == ansi_permissions_message("<#55>", world.forum, ("embed_links",))
 
     def test_the_unit_function_in_the_shared_module_is_byte_exact_too(self, world):
-        from utils.music import request_channel
+        from empiremuse.utils.music import request_channel
 
         world.text._perms = perms(view_channel=True)
         with pytest.raises(GenericError) as raised:
@@ -1004,8 +1004,8 @@ class TestPermissionMessageIsByteExact:
 
     def test_the_command_module_and_the_shared_module_agree_on_the_message(self, world):
         """Se o cog voltar a ter uma cópia própria da checagem, as duas têm de produzir os mesmos bytes."""
-        import modules.music_settings as cog
-        from utils.music import request_channel
+        import empiremuse.cogs.music_settings as cog
+        from empiremuse.utils.music import request_channel
 
         world.text._perms = perms(view_channel=True)
         messages = []

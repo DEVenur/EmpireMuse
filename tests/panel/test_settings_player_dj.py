@@ -151,7 +151,7 @@ class PlayerWriteTest(HttpBase):
         response = self.save(browser, 200, "player", "default_player_volume", default_player_volume="75")
         assert response.code == 200
         ver = self.db.doc("2", 200)["ver"]
-        from utils.db import DBModel, db_models
+        from empiremuse.utils.db import DBModel, db_models
 
         assert ver == db_models[DBModel.guilds]["ver"], "o painel nunca sobe `ver` (KI-09)"
 

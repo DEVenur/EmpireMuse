@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PANEL_DIR = ROOT / "panel"
+PANEL_DIR = ROOT / "empiremuse" / "panel"
 VENDOR_DIR = PANEL_DIR / "static" / "vendor"
 TEMPLATES_DIR = PANEL_DIR / "templates"
 BRAND_DIR = ROOT / "assets" / "brand"
@@ -61,10 +61,21 @@ def https_config(**overrides) -> dict:
 
 def require(module_name: str):
     """Importa um módulo do painel; falha o teste (não a coleta) com mensagem clara se não existir."""
+    if not module_name.startswith("empiremuse."):
+        first = module_name.split(".")[0]
+        if first in ("panel", "utils", "wavelink", "cogs", "config_loader", "web_app"):
+            target = f"empiremuse.{module_name}"
+        elif first == "modules":
+            rest = module_name[len("modules") :]
+            target = f"empiremuse.cogs{rest}"
+        else:
+            target = module_name
+    else:
+        target = module_name
     try:
-        return importlib.import_module(module_name)
+        return importlib.import_module(target)
     except ImportError as exc:
-        pytest.fail(f"{module_name} ainda não existe ou não importa (RED esperado): {exc}", pytrace=False)
+        pytest.fail(f"{target} ainda não existe ou não importa (RED esperado): {exc}", pytrace=False)
 
 
 def load_settings(config: dict):

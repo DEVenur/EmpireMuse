@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 FILE, DIR, SYM, HARD, FIFO = "file", "dir", "sym", "hard", "fifo"
 

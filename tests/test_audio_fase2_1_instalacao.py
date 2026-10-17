@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 
 from tests.test_audio_fase2_1_extracao import DIR, FILE, GOOD, SYM, tar_gz
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 PLATFORM_DIR = "Linux-64bit-ELF"
 JDK_URL = "https://example.test/jdk-linux.tar.gz"

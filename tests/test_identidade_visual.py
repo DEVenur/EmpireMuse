@@ -27,7 +27,7 @@ def _read(rel: str) -> str:
 
 def _branding():
     try:
-        from utils import branding
+        from empiremuse.utils import branding
     except ImportError as exc:
         pytest.fail(f"utils.branding não importa: {exc}", pytrace=False)
     return branding
@@ -35,7 +35,7 @@ def _branding():
 
 def _config_loader(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    import config_loader
+    import empiremuse.config_loader as config_loader
 
     return config_loader
 

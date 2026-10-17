@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
 OLD_YML_SHA256 = "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3"  # application.yml da release 0.0.1
@@ -396,14 +396,14 @@ class TestRunLavalink:
 
 class TestConfig:
     def test_default_config_has_an_empty_file_sha256_and_example_env_documents_it(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         assert config_loader.DEFAULT_CONFIG.get("LAVALINK_FILE_SHA256") == ""
         example = (ROOT / ".example.env").read_text(encoding="utf-8")
         assert re.search(r"^LAVALINK_FILE_SHA256=", example, re.MULTILINE)
 
     def test_client_passes_the_configured_sha256_to_run_lavalink(self):
-        source = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
+        source = (ROOT / "empiremuse" / "utils" / "client.py").read_text(encoding="utf-8")
         assert "lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256']" in source.replace('"', "'")
 
 
@@ -435,7 +435,7 @@ class TestRunLavalinkSignature:
         ]
 
     def test_client_still_calls_by_keyword_with_the_sha256(self):
-        source = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
+        source = (ROOT / "empiremuse" / "utils" / "client.py").read_text(encoding="utf-8")
         assert "lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256']" in source.replace('"', "'")
 
 

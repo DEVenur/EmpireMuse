@@ -6,11 +6,11 @@ import re
 
 from tests.panel.helpers import ROOT
 
-LEGACY = (ROOT / "modules/legacy_cmds.py").read_text(encoding="utf-8")
-INTERACTIONS = (ROOT / "utils/music/interactions.py").read_text(encoding="utf-8")
-SETTINGS = (ROOT / "modules/music_settings.py").read_text(encoding="utf-8")
-LASTFM = (ROOT / "modules/lastfm.py").read_text(encoding="utf-8")
-MUSIC = (ROOT / "modules/music.py").read_text(encoding="utf-8")
+LEGACY = (ROOT / "empiremuse/cogs/legacy_cmds.py").read_text(encoding="utf-8")
+INTERACTIONS = (ROOT / "empiremuse/utils/music/interactions.py").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "empiremuse/cogs/music_settings.py").read_text(encoding="utf-8")
+LASTFM = (ROOT / "empiremuse/cogs/lastfm.py").read_text(encoding="utf-8")
+MUSIC = (ROOT / "empiremuse/cogs/music.py").read_text(encoding="utf-8")
 
 
 def flat(text):
@@ -34,13 +34,13 @@ class TestUserPrefixRules:
         assert 'self.bot.pool.user_prefix_cache[ctx.author.id] = ""' in code
 
     def test_cache_is_read_with_the_same_int_key(self):
-        source = (ROOT / "utils/db.py").read_text(encoding="utf-8")
+        source = (ROOT / "empiremuse/utils/db.py").read_text(encoding="utf-8")
         assert "bot.pool.user_prefix_cache[message.author.id]" in source
 
 
 class TestFavoritesRules:
     def test_config_defaults(self):
-        import config_loader
+        import empiremuse.config_loader as config_loader
 
         cfg = config_loader.DEFAULT_CONFIG
         assert (

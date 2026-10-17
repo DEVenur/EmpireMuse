@@ -293,7 +293,7 @@ class FakeDB:
     """Mesma semântica do BaseDB: get devolve o MESMO dict; update registra e guarda uma cópia."""
 
     def __init__(self, journal, channel=None, message_id=None):
-        from utils.db import DBModel, db_models
+        from empiremuse.utils.db import DBModel, db_models
 
         doc = copy.deepcopy(db_models[DBModel.guilds])
         doc["player_controller"]["channel"] = channel

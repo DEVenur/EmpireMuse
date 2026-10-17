@@ -18,7 +18,7 @@ import tornado.testing
 import tornado.websocket
 
 from tests.panel.helpers import local_config, require
-from utils import branding
+from empiremuse.utils import branding
 
 HOSTILE = "<script>alert(1)</script>"
 HOSTILE_IMG = "<img src=x onerror=alert(2)>"

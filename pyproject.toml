@@ -8,8 +8,8 @@ addopts = "-ra"
 
 [tool.coverage.run]
 source = [
-    "panel",
-    "utils.music.request_channel",
+    "empiremuse.panel",
+    "empiremuse.utils.music.request_channel",
 ]
 omit = [
     'repos/*',

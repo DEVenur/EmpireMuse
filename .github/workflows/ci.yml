@@ -39,7 +39,7 @@ jobs:
         run: ruff format --check .
 
       - name: Verificação de compilação de bytecode
-        run: python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink
+        run: python -m compileall -q main.py app.py empiremuse
 
       - name: Execução dos testes automatizados (pytest)
         run: pytest -q
