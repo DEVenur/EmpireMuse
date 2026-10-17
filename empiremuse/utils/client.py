@@ -31,7 +31,7 @@ from user_agent import generate_user_agent
 
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
-from empiremuse.config_loader import load_config
+from empiremuse.config_loader import load_config, resolve_port
 from empiremuse.utils import branding
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
@@ -562,7 +562,7 @@ class BotPool:
     async def connect_rpc_ws(self):
         if not self.config["RUN_RPC_SERVER"] and (
             not self.config["RPC_SERVER"]
-            or self.config["RPC_SERVER"].replace("$PORT", port := os.environ.get("PORT", "80"))
+            or self.config["RPC_SERVER"].replace("$PORT", port := str(resolve_port(self.config.get("PORT"))))
             == f"ws://localhost:{port}/ws"
         ):
             pass
