@@ -321,10 +321,16 @@ class MongoDatabase(BaseDB):
         return await self._connect[collection][db_name].delete_one({"_id": str(id_)})
 
 
-def update_values(d, u):
+def update_values(d: dict, u: collections.abc.Mapping) -> dict:
+    """Migra o documento salvo `u` para o modelo `d` (o modelo é alterado e devolvido; passe uma cópia).
+
+    Só acrescenta e atualiza, nunca apaga: o valor salvo vence o padrão em qualquer tipo (inclusive listas), chaves
+    novas do modelo ficam com o padrão e chaves removidas do modelo são preservadas. Nada do documento salvo é
+    compartilhado com o resultado (cópia profunda).
+    """
     for k, v in u.items():
-        if isinstance(v, collections.abc.Mapping):
-            d[k] = update_values(d.get(k, {}), v)
-        elif not isinstance(v, list):
-            d[k] = v
+        if isinstance(v, collections.abc.Mapping) and isinstance(d.get(k), collections.abc.Mapping):
+            d[k] = update_values(d[k], v)
+        else:
+            d[k] = deepcopy(v)
     return d
