@@ -13,6 +13,7 @@ Documentação técnica e tutoriais de configuração para administradores e des
 | **[Painel Web Integrado](painel-web.md)** | Configuração do painel de administração web, credenciais OAuth2 no Discord Developer Portal, permissões e variáveis de ambiente. |
 | **[Chaves de API do Spotify](spotify-keys.md)** | Obtenção de `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` no Spotify for Developers para resolução de metadados de faixas e playlists. |
 | **[Implantação com Docker](docker.md)** | Implantação e execução com a imagem oficial multi-stage, variáveis operacionais, volumes persistentes e supervisão de processos. |
+| **[Guia de Release e Publicação](release.md)** | Versionamento SemVer, publicação de tags no Git, esteira automatizada multi-arquitetura no Docker Hub com SBOM e provenance. |
 
 ---
 

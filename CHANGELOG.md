@@ -8,6 +8,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Workflow de Release Multi-Arquitetura e Verificação de Tags (Bloco D4 / Fase D)**:
+  - Adicionado workflow automatizado no GitHub Actions (`.github/workflows/release.yml`) acionado no envio de tags semânticas (`v*.*.*`).
+  - Verificação prévia de segurança (`verify-tag`) validando se o commit da tag pertence estritamente ao histórico da branch `origin/main` (`git merge-base --is-ancestor`) antes de disparar testes e compilação.
+  - Compilação e publicação multi-arquitetura (`linux/amd64` e `linux/arm64`) no Docker Hub (`or4cu1o/empiremuse`) utilizando Docker Buildx e QEMU, com geração e anexação de atestados de segurança SBOM (`sbom: true`) e Provenance em nível máximo (`provenance: mode=max`).
+  - Publicação de tags semânticas (`X.Y.Z`, `X.Y`, `latest`) para releases estáveis e isolamento de release candidates (`X.Y.Z-rc.N`) sem impactar a tag `latest`.
+  - Guia técnico completo para o mantenedor em `docs/guides/release.md` cobrindo versionamento SemVer, fluxo de publicação, pré-requisitos de segredos e conferência de imagens.
 - **Orquestração com Docker Compose e MongoDB Opcional (Bloco D3 / Fase D)**:
   - Adicionado arquivo `docker-compose.yml` para orquestração declarativa e endurecida da aplicação, com o contêiner do bot configurado com sistema de arquivos somente leitura (`read_only: true`), `/tmp` em memória (`tmpfs`), descarte total de capacidades Linux (`cap_drop: [ALL]`), proibição de novos privilégios (`no-new-privileges:true`) e publicação restrita apenas da porta HTTP 8080 (Lavalink nunca exposto).
   - Suporte a serviço opcional de MongoDB em contêiner (`mongo:8.0.34` com imagem fixada por digest imutável) gerenciado via perfil do Compose (`--profile mongo`), com isolamento de credenciais administrativas em arquivo de ambiente próprio obrigatório (`.env.mongo`), exigido apenas quando o perfil estiver ativo e com porta do banco não publicada no host.
@@ -114,6 +120,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Modernização da CI para Node 24 e Fixação de Versão do uv (Bloco D4 / Fase D)**:
+  - Atualização das GitHub Actions na esteira de integração contínua (`.github/workflows/ci.yml`) para versões baseadas em Node 24 (`actions/checkout@v7.0.1` e `actions/setup-python@v7.0.0`).
+  - Fixação determinística da versão do gerenciador de pacotes `uv` (`uv==0.13.1`), prevenindo quebras inesperadas por atualizações automáticas upstream.
 - **Otimização de Inicialização do Lavalink sem Consulta Externa (Bloco D2 / Tarefa D-09)**:
   - O Lavalink local deixa de consultar o repositório remoto do Maven (`maven.lavalink.dev`) a cada partida: geração automática de arquivo de override (`plugins-override.yml` em `RUNTIME_DIR/.lavalink/`) passado via `-Dspring.config.additional-location` antes do jar, operando de forma imediata e compatível com ambientes offline e contêineres a partir dos plugins locais já verificados por SHA-256.
 - **Encerramento Ordenado do Pool de Bots (Bloco D1 / Tarefa D-02)**:
