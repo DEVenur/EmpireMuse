@@ -152,10 +152,7 @@ class Owner(commands.Cog):
 
         args, unknown = ctx.command.extras["flags"].parse_known_args(flags.split())
 
-        try:
-            self.bot.pool.lavalink_instance.kill()
-        except:
-            pass
+        self.bot.pool.stop_lavalink()
 
         async with ctx.typing():
             await asyncio.sleep(1.5)

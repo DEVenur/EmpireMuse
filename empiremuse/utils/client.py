@@ -9,6 +9,7 @@ import logging
 import os
 import pickle
 import subprocess
+import threading
 import traceback
 from configparser import ConfigParser
 from copy import deepcopy
@@ -39,7 +40,7 @@ from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
-from empiremuse.utils.music.local_lavalink import run_lavalink
+from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
 from empiremuse.utils.music.models import (
     music_mode,
     LavalinkPlayer,
@@ -101,6 +102,8 @@ class BotPool:
         self.spotify: Optional[SpotifyClient] = None
         self.deezer = DeezerClient(self.playlist_cache)
         self.lavalink_instance: Optional[subprocess.Popen] = None
+        self.lavalink_watcher: Optional[threading.Thread] = None
+        self.lavalink_exit_future: Optional[asyncio.Future] = None
         self.commit = ""
         self.remote_git_url = ""
         self.max_counter: int = 0
@@ -224,18 +227,53 @@ class BotPool:
 
         return self.local_database
 
+    def stop_lavalink(self) -> None:
+        """Encerra o Java do Lavalink local de forma esperada: o vigia não trata essa saída como queda."""
+        process, self.lavalink_instance = self.lavalink_instance, None
+        if not process:
+            return
+
+        try:
+            process.kill()
+        except OSError:
+            logger.warning("Falha ao finalizar o processo do Lavalink local", exc_info=True)
+
+    async def _handle_lavalink_exit(self, process: subprocess.Popen, returncode: int):
+        """Roda no loop: só uma saída inesperada do Java vigente derruba o bot (shutdown com código 1)."""
+        if process is not self.lavalink_instance or self.killing_state:
+            return
+
+        logger.error("O processo do Lavalink local encerrou inesperadamente (código %s); encerrando o bot.", returncode)
+        await self.shutdown(1)
+
+    def _on_lavalink_exit(self, process: subprocess.Popen, returncode: int) -> None:
+        """Chamada na thread do vigia: devolve a decisão ao loop do bot e guarda a referência da tarefa."""
+        coroutine = self._handle_lavalink_exit(process, returncode)
+        try:
+            self.lavalink_exit_future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
+        except RuntimeError:
+            coroutine.close()
+            logger.warning(
+                "O loop do bot já foi encerrado; a saída do Lavalink local (código %s) foi ignorada.", returncode
+            )
+
+    def _watch_lavalink(self, process: subprocess.Popen) -> None:
+        self.lavalink_watcher = threading.Thread(
+            target=watch_lavalink_process,
+            args=(process, lambda returncode: self._on_lavalink_exit(process, returncode)),
+            name="lavalink-watcher",
+            daemon=True,
+        )
+        self.lavalink_watcher.start()
+
     async def start_lavalink(self):
-        if self.lavalink_instance:
-            try:
-                self.lavalink_instance.kill()
-            except:
-                traceback.print_exc()
+        self.stop_lavalink()
 
         if not self.loop:
             self.loop = asyncio.get_event_loop()
 
         try:
-            self.lavalink_instance = await self.loop.run_in_executor(
+            process = await self.loop.run_in_executor(
                 None,
                 lambda: run_lavalink(
                     lavalink_file_url=self.config["LAVALINK_FILE_URL"],
@@ -245,10 +283,21 @@ class BotPool:
                     lavalink_ram_limit=self.config["LAVALINK_RAM_LIMIT"],
                     lavalink_additional_sleep=int(self.config["LAVALINK_ADDITIONAL_SLEEP"]),
                     use_jabba=self.config["USE_JABBA"],
+                    lavalink_java_path=self.config["LAVALINK_JAVA_PATH"],
+                    lavalink_home=self.config["LAVALINK_HOME"],
+                    lavalink_offline=self.config["LAVALINK_OFFLINE"],
                 ),
             )
         except Exception:
             traceback.print_exc()
+            return
+
+        if self.killing_state:  # o bot começou a encerrar enquanto o Java subia: não deixa o processo órfão
+            process.kill()
+            return
+
+        self.lavalink_instance = process
+        self._watch_lavalink(process)
 
     async def start_bot(self, bot: BotCore):
         e = None

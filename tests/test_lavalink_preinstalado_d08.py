@@ -738,3 +738,107 @@ async def _aguardar_async(condicao, limite=LIMITE_DE_ESPERA):
             return True
         await asyncio.sleep(0.02)
     return condicao()
+
+
+# ============================================================================ (7) acréscimos da D-09 (decididos pelo MAESTRO)
+
+
+class TestLogsComLavalinkHome:
+    """application.yml tem SHA-256 fixo: o destino dos logs vai pela linha de comando do Java."""
+
+    def test_com_lavalink_home_fora_do_runtime_dir_os_logs_vao_para_o_volume_gravavel(
+        self, runtime, popen, proibidos, monkeypatch
+    ):
+        somente_leitura = runtime.parent / "opt-lavalink"
+        instalar_binarios(somente_leitura, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+
+        ll.run_lavalink(lavalink_home=str(somente_leitura), lavalink_offline=True)
+
+        args = popen[0][0]
+        esperado = f"-Dlogging.file.path={paths.RUNTIME_DIR / '.logs' / 'lavalink'}"
+        assert esperado in args
+        assert args.index(esperado) < args.index("-jar"), "a propriedade precisa vir antes do -jar"
+        assert (runtime / ".logs" / "lavalink").is_dir()
+
+    @pytest.mark.parametrize("home", ["", "igual_ao_runtime"])
+    def test_sem_lavalink_home_diferente_do_runtime_dir_nada_muda(self, runtime, popen, proibidos, monkeypatch, home):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+
+        ll.run_lavalink(lavalink_home=str(runtime) if home else "")
+
+        assert not [arg for arg in popen[0][0] if arg.startswith("-Dlogging")]
+        assert not (runtime / ".logs").exists()
+
+
+class TestValidateJavaComTimeout:
+    def test_usa_timeout_e_trata_a_expiracao_como_java_invalido(self, monkeypatch):
+        chamadas = []
+
+        def check_output_falso(args, **kwargs):
+            chamadas.append((args, kwargs))
+            raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+
+        monkeypatch.setattr(ll.subprocess, "check_output", check_output_falso)
+
+        assert ll.validate_java("/opt/java com espaço/bin/java") is None
+
+        ((args, kwargs),) = chamadas
+        assert args == ["/opt/java com espaço/bin/java", "-version"], "sem shell: o caminho é UM argumento"
+        assert 0 < kwargs["timeout"] <= 30
+
+
+class TestStopLavalink:
+    @pytest.mark.asyncio
+    async def test_mata_o_java_zera_a_instancia_e_nao_aciona_shutdown(self, fabrica_de_pool):
+        java = FakeJava()
+        pool, _ = fabrica_de_pool(java)
+        await pool.start_lavalink()
+
+        pool.stop_lavalink()
+        await asyncio.sleep(JANELA_DE_OBSERVACAO)
+
+        assert java.sinais == ["kill"]
+        assert pool.lavalink_instance is None
+        pool.shutdown.assert_not_awaited()
+
+    def test_sem_instancia_nao_faz_nada(self, fabrica_de_pool):
+        pool = type("PoolSemJava", (), {})()
+        pool.lavalink_instance = None
+        from empiremuse.utils.client import BotPool
+
+        BotPool.stop_lavalink(pool)
+
+        assert pool.lavalink_instance is None
+
+    @pytest.mark.asyncio
+    async def test_updatelavalink_mata_o_java_pelo_stop_lavalink_sem_derrubar_o_bot(
+        self, fabrica_de_pool, runtime, monkeypatch
+    ):
+        """O comando mata o Java, espera e sobe outro: a morte do antigo não pode virar shutdown(1)."""
+        from types import SimpleNamespace
+
+        from empiremuse.cogs import legacy_cmds
+
+        antigo, novo = FakeJava(), FakeJava()
+        pool, _ = fabrica_de_pool(antigo, novo)
+        await pool.start_lavalink()
+        assert paths.RUNTIME_DIR.resolve() == runtime.resolve(), (
+            "o comando apaga o jar: só pode agir no runtime isolado"
+        )
+        monkeypatch.setattr(legacy_cmds, "asyncio", SimpleNamespace(sleep=AsyncMock()))
+        cog = legacy_cmds.Owner.__new__(legacy_cmds.Owner)
+        cog.bot = MagicMock()
+        cog.bot.pool = pool
+        cog.bot.get_color.return_value = 0
+        ctx = MagicMock()
+        ctx.command.extras = legacy_cmds.Owner.updatelavalink.extras
+        ctx.send = AsyncMock()
+
+        await legacy_cmds.Owner.updatelavalink.callback(cog, ctx, "")
+        await asyncio.sleep(JANELA_DE_OBSERVACAO)
+
+        assert antigo.sinais == ["kill"]
+        assert pool.lavalink_instance is novo and novo.returncode is None
+        pool.shutdown.assert_not_awaited()

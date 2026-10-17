@@ -10,7 +10,7 @@ import tempfile
 import time
 import zipfile
 from contextlib import suppress
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, List, Mapping, Optional, Tuple
 
 import requests
@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um servidor parado trava o boot
 HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
+VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
+LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
 
 
 class LavalinkDownloadError(Exception):
@@ -117,7 +119,9 @@ def download_file(url, filename):
 def validate_java(cmd: str, debug: bool = False):
     """Devolve ``cmd`` se for um Java 17+ executável; senão ``None``. Sem shell: o caminho vira UM argumento."""
     try:
-        java_info = subprocess.check_output([cmd, "-version"], stderr=subprocess.STDOUT, text=True)
+        java_info = subprocess.check_output(
+            [cmd, "-version"], stderr=subprocess.STDOUT, text=True, timeout=VALIDATE_JAVA_TIMEOUT
+        )
         if int(java_info.splitlines()[0].split()[2].strip('"').split(".")[0]) >= 17:
             return cmd
     except (OSError, subprocess.SubprocessError, ValueError, IndexError) as e:
@@ -511,7 +515,19 @@ def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool) ->
     return os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
 
 
-def _java_command(java_cmd: str, *, cpu_cores: int, ram_limit: int, initial_ram: int) -> List[str]:
+def _logging_args(home: str) -> List[str]:
+    """Com LAVALINK_HOME fora de RUNTIME_DIR (talvez somente leitura) os logs do Lavalink vão para o volume gravável.
+
+    Vai pela linha de comando porque o application.yml tem SHA-256 fixo e o ambiente do Java é uma allowlist.
+    """
+    if Path(home).resolve() == paths.RUNTIME_DIR.resolve():
+        return []
+    logs_dir = paths.RUNTIME_DIR / LAVALINK_LOGS_SUBDIR
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    return [f"-Dlogging.file.path={logs_dir}"]
+
+
+def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, initial_ram: int) -> List[str]:
     """Linha de comando do Java como lista: o caminho do Java (mesmo com espaços) é sempre UM argumento."""
     args = [java_cmd]
 
@@ -535,7 +551,7 @@ def _java_command(java_cmd: str, *, cpu_cores: int, ram_limit: int, initial_ram:
 
         args.append(f"-Djava.io.tmpdir={tempjar_dir}")
 
-    return [*args, "-jar", "Lavalink.jar"]
+    return [*args, *_logging_args(home), "-jar", "Lavalink.jar"]
 
 
 def run_lavalink(
@@ -572,7 +588,11 @@ def run_lavalink(
     )
 
     java_args = _java_command(
-        java_cmd, cpu_cores=lavalink_cpu_cores, ram_limit=lavalink_ram_limit, initial_ram=lavalink_initial_ram
+        java_cmd,
+        home=home,
+        cpu_cores=lavalink_cpu_cores,
+        ram_limit=lavalink_ram_limit,
+        initial_ram=lavalink_initial_ram,
     )
 
     print(
