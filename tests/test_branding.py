@@ -480,3 +480,22 @@ def test_branding_constant_has_contract_value(branding, const, expected):
     assert getattr(branding, const, None) == expected, (
         f"utils.branding.{const} ausente ou com valor diferente do contrato"
     )
+
+
+# --------------------------------------------------------------------------- C3 Escopo EmpireHub e Texto Neutro
+
+
+def test_client_bot_token_message_has_no_replit_reference():
+    """Garante que a mensagem de erro de token em utils/client.py não contém referências à Replit (C-15/C-16)."""
+    client_py = (ROOT / "utils" / "client.py").read_text(encoding="utf-8")
+    assert "REPL_SLUG" not in client_py, "utils/client.py ainda contém ramificação específica para REPL_SLUG"
+    assert "replit-token.md" not in client_py, "utils/client.py ainda referencia replit-token.md"
+    assert "secrets da replit" not in client_py, "utils/client.py ainda contém mensagem legada da Replit"
+
+
+def test_readme_conforms_to_empirehub_scope():
+    """Garante que o README não possui seções legadas de auto-hospedagem de terceiros."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Hospede o seu próprio bot com essa source" not in readme
+    assert "source_setup.sh" not in readme
+    assert "replit.com/@xRitsu" not in readme
