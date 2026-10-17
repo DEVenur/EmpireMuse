@@ -279,12 +279,14 @@ class TestRunLavalinkOauthEnv:
         assert isinstance(env, dict) and env
         assert all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
 
-    def test_with_token_the_inherited_environment_is_preserved(self, started, monkeypatch):
+    def test_with_token_only_the_allowlisted_environment_is_inherited(self, started, monkeypatch):
+        # Fase 2.1 (item 2): o filho Java não herda mais o os.environ inteiro; a allowlist completa está em
+        # tests/test_audio_fase2_1.py. Aqui: PATH segue (o java precisa ser achado) e uma variável qualquer NÃO segue.
         monkeypatch.setenv("QA_MARKER_VAR", "valor-herdado")
         start(FAKE_TOKEN)
         env = env_of(started[0])
         assert env.get("PATH") == "/usr/bin:/bin:/caminho/do/java", "sem PATH o processo não encontra o java"
-        assert env.get("QA_MARKER_VAR") == "valor-herdado"
+        assert "QA_MARKER_VAR" not in env, "variável fora da allowlist vazou para o processo do Lavalink"
 
     def test_the_token_is_stripped_of_surrounding_whitespace(self, started):
         start(f"  {FAKE_TOKEN}\n")
