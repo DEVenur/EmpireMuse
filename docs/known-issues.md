@@ -34,7 +34,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | KI-02 | `.Dockerfile:1-2`, `.Dockerfile:4` | Imagem com `python:3.10-slim` e OpenJDK 11, distinta do ambiente validado (Python 3.13); o Lavalink exige Java 17+ (`utils/music/local_lavalink.py:63`). | Imagem divergente do que é testado; o Lavalink local depende de baixar outro JDK em tempo de execução. | médio |
 | KI-03 | `render.yaml` | [Corrigido] Apontava para o repositório upstream e fixava Python 3.11.7; atualizado para o EmpireMuse com Python 3.13.5 (I-7). | Corrigido em 2026-10-15 (I-7 da Fase 1). | baixo |
 | KI-04 | `utils/client.py:267`; `modules/error_handler.py:141`, `modules/error_handler.py:303` | O reinício do processo é feito com `kill 1` (PID 1 do contêiner). | Só funciona como esperado dentro de contêiner; fora dele o sinal vai para o `init` do sistema (ou falha), sem reiniciar o bot. | médio |
-| KI-05 | `requirements.txt:13`, `requirements.txt:21`, `requirements.txt:22`, `requirements.txt:25`, `requirements.txt:27`, `requirements.txt:29` | Dependências declaradas e **sem nenhum `import`** no código: `aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`. (`nodriver` é usado em `utils/music/youtube_trusted_session_generator.py`.) | Instalação mais pesada e maior superfície de dependências. | baixo |
+| KI-05 | `requirements.txt` | [Resolvido] Dependências declaradas e **sem nenhum `import`** no código: `aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`. (`nodriver` é usado em `utils/music/youtube_trusted_session_generator.py`.) | Resolvido no Bloco C2 (expurgo de 8 dependências obsoletas em `requirements.txt`). | baixo |
 
 ## Configuração
 

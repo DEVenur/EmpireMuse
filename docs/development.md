@@ -36,8 +36,7 @@ Observações:
   nada neles é necessário se você usar `uv`. Eles também sofrem do bug acima.
 - O `disnake` está fixado em um commit Git anterior à 2.12.0 (`requirements.txt:1`); a atualização para a
   versão estável está planejada para fases futuras.
-- Dependências declaradas e não usadas (candidatas à remoção): `syncedlyrics`, `pylrc`, `curl_cffi`,
-  `undetected-chromedriver`, `aiosqlite`, `nest_asyncio` — ver [`known-issues.md`](known-issues.md).
+- Dependências obsoletas expurgadas (Bloco C2): 8 bibliotecas declaradas sem nenhum uso no código (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`) foram removidas de `requirements.txt`, saneando a superfície de dependências e resolvendo o item KI-05 (ver [`known-issues.md`](known-issues.md)).
 
 ## 3. Configuração
 

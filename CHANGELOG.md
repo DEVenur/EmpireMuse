@@ -92,8 +92,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Esteira de integração contínua (CI) mínima no GitHub Actions (`.github/workflows/ci.yml`), executando checagem de lint (`ruff check .`), conferência de formatação (`ruff format --check .`), compilação de bytecode (`compileall`) e suíte de testes (`pytest`) em pushes e Pull Requests para a branch `main`.
   - Criação do arquivo `.git-blame-ignore-revs` contendo o hash do commit de formatação em massa (`fc4b7f8f034071ccb08803c153511afbe5a2c9e9`), preservando o histórico de autoria original nas anotações de blame do Git.
   - Revisão e alinhamento dos arquivos `.editorconfig` e `.gitignore` para padronização de formatação e exclusão consistente de pastas locais, worktrees e repositórios satélites.
+- **Testes de Caracterização Comportamental (Bloco C2 / Saneamento)**:
+  - Adição de testes de caracterização comportamental em `tests/test_residuos_c2.py` assegurando a integridade da API pública do WaveLink, resolução de instâncias no listenalong e isolamento contra dependências expurgadas.
 
 ### Alterado
+- **Tipagem de Re-exports no WaveLink (Bloco C2 / PEP 484)**:
+  - Re-exports explícitos em `wavelink/__init__.py` utilizando aliases redundantes (`Client as Client`, `Node as Node`, `WebSocket as WebSocket`) em conformidade com a PEP 484, assegurando reconhecimento estático por linters e IDEs sem gerar avisos de import não utilizado (`F401`).
 - **Formatação de Código em Massa com Ruff (Bloco C1)**:
   - Aplicação de formatação automatizada via `ruff format` em toda a base de código Python (`main.py`, `app.py`, `config_loader.py`, `web_app.py`, `modules/`, `utils/`, `wavelink/` e `tests/`), padronizando estilo, indentação e limite de 120 colunas sem alterações semânticas de comportamento.
 - **Atualização da Stack de Áudio e Lavalink (Fase 2 / Release 0.0.3)**:
@@ -119,6 +123,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Documentação**: `README.md` reescrito para o EmpireMuse (imagens em `assets/`, guias em `docs/guides/`, créditos preservados); `docs/architecture.md`, `docs/development.md` e `AGENTS.md` atualizados (mapa do repositório, testes com pytest, roster e protocolo com o orquestrador `MAESTRO`).
 - **Lista de servidores Lavalink**: `data/lavalink_servers.ini` revisada (1 servidor removido).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
+
+### Removido
+- **Expurgo de Dependências Obsoletas e Superfície de Supply Chain (Bloco C2 / KI-05)**:
+  - Remoção de 8 dependências obsoletas em `requirements.txt` (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`), reduzindo a superfície de dependências e supply chain (resolução de KI-05).
+- **Limpeza de Código Morto e Imports Não Utilizados (Bloco C2)**:
+  - Remoção de código inalcançável em `wavelink/node.py` (instrução de log posterior ao `return`).
+  - Remoção de imports órfãos e variáveis mortas em `modules/music.py`, `modules/music_settings.py`, `panel/handlers/auth.py`, `utils/music/models.py` e arquivos de testes (`tests/panel/`, `tests/test_audio_fase2a.py` e `tests/test_request_channel_characterization.py`).
 
 ### Corrigido
 - **Atualização Automática de URLs Oficiais do Lavalink**:
