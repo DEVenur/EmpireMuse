@@ -2,7 +2,7 @@
 sem Discloud e sem ``.env`` real).
 
 ``discloud.config``: chaves conhecidas e sem repetição, ``TYPE=bot``, ``MAIN=main.py`` (existente), ``RAM=1024`` (plano
-pago; o gratuito não é suportado), ``AUTORESTART=true``, avatar da marca e ``VERSION`` 3.13 ou latest, sem segredo.
+pago; o gratuito não é suportado), ``AUTORESTART=true``, avatar da marca e ``VERSION`` latest ou 3.11 (a Discloud não oferece 3.13), sem segredo.
 
 ``.discloudignore``: o pacote enviado NÃO leva dados locais, segredos auxiliares (``.env.*``), binários do Lavalink,
 testes, docs nem arquivos de container/outras plataformas, mas LEVA o ``.env`` (a Discloud lê o ``.env`` do zip), o
@@ -25,7 +25,9 @@ IGNORE = ROOT / ".discloudignore"
 
 CHAVES_CONHECIDAS = {"ID", "TYPE", "MAIN", "NAME", "AVATAR", "RAM", "VERSION", "AUTORESTART", "APT", "START", "BUILD"}
 CHAVES_OBRIGATORIAS = {"NAME", "AVATAR", "TYPE", "MAIN", "RAM", "AUTORESTART", "VERSION"}
-VERSOES_VALIDAS = {"3.13", "latest"}
+# Na Discloud, Python só oferece "latest" (recomendado) e as versões fixas 3.11, 3.10 e 3.9; "3.13" NÃO é valor válido.
+# O código passa a suíte inteira em 3.11, 3.12 e 3.13, então "latest" e "3.11" são seguros.
+VERSOES_VALIDAS = {"latest", "3.11"}
 
 # (caminho, é_diretório): tudo isto TEM de ficar fora do zip enviado.
 IGNORADOS = [
@@ -244,7 +246,7 @@ class TestDiscloudConfig:
 
     def test_versao_do_python(self, config):
         assert config.get("VERSION") in VERSOES_VALIDAS, (
-            f"VERSION precisa ser 3.13 ou latest: {config.get('VERSION')!r}"
+            f"VERSION precisa ser latest ou 3.11: {config.get('VERSION')!r}"
         )
 
     def test_sem_segredo_no_arquivo(self, config_bruto, config):
