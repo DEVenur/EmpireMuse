@@ -20,3 +20,39 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+extend-exclude = [
+    "repos",
+    "worktrees",
+    ".arquivo",
+    ".local",
+]
+
+[tool.ruff.lint]
+# Regras conservadoras iniciais baseadas no padrão Ruff (E4, E7, E9, F)
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+]
+# Violações legadas pré-existentes ignoradas temporariamente para permitir
+# adoção gradual sem risco de quebra de comportamento em produção
+ignore = [
+    "E701",  # multiple statements on one line (colon)
+    "E702",  # multiple statements on one line (semicolon)
+    "E713",  # test for membership should be 'not in'
+    "E714",  # test for identity should be 'is not'
+    "E722",  # do not use bare 'except' (legado em 38 arquivos; saneamento futuro)
+    "E731",  # do not assign a lambda expression
+    "E741",  # ambiguous variable name
+    "F401",  # imported but unused
+    "F403",  # unable to detect undefined names from star import
+    "F405",  # name may be undefined, or defined from star imports
+    "F541",  # f-string without any placeholders
+    "F841",  # local variable is assigned to but never used
+]
+
