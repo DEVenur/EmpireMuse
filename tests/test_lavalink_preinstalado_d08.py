@@ -842,3 +842,80 @@ class TestStopLavalink:
         assert antigo.sinais == ["kill"]
         assert pool.lavalink_instance is novo and novo.returncode is None
         pool.shutdown.assert_not_awaited()
+
+
+# ============================================================================ (8) guarda dos comandos de owner pela config
+
+
+NAO_ESTA_SENDO_USADO = "não está sendo usado"
+
+
+@pytest.fixture
+def owner_com_pool(runtime, monkeypatch):
+    """Cog Owner com pool dublado: ``start_lavalink``/``stop_lavalink`` só registram a chamada (sem Java, sem espera)."""
+    from types import SimpleNamespace
+
+    from empiremuse.cogs import legacy_cmds
+
+    assert paths.RUNTIME_DIR.resolve() == runtime.resolve(), "o updatelavalink apaga o jar: só no runtime isolado"
+    monkeypatch.setattr(legacy_cmds, "asyncio", SimpleNamespace(sleep=AsyncMock()))
+
+    def criar(*, run_local, instancia):
+        pool = MagicMock()
+        pool.lavalink_instance = instancia
+        pool.start_lavalink = AsyncMock()
+        cog = legacy_cmds.Owner.__new__(legacy_cmds.Owner)
+        cog.bot = MagicMock()
+        cog.bot.pool = pool
+        cog.bot.config = {"RUN_LOCAL_LAVALINK": run_local}
+        cog.bot.get_color.return_value = 0
+        ctx = MagicMock()
+        ctx.command.extras = legacy_cmds.Owner.updatelavalink.extras
+        ctx.send = AsyncMock()
+        return cog, ctx, pool
+
+    return criar
+
+
+def comando(nome):
+    from empiremuse.cogs import legacy_cmds
+
+    return getattr(legacy_cmds.Owner, nome).callback
+
+
+class TestGuardaDosComandosDeOwner:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("nome, argumentos", [("restartlavalink", ()), ("updatelavalink", ("",))])
+    async def test_com_run_local_ligado_e_sem_instancia_tenta_subir_o_lavalink(self, owner_com_pool, nome, argumentos):
+        """Depois de uma falha no reinício (instância None) o dono precisa conseguir tentar de novo."""
+        cog, ctx, pool = owner_com_pool(run_local=True, instancia=None)
+
+        await comando(nome)(cog, ctx, *argumentos)
+
+        pool.start_lavalink.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("nome, argumentos", [("restartlavalink", ()), ("updatelavalink", ("",))])
+    async def test_com_run_local_desligado_e_sem_instancia_continua_respondendo_que_nao_esta_em_uso(
+        self, owner_com_pool, nome, argumentos
+    ):
+        from empiremuse.utils.music.errors import GenericError
+
+        cog, ctx, pool = owner_com_pool(run_local=False, instancia=None)
+
+        with pytest.raises(GenericError, match=NAO_ESTA_SENDO_USADO):
+            await comando(nome)(cog, ctx, *argumentos)
+
+        pool.start_lavalink.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("nome, argumentos", [("restartlavalink", ()), ("updatelavalink", ("",))])
+    async def test_java_local_em_execucao_sem_run_local_na_config_continua_reiniciavel(
+        self, owner_com_pool, nome, argumentos
+    ):
+        """O boot também sobe o Lavalink local quando a lista de servidores está vazia, mesmo com RUN_LOCAL=false."""
+        cog, ctx, pool = owner_com_pool(run_local=False, instancia=FakeJava())
+
+        await comando(nome)(cog, ctx, *argumentos)
+
+        pool.start_lavalink.assert_awaited_once()
