@@ -4,6 +4,7 @@ Complementa tests/test_audio_fase2_1.py. O arquivo já passou pela verificação
 extração não pode, mesmo assim, escrever fora da pasta de destino nem criar links/arquivos especiais perigosos.
 Sem rede e sem produção: tudo em tmp_path, arquivos .tar.gz mínimos gerados em memória.
 """
+
 import hashlib
 import io
 import os
@@ -13,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 FILE, DIR, SYM, HARD, FIFO = "file", "dir", "sym", "hard", "fifo"
 
@@ -44,9 +45,14 @@ def tar_gz(members) -> bytes:
     return buffer.getvalue()
 
 
-GOOD = [(DIR, "jdk-21.0.3/"), (DIR, "jdk-21.0.3/bin"), (FILE, "jdk-21.0.3/bin/java", b"JAVA"),
-        (FILE, "jdk-21.0.3/release", b"release", 0o644), (HARD, "jdk-21.0.3/bin/java-hard", "jdk-21.0.3/bin/java"),
-        (SYM, "jdk-21.0.3/bin/java-sym", "java")]
+GOOD = [
+    (DIR, "jdk-21.0.3/"),
+    (DIR, "jdk-21.0.3/bin"),
+    (FILE, "jdk-21.0.3/bin/java", b"JAVA"),
+    (FILE, "jdk-21.0.3/release", b"release", 0o644),
+    (HARD, "jdk-21.0.3/bin/java-hard", "jdk-21.0.3/bin/java"),
+    (SYM, "jdk-21.0.3/bin/java-sym", "java"),
+]
 
 
 @pytest.fixture
@@ -63,12 +69,26 @@ def sandbox(tmp_path):
 
     def outside():
         """Tudo que existe em tmp_path fora do destino (e fora do próprio java.tar.gz)."""
-        return sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob("*")
-                      if destination not in p.parents and p != destination and p.name != "java.tar.gz"
-                      and p not in (root, root / ".java"))
+        return sorted(
+            str(p.relative_to(tmp_path))
+            for p in tmp_path.rglob("*")
+            if destination not in p.parents
+            and p != destination
+            and p.name != "java.tar.gz"
+            and p not in (root, root / ".java")
+        )
 
-    return type("Sandbox", (), {"extract": staticmethod(extract), "dest": destination, "outside": staticmethod(outside),
-                                "root": root, "tmp": tmp_path})
+    return type(
+        "Sandbox",
+        (),
+        {
+            "extract": staticmethod(extract),
+            "dest": destination,
+            "outside": staticmethod(outside),
+            "root": root,
+            "tmp": tmp_path,
+        },
+    )
 
 
 class TestStripsTheRootDirectory:
@@ -99,14 +119,17 @@ class TestStripsTheRootDirectory:
 
 
 class TestUnsafeMembersAreRefusedAndNeverEscape:
-    @pytest.mark.parametrize("label,bad", [
-        ("'../' em profundidade", (FILE, "jdk-21.0.3/../../evil-deep.txt", b"x")),
-        ("symlink absoluto", (SYM, "jdk-21.0.3/bin/abs", "/etc/passwd")),
-        ("symlink relativo que escapa", (SYM, "jdk-21.0.3/bin/esc", "../../../../etc")),
-        ("hardlink que escapa", (HARD, "jdk-21.0.3/bin/h-esc", "../../../etc/passwd")),
-        ("hardlink absoluto", (HARD, "jdk-21.0.3/bin/h-abs", "/etc/passwd")),
-        ("arquivo especial (fifo)", (FIFO, "jdk-21.0.3/bin/pipe")),
-    ])
+    @pytest.mark.parametrize(
+        "label,bad",
+        [
+            ("'../' em profundidade", (FILE, "jdk-21.0.3/../../evil-deep.txt", b"x")),
+            ("symlink absoluto", (SYM, "jdk-21.0.3/bin/abs", "/etc/passwd")),
+            ("symlink relativo que escapa", (SYM, "jdk-21.0.3/bin/esc", "../../../../etc")),
+            ("hardlink que escapa", (HARD, "jdk-21.0.3/bin/h-esc", "../../../etc/passwd")),
+            ("hardlink absoluto", (HARD, "jdk-21.0.3/bin/h-abs", "/etc/passwd")),
+            ("arquivo especial (fifo)", (FIFO, "jdk-21.0.3/bin/pipe")),
+        ],
+    )
     def test_the_archive_is_refused(self, sandbox, label, bad):
         with pytest.raises(Exception):
             sandbox.extract(GOOD + [bad])
@@ -143,20 +166,36 @@ class TestRunLavalinkRefusesAVerifiedButUnsafeArchive:
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("JAVA_HOME", raising=False)
         jar, yml = b"JAR", b"YML\n"
-        plugins = {n: f"plugin {n}".encode() for n in ("youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
-                                                       "lavasrc-plugin-4.8.3.jar", "lavalink-2.6.1.jar")}
+        plugins = {
+            n: f"plugin {n}".encode()
+            for n in (
+                "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
+                "lavasrc-plugin-4.8.3.jar",
+                "lavalink-2.6.1.jar",
+            )
+        }
         monkeypatch.setattr(branding, "LAVALINK_JAR_SHA256", hashlib.sha256(jar).hexdigest())
         monkeypatch.setattr(branding, "LAVALINK_APPLICATION_YML_SHA256", hashlib.sha256(yml).hexdigest())
-        monkeypatch.setattr(branding, "LAVALINK_PLUGIN_SHA256", {n: hashlib.sha256(d).hexdigest() for n, d in plugins.items()})
+        monkeypatch.setattr(
+            branding, "LAVALINK_PLUGIN_SHA256", {n: hashlib.sha256(d).hexdigest() for n, d in plugins.items()}
+        )
         (tmp_path / "Lavalink.jar").write_bytes(jar)
         (tmp_path / "application.yml").write_bytes(yml)
         (tmp_path / "plugins").mkdir()
         for name, data in plugins.items():
             (tmp_path / "plugins" / name).write_bytes(data)
-        evil = tar_gz(GOOD + [(SYM, "jdk-21.0.3/bin/abs", "/etc/passwd")])   # com SHA-256 CORRETO: só a extração o recusa
+        evil = tar_gz(
+            GOOD + [(SYM, "jdk-21.0.3/bin/abs", "/etc/passwd")]
+        )  # com SHA-256 CORRETO: só a extração o recusa
         url = "https://example.test/jdk.tar.gz"
-        monkeypatch.setattr(branding, "JDK_DOWNLOADS", {"linux-amd64": (url, hashlib.sha256(evil).hexdigest()),
-                                                        "linux-i586": (url, hashlib.sha256(evil).hexdigest())})
+        monkeypatch.setattr(
+            branding,
+            "JDK_DOWNLOADS",
+            {
+                "linux-amd64": (url, hashlib.sha256(evil).hexdigest()),
+                "linux-i586": (url, hashlib.sha256(evil).hexdigest()),
+            },
+        )
 
         class Response:
             headers = {"content-length": str(len(evil))}

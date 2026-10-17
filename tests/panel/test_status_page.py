@@ -6,6 +6,7 @@ painel desligado. Parte RED: logo, paleta, link do painel só com o painel ligad
 upstream, lang pt-BR, viewport, acessibilidade, texto externo escapado e nenhum recurso externo novo (nada de CDN).
 Interpretações: .qa-fase2-interp.txt. Os testes sobem o servidor real (run_app) numa porta livre e usam HTTP de verdade.
 """
+
 import asyncio
 import re
 from types import SimpleNamespace
@@ -17,15 +18,30 @@ import tornado.testing
 import tornado.websocket
 
 from tests.panel.helpers import local_config, require
-from utils import branding
+from empiremuse.utils import branding
 
 HOSTILE = "<script>alert(1)</script>"
 HOSTILE_IMG = "<img src=x onerror=alert(2)>"
 NEBULOSA = ("#0b0a1f", "#8b5cf6")
-ALLOWED_HOSTS = {"discord.com", "discordapp.com", "cdn.discordapp.com", "discord.gg", "github.com",
-                 "raw.githubusercontent.com"}   # convite, avatar, suporte e repositórios
-CDN_MARKERS = ("googleapis.com", "gstatic.com", "jsdelivr", "unpkg.com", "cdnjs", "bootstrapcdn", "fontawesome",
-               "tailwindcss.com", "@import")
+ALLOWED_HOSTS = {
+    "discord.com",
+    "discordapp.com",
+    "cdn.discordapp.com",
+    "discord.gg",
+    "github.com",
+    "raw.githubusercontent.com",
+}  # convite, avatar, suporte e repositórios
+CDN_MARKERS = (
+    "googleapis.com",
+    "gstatic.com",
+    "jsdelivr",
+    "unpkg.com",
+    "cdnjs",
+    "bootstrapcdn",
+    "fontawesome",
+    "tailwindcss.com",
+    "@import",
+)
 
 
 class _User:
@@ -42,20 +58,33 @@ def make_bot(bot_id, name, *, ready=True, guilds=3):
     async def wait_until_ready():
         return None
 
-    return SimpleNamespace(user=_User(bot_id, name), guilds=[object()] * guilds, identifier=f"id-{name}",
-                           config={"INVITE_PERMISSIONS": 332892794064}, is_ready=lambda: ready,
-                           wait_until_ready=wait_until_ready)
+    return SimpleNamespace(
+        user=_User(bot_id, name),
+        guilds=[object()] * guilds,
+        identifier=f"id-{name}",
+        config={"INVITE_PERMISSIONS": 332892794064},
+        is_ready=lambda: ready,
+        wait_until_ready=wait_until_ready,
+    )
 
 
 def make_pool(config, bots=(), failed=None, killing=False, commit=""):
     config = {"ENABLE_RPC_AUTH": False, "DEFAULT_PREFIX": "!", "INVITE_PERMISSIONS": 332892794064, **config}
-    return SimpleNamespace(bots=list(bots), database=None, config=config, killing_state=killing,
-                           failed_bots=dict(failed or {}), commit=commit, remote_git_url="https://github.com/x/y")
+    return SimpleNamespace(
+        bots=list(bots),
+        database=None,
+        config=config,
+        killing_state=killing,
+        failed_bots=dict(failed or {}),
+        commit=commit,
+        remote_git_url="https://github.com/x/y",
+    )
 
 
-def get_index(monkeypatch, *, message="", bots=(), failed=None, killing=False, commit="", path="/", ws=False,
-              **overrides):
-    web_app = require("web_app")
+def get_index(
+    monkeypatch, *, message="", bots=(), failed=None, killing=False, commit="", path="/", ws=False, **overrides
+):
+    web_app = require("empiremuse.web_app")
     config = local_config(PORT=0, **overrides)
     pool = make_pool(config, bots, failed, killing, commit)
     real = tornado.httpserver.HTTPServer
@@ -76,8 +105,9 @@ def get_index(monkeypatch, *, message="", bots=(), failed=None, killing=False, c
             return connection
         client = tornado.httpclient.AsyncHTTPClient()
         try:
-            return await client.fetch(f"http://127.0.0.1:{seen['port']}{path}", raise_error=False,
-                                      follow_redirects=False)
+            return await client.fetch(
+                f"http://127.0.0.1:{seen['port']}{path}", raise_error=False, follow_redirects=False
+            )
         finally:
             client.close()
 
@@ -98,6 +128,7 @@ READY = (make_bot(111, "Bot Um", guilds=7),)
 
 
 # ============================================================================ caracterização (VERDE)
+
 
 class TestExistingBehaviourStays:
     def test_ok_html_with_and_without_the_panel_and_without_panel_static(self, monkeypatch):
@@ -142,11 +173,14 @@ class TestExistingBehaviourStays:
 
 # ============================================================================ identidade "Nebulosa" (RED)
 
+
 class TestNebulosaIdentity:
     def test_has_the_brand_logo_without_depending_on_panel_static(self, monkeypatch):
         body = page(monkeypatch, bots=READY, PANEL_ENABLED=False)
-        brand_img = any(u.startswith("data:image/") or u.startswith(branding.ASSETS_BASE_URL)
-                        for u in re.findall(r'<img[^>]+src="([^"]+)"', body))
+        brand_img = any(
+            u.startswith("data:image/") or u.startswith(branding.ASSETS_BASE_URL)
+            for u in re.findall(r'<img[^>]+src="([^"]+)"', body)
+        )
         assert "<svg" in body or brand_img, "a página precisa exibir o logo da marca (SVG embutido ou asset da marca)"
         assert "/painel/static" not in body
 
@@ -210,8 +244,9 @@ class TestNoNewExternalResources:
         assert not [m for m in CDN_MARKERS if m in lowered], "nada de CDN/fontes externas"
         assert not re.search(r"<script[^>]+src=", lowered), "nenhum script externo"
         assert not re.search(r"<link[^>]+rel=\"?stylesheet", lowered), "estilos ficam embutidos"
-        hosts = {urlsplit(u.replace("&amp;", "&")).hostname
-                 for u in re.findall(r'(?:href|src)="(https?://[^"]+)"', body)}
+        hosts = {
+            urlsplit(u.replace("&amp;", "&")).hostname for u in re.findall(r'(?:href|src)="(https?://[^"]+)"', body)
+        }
         assert hosts <= ALLOWED_HOSTS, f"hosts não previstos: {hosts - ALLOWED_HOSTS}"
 
 
@@ -220,14 +255,20 @@ class TestExternalTextIsEscaped:
         pending = make_bot(222, "ok", ready=False)
         pending.identifier = HOSTILE_IMG
         bots = (make_bot(111, HOSTILE, guilds=1), pending)
-        body = page(monkeypatch, message=f"Aviso {HOSTILE}", bots=bots, failed={HOSTILE_IMG: HOSTILE},
-                    DEFAULT_PREFIX=HOSTILE_IMG)
+        body = page(
+            monkeypatch,
+            message=f"Aviso {HOSTILE}",
+            bots=bots,
+            failed={HOSTILE_IMG: HOSTILE},
+            DEFAULT_PREFIX=HOSTILE_IMG,
+        )
         assert "<script>alert(1)" not in body and "<img src=x onerror" not in body, "texto externo sem escape (XSS)"
         assert "&lt;script&gt;alert(1)&lt;/script&gt;" in body
         assert "&lt;img src=x onerror=alert(2)&gt;" in body
 
 
 # ============================================================================ BAIXO-1: cabeçalhos de segurança de `/`
+
 
 class TestSecurityHeadersOnIndex:
     """Contrato do MAESTRO (item 8): nosniff, X-Frame-Options DENY (ou frame-ancestors), Referrer-Policy — sem quebrar
@@ -237,10 +278,16 @@ class TestSecurityHeadersOnIndex:
         headers = get_index(monkeypatch, bots=READY).headers
         assert headers.get("X-Content-Type-Options") == "nosniff"
         csp = headers.get("Content-Security-Policy", "")
-        assert headers.get("X-Frame-Options") == "DENY" or re.search(r"frame-ancestors\s+'none'", csp), \
+        assert headers.get("X-Frame-Options") == "DENY" or re.search(r"frame-ancestors\s+'none'", csp), (
             "a página não pode ser embutida em iframe (clickjacking)"
-        assert headers.get("Referrer-Policy") in {"no-referrer", "same-origin", "strict-origin",
-                                                  "strict-origin-when-cross-origin", "origin-when-cross-origin"}
+        )
+        assert headers.get("Referrer-Policy") in {
+            "no-referrer",
+            "same-origin",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+            "origin-when-cross-origin",
+        }
 
     def test_headers_also_present_when_restarting_and_with_the_panel_off(self, monkeypatch):
         for kwargs in ({"killing": True}, {"PANEL_ENABLED": False}):
@@ -260,6 +307,7 @@ class TestSecurityHeadersOnIndex:
 
     def test_panel_keeps_its_own_stricter_headers(self, monkeypatch):
         from tests.panel.helpers import EXPECTED_SECURITY_HEADERS
+
         response = get_index(monkeypatch, path="/painel/", PANEL_ENABLED=True)
         for name, want in EXPECTED_SECURITY_HEADERS.items():
             assert response.headers.get(name) == want, name

@@ -1,4 +1,5 @@
 """config_loader.DEFAULT_CONFIG e .example.env — variáveis PANEL_*."""
+
 import re
 
 import pytest
@@ -19,10 +20,13 @@ EXPECTED_DEFAULTS = {
 
 
 def _config_loader(monkeypatch, tmp_path):
-    monkeypatch.chdir(tmp_path)  # isola o config.json real; o .env real é isolado pelo fixture autouse de tests/conftest.py
+    monkeypatch.chdir(
+        tmp_path
+    )  # isola o config.json real; o .env real é isolado pelo fixture autouse de tests/conftest.py
     for key in EXPECTED_DEFAULTS:
         monkeypatch.delenv(key, raising=False)
-    import config_loader
+    import empiremuse.config_loader as config_loader
+
     return config_loader
 
 
@@ -35,8 +39,11 @@ def test_default_config_has_panel_default(monkeypatch, tmp_path, key, expected):
 def test_load_config_keeps_safe_defaults_without_environment(monkeypatch, tmp_path):
     config = _config_loader(monkeypatch, tmp_path).load_config()
     # Falha só com os NOMES das chaves: o valor carregado pode vir de um ambiente com segredos reais.
-    wrong = sorted(k for k, expected in EXPECTED_DEFAULTS.items()
-                   if config.get(k) != expected or type(config.get(k)) is not type(expected))
+    wrong = sorted(
+        k
+        for k, expected in EXPECTED_DEFAULTS.items()
+        if config.get(k) != expected or type(config.get(k)) is not type(expected)
+    )
     if wrong:
         pytest.fail(f"load_config() sem ambiente não mantém o padrão seguro de: {wrong}", pytrace=False)
 

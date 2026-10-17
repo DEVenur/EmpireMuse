@@ -1,4 +1,5 @@
 """Dublês de pool/bot/guild/member para os testes da Etapa 3 (autorização e servidores). Sem rede."""
+
 import asyncio
 from collections import Counter
 from types import SimpleNamespace
@@ -39,8 +40,11 @@ class FakeGuild:
         self.id = int(guild_id)
         self.name = name
         self.owner_id = owner_id
-        self.icon = (SimpleNamespace(key=icon_hash, url=f"https://cdn.discordapp.com/icons/{guild_id}/{icon_hash}.png")
-                     if icon_hash else None)
+        self.icon = (
+            SimpleNamespace(key=icon_hash, url=f"https://cdn.discordapp.com/icons/{guild_id}/{icon_hash}.png")
+            if icon_hash
+            else None
+        )
         self.members = {}
         self.fetchable = {}
         self.calls = Counter()
@@ -65,8 +69,10 @@ class FakeBot:
     def __init__(self, bot_id, name="Bot", ready=True, guilds=()):
         self.application_id = int(bot_id)
         self.user = SimpleNamespace(
-            id=int(bot_id), name=name,
-            display_avatar=SimpleNamespace(url=f"https://cdn.discordapp.com/avatars/{bot_id}/hashbot.png"))
+            id=int(bot_id),
+            name=name,
+            display_avatar=SimpleNamespace(url=f"https://cdn.discordapp.com/avatars/{bot_id}/hashbot.png"),
+        )
         self.ready = ready
         self.guilds = {g.id: g for g in guilds}
         self.calls = Counter()
@@ -95,10 +101,11 @@ class FakePool:
 
 
 def make_session(user_id=USER_ID, guild_ids=("42",), name_prefix="Servidor"):
-    sessions = require("panel.sessions")
+    sessions = require("empiremuse.panel.sessions")
     user = sessions.PanelUser(id=user_id, username=f"user{user_id}", global_name=None, avatar=None)
-    guilds = tuple(sessions.ManagedGuild(id=g, name=f"{name_prefix} {g}", icon=None, permissions=8, owner=False)
-                   for g in guild_ids)
+    guilds = tuple(
+        sessions.ManagedGuild(id=g, name=f"{name_prefix} {g}", icon=None, permissions=8, owner=False) for g in guild_ids
+    )
     return sessions.Session(user=user, guilds=guilds, created_at=0.0, last_seen=0.0)
 
 

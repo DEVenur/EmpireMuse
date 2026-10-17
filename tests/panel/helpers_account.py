@@ -3,6 +3,7 @@
 Contrato: BRIEFING-PAINEL-E5.md. O FakeDB devolve o MESMO dict do cache (como o BaseDB) e registra violações
 (mutar o cache, gravar o próprio dict, id que não é int, db_name diferente de "users").
 """
+
 import copy
 from types import SimpleNamespace
 
@@ -16,9 +17,17 @@ from tests.panel.helpers_settings import FakeDB, SettingsBase, UID
 OTHER_UID = 2002
 SESSIONKEY = "SK-SEGREDO-0123456789abcdef"
 RPC_TOKEN_OLD = "T" * 50
-FAV_CONFIG = {"MAX_USER_FAVS": 10, "USER_FAV_MAX_NAME_LENGTH": 35, "USER_FAV_MAX_URL_LENGTH": 90,
-              "MAX_USER_INTEGRATIONS": 10, "ENABLE_RPC_COMMAND": True, "ENABLE_RPC_AUTH": True,
-              "RPC_PUBLIC_URL": "wss://rpc.example.com/ws", "RPC_SERVER": "", "INVITE_PERMISSIONS": 332892794064}
+FAV_CONFIG = {
+    "MAX_USER_FAVS": 10,
+    "USER_FAV_MAX_NAME_LENGTH": 35,
+    "USER_FAV_MAX_URL_LENGTH": 90,
+    "MAX_USER_INTEGRATIONS": 10,
+    "ENABLE_RPC_COMMAND": True,
+    "ENABLE_RPC_AUTH": True,
+    "RPC_PUBLIC_URL": "wss://rpc.example.com/ws",
+    "RPC_SERVER": "",
+    "INVITE_PERMISSIONS": 332892794064,
+}
 
 
 class UserFakeDB(FakeDB):
@@ -32,7 +41,8 @@ class UserFakeDB(FakeDB):
 
     async def get(self, scope, gid, db_name):
         if (scope, gid) not in self.docs:
-            from utils.db import DBModel, global_db_models
+            from empiremuse.utils.db import DBModel, global_db_models
+
             self.seed(scope, gid, copy.deepcopy(global_db_models[DBModel.users]))
         return await super().get(scope, gid, db_name)
 
@@ -40,8 +50,11 @@ class UserFakeDB(FakeDB):
 class FakeRpcPlayer:
     def __init__(self, journal, label, user_ids):
         self.journal, self.label = journal, label
-        self.guild = SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(
-            channel=SimpleNamespace(voice_states={uid: object() for uid in user_ids}))))
+        self.guild = SimpleNamespace(
+            me=SimpleNamespace(
+                voice=SimpleNamespace(channel=SimpleNamespace(voice_states={uid: object() for uid in user_ids}))
+            )
+        )
 
     async def _send_rpc_data(self, user_ids, stats):
         self.journal.append(("rpc", self.label, list(user_ids), dict(stats)))
@@ -57,6 +70,7 @@ class ExternalGuard:
         def call(*args, **kwargs):
             self._sink.append((self._label, name))
             raise AssertionError(f"requisição externa proibida: {self._label}.{name}")
+
         return call
 
 
@@ -64,9 +78,15 @@ class AccountBot:
     def __init__(self, world, bot_id=7000, name="Bot Um"):
         self.world, self.ready = world, True
         self.application_id = bot_id
-        self.user = SimpleNamespace(id=bot_id, name=name, mention=f"<@{bot_id}>", display_avatar=SimpleNamespace(
-            url=f"https://cdn.discordapp.com/avatars/{bot_id}/x.png",
-            replace=lambda **kw: SimpleNamespace(url=f"https://cdn.discordapp.com/avatars/{bot_id}/x.png")))
+        self.user = SimpleNamespace(
+            id=bot_id,
+            name=name,
+            mention=f"<@{bot_id}>",
+            display_avatar=SimpleNamespace(
+                url=f"https://cdn.discordapp.com/avatars/{bot_id}/x.png",
+                replace=lambda **kw: SimpleNamespace(url=f"https://cdn.discordapp.com/avatars/{bot_id}/x.png"),
+            ),
+        )
         self.config = world.config
         self.music = SimpleNamespace(players={})
         self.pool = None
@@ -123,12 +143,23 @@ class AccountWorld:
 
     @staticmethod
     def user_doc(prefix="", favs=None, integrations=None, token="", lastfm=None):
-        from utils.db import DBModel, global_db_models
+        from empiremuse.utils.db import DBModel, global_db_models
+
         doc = copy.deepcopy(global_db_models[DBModel.users])
-        doc.update({"custom_prefix": prefix, "fav_links": dict(favs or {}), "token": token,
-                    "integration_links": dict(integrations if integrations is not None else {
-                        "Meu canal": {"url": "https://example.com/canal", "avatar": "https://example.com/a.png"}}),
-                    "last_tracks": [{"title": "faixa antiga"}], "extra_flag": "intacto"})
+        doc.update(
+            {
+                "custom_prefix": prefix,
+                "fav_links": dict(favs or {}),
+                "token": token,
+                "integration_links": dict(
+                    integrations
+                    if integrations is not None
+                    else {"Meu canal": {"url": "https://example.com/canal", "avatar": "https://example.com/a.png"}}
+                ),
+                "last_tracks": [{"title": "faixa antiga"}],
+                "extra_flag": "intacto",
+            }
+        )
         doc["lastfm"].update(lastfm or {"username": "", "sessionkey": "", "scrobble": False})
         return doc
 
@@ -151,8 +182,8 @@ class AccountBase(SettingsBase):
     """Painel montado com o AccountWorld; `logged_in()` entra como o usuário 1001."""
 
     def get_app(self):
-        panel = require("panel")
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        panel = require("empiremuse.panel")
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings, self.world = settings, AccountWorld()
         self.pool, self.db = self.world.pool, self.world.db
         self.events = self.world.journal

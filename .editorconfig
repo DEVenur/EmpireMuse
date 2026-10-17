@@ -17,7 +17,9 @@ end_of_line = crlf
 [*.py]
 indent_style = space
 indent_size = 4
+max_line_length = 120
 
-[*.{yml,yaml,json,toml,md}]
+[*.{yml,yaml,json,toml,md,html,htm,css,js}]
 indent_style = space
 indent_size = 2
+

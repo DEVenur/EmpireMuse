@@ -9,8 +9,8 @@ Contrato (interpretações em .qa-e4c-interp.txt):
 - O painel usa `apply_request_channel(...)` e `reset_request_channel(...)` de utils/music/request_channel.py com o default
   de `send_idle_embed` (os testes trocam esse default) e entrega cópias profundas dos dados (FakeDB audita).
 """
+
 import asyncio
-import copy
 import html
 import logging
 import re
@@ -20,11 +20,10 @@ from tests.helpers_request_channel import FakePlayer, FakeThreadInfo
 from tests.panel.helpers import COOKIE_SECRET, OAUTH_SECRET, require
 from tests.panel.helpers_channel import GID, PANEL_USER, TASK_ID
 from tests.panel.helpers_login import DEFAULT_USER
-from tests.panel.helpers_servers import raw_guild
 from tests.panel.helpers_settings import NOT_FOUND_TEXT, UID, acao_form
 from tests.panel.test_channel_page import CanalBase
 from tests.panel.test_settings_http import Each, external_change
-from utils.music.errors import GenericError
+from empiremuse.utils.music.errors import GenericError
 
 TASK_URL = re.compile(r"/painel/servidores/(\d+)/canal/tarefas/([A-Za-z0-9_-]{32})")
 FINAL = ("ok", "erro")
@@ -86,6 +85,7 @@ class TasksBase(CanalBase):
 
 # ============================================================================ tarefa de setup: execução e efeitos
 
+
 class SetupExecutionTest(TasksBase):
     def test_existing_text_channel_runs_the_same_steps_as_the_command_and_saves_last(self):
         browser = self.logged_in()
@@ -93,8 +93,11 @@ class SetupExecutionTest(TasksBase):
         assert response.code == 202
         state, body = self.finish(browser, response)
         assert state == "ok", body
-        names = [n for n in self.world.j.names() if n in ("channel.history", "channel.edit", "send_idle_embed",
-                                                          "message.create_thread", "db")]
+        names = [
+            n
+            for n in self.world.j.names()
+            if n in ("channel.history", "channel.edit", "send_idle_embed", "message.create_thread", "db")
+        ]
         assert names == ["channel.history", "channel.edit", "send_idle_embed", "message.create_thread", "db"]
         assert self.world.doc["player_controller"]["channel"] == "22"
         assert self.world.doc["player_controller"]["message_id"] == str(self.world.next_message)
@@ -178,10 +181,11 @@ class SetupExecutionTest(TasksBase):
 
     def test_data_is_read_and_written_through_the_bot_with_a_deep_copy(self):
         self.run_setup(modo="existente", canal="22")
-        assert self.db.violations == [], self.db.violations   # mutar o cache / gravar o dict do cache / id não-int
+        assert self.db.violations == [], self.db.violations  # mutar o cache / gravar o dict do cache / id não-int
 
 
 # ============================================================================ tarefa: estados, polling, acesso, limites
+
 
 class TaskLifecycleTest(TasksBase):
     def test_post_returns_202_with_an_urlsafe_32_char_task_id_and_a_polling_block(self):
@@ -238,8 +242,10 @@ class TaskLifecycleTest(TasksBase):
         self.settle()
         second = self.start(browser, modo="existente", canal="23")
         assert first.code == 202 and second.code == 409
-        assert "andamento" in html.unescape(second.body.decode()).lower() or "aguarde" in html.unescape(
-            second.body.decode()).lower()
+        assert (
+            "andamento" in html.unescape(second.body.decode()).lower()
+            or "aguarde" in html.unescape(second.body.decode()).lower()
+        )
         self.world.gate.set()
         self.settle()
         self.world.gate = None
@@ -263,9 +269,18 @@ class TaskLifecycleTest(TasksBase):
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), response.code
 
         base = f"/painel/servidores/{GID}/canal/tarefas/"
-        Each.run([base + "a" * 32, base + "short", base + "../" + "a" * 29, base + "a" * 33, base + "%00" * 8,
-                  "/painel/servidores/300/canal/tarefas/" + ref.rsplit("/", 1)[1],
-                  f"/painel/servidores/abc/canal/tarefas/{'a' * 32}"], check)
+        Each.run(
+            [
+                base + "a" * 32,
+                base + "short",
+                base + "../" + "a" * 29,
+                base + "a" * 33,
+                base + "%00" * 8,
+                "/painel/servidores/300/canal/tarefas/" + ref.rsplit("/", 1)[1],
+                f"/painel/servidores/abc/canal/tarefas/{'a' * 32}",
+            ],
+            check,
+        )
         assert reference
 
     def test_another_user_cannot_read_the_task_even_with_the_id(self):
@@ -285,8 +300,9 @@ class TaskLifecycleTest(TasksBase):
         ref = task_ref(self.start(browser, modo="existente", canal="22").body.decode())
         self.settle()
         self.clock.advance(4)
-        response = browser.post(ref, body="a=1", headers={"Content-Type": "application/x-www-form-urlencoded",
-                                                           **self.xsrf_header(browser)})
+        response = browser.post(
+            ref, body="a=1", headers={"Content-Type": "application/x-www-form-urlencoded", **self.xsrf_header(browser)}
+        )
         assert response.code in (404, 405), f"POST na URL de acompanhamento: {response.code} (nunca 500)"
         assert not [r for r in self.caplog.records if r.levelno >= logging.ERROR], "sem 'Uncaught exception' no log"
 
@@ -300,7 +316,7 @@ class TaskLifecycleTest(TasksBase):
         self.world.guild.members[2002] = self.world.guild.members[UID]
         other = self.browser()
         assert self.login(other).code == 302
-        form = self.setup_form(other)            # com o _xsrf do próprio B
+        form = self.setup_form(other)  # com o _xsrf do próprio B
         assert estado(self.body(other)) is None, "B não vê a tarefa de A na página"
         for htmx in (True, False):
             response = self.submit(other, self.canal_url(), form, htmx=htmx, modo="existente", canal="23")
@@ -337,9 +353,13 @@ class TaskLifecycleTest(TasksBase):
         assert browser.get(ref).code == 404
 
     def test_task_limits_are_pinned_by_constants(self):
-        tasks = require("panel.services.tasks")
-        assert (tasks.TASK_TIMEOUT_SECONDS, tasks.MAX_TASKS_PER_USER, tasks.MAX_TASKS_TOTAL, tasks.TASK_TTL_SECONDS) == (
-            60, 5, 500, 15 * 60)
+        tasks = require("empiremuse.panel.services.tasks")
+        assert (
+            tasks.TASK_TIMEOUT_SECONDS,
+            tasks.MAX_TASKS_PER_USER,
+            tasks.MAX_TASKS_TOTAL,
+            tasks.TASK_TTL_SECONDS,
+        ) == (60, 5, 500, 15 * 60)
 
     def test_shutdown_cancels_running_tasks_and_leaves_none_behind(self):
         self.world.gate = asyncio.Event()
@@ -359,15 +379,29 @@ class TaskConcurrencyTest(TasksBase):
         browser = self.logged_in()
         form = self.setup_form(browser)
         self.clock.advance(4)
-        headers = {"Content-Type": "application/x-www-form-urlencoded", "HX-Request": "true",
-                   "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()), **self.xsrf_header(browser)}
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "HX-Request": "true",
+            "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()),
+            **self.xsrf_header(browser),
+        }
         bodies = [urlencode(form.pairs(modo="existente", canal=c)) for c in ("22", "23")]
         path = self.canal_url()
 
         async def both():
-            return await asyncio.gather(*[
-                self.http_client.fetch(self.get_url(path), method="POST", headers=headers, body=b,
-                                       raise_error=False, follow_redirects=False) for b in bodies])
+            return await asyncio.gather(
+                *[
+                    self.http_client.fetch(
+                        self.get_url(path),
+                        method="POST",
+                        headers=headers,
+                        body=b,
+                        raise_error=False,
+                        follow_redirects=False,
+                    )
+                    for b in bodies
+                ]
+            )
 
         codes = sorted(r.code for r in self.io_loop.run_sync(both))
         assert codes == [202, 409], codes
@@ -381,14 +415,24 @@ class TaskConcurrencyTest(TasksBase):
         self.settle()
         url, form, _ = self.open_form(browser, GID, "player", "default_player_volume")
         self.clock.advance(4)
-        headers = {"Content-Type": "application/x-www-form-urlencoded",
-                   "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()), **self.xsrf_header(browser)}
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()),
+            **self.xsrf_header(browser),
+        }
         body = urlencode(form.pairs(default_player_volume="45"))
 
         async def scenario():
-            settings_write = asyncio.ensure_future(self.http_client.fetch(
-                self.get_url(url), method="POST", headers=headers, body=body, raise_error=False,
-                follow_redirects=False))
+            settings_write = asyncio.ensure_future(
+                self.http_client.fetch(
+                    self.get_url(url),
+                    method="POST",
+                    headers=headers,
+                    body=body,
+                    raise_error=False,
+                    follow_redirects=False,
+                )
+            )
             await asyncio.sleep(0.1)
             self.world.gate.set()
             return await settings_write
@@ -402,6 +446,7 @@ class TaskConcurrencyTest(TasksBase):
 
 
 # ============================================================================ reset: confirmação dupla, token, deletar
+
 
 class ResetFlowTest(TasksBase):
     def test_step_one_shows_the_confirmation_and_changes_nothing(self):
@@ -442,8 +487,8 @@ class ResetFlowTest(TasksBase):
         browser = self.logged_in()
         self.world.configured_text()
         form = acao_form(self.body(browser), "reset")
-        external_change(self.db, "7000", GID, autoplay=True)   # não é do formulário: não conflita
-        self.world.configure("23", "1")                          # channel/message_id mudaram
+        external_change(self.db, "7000", GID, autoplay=True)  # não é do formulário: não conflita
+        self.world.configure("23", "1")  # channel/message_id mudaram
         response = self.submit(browser, self.canal_url(), form, htmx=True)
         assert response.code == 409
 
@@ -495,8 +540,9 @@ class ResetFlowTest(TasksBase):
         self.world.configured_text()
         browser = self.logged_in()
         confirmation = self.reset_confirmation(browser, deletar="on")
-        state, _ = self.finish(browser, self.confirm_reset(browser, confirmation, deletar="on",
-                                                          confirmar_nome="pedidos"))
+        state, _ = self.finish(
+            browser, self.confirm_reset(browser, confirmation, deletar="on", confirmar_nome="pedidos")
+        )
         assert state == "ok"
         delete = self.world.j.of("channel.delete")[0]
         assert delete[1] == "#pedidos" and PANEL_USER in delete[2]
@@ -506,7 +552,7 @@ class ResetFlowTest(TasksBase):
     def test_tampering_with_the_delete_flag_in_step_two_still_requires_the_name(self):
         self.world.configured_text()
         browser = self.logged_in()
-        confirmation = self.reset_confirmation(browser)    # passo 1 SEM deletar
+        confirmation = self.reset_confirmation(browser)  # passo 1 SEM deletar
         response = self.confirm_reset(browser, confirmation, deletar="on", confirmar_nome="")
         assert response.code == 422 and self.world.j.of("channel.delete") == []
 
@@ -546,7 +592,7 @@ class ResetTokenTest(TasksBase):
     def test_token_is_single_use(self):
         browser, confirmation = self.two_steps()
         assert self.finish(browser, self.confirm_reset(browser, confirmation))[0] == "ok"
-        self.world.configured_text()      # mesmo canal de volta: só o uso único impede o reuso
+        self.world.configured_text()  # mesmo canal de volta: só o uso único impede o reuso
         again = self.confirm_reset(browser, confirmation)
         assert again.code in (409, 422), again.code
         assert len(self.db.writes) == 1
@@ -581,6 +627,7 @@ class ResetTokenTest(TasksBase):
 
 
 # ============================================================================ logs
+
 
 class CanalAuditTest(TasksBase):
     def test_setup_audit_names_user_guild_bot_category_and_kind_but_no_values(self):

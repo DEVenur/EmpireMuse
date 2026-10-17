@@ -3,6 +3,7 @@
 Contrato: BRIEFING-PAINEL-E1.md. Os módulos do painel são importados de forma lazy
 para que cada teste falhe individualmente (RED) enquanto a implementação não existe.
 """
+
 import importlib
 import re
 from pathlib import Path
@@ -11,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PANEL_DIR = ROOT / "panel"
+PANEL_DIR = ROOT / "empiremuse" / "panel"
 VENDOR_DIR = PANEL_DIR / "static" / "vendor"
 TEMPLATES_DIR = PANEL_DIR / "templates"
 BRAND_DIR = ROOT / "assets" / "brand"
@@ -59,7 +60,7 @@ def https_config(**overrides) -> dict:
 
 
 def require(module_name: str):
-    """Importa um módulo do painel; falha o teste (não a coleta) com mensagem clara se não existir."""
+    """Importa um módulo do projeto; falha o teste (não a coleta) com mensagem clara se não existir."""
     try:
         return importlib.import_module(module_name)
     except ImportError as exc:
@@ -67,7 +68,7 @@ def require(module_name: str):
 
 
 def load_settings(config: dict):
-    return require("panel.settings").load_panel_settings(config)
+    return require("empiremuse.panel.settings").load_panel_settings(config)
 
 
 def fake_pool():

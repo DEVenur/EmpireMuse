@@ -3,6 +3,7 @@
 Contrato: BRIEFING-PAINEL-E2.md. Nada de rede real: o cliente OAuth é um subclasse de DiscordOAuthClient que
 sobrescreve só os métodos de rede (authorize_url continua sendo o real, que é puro).
 """
+
 import base64
 import hashlib
 from http.cookies import SimpleCookie
@@ -17,8 +18,16 @@ CLIENT_ID = "123456789012345678"
 DEFAULT_USER = {"id": "1001", "username": "tester", "global_name": "Tester Global", "avatar": "abc123hash"}
 DEFAULT_GUILDS = [{"id": "1", "name": "Dono", "icon": None, "owner": True, "permissions": "0"}]
 GATE = "https://discord.com/oauth2/authorize"
-AUTHORIZE_PARAM_KEYS = {"response_type", "client_id", "scope", "state", "redirect_uri", "code_challenge",
-                        "code_challenge_method", "prompt"}
+AUTHORIZE_PARAM_KEYS = {
+    "response_type",
+    "client_id",
+    "scope",
+    "state",
+    "redirect_uri",
+    "code_challenge",
+    "code_challenge_method",
+    "prompt",
+}
 
 
 class FakeClock:
@@ -41,7 +50,7 @@ def s256(verifier: str) -> str:
 
 def make_fake_oauth(settings, *, user=None, guilds=None, fail_at=None, token=ACCESS_TOKEN):
     """DiscordOAuthClient com a rede substituída. `fail_at` ∈ {None,'exchange','user','guilds'}; registra `calls`."""
-    oauth = require("panel.oauth")
+    oauth = require("empiremuse.panel.oauth")
 
     class FakeOAuthClient(oauth.DiscordOAuthClient):
         def __init__(self):
@@ -79,7 +88,7 @@ def make_fake_oauth(settings, *, user=None, guilds=None, fail_at=None, token=ACC
 
 
 def build_app(settings_config: dict, clock, fake):
-    panel = require("panel")
+    panel = require("empiremuse.panel")
     settings = load_settings(settings_config)
     return settings, panel.build_panel_app(fake_pool(), settings, oauth_client=fake, clock=clock)
 

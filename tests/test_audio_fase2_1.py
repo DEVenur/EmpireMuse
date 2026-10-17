@@ -12,6 +12,7 @@ API exigida do Backend (nomes fixados pelos testes):
                           lavalink_child_env(refresh_token, environ=os.environ) -> dict[str, str] (função pura);
                           o Popen do Lavalink SEMPRE recebe env=lavalink_child_env(token).
 """
+
 import hashlib
 import inspect
 import io
@@ -26,8 +27,8 @@ from types import MappingProxyType
 
 import pytest
 
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -40,10 +41,34 @@ JDK_URLS = {
     "linux-amd64": "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-amd64-lite.tar.gz",
     "linux-i586": "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-i586-lite.tar.gz",
 }
-COMMON_ALLOWED = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TEMP", "TMP", "JAVA_HOME", "SERVER_PORT")
-WINDOWS_ONLY_ALLOWED = ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA")
-OAUTH_VARS = ("PLUGINS_YOUTUBE_OAUTH_ENABLED", "PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN",
-              "PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION")
+COMMON_ALLOWED = (
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TZ",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "JAVA_HOME",
+    "SERVER_PORT",
+)
+WINDOWS_ONLY_ALLOWED = (
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMDATA",
+)
+OAUTH_VARS = (
+    "PLUGINS_YOUTUBE_OAUTH_ENABLED",
+    "PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN",
+    "PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION",
+)
 # Valores sintéticos: nunca são segredos reais.
 FAKE_TOKEN = "1//0gFAKE-refresh_TOKEN-qa-fase2-1-zZ9"
 SECRET_SENTINELS = {
@@ -55,9 +80,23 @@ SECRET_SENTINELS = {
     "LASTFM_SECRET": "sentinela-lastfm",
 }
 NEVER_PASSED = (
-    "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH", "LD_PRELOAD", "LD_LIBRARY_PATH",
-    "PYTHONPATH", "SPRING_APPLICATION_JSON", "SPRING_CONFIG_LOCATION", "LAVALINK_SERVER_PASSWORD", "HTTP_PROXY",
-    "HTTPS_PROXY", "AWS_SECRET_ACCESS_KEY", "GITHUB_TOKEN", "DISCORD_TOKEN", "TOKEN_BOT_1", "PLUGINS_YOUTUBE_ENABLED",
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "CLASSPATH",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "PYTHONPATH",
+    "SPRING_APPLICATION_JSON",
+    "SPRING_CONFIG_LOCATION",
+    "LAVALINK_SERVER_PASSWORD",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "AWS_SECRET_ACCESS_KEY",
+    "GITHUB_TOKEN",
+    "DISCORD_TOKEN",
+    "TOKEN_BOT_1",
+    "PLUGINS_YOUTUBE_ENABLED",
     *SECRET_SENTINELS,
 )
 
@@ -72,6 +111,7 @@ def fail(message: str):
 
 
 # ============================================================================ (1a) constantes reais do branding
+
 
 class TestJdkDownloadsConstant:
     def test_exists_and_is_a_mapping_with_exactly_the_four_platform_keys(self):
@@ -92,12 +132,15 @@ class TestJdkDownloadsConstant:
         assert not any(len(set(d)) <= 2 for d in digests), "hash com cara de placeholder (0000…, aaaa…)"
 
     def test_local_lavalink_no_longer_hardcodes_the_bellsoft_urls_or_downloads_the_jdk_unverified(self):
-        source = (ROOT / "utils/music/local_lavalink.py").read_text(encoding="utf-8")
+        source = (ROOT / "empiremuse/utils/music/local_lavalink.py").read_text(encoding="utf-8")
         assert "download.bell-sw.com" not in source, "as URLs do JDK passam a viver em branding.JDK_DOWNLOADS"
-        assert not re.search(r"download_file\(\s*jdk_url", source), "JDK não pode mais passar por download_file (sem verificação)"
+        assert not re.search(r"download_file\(\s*jdk_url", source), (
+            "JDK não pode mais passar por download_file (sem verificação)"
+        )
 
 
 # ============================================================================ fixtures do item 1 (JDK)
+
 
 class Net:
     """Atende só as URLs em ``served``; qualquer outra é requisição inesperada. Suporta `with` e uso direto."""
@@ -194,8 +237,14 @@ def jdk(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("JAVA_HOME", raising=False)
     jar, yml = b"JAR", b"YML\n"
-    plugins = {n: f"plugin {n}".encode() for n in ("youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
-                                                   "lavasrc-plugin-4.8.3.jar", "lavalink-2.6.1.jar")}
+    plugins = {
+        n: f"plugin {n}".encode()
+        for n in (
+            "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
+            "lavasrc-plugin-4.8.3.jar",
+            "lavalink-2.6.1.jar",
+        )
+    }
     monkeypatch.setattr(branding, "LAVALINK_JAR_SHA256", sha(jar))
     monkeypatch.setattr(branding, "LAVALINK_APPLICATION_YML_SHA256", sha(yml))
     monkeypatch.setattr(branding, "LAVALINK_PLUGIN_SHA256", {n: sha(d) for n, d in plugins.items()})
@@ -206,15 +255,20 @@ def jdk(monkeypatch, tmp_path):
         (tmp_path / "plugins" / name).write_bytes(data)
 
     archives = {key: good_archive(key) for key in JDK_KEYS}
-    test_urls = {key: f"https://example.test/jdk/{key}.{'zip' if key.startswith('windows') else 'tar.gz'}" for key in JDK_KEYS}
-    monkeypatch.setattr(branding, "JDK_DOWNLOADS", {k: (test_urls[k], sha(archives[k])) for k in JDK_KEYS}, raising=False)
+    test_urls = {
+        key: f"https://example.test/jdk/{key}.{'zip' if key.startswith('windows') else 'tar.gz'}" for key in JDK_KEYS
+    }
+    monkeypatch.setattr(
+        branding, "JDK_DOWNLOADS", {k: (test_urls[k], sha(archives[k])) for k in JDK_KEYS}, raising=False
+    )
 
     net = Net()
     net.served = {test_urls[k]: archives[k] for k in JDK_KEYS}
     monkeypatch.setattr(ll.requests, "get", net.get)
 
-    monkeypatch.setattr(ll, "validate_java",
-                        lambda cmd, debug=False: cmd if cmd != "java" and os.path.isfile(cmd) else None)
+    monkeypatch.setattr(
+        ll, "validate_java", lambda cmd, debug=False: cmd if cmd != "java" and os.path.isfile(cmd) else None
+    )
 
     real_popen = ll.subprocess.Popen
     started, extractions = [], []
@@ -243,8 +297,16 @@ def jdk(monkeypatch, tmp_path):
     monkeypatch.setattr(tarfile, "open", tar_open)
     monkeypatch.setattr(zipfile, "ZipFile", RecordingZip)
 
-    return types.SimpleNamespace(net=net, archives=archives, urls=test_urls, started=started, extractions=extractions,
-                                 base=tmp_path, baseline=tree(tmp_path), monkeypatch=monkeypatch)
+    return types.SimpleNamespace(
+        net=net,
+        archives=archives,
+        urls=test_urls,
+        started=started,
+        extractions=extractions,
+        base=tmp_path,
+        baseline=tree(tmp_path),
+        monkeypatch=monkeypatch,
+    )
 
 
 def _archive_hash_in(args):
@@ -283,6 +345,7 @@ def setup_platform(env, system, bits):
 
 # ============================================================================ (1b) comportamento dos downloads
 
+
 @pytest.mark.parametrize("system,bits", PLATFORMS)
 class TestJdkDownloadIsVerified:
     def test_downloads_the_entry_of_the_running_platform_and_nothing_else(self, jdk, system, bits):
@@ -302,8 +365,9 @@ class TestJdkDownloadIsVerified:
         ll.run_lavalink()
         assert jdk.extractions, "nenhuma extração observada (tar/tarfile/zipfile)"
         expected = branding.JDK_DOWNLOADS[key][1]
-        assert all(digest == expected for _, digest in jdk.extractions), \
+        assert all(digest == expected for _, digest in jdk.extractions), (
             "o arquivo foi aberto/extraído antes de estar verificado (ou diferente do esperado)"
+        )
 
     def test_wrong_hash_aborts_with_integrity_error_and_leaves_nothing_behind(self, jdk, system, bits):
         key, java, archive = setup_platform(jdk, system, bits)
@@ -383,10 +447,21 @@ class TestInstallationIsSkippedWhenJavaAlreadyWorks:
 
 # ============================================================================ (2a) lavalink_child_env — função pura
 
+
 def sentinel_environ(**extra):
-    base = {"PATH": "/usr/bin:/bin", "HOME": "/home/bot", "LANG": "pt_BR.UTF-8", "LC_ALL": "C.UTF-8", "LC_CTYPE": "UTF-8",
-            "TZ": "America/Sao_Paulo", "TMPDIR": "/tmp", "TEMP": "/tmp", "TMP": "/tmp", "JAVA_HOME": "/opt/jdk",
-            "SERVER_PORT": "8123"}
+    base = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/home/bot",
+        "LANG": "pt_BR.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "LC_CTYPE": "UTF-8",
+        "TZ": "America/Sao_Paulo",
+        "TMPDIR": "/tmp",
+        "TEMP": "/tmp",
+        "TMP": "/tmp",
+        "JAVA_HOME": "/opt/jdk",
+        "SERVER_PORT": "8123",
+    }
     base.update({name: f"valor-{name}" for name in NEVER_PASSED if name not in SECRET_SENTINELS})
     base.update(SECRET_SENTINELS)
     base.update(extra)
@@ -480,9 +555,12 @@ class TestChildEnvOauth:
         assert env["PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"] == FAKE_TOKEN
 
     def test_the_given_token_wins_over_a_stale_value_in_the_bot_environment(self):
-        env = ll.lavalink_child_env(FAKE_TOKEN, {"PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN": "velho",
-                                                 "PLUGINS_YOUTUBE_OAUTH_ENABLED": "false"})
-        assert env["PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"] == FAKE_TOKEN and env["PLUGINS_YOUTUBE_OAUTH_ENABLED"] == "true"
+        env = ll.lavalink_child_env(
+            FAKE_TOKEN, {"PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN": "velho", "PLUGINS_YOUTUBE_OAUTH_ENABLED": "false"}
+        )
+        assert (
+            env["PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"] == FAKE_TOKEN and env["PLUGINS_YOUTUBE_OAUTH_ENABLED"] == "true"
+        )
 
     def test_the_token_only_exists_in_the_returned_dict(self):
         source = {"PATH": "/bin"}
@@ -500,9 +578,21 @@ class TestChildEnvOnWindows:
         assert set(ll.lavalink_child_env(None, source)) == set(COMMON_ALLOWED) | set(WINDOWS_ONLY_ALLOWED)
 
     def test_names_are_matched_without_regard_to_case(self):
-        source = {"Path": "C:\\bin", "SystemRoot": "C:\\Windows", "ComSpec": "cmd.exe", "PathExt": ".EXE", "Temp": "C:\\t",
-                  "TMP": "C:\\t", "AppData": "C:\\a", "LocalAppData": "C:\\l", "ProgramData": "C:\\p", "UserProfile": "C:\\u",
-                  "WinDir": "C:\\Windows", "Server_Port": "8123", "Java_Home": "C:\\jdk"}
+        source = {
+            "Path": "C:\\bin",
+            "SystemRoot": "C:\\Windows",
+            "ComSpec": "cmd.exe",
+            "PathExt": ".EXE",
+            "Temp": "C:\\t",
+            "TMP": "C:\\t",
+            "AppData": "C:\\a",
+            "LocalAppData": "C:\\l",
+            "ProgramData": "C:\\p",
+            "UserProfile": "C:\\u",
+            "WinDir": "C:\\Windows",
+            "Server_Port": "8123",
+            "Java_Home": "C:\\jdk",
+        }
         env = ll.lavalink_child_env(None, source)
         by_upper = {k.upper(): v for k, v in env.items()}
         assert by_upper == {k.upper(): v for k, v in source.items()}
@@ -513,13 +603,22 @@ class TestChildEnvOnWindows:
         assert [k.upper() for k in env] == ["PATH"], "no Windows Path e PATH são a mesma variável: apenas uma entrada"
 
     def test_names_outside_the_allowlist_are_blocked_in_any_case(self):
-        source = {"Token": "t", "mongo": "m", "Java_Tool_Options": "-javaagent:x.jar", "_Java_Options": "-Xevil",
-                  "Spring_Application_Json": "{}", "panel_cookie_secret": "s", "Path": "C:\\bin"}
+        source = {
+            "Token": "t",
+            "mongo": "m",
+            "Java_Tool_Options": "-javaagent:x.jar",
+            "_Java_Options": "-Xevil",
+            "Spring_Application_Json": "{}",
+            "panel_cookie_secret": "s",
+            "Path": "C:\\bin",
+        }
         env = ll.lavalink_child_env(None, source)
         assert {k.upper() for k in env} == {"PATH"}
 
     def test_oauth_variables_follow_the_same_rules_on_windows(self):
-        assert [v for v in OAUTH_VARS if v in ll.lavalink_child_env("  ", {"plugins_youtube_oauth_enabled": "true"})] == []
+        assert [
+            v for v in OAUTH_VARS if v in ll.lavalink_child_env("  ", {"plugins_youtube_oauth_enabled": "true"})
+        ] == []
         env = ll.lavalink_child_env(FAKE_TOKEN, {"Path": "C:\\bin", "plugins_youtube_oauth_enabled": "false"})
         assert env["PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"] == FAKE_TOKEN
         assert env["PLUGINS_YOUTUBE_OAUTH_ENABLED"] == "true"
@@ -528,13 +627,20 @@ class TestChildEnvOnWindows:
 
 # ============================================================================ (2b) o Popen do Lavalink sempre recebe env=
 
+
 @pytest.fixture
 def lavalink_start(monkeypatch, tmp_path):
     """run_lavalink com Java 'instalado' e tudo verificado; registra os kwargs do Popen. Ambiente do bot com segredos fictícios."""
     monkeypatch.chdir(tmp_path)
     jar, yml = b"JAR", b"YML\n"
-    plugins = {n: f"plugin {n}".encode() for n in ("youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
-                                                   "lavasrc-plugin-4.8.3.jar", "lavalink-2.6.1.jar")}
+    plugins = {
+        n: f"plugin {n}".encode()
+        for n in (
+            "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
+            "lavasrc-plugin-4.8.3.jar",
+            "lavalink-2.6.1.jar",
+        )
+    }
     monkeypatch.setattr(branding, "LAVALINK_JAR_SHA256", sha(jar))
     monkeypatch.setattr(branding, "LAVALINK_APPLICATION_YML_SHA256", sha(yml))
     monkeypatch.setattr(branding, "LAVALINK_PLUGIN_SHA256", {n: sha(d) for n, d in plugins.items()})

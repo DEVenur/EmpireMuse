@@ -26,7 +26,7 @@ paths:
 - Não envie segredos pelo Discord, nem por DM ou anexo. Funções que exportam configuração devem
   substituir os segredos por placeholders.
 - Toda variável sensível nova entra em `.example.env` **vazia** e documentada, e é lida pelo
-  `config_loader.py`. `.example.env` nunca recebe valores reais.
+  `empiremuse/config_loader.py`. `.example.env` nunca recebe valores reais.
 - `.env`, `config.json`, `local_database/` e caches locais não são versionados nem copiados para
   imagens Docker.
 
@@ -42,7 +42,7 @@ paths:
 - `ruamel.yaml`: use apenas o carregador padrão seguro (`YAML()` / `typ="rt"` ou `"safe"`), nunca
   `typ="unsafe"`.
 
-## 3. Servidor RPC/WebSocket e HTTP (`web_app.py`)
+## 3. Servidor RPC/WebSocket e HTTP (`empiremuse/web_app.py`)
 
 - Toda mensagem recebida é decodificada dentro de `try` (`json.JSONDecodeError`/`ValueError`),
   precisa ser um `dict` e passa por validação de esquema: `op` em lista permitida, IDs como
@@ -127,13 +127,13 @@ paths:
   segredo. Use variáveis secretas da plataforma (por exemplo, `sync: false` no Render).
 - Workflows do GitHub Actions (quando existirem): actions fixadas por SHA, `permissions:` mínimas
   e nada de `pull_request_target` executando código do PR.
-- Opções novas de segurança entram com o **valor seguro como padrão** em `config_loader.py` e
+- Opções novas de segurança entram com o **valor seguro como padrão** em `empiremuse/config_loader.py` e
   `.example.env`.
 
 ## 10. Revisão obrigatória
 
-Mudanças em `web_app.py`, `utils/db.py`, persistência, `modules/legacy_cmds.py`,
-`modules/player_resume.py`, `utils/music/local_lavalink.py`, `config_loader.py`, scripts de
+Mudanças em `empiremuse/web_app.py`, `empiremuse/utils/db.py`, persistência, `empiremuse/cogs/legacy_cmds.py`,
+`empiremuse/cogs/player_resume.py`, `empiremuse/utils/music/local_lavalink.py`, `empiremuse/config_loader.py`, scripts de
 instalação/deploy e arquivos de dependências passam por revisão do agente AppSec (agente
 `security-reviewer` do ECC) antes do merge. Vulnerabilidades ainda não corrigidas **não** são
 descritas em issues, PRs, commits ou documentos públicos. Siga o fluxo de [`SECURITY.md`](../../../SECURITY.md).

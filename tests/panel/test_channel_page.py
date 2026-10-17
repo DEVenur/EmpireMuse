@@ -5,6 +5,7 @@ Contrato do formulário (interpretações em .qa-e4c-interp.txt): `POST /painel/
 `titulo_forum`, `tipo` ∈ texto|voz|palco, `categoria`. Validação falha = 422 SÍNCRONO (nenhuma tarefa, nenhum efeito
 no Discord, nada no banco); sucesso = 202 + tarefa (ver test_channel_tasks.py).
 """
+
 import html
 import re
 from urllib.parse import parse_qs, urlsplit
@@ -13,7 +14,7 @@ from tests.panel.helpers import EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, COOKIE_
 from tests.panel.helpers_channel import ChannelBase, GID
 from tests.panel.helpers_settings import NOT_FOUND_TEXT, UID, acao_form, version_of
 from tests.panel.test_settings_http import Each, HttpBase, normalize
-from tests.helpers_request_channel import perms, FULL_TEXT, FakeText
+from tests.helpers_request_channel import perms, FULL_TEXT
 
 TASK_PATH = re.compile(r"/painel/servidores/\d+/canal/tarefas/")
 
@@ -46,6 +47,7 @@ class CanalBase(ChannelBase, HttpBase):
 
 # ============================================================================ acesso
 
+
 class CanalAccessTest(CanalBase):
     def test_anonymous_is_redirected_to_login_with_next(self):
         response = self.browser().get(self.canal_url())
@@ -57,8 +59,12 @@ class CanalAccessTest(CanalBase):
         browser = self.browser()
         token = self.xsrf_header(browser)
         for method, path in (("POST", self.canal_url()), ("GET", f"/painel/servidores/{GID}/canal/tarefas/{'a' * 32}")):
-            response = browser.request(path, method, headers={"Content-Type": "application/x-www-form-urlencoded",
-                                                              **token}, **({"body": "acao=configurar"} if method == "POST" else {}))
+            response = browser.request(
+                path,
+                method,
+                headers={"Content-Type": "application/x-www-form-urlencoded", **token},
+                **({"body": "acao=configurar"} if method == "POST" else {}),
+            )
             assert response.code in (302, 401, 403), f"{method}: {response.code}"
         assert list(self.world.j) == []
 
@@ -81,8 +87,16 @@ class CanalAccessTest(CanalBase):
             response = browser.get(path)
             assert response.code == 404 and normalize(response.body.decode()) == reference, response.code
 
-        Each.run([self.canal_url(1), self.canal_url("abc"), self.canal_url("7000;1"), "/painel/servidores/300/canal",
-                  "/painel/servidores/abc/canal"], check)
+        Each.run(
+            [
+                self.canal_url(1),
+                self.canal_url("abc"),
+                self.canal_url("7000;1"),
+                "/painel/servidores/300/canal",
+                "/painel/servidores/abc/canal",
+            ],
+            check,
+        )
         post = self.post_raw(browser, self.canal_url(1), [("acao", "configurar"), ("versao", "0" * 16)])
         assert post.code == 404 and list(self.world.j) == []
 
@@ -106,16 +120,18 @@ class CanalAccessTest(CanalBase):
         no_version = [p for p in form.pairs(modo="existente", canal="22") if p[0] != "versao"]
         self.assert_nothing_happened(self.submit(browser, self.canal_url(), form, pairs=no_version))
         for acao in ("", "apagar", "CONFIGURAR"):
-            self.assert_nothing_happened(self.submit(browser, self.canal_url(), form, acao=acao,
-                                                     modo="existente", canal="22"))
+            self.assert_nothing_happened(
+                self.submit(browser, self.canal_url(), form, acao=acao, modo="existente", canal="22")
+            )
 
     def test_body_over_16_kib_is_413_and_the_write_rate_limit_is_20_per_minute(self):
         browser = self.logged_in()
         form = self.setup_form(browser)
         big = form.pairs(modo="existente", canal="22") + [("pad", "x" * 20000)]
         assert self.submit(browser, self.canal_url(), form, pairs=big).code == 413
-        codes = [self.submit(browser, self.canal_url(), form, gap=0, modo="existente", canal="abc").code
-                 for _ in range(20)]
+        codes = [
+            self.submit(browser, self.canal_url(), form, gap=0, modo="existente", canal="abc").code for _ in range(20)
+        ]
         assert 429 not in codes, "o 413 não conta; as 20 primeiras escritas do minuto passam"
         assert self.submit(browser, self.canal_url(), form, gap=0, modo="existente", canal="abc").code == 429
         assert list(self.world.j) == []
@@ -140,6 +156,7 @@ class CanalAccessTest(CanalBase):
 
 
 # ============================================================================ página
+
 
 class CanalPageTest(CanalBase):
     def test_not_configured_page_offers_setup_and_no_reset(self):
@@ -177,7 +194,9 @@ class CanalPageTest(CanalBase):
     def test_form_carries_xsrf_version_and_the_documented_fields(self):
         form = self.setup_form(self.logged_in())
         assert form.method == "post" and form.value("_xsrf") and re.fullmatch(r"[0-9a-f]{16}", form.value("versao"))
-        assert all(form.has(name) for name in ("modo", "canal", "limpar_mensagens", "titulo_forum", "tipo", "categoria"))
+        assert all(
+            form.has(name) for name in ("modo", "canal", "limpar_mensagens", "titulo_forum", "tipo", "categoria")
+        )
 
     def test_version_is_the_hash_of_channel_and_message_id(self):
         browser = self.logged_in()
@@ -192,10 +211,11 @@ class CanalPageTest(CanalBase):
 
     def test_pages_of_the_other_categories_link_to_canal_too(self):
         body = self.logged_in().get(f"/painel/servidores/{GID}/player").body.decode()
-        assert f'/painel/servidores/{GID}/canal' in body
+        assert f"/painel/servidores/{GID}/canal" in body
 
 
 # ============================================================================ validações (422 síncrono, sem efeitos)
+
 
 class CanalSetupValidationTest(CanalBase):
     def check_422(self, **fields):
@@ -216,10 +236,10 @@ class CanalSetupValidationTest(CanalBase):
         Each.run(["", "abc", "22 ", "-22", "22.0", "٢٢", "9" * 21, "999999", "99", "<script>"], check)
 
     def test_accepted_channel_types_only(self):
-        for value in ("66",):          # categoria
+        for value in ("66",):  # categoria
             self.check_422(modo="existente", canal=value)
         post = self.world.forum.add_post(900, "post")
-        self.world.bot.channels[900] = post   # thread/post de fórum não é um alvo válido
+        self.world.bot.channels[900] = post  # thread/post de fórum não é um alvo válido
         self.check_422(modo="existente", canal="900")
 
     def test_discord_updates_and_rules_channels_are_refused(self):
@@ -256,11 +276,14 @@ class CanalSetupValidationTest(CanalBase):
 
     def test_missing_manage_permissions_is_explained_in_panel_terms_not_with_the_commands_text(self):
         """Fase 2 / Trilha C: o texto do /setup ("use o comando sem selecionar um canal de destino") não serve ao painel."""
-        from utils import branding
+        from empiremuse.utils import branding
+
         self.world.text._perms = perms(**{k: v for k, v in FULL_TEXT.items() if k != "manage_permissions"})
         body = " ".join(html.unescape(self.check_422(modo="existente", canal="22")).split())
-        assert (f"O {branding.BOT_NAME} precisa da permissão Gerenciar permissões neste canal (ou de Administrador). "
-                "Conceda a permissão ao cargo do bot ou escolha Criar um canal novo.") in body
+        assert (
+            f"O {branding.BOT_NAME} precisa da permissão Gerenciar permissões neste canal (ou de Administrador). "
+            "Conceda a permissão ao cargo do bot ou escolha Criar um canal novo."
+        ) in body
         lowered = body.lower()
         for forbidden in ("comando", "sem selecionar um canal de destino", "genericerror"):
             assert forbidden not in lowered, f"texto do comando vazou para o painel: {forbidden!r}"
@@ -301,7 +324,12 @@ class CanalSetupValidationTest(CanalBase):
         assert self.configure(self.logged_in(), modo="existente", canal="22", titulo_forum="x").code == 202
 
     def test_mode_and_type_come_from_closed_lists(self):
-        for fields in ({"modo": "outro"}, {"modo": ""}, {"modo": "criar", "tipo": "forum"}, {"modo": "criar", "tipo": ""}):
+        for fields in (
+            {"modo": "outro"},
+            {"modo": ""},
+            {"modo": "criar", "tipo": "forum"},
+            {"modo": "criar", "tipo": ""},
+        ):
             self.world.j.clear()
             self.check_422(**fields)
 
@@ -309,7 +337,7 @@ class CanalSetupValidationTest(CanalBase):
         self.check_422(modo="criar", tipo="palco")
 
     def test_category_must_be_a_category_of_this_guild(self):
-        for value in ("999", "22", "abc", "66 ", "-66"):   # inexistente, canal comum, lixo
+        for value in ("999", "22", "abc", "66 ", "-66"):  # inexistente, canal comum, lixo
             self.world.j.clear()
             self.check_422(modo="criar", tipo="texto", categoria=value)
 

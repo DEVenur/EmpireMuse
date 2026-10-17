@@ -3,11 +3,12 @@
 Código de referência: modules/music_settings.py (listenalong / listen_along_modal): permissão `manage_channels`,
 máx. 5 convites, efeito nos players do canal (`listen_along_invite`, `process_rpc()`). Adicionar fica fora da v1.
 """
+
 import copy
 import html
 import re
 
-from tests.panel.helpers_settings import CONFLICT_TEXT, NOT_FOUND_TEXT, SAVED_TEXT, UID, acao_form, parse_forms
+from tests.panel.helpers_settings import CONFLICT_TEXT, NOT_FOUND_TEXT, SAVED_TEXT, UID, parse_forms
 from tests.panel.test_settings_http import Each, HttpBase, external_change
 
 HEX16 = re.compile(r"^[0-9a-f]{16}$")
@@ -118,8 +119,14 @@ class ListenAlongRemoveTest(ListenAlongBase):
         browser = self.logged_in()
         form = next(f for f in parse_forms(self.geral(browser)) if f.value("acao") == REMOVE)
         before, writes = self.db.doc("global", 100), len(self.db.writes)
-        response = self.submit(browser, self.url(100, "geral"), form, acao="adicionar_ouvir_junto",
-                               canal="123", convite="https://discord.gg/novo")
+        response = self.submit(
+            browser,
+            self.url(100, "geral"),
+            form,
+            acao="adicionar_ouvir_junto",
+            canal="123",
+            convite="https://discord.gg/novo",
+        )
         assert response.code == 422
         assert self.db.doc("global", 100) == before and len(self.db.writes) == writes
 
@@ -141,7 +148,7 @@ class ListenAlongPermissionTest(ListenAlongBase):
         member = self.world.g100.members[UID]
         member.guild_permissions.manage_channels = False
         member.guild_permissions.administrator = False
-        member.guild_permissions.manage_guild = True    # ainda gerencia o servidor, mas não os canais
+        member.guild_permissions.manage_guild = True  # ainda gerencia o servidor, mas não os canais
         before, writes = self.db.doc("global", 100), len(self.db.writes)
         response = self.submit(browser, self.url(100, "geral"), form, gap=2)
         assert response.code == 403, f"sem manage_channels deveria ser 403, veio {response.code}"
@@ -171,7 +178,7 @@ class ListenAlongProtocolTest(ListenAlongBase):
         browser = self.logged_in()
         form = next(f for f in parse_forms(self.geral(browser, 800)) if f.value("acao") == REMOVE)
         url = self.url(800, "geral")
-        before, writes = self.db.doc("global", 800), len(self.db.writes)
+        writes = len(self.db.writes)
         assert self.submit(browser, url, form, pairs=[p for p in form.pairs() if p[0] != "_xsrf"]).code == 403
         assert self.submit(browser, url, form, pairs=[p for p in form.pairs() if p[0] != "versao"]).code == 422
         external_change(self.db, "global", 800, listen_along_invites={"123": "https://discord.gg/novo"})
@@ -183,9 +190,11 @@ class ListenAlongProtocolTest(ListenAlongBase):
 
     def test_other_geral_forms_do_not_change_the_invites_version(self):
         browser = self.logged_in()
+
         def version():
             form = next(f for f in parse_forms(self.geral(browser)) if f.value("acao") == REMOVE)
             return form.value("versao")
+
         first = version()
         external_change(self.db, "global", 100, prefix="?", voice_channel_status="{track.title}")
         assert version() == first
@@ -195,9 +204,11 @@ class ListenAlongProtocolTest(ListenAlongBase):
     def test_denied_guilds_and_foreign_bots_do_not_leak(self):
         browser = self.logged_in()
         for gid in (300, 600, 500, 999999):
-            response = browser.post(self.url(gid, "geral"), body="acao=remover_ouvir_junto&canal=123&versao=" + "0" * 16,
-                                    headers={"Content-Type": "application/x-www-form-urlencoded",
-                                             **self.xsrf_header(browser)})
+            response = browser.post(
+                self.url(gid, "geral"),
+                body="acao=remover_ouvir_junto&canal=123&versao=" + "0" * 16,
+                headers={"Content-Type": "application/x-www-form-urlencoded", **self.xsrf_header(browser)},
+            )
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), gid
         assert self.db.writes == []
 

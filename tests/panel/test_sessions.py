@@ -3,6 +3,7 @@
 ATENÇÃO (interpretação): o construtor do SessionStore não está no briefing; os testes o criam em `make_store`
 como SessionStore(settings, clock=clock). Se a assinatura real for outra, ajustar só esta função.
 """
+
 import dataclasses
 
 import pytest
@@ -15,21 +16,21 @@ HOUR, MINUTE = 3600, 60
 
 def make_store(clock, **overrides):
     settings = load_settings(https_config(**overrides))
-    return require("panel.sessions").SessionStore(settings, clock=clock)
+    return require("empiremuse.panel.sessions").SessionStore(settings, clock=clock)
 
 
 def _user(user_id="1001"):
-    sessions = require("panel.sessions")
+    sessions = require("empiremuse.panel.sessions")
     return sessions.PanelUser(id=user_id, username=f"user{user_id}", global_name=None, avatar=None)
 
 
 def _guilds():
-    sessions = require("panel.sessions")
+    sessions = require("empiremuse.panel.sessions")
     return (sessions.ManagedGuild(id="1", name="Servidor", icon=None, permissions=8, owner=False),)
 
 
 def test_models_are_frozen_dataclasses_without_token_fields():
-    sessions = require("panel.sessions")
+    sessions = require("empiremuse.panel.sessions")
     for model in (sessions.PanelUser, sessions.ManagedGuild):
         assert dataclasses.is_dataclass(model)
         with pytest.raises(dataclasses.FrozenInstanceError):

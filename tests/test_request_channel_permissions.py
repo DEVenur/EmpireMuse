@@ -3,12 +3,23 @@
 Hoje `Permissions` itera por `view_channel`/`send_messages` e a lista da função usa os aliases `read_messages`/
 `create_forum_threads`, que nunca casam: falta de ler mensagens (e de postar em fórum) passa batido (RED).
 """
+
 import pytest
 
-from tests.helpers_request_channel import (BOT_MENTION, FULL_TEXT, FakeForum, FakeGuild, FakeStage, FakeText,
-                                           FakeThread, FakeVoice, Journal, perms)
-from utils.music import request_channel
-from utils.music.errors import GenericError
+from tests.helpers_request_channel import (
+    BOT_MENTION,
+    FULL_TEXT,
+    FakeForum,
+    FakeGuild,
+    FakeStage,
+    FakeText,
+    FakeThread,
+    FakeVoice,
+    Journal,
+    perms,
+)
+from empiremuse.utils.music import request_channel
+from empiremuse.utils.music.errors import GenericError
 
 TEXT_NEEDS = ("send_messages", "embed_links", "view_channel")
 FORUM_NEEDS = ("send_messages", "send_messages_in_threads", "embed_links", "view_channel")
@@ -17,11 +28,14 @@ ESC = "\x1b"
 
 def exact(channel, missing):
     """Mensagem EXATA esperada (bloco ```ansi com ESC[0;33m … ESC[0m, na ordem de iteração de Permissions)."""
-    from utils.music.converters import perms_translations
+    from empiremuse.utils.music.converters import perms_translations
+
     ordered = [name for name, _ in channel.permissions_for(None) if name in missing]
     lines = "\n".join(f"{ESC}[0;33m{perms_translations.get(name, name)}{ESC}[0m" for name in ordered)
-    return (f"**{BOT_MENTION} não possui as seguintes permissões necessárias no canal {channel.mention}** ```ansi\n"
-            f"{lines}```")
+    return (
+        f"**{BOT_MENTION} não possui as seguintes permissões necessárias no canal {channel.mention}** ```ansi\n"
+        f"{lines}```"
+    )
 
 
 def guild():
@@ -61,8 +75,13 @@ class TestCheckChannelPerm:
 
     def test_all_permissions_present_passes(self):
         j, g = guild()
-        for channel in (FakeText(j, 1, "a", g), FakeVoice(j, 2, "b", g), FakeStage(j, 3, "c", g),
-                        FakeForum(j, 4, "d", g), FakeThread(j, 5, "e", g, FakeForum(j, 6, "f", g))):
+        for channel in (
+            FakeText(j, 1, "a", g),
+            FakeVoice(j, 2, "b", g),
+            FakeStage(j, 3, "c", g),
+            FakeForum(j, 4, "d", g),
+            FakeThread(j, 5, "e", g, FakeForum(j, 6, "f", g)),
+        ):
             request_channel.check_channel_perm(channel)
 
     def test_several_missing_permissions_are_listed_together_in_iteration_order(self):

@@ -1,12 +1,12 @@
 """Endurecimento do login (Etapa 2, validação): client_id/503, Retry-After, logs sem query string,
 revogação mesmo em erro inesperado, cookies sem aspas."""
-import logging
+
 from types import SimpleNamespace
 
 import tornado.web
 
-from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, fake_pool, local_config, require
-from tests.panel.helpers_login import ACCESS_TOKEN, CODE, authorize_params, build_app, set_cookie_headers
+from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, local_config, require
+from tests.panel.helpers_login import ACCESS_TOKEN, CODE, authorize_params, set_cookie_headers
 from tests.panel.test_login_flow import SESSION_COOKIE, LoginBase
 
 PANEL_APP_ID = "111111111111111111"
@@ -16,6 +16,7 @@ CONFIGURED_ID = "999999999999999999"
 
 class ClientIdBase(LoginBase):
     """App SEM cliente OAuth injetado: o client_id é resolvido no primeiro login."""
+
     pool_bots: list = []
     config_overrides: dict = {}
 
@@ -23,9 +24,9 @@ class ClientIdBase(LoginBase):
         return local_config(**self.config_overrides)
 
     def get_app(self):
-        panel = require("panel")
+        panel = require("empiremuse.panel")
         self.pool = SimpleNamespace(bots=list(self.pool_bots), database=None)
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings = settings
         app = panel.build_panel_app(self.pool, settings, clock=self.clock)
         return panel.make_router(tornado.web.Application([]), app)
@@ -125,7 +126,7 @@ class AccessLogTest(LoginBase):
 
 class RevokeFailureTest(LoginBase):
     def test_revoke_failure_does_not_block_login_and_does_not_leak(self):
-        oauth = require("panel.oauth")
+        oauth = require("empiremuse.panel.oauth")
 
         async def failing_revoke(_token):
             raise oauth.DiscordOAuthError("revogação falhou")

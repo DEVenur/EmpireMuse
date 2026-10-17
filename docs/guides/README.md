@@ -1,38 +1,23 @@
-> Adaptado da wiki/gist do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) (zRitsu), GPL-2.0.
+# Guias Técnicos do EmpireMuse
 
-# Guias do EmpireMuse
+Documentação técnica e tutoriais de configuração para administradores e desenvolvedores do **EmpireMuse**.
 
-Seja bem-vindo ao guia de como hospedar seu próprio bot de música sem coding.
+---
 
-`Nota: Este guia ainda está em fase bem inicial (apenas siga caso já tenha criado seu bot na página de desenvolvedores do discord e que ele já esteja no servidor onde será usado, pois o token do bot será um requisito obrigatório neste guia).`
+## Índice de Guias
 
-**Caso queira ver o tutorial em vídeo clique na imagem abaixo:**  
-[![Tutorial](https://img.youtube.com/vi/zTXF4QA05Ic/mqdefault.jpg)](https://www.youtube.com/watch?v=zTXF4QA05Ic)
+| Guia | Descrição |
+| :--- | :--- |
+| **[Lavalink Local e Atualização](atualizar-lavalink.md)** | Configuração do servidor de áudio local, verificação de integridade via SHA-256 (`Lavalink.jar`, `application.yml`, plugins e JDK portátil), cifras remotas e fontes de áudio. |
+| **[YouTube OAuth](youtube-oauth.md)** | Configuração de autenticação OAuth com conta Google descartável no cliente TV para contornar bloqueios anti-bot do YouTube. |
+| **[Painel Web Integrado](painel-web.md)** | Configuração do painel de administração web, credenciais OAuth2 no Discord Developer Portal, permissões e variáveis de ambiente. |
+| **[Chaves de API do Spotify](spotify-keys.md)** | Obtenção de `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` no Spotify for Developers para resolução de metadados de faixas e playlists. |
 
-### Antes de prosseguir
+---
 
-Verifique se todas as intents do seu bot estão ativadas como na imagem abaixo:
+## Outras Documentações do Projeto
 
-![](https://cdn.discordapp.com/attachments/480195401543188483/906040761047478282/unknown.png)
-
-### Escolha um dos guias abaixo para hospedar seu bot
-
-- [Tutorial: Hospedar na Repl.it](replit-hosting.md)
-- [Tutorial: Hospedar na Heroku](heroku-hosting.md) (o plano gratuito da Heroku foi encerrado)
-
-Tutorial: Hospedar no pc/windows (em breve...)
-
-Tutorial: Hospedar na discloud (em breve...)
-
-### Índice de guias
-
-- [replit-hosting.md](replit-hosting.md): hospedar o bot na Repl.it.
-- [replit-hosting-opcionais.md](replit-hosting-opcionais.md): etapas opcionais da Repl.it (prefixo, Spotify, MongoDB).
-- [replit-atualizar.md](replit-atualizar.md): atualizar o bot hospedado na Repl.it.
-- [replit-token.md](replit-token.md): guia do template da Repl.it com o token do bot.
-- [heroku-hosting.md](heroku-hosting.md): hospedar o bot na Heroku.
-- [mongodb.md](mongodb.md): criar um banco MongoDB e obter o link de conexão.
-- [spotify-keys.md](spotify-keys.md): obter o Spotify CLIENT_ID e CLIENT_SECRET.
-- [atualizar-lavalink.md](atualizar-lavalink.md): guia do Lavalink local, versões, integridade SHA-256, plugins e fontes de áudio.
-- [youtube-oauth.md](youtube-oauth.md): guia de configuração do YouTube OAuth no Lavalink local, cliente TV e conta descartável.
-- [painel-web.md](painel-web.md): configuração, Developer Portal e uso do painel web.
+- **[Guia de Desenvolvimento Local](../development.md)**: Preparação do ambiente Python 3.13 com `uv`, execução do bot, suíte de testes e padrão de Git Worktrees.
+- **[Arquitetura do Sistema](../architecture.md)**: Mapeamento aprofundado dos módulos, ciclo de vida do `BotPool`, fluxo de áudio com Lavalink v4 e persistência de dados.
+- **[Guia de Contribuição](../../CONTRIBUTING.md)**: Convenções de código, formatação com `ruff` e fluxo de trabalho com Pull Requests.
+- **[Política de Segurança](../../SECURITY.md)**: Práticas de proteção de credenciais e canal para relato privado de vulnerabilidades.

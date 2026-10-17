@@ -87,8 +87,39 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Padrão de Git Worktrees e Isolamento de Branches (Task B-01 / Fase B)**:
   - Documentação formal em `docs/development.md` (seção 9) e em `AGENTS.md` (seções 4 e 5) estabelecendo o padrão obrigatório de Git Worktrees para trabalho paralelo de agentes autônomos e desenvolvedores.
   - Fixação da árvore de trabalho principal permanentemente na branch `main` (proibindo trocas de branch no repositório raiz) e isolamento compulsório de branches (`feat/*`, `fix/*`, `refactor/*`) sob `worktrees/` com ciclo de vida e comandos de limpeza pós-merge (`git worktree remove`, `git branch -d` e `git worktree prune`).
+- **Padronização de Código, Linting e CI Mínima (Bloco C1 / Saneamento)**:
+  - Configuração do linter e formatador **Ruff** em `pyproject.toml` (target Python 3.13, limite de 120 colunas, conjunto conservador de regras `E4`, `E7`, `E9` e `F`) e inclusão no `requirements-dev.txt`.
+  - Esteira de integração contínua (CI) mínima no GitHub Actions (`.github/workflows/ci.yml`), executando checagem de lint (`ruff check .`), conferência de formatação (`ruff format --check .`), compilação de bytecode (`compileall`) e suíte de testes (`pytest`) em pushes e Pull Requests para a branch `main`.
+  - Criação do arquivo `.git-blame-ignore-revs` contendo o hash do commit de formatação em massa (`fc4b7f8f034071ccb08803c153511afbe5a2c9e9`), preservando o histórico de autoria original nas anotações de blame do Git.
+  - Revisão e alinhamento dos arquivos `.editorconfig` e `.gitignore` para padronização de formatação e exclusão consistente de pastas locais, worktrees e repositórios satélites.
+- **Testes de Caracterização Comportamental (Bloco C2 / Saneamento)**:
+  - Adição de testes de caracterização comportamental em `tests/test_residuos_c2.py` assegurando a integridade da API pública do WaveLink, resolução de instâncias no listenalong e isolamento contra dependências expurgadas.
+- **Testes de Caracterização de Mensagens e Branding (Bloco C3 / Task C-15)**:
+  - Adição de teste automatizado em `tests/test_branding.py` garantindo a ausência de referências legadas à Repl.it na mensagem de token do bot.
+- **Estruturação do Pacote Canônico e Resolução de Caminhos (Bloco C4 / Saneamento)**:
+  - Criação do pacote canônico `empiremuse/` com ponto de entrada `empiremuse.__main__` (`python -m empiremuse`), mantendo `main.py` e `app.py` na raiz como atalhos diretos.
+  - Adição do módulo `empiremuse.paths` com distinção explícita entre `PROJECT_DIR` (raiz do repositório para estáticos `data/` e `assets/`), `PACKAGE_DIR` (pacote Python para código e `templates/status.html`) e `RUNTIME_DIR` (diretório de execução configurável via variável de ambiente `EMPIREMUSE_HOME`).
+  - Implementação de guardas defensivas de cache no `BotPool.load_cache` com captura explícita de `(ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError)`, descartando caches corrompidos ou com referências a classes órfãs via logging defensivo sem interromper a inicialização do bot.
+  - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Roteamento Seguro de Dados de Execução e Migração para Pacote empiremuse (Bloco C4 / Saneamento)**:
+  - Migração de todos os módulos, cogs, templates e utilitários para o pacote canônico `empiremuse/` (`empiremuse.cogs`, `empiremuse.utils`, `empiremuse.wavelink`, `empiremuse.panel`).
+  - Roteamento seguro de bancos de dados locais (`LocalDatabase` em `local_database/`), listas de servidores (`lavalink.ini`, `auto_lavalink.ini`), logs (`.logs/disnake.log`) e sincronização de comandos de barra (`.app_commands_sync_data/`) respeitando `RUNTIME_DIR` / `EMPIREMUSE_HOME`.
+  - Passagem explícita de `cwd=RUNTIME_DIR` no `subprocess.Popen` do Lavalink local (`empiremuse/utils/music/local_lavalink.py`), garantindo que binários, plugins e arquivos temporários permaneçam confinados ao diretório de runtime configurado.
+  - Atualização do script de teste local `.local/run-painel-local.py` para invocar o bot via `python -m empiremuse`.
+- **Alinhamento e Coerência de Documentação Técnica (Bloco C3 / Task C-17)**:
+  - `CONTRIBUTING.md`: checklist de Pull Requests atualizado para refletir os comandos reais e ativos da suíte `pytest`, checagem de lint e formatação com `ruff` e compilação de bytecode com `compileall`.
+  - `AGENTS.md` e `docs/architecture.md`: inventários e tabelas alinhados aos 4 guias técnicos oficiais mantidos em `docs/guides/` (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
+  - `docs/architecture.md`: seção 11 (Implantação) atualizada registrando o expurgo dos tutoriais legados de hospedagem de terceiros no Bloco C3 e o mapeamento dos artefatos de deploy para a Fase D.
+- **Neutralização da Mensagem de Ausência de Token (Bloco C3 / Task C-16)**:
+  - Substituição da mensagem legada com menções à Repl.it por texto neutro e direto em `utils/client.py`, indicando a configuração da variável `TOKEN` (ou `TOKEN_BOT_*`) no `.env`.
+- **Reestruturação do README com Escopo Oficial EmpireHub (Bloco C3 / Task C-13)**:
+  - Redesenho completo do `README.md` apresentando o bot oficial da comunidade EmpireHUB, recursos centrais, visão geral de arquitetura e diretrizes de desenvolvimento/contribuição, removendo tutoriais legados de hospedagem de terceiros e preservando créditos GPL-2.0 a zRitsu e ao MuseHeart-MusicBot.
+- **Tipagem de Re-exports no WaveLink (Bloco C2 / PEP 484)**:
+  - Re-exports explícitos em `wavelink/__init__.py` utilizando aliases redundantes (`Client as Client`, `Node as Node`, `WebSocket as WebSocket`) em conformidade com a PEP 484, assegurando reconhecimento estático por linters e IDEs sem gerar avisos de import não utilizado (`F401`).
+- **Formatação de Código em Massa com Ruff (Bloco C1)**:
+  - Aplicação de formatação automatizada via `ruff format` em toda a base de código Python (`main.py`, `app.py`, `config_loader.py`, `web_app.py`, `modules/`, `utils/`, `wavelink/` e `tests/`), padronizando estilo, indentação e limite de 120 colunas sem alterações semânticas de comportamento.
 - **Atualização da Stack de Áudio e Lavalink (Fase 2 / Release 0.0.3)**:
   - Servidor de áudio atualizado para o **Lavalink 4.2.2 oficial** (substituindo builds SNAPSHOT de desenvolvimento), com suporte a Java 17+ e protocolo de voz **DAVE (E2EE)**.
   - Artefatos e plugins espelhados na release `0.0.3` do repositório [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) (`youtube-plugin` snapshot `2be8e542`, `LavaSrc 4.8.3` e `lyrics 2.6.1`), baixados diretamente para `plugins/` com verificação de SHA-256 e dispensando requisições dinâmicas ao Maven em tempo de execução.
@@ -112,6 +143,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Documentação**: `README.md` reescrito para o EmpireMuse (imagens em `assets/`, guias em `docs/guides/`, créditos preservados); `docs/architecture.md`, `docs/development.md` e `AGENTS.md` atualizados (mapa do repositório, testes com pytest, roster e protocolo com o orquestrador `MAESTRO`).
 - **Lista de servidores Lavalink**: `data/lavalink_servers.ini` revisada (1 servidor removido).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
+
+### Removido
+- **Expurgo de Dependências Obsoletas e Superfície de Supply Chain (Bloco C2 / KI-05)**:
+  - Remoção de 8 dependências obsoletas em `requirements.txt` (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`), reduzindo a superfície de dependências e supply chain (resolução de KI-05).
+- **Limpeza de Código Morto e Imports Não Utilizados (Bloco C2)**:
+  - Remoção de código inalcançável em `wavelink/node.py` (instrução de log posterior ao `return`).
+  - Remoção de imports órfãos e variáveis mortas em `modules/music.py`, `modules/music_settings.py`, `panel/handlers/auth.py`, `utils/music/models.py` e arquivos de testes (`tests/panel/`, `tests/test_audio_fase2a.py` e `tests/test_request_channel_characterization.py`).
+- **Expurgo de Guias Obsoletos de Hospedagem de Terceiros (Bloco C3 / Task C-14)**:
+  - Remoção de 6 tutoriais legados de hospedagem em `docs/guides/` (`heroku-hosting.md`, `mongodb.md`, `replit-atualizar.md`, `replit-hosting.md`, `replit-hosting-opcionais.md` e `replit-token.md`), reorganizando o índice em `docs/guides/README.md` exclusivamente em torno dos 4 guias técnicos oficiais do projeto (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
 
 ### Corrigido
 - **Atualização Automática de URLs Oficiais do Lavalink**:

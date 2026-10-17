@@ -2,6 +2,7 @@
 
 O limite vale antes de qualquer handler (XSRF, 413 do painel) e não pode quebrar `/` nem `/ws`.
 """
+
 import asyncio
 from types import SimpleNamespace
 
@@ -45,14 +46,14 @@ def recording_server(monkeypatch, web_app, *, bind=False):
 class TestServerConfiguration:
     @pytest.mark.parametrize("panel_enabled", [True, False])
     def test_http_server_gets_max_body_size_64_kib_with_or_without_the_panel(self, monkeypatch, panel_enabled):
-        web_app = require("web_app")
+        web_app = require("empiremuse.web_app")
         seen = recording_server(monkeypatch, web_app)
         config = local_config(PANEL_ENABLED=panel_enabled, PORT=0)
         web_app.run_app(make_pool(config), config=make_pool(config).config)
         assert seen["kwargs"].get("max_body_size") == LIMIT, f"kwargs do HTTPServer: {seen['kwargs']}"
 
     def test_xheaders_behaviour_is_unchanged(self, monkeypatch):
-        web_app = require("web_app")
+        web_app = require("empiremuse.web_app")
         seen = recording_server(monkeypatch, web_app)
         config = local_config(PORT=0, PANEL_TRUST_PROXY=False)
         web_app.run_app(make_pool(config), config=make_pool(config).config)
@@ -60,7 +61,7 @@ class TestServerConfiguration:
 
 
 def run_with_server(monkeypatch, scenario, **config_overrides):
-    web_app = require("web_app")
+    web_app = require("empiremuse.web_app")
     config = local_config(PORT=0, **config_overrides)
 
     async def main():

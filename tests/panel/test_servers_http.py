@@ -1,4 +1,5 @@
 """Rotas /painel/servidores e /painel/servidores/<gid> (Etapa 3): autorização no servidor, lista, convites, 404 genérico."""
+
 import html
 import re
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ import tornado.web
 
 from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, require
 from tests.panel.helpers_login import DEFAULT_USER, make_fake_oauth
-from tests.panel.helpers_servers import (INVITE_PERMISSIONS, USER_ID, FakeBot, FakeGuild, FakePool, raw_guild)
+from tests.panel.helpers_servers import INVITE_PERMISSIONS, USER_ID, FakeBot, FakeGuild, FakePool, raw_guild
 from tests.panel.test_login_flow import LoginBase
 
 INVITE_BASE = "https://discord.com/oauth2/authorize"
@@ -35,8 +36,12 @@ def invites(body: str):
     found = []
     for href in re.findall(r'href="(https://discord\.com/oauth2/authorize[^"]*)"', body):
         parts = urlsplit(html.unescape(href))
-        found.append({"base": f"{parts.scheme}://{parts.netloc}{parts.path}",
-                      "params": {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()}})
+        found.append(
+            {
+                "base": f"{parts.scheme}://{parts.netloc}{parts.path}",
+                "params": {k: v[0] for k, v in parse_qs(parts.query, keep_blank_values=True).items()},
+            }
+        )
     return found
 
 
@@ -60,10 +65,13 @@ class World:
         self.bot2 = FakeBot(2, "Bot Dois", guilds=[self.guilds["200"]])
         self.pool = FakePool([self.bot1, self.bot2])
         self.raw = [
-            raw_guild(100, "Alfa", icon="icon100", permissions="8"), raw_guild(200, "Beta", permissions="32"),
-            raw_guild(300, "Gama", permissions="8"), raw_guild(400, "Delta", permissions="8"),
-            raw_guild(600, "Rebaixado", permissions="8"), raw_guild(700, "SemBot", permissions="8"),
-            raw_guild(500, "Fora", owner=False, permissions="1024"),   # filtrado no login
+            raw_guild(100, "Alfa", icon="icon100", permissions="8"),
+            raw_guild(200, "Beta", permissions="32"),
+            raw_guild(300, "Gama", permissions="8"),
+            raw_guild(400, "Delta", permissions="8"),
+            raw_guild(600, "Rebaixado", permissions="8"),
+            raw_guild(700, "SemBot", permissions="8"),
+            raw_guild(500, "Fora", owner=False, permissions="1024"),  # filtrado no login
         ]
 
 
@@ -71,8 +79,8 @@ class ServersBase(LoginBase):
     raw_override = None
 
     def get_app(self):
-        panel = require("panel")
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        panel = require("empiremuse.panel")
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings, self.world = settings, World()
         self.pool = self.world.pool
         raw = self.world.raw if self.raw_override is None else self.raw_override
@@ -91,14 +99,23 @@ class ServersBase(LoginBase):
 
 # ============================================================================ acesso anônimo
 
+
 class AnonymousTest(ServersBase):
     def test_anonymous_is_redirected_to_login_with_next(self):
         failures = []
-        for path in ("/painel/servidores", "/painel/servidores/100", "/painel/servidores/999", "/painel/servidores/abc"):
+        for path in (
+            "/painel/servidores",
+            "/painel/servidores/100",
+            "/painel/servidores/999",
+            "/painel/servidores/abc",
+        ):
             response = self.browser().get(path)
             location = urlsplit(response.headers.get("Location", ""))
-            ok = (response.code == 302 and location.path == "/painel/login"
-                  and parse_qs(location.query).get("next") == [path])
+            ok = (
+                response.code == 302
+                and location.path == "/painel/login"
+                and parse_qs(location.query).get("next") == [path]
+            )
             if not ok:
                 failures.append(f"{path}: {response.code} {response.headers.get('Location')!r}")
         assert not failures, "anônimo deveria ir para /painel/login?next=<caminho>:\n  " + "\n  ".join(failures)
@@ -120,6 +137,7 @@ class AnonymousTest(ServersBase):
 
 
 # ============================================================================ lista
+
 
 class ServerListTest(ServersBase):
     def test_list_shows_session_guilds_sorted_by_name(self):
@@ -149,7 +167,12 @@ class ServerListTest(ServersBase):
             assert params["disable_guild_select"] == "true"
             by_guild.setdefault(params["guild_id"], []).append(params["client_id"])
         assert {g: sorted(c) for g, c in by_guild.items()} == {
-            "100": ["2"], "200": ["1"], "300": ["1", "2"], "400": ["2"], "600": ["2"], "700": ["1", "2"],
+            "100": ["2"],
+            "200": ["1"],
+            "300": ["1", "2"],
+            "400": ["2"],
+            "600": ["2"],
+            "700": ["1", "2"],
         }, "convite só para cada bot do pool AUSENTE do servidor"
         assert "Adicionar" in body
 
@@ -196,8 +219,10 @@ class ServerListEmptyTest(ServersBase):
 
 
 class ServerListEscapingTest(ServersBase):
-    raw_override = [raw_guild(100, "<script>alert(1)</script>Alfa", permissions="8"),
-                    raw_guild(300, "<img src=x onerror=alert(2)>", permissions="8")]
+    raw_override = [
+        raw_guild(100, "<script>alert(1)</script>Alfa", permissions="8"),
+        raw_guild(300, "<img src=x onerror=alert(2)>", permissions="8"),
+    ]
 
     def test_guild_and_bot_names_are_html_escaped(self):
         self.world_bot_name = "<b>Bot</b>"
@@ -224,6 +249,7 @@ class OtherUserIsolationTest(ServersBase):
 
 # ============================================================================ detalhe / autorização
 
+
 class ServerDetailTest(ServersBase):
     def test_authorized_detail_shows_guild_bots_links_to_real_categories_and_coming_soon_for_the_rest(self):
         response = self.page("/painel/servidores/100")
@@ -232,7 +258,9 @@ class ServerDetailTest(ServersBase):
         for category in CATEGORIES:
             assert category in body, f"categoria ausente: {category}"
         hrefs = set(re.findall(r'href="(/painel/servidores/100/[a-z]+)(?:\?[^"]*)?"', body))
-        assert hrefs == {f"/painel/servidores/100/{c}" for c in ("player", "dj", "aparencia", "geral", "links", "canal")}
+        assert hrefs == {
+            f"/painel/servidores/100/{c}" for c in ("player", "dj", "aparencia", "geral", "links", "canal")
+        }
         assert 'aria-disabled="true"' not in body, "nenhuma categoria fica desabilitada depois da E4c"
         assert not re.findall(r"em breve", body, re.I)
         found = invites(body)
@@ -254,11 +282,13 @@ class ServerDetailTest(ServersBase):
 
     def test_owner_and_manage_guild_can_open_the_detail(self):
         self.world.guilds["100"].members[UID] = SimpleNamespace(
-            guild_permissions=SimpleNamespace(administrator=False, manage_guild=True))
+            guild_permissions=SimpleNamespace(administrator=False, manage_guild=True)
+        )
         assert self.page("/painel/servidores/100").code == 200
         self.world.guilds["200"].owner_id = UID
         self.world.guilds["200"].members[UID] = SimpleNamespace(
-            guild_permissions=SimpleNamespace(administrator=False, manage_guild=False))
+            guild_permissions=SimpleNamespace(administrator=False, manage_guild=False)
+        )
         assert self.page("/painel/servidores/200").code == 200
 
     def test_detail_html_escapes_the_guild_name(self):
@@ -296,8 +326,11 @@ class NotFoundIsGenericTest(ServersBase):
             visible = visible_text(body)
             for leak in ("Traceback", "tornado", "GuildAccessDenied", gid if gid.isdigit() and len(gid) < 6 else "\0"):
                 assert leak not in visible or leak == "\0", f"{label}: vaza {leak!r}"
-            pages[label] = (visible, response.headers.get("Content-Type"),
-                            {n: response.headers.get(n) for n in EXPECTED_SECURITY_HEADERS})
+            pages[label] = (
+                visible,
+                response.headers.get("Content-Type"),
+                {n: response.headers.get(n) for n in EXPECTED_SECURITY_HEADERS},
+            )
         distinct = {key: page for key, page in pages.items()}
         reference_label, reference = next(iter(distinct.items()))
         different = [label for label, page in distinct.items() if page != reference]

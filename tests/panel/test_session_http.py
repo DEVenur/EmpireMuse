@@ -1,4 +1,5 @@
 """Sessões via HTTP: logout, TTL/ociosidade com relógio injetado, limite por usuário e rate limit."""
+
 import re
 
 from tests.panel.helpers import XSRF_META_RE, https_config, local_config
@@ -14,6 +15,7 @@ def xsrf_headers(browser):
 
 
 # ============================================================================ logout
+
 
 class LogoutTest(LoginBase):
     def logged_in(self):
@@ -54,8 +56,11 @@ class LogoutTest(LoginBase):
         body = browser.get("/painel/").body.decode()
         token = re.search(r'name="_xsrf"\s+value="([^"]+)"', body) or re.search(r'value="([^"]+)"\s+name="_xsrf"', body)
         assert token, "formulário de logout sem campo _xsrf"
-        response = browser.post("/painel/logout", body=f"_xsrf={token.group(1)}",
-                                headers={"Content-Type": "application/x-www-form-urlencoded"})
+        response = browser.post(
+            "/painel/logout",
+            body=f"_xsrf={token.group(1)}",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
         assert response.code == 302 and "Entrar com Discord" in self.index_html(browser)
 
     def test_logout_when_anonymous_is_harmless(self):
@@ -69,6 +74,7 @@ class LogoutHttpsTest(LogoutTest):
 
 
 # ============================================================================ TTL e ociosidade
+
 
 class SessionExpiryTest(LoginBase):
     config_factory = staticmethod(lambda: local_config(PANEL_SESSION_TTL_HOURS=2, PANEL_SESSION_IDLE_MINUTES=30))
@@ -109,6 +115,7 @@ class SessionExpiryTest(LoginBase):
 
 # ============================================================================ limite de sessões por usuário
 
+
 class SessionLimitTest(LoginBase):
     def test_sixth_login_of_same_user_evicts_the_oldest_session(self):
         browsers = [self.browser() for _ in range(6)]
@@ -120,6 +127,7 @@ class SessionLimitTest(LoginBase):
 
 
 # ============================================================================ rate limit
+
 
 def first_429(statuses):
     return next((i for i, code in enumerate(statuses, start=1) if code == 429), None)
@@ -162,8 +170,10 @@ class RateLimitTest(LoginBase):
 
     def test_forwarded_for_header_is_ignored_without_trust_proxy(self):
         browser = self.browser()
-        codes = [browser.get("/painel/login", headers={"X-Forwarded-For": f"203.0.113.{i}"}).code
-                 for i in range(1, self.LIMIT_PROBE + 1)]
+        codes = [
+            browser.get("/painel/login", headers={"X-Forwarded-For": f"203.0.113.{i}"}).code
+            for i in range(1, self.LIMIT_PROBE + 1)
+        ]
         assert first_429(codes) is not None, "X-Forwarded-For não pode burlar o limite sem PANEL_TRUST_PROXY"
 
     def test_limit_applies_to_each_ip_independently_of_login_success(self):
@@ -181,12 +191,10 @@ class RateLimitTrustProxyTest(LoginBase):
 
     def test_distinct_forwarded_ips_have_separate_counters_when_proxy_is_trusted(self):
         browser = self.browser()
-        codes = [browser.get("/painel/login", headers={"X-Forwarded-For": f"203.0.113.{i}"}).code
-                 for i in range(1, 31)]
+        codes = [browser.get("/painel/login", headers={"X-Forwarded-For": f"203.0.113.{i}"}).code for i in range(1, 31)]
         assert 429 not in codes, "com PANEL_TRUST_PROXY o IP real vem de X-Forwarded-For"
 
     def test_same_forwarded_ip_is_still_limited_when_proxy_is_trusted(self):
         browser = self.browser()
-        codes = [browser.get("/painel/login", headers={"X-Forwarded-For": "203.0.113.9"}).code
-                 for _ in range(40)]
+        codes = [browser.get("/painel/login", headers={"X-Forwarded-For": "203.0.113.9"}).code for _ in range(40)]
         assert first_429(codes) is not None

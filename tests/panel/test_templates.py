@@ -1,4 +1,5 @@
 """Templates e JS do painel: CSP estrita (sem inline), acessibilidade básica e conteúdo contratual."""
+
 from html.parser import HTMLParser
 
 import pytest
@@ -61,7 +62,7 @@ def test_base_template_has_language_logo_and_credit_footer():
     assert 'lang="pt-BR"' in text
     assert "/painel/marca/logo.svg" in text
     assert "MuseHeart-MusicBot" in text and "zRitsu" in text and "GPL-2.0" in text
-    assert "xsrf-token" in text, "base.html deve expor <meta name=\"xsrf-token\">"
+    assert "xsrf-token" in text, 'base.html deve expor <meta name="xsrf-token">'
 
 
 def test_base_template_uses_static_url_for_local_assets():

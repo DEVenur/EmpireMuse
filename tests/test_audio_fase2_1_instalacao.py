@@ -9,6 +9,7 @@ Contrato sugerido ao Backend (os testes só observam o comportamento):
   - membro cujo 1º componente seja ``..`` ou nome absoluto é recusado (erro) antes de qualquer arquivo ficar no destino final.
 Sem rede e sem produção: tudo em tmp_path, tar.gz mínimos em memória, requests.get falso.
 """
+
 import hashlib
 import os
 import shutil
@@ -18,12 +19,12 @@ from pathlib import Path
 import pytest
 
 from tests.test_audio_fase2_1_extracao import DIR, FILE, GOOD, SYM, tar_gz
-from utils import branding
-from utils.music import local_lavalink as ll
+from empiremuse.utils import branding
+from empiremuse.utils.music import local_lavalink as ll
 
 PLATFORM_DIR = "Linux-64bit-ELF"
 JDK_URL = "https://example.test/jdk-linux.tar.gz"
-EVIL_LINK = (SYM, "jdk-21.0.3/bin/abs", "/etc/passwd")          # recusado pelo filtro `data` (só no fim da extração)
+EVIL_LINK = (SYM, "jdk-21.0.3/bin/abs", "/etc/passwd")  # recusado pelo filtro `data` (só no fim da extração)
 
 
 def sha(data: bytes) -> str:
@@ -40,8 +41,14 @@ def install(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("JAVA_HOME", raising=False)
     jar, yml = b"JAR", b"YML\n"
-    plugins = {n: f"plugin {n}".encode() for n in ("youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
-                                                   "lavasrc-plugin-4.8.3.jar", "lavalink-2.6.1.jar")}
+    plugins = {
+        n: f"plugin {n}".encode()
+        for n in (
+            "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar",
+            "lavasrc-plugin-4.8.3.jar",
+            "lavalink-2.6.1.jar",
+        )
+    }
     monkeypatch.setattr(branding, "LAVALINK_JAR_SHA256", sha(jar))
     monkeypatch.setattr(branding, "LAVALINK_APPLICATION_YML_SHA256", sha(yml))
     monkeypatch.setattr(branding, "LAVALINK_PLUGIN_SHA256", {n: sha(d) for n, d in plugins.items()})
@@ -81,8 +88,11 @@ def install(monkeypatch, tmp_path):
         data = members_or_bytes if isinstance(members_or_bytes, bytes) else tar_gz(members_or_bytes)
         state["archive"] = data
         entry = (JDK_URL, sha(data))
-        monkeypatch.setattr(branding, "JDK_DOWNLOADS", {"linux-amd64": entry, "linux-i586": entry,
-                                                        "windows-amd64": entry, "windows-i586": entry})
+        monkeypatch.setattr(
+            branding,
+            "JDK_DOWNLOADS",
+            {"linux-amd64": entry, "linux-i586": entry, "windows-amd64": entry, "windows-i586": entry},
+        )
 
     started = []
     monkeypatch.setattr(ll.requests, "get", get)
@@ -96,10 +106,20 @@ def install(monkeypatch, tmp_path):
         return sorted(str(p.relative_to(base)) for p in base.rglob("*")) if base.exists() else []
 
     set_archive(GOOD)
-    return type("Install", (), {
-        "set_archive": staticmethod(set_archive), "state": state, "started": started,
-        "java_dir": tmp_path / ".java" / PLATFORM_DIR, "java_tree": staticmethod(java_tree), "base": tmp_path,
-        "monkeypatch": monkeypatch, "archive_file": tmp_path / "java.tar.gz"})
+    return type(
+        "Install",
+        (),
+        {
+            "set_archive": staticmethod(set_archive),
+            "state": state,
+            "started": started,
+            "java_dir": tmp_path / ".java" / PLATFORM_DIR,
+            "java_tree": staticmethod(java_tree),
+            "base": tmp_path,
+            "monkeypatch": monkeypatch,
+            "archive_file": tmp_path / "java.tar.gz",
+        },
+    )
 
 
 def installed_java(install) -> Path:
@@ -115,6 +135,7 @@ def make_valid_install(install, content=b"JAVA-JA-INSTALADO"):
 
 
 # ============================================================================ M-1 — falha não deixa instalação aproveitável
+
 
 class TestFailedInstallationLeavesNothingUsable:
     def test_a_refused_extraction_leaves_no_install_and_no_temporary_leftovers(self, install):
@@ -189,7 +210,9 @@ class TestFailedInstallationLeavesNothingUsable:
         install.monkeypatch.setattr(tarfile.TarFile, "utime", spying_utime)
         ll.run_lavalink()
         assert seen, "a extração não passou por TarFile (hook não acionado)"
-        assert not any(seen), "o JDK foi extraído direto no diretório definitivo: use um diretório temporário irmão + os.replace"
+        assert not any(seen), (
+            "o JDK foi extraído direto no diretório definitivo: use um diretório temporário irmão + os.replace"
+        )
         assert installed_java(install).read_bytes() == b"JAVA"
 
     def test_no_temporary_sibling_is_left_after_a_successful_install(self, install):
@@ -219,6 +242,7 @@ class TestFailedInstallationLeavesNothingUsable:
 
 # ============================================================================ M-1 — o que torna um diretório já instalado aceitável
 
+
 def build_broken_dir(install, kind):
     java_dir = install.java_dir
     java_dir.mkdir(parents=True)
@@ -238,8 +262,13 @@ def build_broken_dir(install, kind):
         os.symlink("nao-existe", java_dir / "bin" / "java")
 
 
-BROKEN_KINDS = ["vazio", "sem bin/java", "bin/java sem permissão de execução", "bin/java é diretório",
-                "bin/java é symlink quebrado"]
+BROKEN_KINDS = [
+    "vazio",
+    "sem bin/java",
+    "bin/java sem permissão de execução",
+    "bin/java é diretório",
+    "bin/java é symlink quebrado",
+]
 
 
 class TestAnExistingDirectoryIsOnlyAcceptedWhenJavaIsUsable:
@@ -305,8 +334,15 @@ class TestAnExistingDirectoryIsOnlyAcceptedWhenJavaIsUsable:
 
 # ============================================================================ B-1 — '..' / nome absoluto no 1º componente
 
-BAD_FIRST_COMPONENT = ["../evil-top.txt", "../x/y/evil.txt", "..", "../jdk-21.0.3/bin/java",
-                       "/abs-evil.txt", "/etc/cron.d/evil", "//double-slash-evil"]
+BAD_FIRST_COMPONENT = [
+    "../evil-top.txt",
+    "../x/y/evil.txt",
+    "..",
+    "../jdk-21.0.3/bin/java",
+    "/abs-evil.txt",
+    "/etc/cron.d/evil",
+    "//double-slash-evil",
+]
 
 
 def bad_member(name):
@@ -349,8 +385,14 @@ class TestLegitimateNamesAreStillAccepted:
 
     @pytest.mark.parametrize("prefix", ["", "./"])
     def test_names_with_a_dot_slash_prefix_extract_normally(self, install, prefix):
-        install.set_archive([(DIR, f"{prefix}jdk-21.0.3/"), (DIR, f"{prefix}jdk-21.0.3/bin"),
-                             (FILE, f"{prefix}jdk-21.0.3/bin/java", b"JAVA"), (FILE, f"{prefix}jdk-21.0.3/release", b"r")])
+        install.set_archive(
+            [
+                (DIR, f"{prefix}jdk-21.0.3/"),
+                (DIR, f"{prefix}jdk-21.0.3/bin"),
+                (FILE, f"{prefix}jdk-21.0.3/bin/java", b"JAVA"),
+                (FILE, f"{prefix}jdk-21.0.3/release", b"r"),
+            ]
+        )
         ll.run_lavalink()
         assert installed_java(install).read_bytes() == b"JAVA" and len(install.started) == 1
 

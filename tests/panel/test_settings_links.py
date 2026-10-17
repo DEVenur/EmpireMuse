@@ -3,14 +3,21 @@
 Regras extraídas do CÓDIGO (utils/music/interactions.py: FavModalAdd/FavModalImport/FavMenuView, modo
 guild_fav_manager) onde ele diverge do briefing; ver .qa-e4b-interp.txt. Escopo: bot (`player_controller.fav_links`).
 """
+
 import copy
 import html
 import json
 import re
 
 from tests.panel.helpers import EXPECTED_SECURITY_HEADERS
-from tests.panel.helpers_settings import (CONFLICT_TEXT, NOT_FOUND_TEXT, SAVED_TEXT, UID, acao_form, acao_forms,
-                                          parse_forms)
+from tests.panel.helpers_settings import (
+    CONFLICT_TEXT,
+    NOT_FOUND_TEXT,
+    SAVED_TEXT,
+    UID,
+    acao_form,
+    parse_forms,
+)
 from tests.panel.test_settings_http import Each, HttpBase, external_change
 
 HEX16 = re.compile(r"^[0-9a-f]{16}$")
@@ -60,6 +67,7 @@ class LinksBase(HttpBase):
 
 # ============================================================================ leitura
 
+
 class LinksReadTest(LinksBase):
     def test_lists_name_url_description_count_and_a_list_wide_version(self):
         body = self.body_of(self.logged_in(), 100)
@@ -76,9 +84,15 @@ class LinksReadTest(LinksBase):
 
     def test_bot_selector_only_with_two_bots(self):
         browser = self.logged_in()
+
         def selects(gid):
-            return [c for f in parse_forms(self.body_of(browser, gid)) for c in f.controls
-                    if c.get("name") == "bot" and len(c["options"]) >= 2]
+            return [
+                c
+                for f in parse_forms(self.body_of(browser, gid))
+                for c in f.controls
+                if c.get("name") == "bot" and len(c["options"]) >= 2
+            ]
+
         assert selects(800) and not selects(100)
 
     def test_forms_exist_for_add_import_and_per_link_edit_and_remove(self):
@@ -97,13 +111,26 @@ class LinksReadTest(LinksBase):
         assert "&lt;b&gt;x&lt;/b&gt;" in body
 
     def test_urls_become_links_only_for_http_and_https_with_rel_noopener_noreferrer(self):
-        set_links(self.db, "1", 100, {"a": link("javascript:alert(1)"), "b": link("data:text/html,x"),
-                                     "c": link("HTTP://UPPER.example/"), "d": link("https://ok.example/x"),
-                                     "e": link("//evil.example/x"), "f": link("vbscript:x")})
+        set_links(
+            self.db,
+            "1",
+            100,
+            {
+                "a": link("javascript:alert(1)"),
+                "b": link("data:text/html,x"),
+                "c": link("HTTP://UPPER.example/"),
+                "d": link("https://ok.example/x"),
+                "e": link("//evil.example/x"),
+                "f": link("vbscript:x"),
+            },
+        )
         body = self.body_of(self.logged_in(), 100)
         hrefs = re.findall(r'<a\b[^>]*href="([^"]*)"[^>]*>', body)
-        bad = [h for h in hrefs if re.match(r"\s*(javascript|data|vbscript):", html.unescape(h), re.I)
-               or html.unescape(h).startswith("//")]
+        bad = [
+            h
+            for h in hrefs
+            if re.match(r"\s*(javascript|data|vbscript):", html.unescape(h), re.I) or html.unescape(h).startswith("//")
+        ]
         assert not bad, f"href perigoso: {bad}"
         for tag in re.findall(r'<a\b[^>]*href="https?://ok\.example/x"[^>]*>', body):
             assert "noopener" in tag and "noreferrer" in tag, tag
@@ -129,6 +156,7 @@ class LinksReadTest(LinksBase):
 
 # ============================================================================ adicionar
 
+
 class LinksAddTest(LinksBase):
     def test_valid_add_writes_only_the_new_entry(self):
         browser = self.logged_in()
@@ -146,9 +174,11 @@ class LinksAddTest(LinksBase):
 
     def test_url_is_extracted_like_the_command_does(self):
         browser = self.logged_in()
-        cases = {"A1": ("  https://example.com/a  ", "https://example.com/a"),
-                 "B2": ("veja https://example.com/b agora", "https://example.com/b"),
-                 "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c")}
+        cases = {
+            "A1": ("  https://example.com/a  ", "https://example.com/a"),
+            "B2": ("veja https://example.com/b agora", "https://example.com/b"),
+            "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c"),
+        }
         for name, (sent, expected) in cases.items():
             assert self.add(browser, name, sent).code == 200, name
             assert self.stored()[name]["url"] == expected
@@ -167,12 +197,19 @@ class LinksAddTest(LinksBase):
         before, writes = self.db.doc("1", 100), len(self.db.writes)
         ok = BASE_URL + "novo"
         cases = {
-            "nome 1 caractere": ("a", ok, ""), "nome 26": ("n" * 26, ok, ""), "nome vazio": ("", ok, ""),
-            "nome só espaços": ("   ", ok, ""), "nome duplicado": ("Fixo", ok, ""),
-            "url ftp": ("Ok", "ftp://example.com/x", ""), "url javascript": ("Ok", "javascript:alert(1)", ""),
-            "url sem esquema": ("Ok", "example.com/x", ""), "url só esquema": ("Ok", "http://", ""),
-            "url vazia": ("Ok", "", ""), "url 251": ("Ok", BASE_URL + "a" * (251 - len(BASE_URL)), ""),
-            "descrição 51": ("Ok", ok, "d" * 51), "descrição 2": ("Ok", ok, "ab"),
+            "nome 1 caractere": ("a", ok, ""),
+            "nome 26": ("n" * 26, ok, ""),
+            "nome vazio": ("", ok, ""),
+            "nome só espaços": ("   ", ok, ""),
+            "nome duplicado": ("Fixo", ok, ""),
+            "url ftp": ("Ok", "ftp://example.com/x", ""),
+            "url javascript": ("Ok", "javascript:alert(1)", ""),
+            "url sem esquema": ("Ok", "example.com/x", ""),
+            "url só esquema": ("Ok", "http://", ""),
+            "url vazia": ("Ok", "", ""),
+            "url 251": ("Ok", BASE_URL + "a" * (251 - len(BASE_URL)), ""),
+            "descrição 51": ("Ok", ok, "d" * 51),
+            "descrição 2": ("Ok", ok, "ab"),
         }
 
         def check(item):
@@ -213,8 +250,12 @@ class LinksAddTest(LinksBase):
         form = acao_form(self.body_of(browser, 100), "adicionar")
         before = self.db.doc("1", 100)
         pairs = form.pairs(nome="Rock", url=BASE_URL + "r") + [
-            ("player_controller.channel", "1"), ("djroles", "5001"), ("autoplay", "on"), ("ver", "9.9"),
-            ("fav_links", "{}")]
+            ("player_controller.channel", "1"),
+            ("djroles", "5001"),
+            ("autoplay", "on"),
+            ("ver", "9.9"),
+            ("fav_links", "{}"),
+        ]
         assert self.submit(browser, url, form, pairs=pairs).code in (200, 422)
         after = self.db.doc("1", 100)
         for key in ("djroles", "autoplay", "ver", "extra_flag"):
@@ -223,6 +264,7 @@ class LinksAddTest(LinksBase):
 
 
 # ============================================================================ editar / remover
+
 
 class LinksEditRemoveTest(LinksBase):
     def test_edit_updates_url_and_description_keeping_name_and_position(self):
@@ -236,14 +278,13 @@ class LinksEditRemoveTest(LinksBase):
 
     def test_edit_cannot_rename_and_unknown_names_are_422(self):
         browser = self.logged_in()
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
         url = self.links_url(100)
         form = acao_form(self.body_of(browser, 100), "editar", "Fixo")
         renamed = self.submit(browser, url, form, pairs=form.pairs(url=BASE_URL + "z") + [("novo_nome", "Outro")])
         assert renamed.code in (200, 422)
         assert list(self.stored()) == ["Fixo"], "renomear = remover + adicionar; o nome nunca muda por editar"
         self.db.writes.clear()
-        form = acao_form(self.body_of(browser, 100), "editar", "Fixo")   # versão atual (409 vem antes de 422)
+        form = acao_form(self.body_of(browser, 100), "editar", "Fixo")  # versão atual (409 vem antes de 422)
         ghost = self.submit(browser, url, form, nome="Inexistente", url=BASE_URL + "z")
         assert ghost.code == 422 and "Inexistente" not in self.stored() and not self.db.writes
 
@@ -256,13 +297,20 @@ class LinksEditRemoveTest(LinksBase):
             response = self.act(browser, 100, "editar", alvo="Fixo", **over)
             assert response.code == 422, f"status {response.code}"
 
-        Each.run([("url javascript", {"url": "javascript:alert(1)"}), ("url vazia", {"url": ""}),
-                  ("url 251", {"url": BASE_URL + "a" * 240}), ("descrição 51", {"descricao": "d" * 51}),
-                  ("descrição 2", {"descricao": "ab"})], check)
+        Each.run(
+            [
+                ("url javascript", {"url": "javascript:alert(1)"}),
+                ("url vazia", {"url": ""}),
+                ("url 251", {"url": BASE_URL + "a" * 240}),
+                ("descrição 51", {"descricao": "d" * 51}),
+                ("descrição 2", {"descricao": "ab"}),
+            ],
+            check,
+        )
         self.assert_untouched(before, writes)
 
     def test_edit_still_works_when_the_list_is_full(self):
-        set_links(self.db, "1", 100, full_list())   # descrições gravadas têm 2 caracteres ("d3"): fora de 3–50
+        set_links(self.db, "1", 100, full_list())  # descrições gravadas têm 2 caracteres ("d3"): fora de 3–50
         browser = self.logged_in()
         # só o que MUDOU é validado: reenviar a descrição já gravada (mesmo curta) é aceito
         response = self.act(browser, 100, "editar", alvo="L03", url=BASE_URL + "novo")
@@ -305,6 +353,7 @@ class LinksEditRemoveTest(LinksBase):
 
 # ============================================================================ importar / exportar
 
+
 class LinksImportExportTest(LinksBase):
     def do_import(self, browser, payload, gid=100, bot=None, htmx=False):
         raw = payload if isinstance(payload, str) else json.dumps(payload)
@@ -325,13 +374,19 @@ class LinksImportExportTest(LinksBase):
         before, writes = self.db.doc("1", 100), len(self.db.writes)
         good = link("https://example.com/ok", "ok")
         cases = {
-            "json inválido": "{nao é json", "lista em vez de objeto": [good], "valor não é objeto": {"A1": "https://x.com/a"},
-            "sem descrição": {"A1": {"url": "https://example.com/a"}}, "sem url": {"A1": {"description": "x"}},
+            "json inválido": "{nao é json",
+            "lista em vez de objeto": [good],
+            "valor não é objeto": {"A1": "https://x.com/a"},
+            "sem descrição": {"A1": {"url": "https://example.com/a"}},
+            "sem url": {"A1": {"description": "x"}},
             "url não é texto": {"A1": {"url": 5, "description": ""}},
-            "url inválida": {"A1": link("ftp://example.com/a")}, "url javascript": {"A1": link("javascript:alert(1)")},
+            "url inválida": {"A1": link("ftp://example.com/a")},
+            "url javascript": {"A1": link("javascript:alert(1)")},
             "url maior que USER_FAV_MAX_URL_LENGTH (90)": {"A1": link(BASE_URL + "a" * 80)},
-            "descrição 51": {"A1": link(BASE_URL + "a", "d" * 51)}, "nome 26": {"n" * 26: good},
-            "26 itens": {f"I{i:02d}": good for i in range(26)}, "vazio": {},
+            "descrição 51": {"A1": link(BASE_URL + "a", "d" * 51)},
+            "nome 26": {"n" * 26: good},
+            "26 itens": {f"I{i:02d}": good for i in range(26)},
+            "vazio": {},
             "'> fav:' não escapa da validação": {"> fav: x": link("javascript:alert(1)")},
         }
 
@@ -399,9 +454,13 @@ class LinksImportExportTest(LinksBase):
         assert json.loads(browser.get("/painel/servidores/800/links/exportar").body) == self.stored("1", 800)
         reference = browser.get("/painel/servidores/999999/links").code
         assert reference == 404
-        for path in ("/painel/servidores/300/links/exportar", "/painel/servidores/600/links/exportar",
-                     "/painel/servidores/500/links/exportar", "/painel/servidores/100/links/exportar?bot=2",
-                     "/painel/servidores/100/links/exportar?bot=abc"):
+        for path in (
+            "/painel/servidores/300/links/exportar",
+            "/painel/servidores/600/links/exportar",
+            "/painel/servidores/500/links/exportar",
+            "/painel/servidores/100/links/exportar?bot=2",
+            "/painel/servidores/100/links/exportar?bot=abc",
+        ):
             response = browser.get(path)
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), path
 
@@ -419,12 +478,13 @@ class LinksImportExportTest(LinksBase):
 
 # ============================================================================ transversal: acesso, versão, htmx, efeitos, log
 
+
 class LinksProtocolTest(LinksBase):
     def test_anonymous_and_denied_guilds(self):
         assert self.browser().get(self.links_url(100)).code == 302
         browser = self.logged_in()
         assert browser.get(self.links_url(100)).code == 200, "a rota deve existir"
-        reference = browser.get("/painel/servidores/999999/links").body.decode()
+        browser.get("/painel/servidores/999999/links")
         for gid, bot in ((300, None), (600, None), (500, None), (100, 2), (100, "abc"), (800, 3)):
             response = browser.get(self.links_url(gid, bot))
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), (gid, bot)
@@ -448,10 +508,12 @@ class LinksProtocolTest(LinksBase):
         browser = self.logged_in()
         url = self.links_url(100)
         body = self.body_of(browser, 100)
-        forms = {"adicionar": (acao_form(body, "adicionar"), {"nome": "Rock", "url": BASE_URL + "r"}),
-                 "editar": (acao_form(body, "editar", "Fixo"), {"url": BASE_URL + "e"}),
-                 "remover": (acao_form(body, "remover", "Fixo"), {}),
-                 "importar": (acao_form(body, "importar"), {"dados": json.dumps({"A1": link(BASE_URL + "i")})})}
+        forms = {
+            "adicionar": (acao_form(body, "adicionar"), {"nome": "Rock", "url": BASE_URL + "r"}),
+            "editar": (acao_form(body, "editar", "Fixo"), {"url": BASE_URL + "e"}),
+            "remover": (acao_form(body, "remover", "Fixo"), {}),
+            "importar": (acao_form(body, "importar"), {"dados": json.dumps({"A1": link(BASE_URL + "i")})}),
+        }
         external_change(self.db, "1", 100, autoplay=False)  # não é da lista: não conflita
         set_links(self.db, "1", 100, {"Fixo": link(), "Mudou": link(BASE_URL + "m")})
         before, writes = self.db.doc("1", 100), len(self.db.writes)
@@ -486,19 +548,33 @@ class LinksProtocolTest(LinksBase):
 
     def test_two_concurrent_adds_with_the_same_version_one_wins(self):
         import asyncio
-        from urllib.parse import urlencode, urlsplit
+        from urllib.parse import urlencode
+
         browser = self.logged_in()
         url = self.links_url(100)
         form = acao_form(self.body_of(browser, 100), "adicionar")
         self.clock.advance(4)
-        headers = {"Content-Type": "application/x-www-form-urlencoded",
-                   "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()), **self.xsrf_header(browser)}
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()),
+            **self.xsrf_header(browser),
+        }
         bodies = [urlencode(form.pairs(nome=n, url=BASE_URL + n)) for n in ("Aa", "Bb")]
 
         async def both():
-            return await asyncio.gather(*[
-                self.http_client.fetch(self.get_url(url), method="POST", headers=headers, body=b,
-                                       raise_error=False, follow_redirects=False) for b in bodies])
+            return await asyncio.gather(
+                *[
+                    self.http_client.fetch(
+                        self.get_url(url),
+                        method="POST",
+                        headers=headers,
+                        body=b,
+                        raise_error=False,
+                        follow_redirects=False,
+                    )
+                    for b in bodies
+                ]
+            )
 
         codes = sorted(r.code for r in self.io_loop.run_sync(both))
         assert codes == [200, 409], codes
@@ -520,7 +596,8 @@ class LinksEffectsTest(LinksBase):
     atualiza o embed ocioso do canal de pedidos (no-op se há player ativo). Guild 200 (bot 2) não tem player."""
 
     def recorder(self):
-        from utils.music import interactions
+        from empiremuse.utils.music import interactions
+
         calls = []
 
         async def fake(bot, guild, guild_data):
@@ -534,10 +611,12 @@ class LinksEffectsTest(LinksBase):
         browser = self.logged_in()
         url = self.links_url(200)
         body = self.body_of(browser, 200)
-        forms = {"adicionar": (acao_form(body, "adicionar"), {"nome": "Rock", "url": BASE_URL + "r"}),
-                 "editar": (acao_form(body, "editar", "Fixo"), {"url": BASE_URL + "e"}),
-                 "remover": (acao_form(body, "remover", "Fixo"), {}),
-                 "importar": (acao_form(body, "importar"), {"dados": json.dumps({"A1": link(BASE_URL + "i")})})}
+        forms = {
+            "adicionar": (acao_form(body, "adicionar"), {"nome": "Rock", "url": BASE_URL + "r"}),
+            "editar": (acao_form(body, "editar", "Fixo"), {"url": BASE_URL + "e"}),
+            "remover": (acao_form(body, "remover", "Fixo"), {}),
+            "importar": (acao_form(body, "importar"), {"dados": json.dumps({"A1": link(BASE_URL + "i")})}),
+        }
         form, over = forms[action]
         bot = self.world.bot2
         bot.calls["get_channel"] = 0
@@ -582,8 +661,10 @@ class LinksImportNormalizationTest(LinksBase):
 
     def test_import_stores_only_the_url_reg_match_not_the_trailing_text(self):
         browser = self.logged_in()
-        payload = {"Lixo": link("https://example.com/ <img src=x onerror=alert(1)>", "d"),
-                   "Dois": link("https://example.com/b?x=1 texto depois", "e")}
+        payload = {
+            "Lixo": link("https://example.com/ <img src=x onerror=alert(1)>", "d"),
+            "Dois": link("https://example.com/b?x=1 texto depois", "e"),
+        }
         assert self.do_import(browser, payload).code == 200
         assert self.stored()["Lixo"]["url"] == "https://example.com/"
         assert self.stored()["Dois"]["url"] == "https://example.com/b?x=1"
@@ -595,8 +676,15 @@ class LinksImportNormalizationTest(LinksBase):
     def test_import_rejects_names_that_add_would_reject(self):
         browser = self.logged_in()
         before, writes = self.db.doc("1", 100), len(self.db.writes)
-        cases = {"só espaços": "   ", "um caractere": "x", "com quebra de linha": "a\nb", "com tabulação": "a\tb",
-                 "controle": "ab\x00", "vazio": "", "26 após strip": " " + "n" * 26}
+        cases = {
+            "só espaços": "   ",
+            "um caractere": "x",
+            "com quebra de linha": "a\nb",
+            "com tabulação": "a\tb",
+            "controle": "ab\x00",
+            "vazio": "",
+            "26 após strip": " " + "n" * 26,
+        }
 
         def check(item):
             label, name = item
