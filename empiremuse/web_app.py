@@ -19,6 +19,7 @@ import tornado.web
 import tornado.websocket
 from packaging import version
 
+from empiremuse import paths
 from empiremuse.config_loader import load_config
 from empiremuse.panel import build_panel_app, make_router
 from empiremuse.panel.settings import PanelConfigError, load_panel_settings
@@ -37,7 +38,6 @@ bots_ws = []
 
 minimal_version = version.parse("2.6.1")
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _status_loader_cache = None
 _logo_cache = None
 
@@ -46,7 +46,7 @@ def _status_loader() -> tornado.template.Loader:
     """Loader dos templates da página de status (autoescape ligado por padrão no Tornado)."""
     global _status_loader_cache
     if _status_loader_cache is None:
-        _status_loader_cache = tornado.template.Loader(os.path.join(_BASE_DIR, "templates"))
+        _status_loader_cache = tornado.template.Loader(str(paths.PACKAGE_DIR / "templates"))
     return _status_loader_cache
 
 
@@ -55,7 +55,7 @@ def _logo_data_uri() -> str:
     global _logo_cache
     if _logo_cache is None:
         try:
-            with open(os.path.join(os.path.dirname(_BASE_DIR), "assets", "brand", "logo.svg"), "rb") as f:
+            with open(paths.PROJECT_DIR / "assets" / "brand" / "logo.svg", "rb") as f:
                 _logo_cache = "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode("ascii")
         except OSError:
             _logo_cache = ""

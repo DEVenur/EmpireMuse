@@ -11,6 +11,7 @@ import disnake
 import ruamel.yaml
 from disnake.ext import commands
 
+from empiremuse import paths
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.interactions import AskView
 from empiremuse.utils.others import CustomContext
@@ -230,13 +231,14 @@ class YtOauthLL(commands.Cog):
             except Exception as e:
                 txts.append(f"Falha ao salvar refreshToken no MongoDB: {repr(e)}")
 
-        if os.path.isfile("./application.yml"):
+        app_yml = paths.RUNTIME_DIR / "application.yml"
+        if app_yml.is_file():
             try:
                 yaml = ruamel.yaml.YAML()
                 yaml.preserve_quotes = True
                 yaml.explicit_start = True
 
-                with open("./application.yml", "r", encoding="utf-8") as file:
+                with open(app_yml, "r", encoding="utf-8") as file:
                     yml_data = yaml.load(file.read())
 
                 new_value = {"enabled": True, "refreshToken": refresh_token}
@@ -246,7 +248,7 @@ class YtOauthLL(commands.Cog):
                 except KeyError:
                     yml_data["plugins"]["youtube"] = {"oauth": new_value}
 
-                with open("./application.yml", "w") as file:
+                with open(app_yml, "w") as file:
                     yaml.dump(yml_data, file)
 
                 if (node := self.bot.music.nodes.get("LOCAL")) and "youtube-plugin" in node.info["plugins"]:

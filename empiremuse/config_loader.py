@@ -7,6 +7,7 @@ from os import environ
 import disnake
 from dotenv import dotenv_values
 
+from empiremuse import paths
 from empiremuse.utils import branding
 
 logger = logging.getLogger(__name__)
@@ -197,13 +198,13 @@ def load_config():
             CONFIG[env] = environ[env]
 
     try:
-        with open("config.json") as f:
+        with open(paths.RUNTIME_DIR / "config.json") as f:
             CONFIG.update(load(f))
     except FileNotFoundError:
         pass
 
     try:
-        CONFIG.update(dotenv_values())
+        CONFIG.update(dotenv_values(paths.RUNTIME_DIR / ".env"))
     except:
         pass
 

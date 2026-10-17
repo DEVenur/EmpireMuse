@@ -29,6 +29,7 @@ from disnake.http import Route
 from user_agent import generate_user_agent
 
 import empiremuse.wavelink as wavelink
+from empiremuse import paths
 from empiremuse.config_loader import load_config
 from empiremuse.utils import branding
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
@@ -57,6 +58,8 @@ if os.name != "nt":
     import uvloop
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+logger = logging.getLogger(__name__)
 
 
 class BotPool:
@@ -154,31 +157,38 @@ class BotPool:
         self.current_useragent = generate_user_agent()
 
     def load_cache(self):
-        if os.path.exists("./local_database/playlist_cache.pkl"):
-            with open("./local_database/playlist_cache.pkl", "rb") as f:
-                try:
+        playlist_cache_file = paths.RUNTIME_DIR / "local_database" / "playlist_cache.pkl"
+        if playlist_cache_file.exists():
+            try:
+                with open(playlist_cache_file, "rb") as f:
                     self.playlist_cache.update(pickle.load(f))
-                except EOFError:
-                    pass
+            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
+                logger.warning(f"Cache de playlists incompatível ou corrompido descartado ({playlist_cache_file}): {e}")
 
-        if os.path.exists("./local_database/partial_track_cache.pkl"):
-            with open("./local_database/partial_track_cache.pkl", "rb") as f:
-                try:
+        partial_cache_file = paths.RUNTIME_DIR / "local_database" / "partial_track_cache.pkl"
+        if partial_cache_file.exists():
+            try:
+                with open(partial_cache_file, "rb") as f:
                     self.partial_track_cache.update(pickle.load(f))
-                except EOFError:
-                    pass
+            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
+                logger.warning(
+                    f"Cache de faixas parciais incompatível ou corrompido descartado ({partial_cache_file}): {e}"
+                )
 
-        if os.path.exists("./local_database/.lyric_cache_data"):
-            with open("./local_database/.lyric_cache_data", "rb") as f:
-                try:
+        lyric_cache_file = paths.RUNTIME_DIR / "local_database" / ".lyric_cache_data"
+        if lyric_cache_file.exists():
+            try:
+                with open(lyric_cache_file, "rb") as f:
                     self.lyric_data_cache.update(pickle.load(f))
-                except EOFError:
-                    pass
+            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
+                logger.warning(f"Cache de letras incompatível ou corrompido descartado ({lyric_cache_file}): {e}")
 
     async def cache_updater(self):
         while True:
             await asyncio.sleep(300)
-            async with aiofiles.open("./local_database/playlist_cache.pkl", "wb") as f:
+            cache_file = paths.RUNTIME_DIR / "local_database" / "playlist_cache.pkl"
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(str(cache_file), "wb") as f:
                 await f.write(pickle.dumps(self.playlist_cache))
 
     async def connect_lavalink_queue_task(self, identifier: str):
@@ -489,8 +499,11 @@ class BotPool:
     def load_cfg(self):
         config = load_config()
 
+        emojis_path = paths.RUNTIME_DIR / "emojis.json"
+        if not emojis_path.is_file():
+            emojis_path = paths.PROJECT_DIR / "emojis.json"
         try:
-            with open("./emojis.json") as f:
+            with open(emojis_path) as f:
                 self.emoji_data = json.load(f)
         except FileNotFoundError:
             pass
@@ -585,12 +598,13 @@ class BotPool:
         self.load_skins()
 
         if self.config["ENABLE_LOGGER"]:
-            if not os.path.isdir("./.logs"):
-                os.makedirs("./.logs")
+            logs_dir = paths.RUNTIME_DIR / ".logs"
+            if not logs_dir.is_dir():
+                logs_dir.mkdir(parents=True, exist_ok=True)
 
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
-            handler = logging.FileHandler(filename="./.logs/disnake.log", encoding="utf-8", mode="w")
+            handler = logging.FileHandler(filename=str(logs_dir / "disnake.log"), encoding="utf-8", mode="w")
             handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
             logger.addHandler(handler)
 
@@ -602,7 +616,7 @@ class BotPool:
                 ini_file = None
             except Exception:
                 traceback.print_exc()
-                ini_file = "auto_lavalink.ini"
+                ini_file = str(paths.RUNTIME_DIR / "auto_lavalink.ini")
                 print(f"Baixando lista de servidores lavalink (arquivo: {ini_file})")
                 try:
                     r = requests.get(self.config["LAVALINK_SERVER_LIST"], allow_redirects=False, timeout=30)
@@ -614,10 +628,10 @@ class BotPool:
                     traceback.print_exc()
                     print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
                     server_list = validated_server_list(None, None)
-                with open("auto_lavalink.ini", "wb") as f:
+                with open(paths.RUNTIME_DIR / "auto_lavalink.ini", "wb") as f:
                     f.write(server_list)
         else:
-            ini_file = "lavalink.ini"
+            ini_file = str(paths.RUNTIME_DIR / "lavalink.ini")
 
         for key, value in self.config.items():
             if key.lower().startswith("lavalink_node_"):
@@ -1110,8 +1124,9 @@ class BotCore(commands.AutoShardedBot):
             [sort_dict_recursively(cmd.body.to_dict()) for cmd in self.application_commands], key=lambda k: k["name"]
         )
 
+        sync_dir = paths.RUNTIME_DIR / ".app_commands_sync_data"
         try:
-            with open(f"./.app_commands_sync_data/{self.user.id}.json") as f:
+            with open(sync_dir / f"{self.user.id}.json") as f:
                 synced_cmds = await self.loop.run_in_executor(None, lambda: json.load(f))
         except FileNotFoundError:
             synced_cmds = None
@@ -1126,13 +1141,13 @@ class BotCore(commands.AutoShardedBot):
         self._command_sync_flags = commands.CommandSyncFlags.none()
 
         try:
-            if not os.path.isdir("./.app_commands_sync_data/"):
-                os.makedirs("./.app_commands_sync_data/")
+            if not sync_dir.is_dir():
+                sync_dir.mkdir(parents=True, exist_ok=True)
 
-            with open(f"./.app_commands_sync_data/{self.user.id}.json", "w", encoding="utf-8") as f:
+            with open(sync_dir / f"{self.user.id}.json", "w", encoding="utf-8") as f:
                 await self.loop.run_in_executor(None, lambda: json.dump(current_cmds, f, indent=4))
 
-            with open(f"./.app_commands_sync_data/{self.user.id}-old.json", "w", encoding="utf-8") as f:
+            with open(sync_dir / f"{self.user.id}-old.json", "w", encoding="utf-8") as f:
                 await self.loop.run_in_executor(None, lambda: json.dump(synced_cmds, f, indent=4))
 
         except:

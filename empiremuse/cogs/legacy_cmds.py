@@ -18,6 +18,7 @@ from disnake.ext import commands
 from disnake.http import Route
 
 import empiremuse.wavelink as wavelink
+from empiremuse import paths
 from empiremuse.config_loader import DEFAULT_CONFIG, load_config
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -167,11 +168,13 @@ class Owner(commands.Cog):
         async with ctx.typing():
             await asyncio.sleep(1.5)
 
-            if os.path.isfile("./Lavalink.jar"):
-                os.remove("./Lavalink.jar")
+            jar_file = paths.RUNTIME_DIR / "Lavalink.jar"
+            if jar_file.is_file():
+                jar_file.unlink()
 
-            if args.yml and os.path.isfile("./application.yml"):
-                os.remove("./application.yml")
+            yml_file = paths.RUNTIME_DIR / "application.yml"
+            if args.yml and yml_file.is_file():
+                yml_file.unlink()
                 txt = "Os arquivos Lavalink.jar e application.yml serão atualizados"
             else:
                 txt = "O arquivo Lavalink.jar será atualizado"
@@ -727,12 +730,12 @@ class Owner(commands.Cog):
             await self.cleanup_git(force=True)
 
         try:
-            env_file = dotenv.dotenv_values("./.env")
+            env_file = dotenv.dotenv_values(str(paths.RUNTIME_DIR / ".env"))
         except:
             env_file = {}
 
         try:
-            with open("config.json") as f:
+            with open(paths.RUNTIME_DIR / "config.json") as f:
                 config_json = json.load(f)
         except FileNotFoundError:
             config_json = {}
@@ -778,13 +781,16 @@ class Owner(commands.Cog):
         ):
             await self.download_lavalink_serverlist()
 
-        if not os.path.isfile("./.env-temp"):
-            shutil.copyfile("./.example.env", "./.env-temp")
+        env_temp = paths.RUNTIME_DIR / ".env-temp"
+        example_env = paths.PROJECT_DIR / ".example.env"
+
+        if not env_temp.is_file():
+            shutil.copyfile(str(example_env), str(env_temp))
 
         for i in SECRETS:
             if not isinstance(SECRETS[i], str):
                 SECRETS[i] = str(SECRETS[i]).lower()
-            dotenv.set_key("./.env-temp", i, SECRETS[i])
+            dotenv.set_key(str(env_temp), i, SECRETS[i])
 
         filelist = await run_command("git ls-files --others --exclude-standard --cached")
 
@@ -803,11 +809,16 @@ class Owner(commands.Cog):
 
         await self.bot.loop.run_in_executor(None, self.zip_dir, filelist.split("\n"))
 
-        os.remove("./.env-temp")
+        try:
+            os.remove(str(env_temp))
+        except OSError:
+            pass
 
-        if (filesize := (os.path.getsize("source.zip")) / 1024) > 25600:
+        source_zip = paths.RUNTIME_DIR / "source.zip"
+
+        if (filesize := (os.path.getsize(str(source_zip))) / 1024) > 25600:
             try:
-                os.remove("./source.zip")
+                os.remove(str(source_zip))
             except:
                 pass
             raise GenericError(
@@ -824,13 +835,15 @@ class Owner(commands.Cog):
             embed.set_footer(text="Por medida de segurança, esta mensagem será deletada em 2 minutos.")
 
             msg = await ctx.author.send(
-                embed=embed, file=disnake.File("./source.zip", filename=f"{self.bot.user}_source.zip"), delete_after=120
+                embed=embed,
+                file=disnake.File(str(source_zip), filename=f"{self.bot.user}_source.zip"),
+                delete_after=120,
             )
 
-            os.remove("./source.zip")
+            os.remove(str(source_zip))
 
         except disnake.Forbidden:
-            os.remove("./source.zip")
+            os.remove(str(source_zip))
             raise GenericError("Seu DM está desativado!")
 
         if isinstance(ctx, CustomContext):
@@ -844,18 +857,20 @@ class Owner(commands.Cog):
             return f"Arquivo [source.zip]({msg.jump_url}) foi enviado com sucesso no seu DM."
 
     def zip_dir(self, filelist: list):
+        source_zip = paths.RUNTIME_DIR / "source.zip"
+        env_temp = paths.RUNTIME_DIR / ".env-temp"
         try:
-            os.remove("./source.zip")
+            os.remove(str(source_zip))
         except:
             pass
 
-        with ZipFile("./source.zip", "a") as zipf:
+        with ZipFile(str(source_zip), "a") as zipf:
             for f in filelist:
                 if not f:
                     continue
                 try:
                     if f == ".env-temp":
-                        zipf.write("./.env-temp", "./.env")
+                        zipf.write(str(env_temp), "./.env")
                     else:
                         zipf.write(f"./{f}")
                 except FileNotFoundError:
@@ -1154,7 +1169,7 @@ class Owner(commands.Cog):
             print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
             ini_file = validated_server_list(None, None)
 
-        with open("lavalink.ini", "wb") as f:
+        with open(paths.RUNTIME_DIR / "lavalink.ini", "wb") as f:
             f.write(ini_file)
 
 

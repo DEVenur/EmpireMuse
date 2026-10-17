@@ -19,6 +19,8 @@ from tinydb_serialization import Serializer, SerializationMiddleware
 from tinymongo import TinyMongoClient
 from tinymongo.serializers import DateTimeSerializer
 
+from empiremuse import paths
+
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
 
@@ -145,8 +147,13 @@ class CustomTinyMongoClient(TinyMongoClient):
 
 
 class LocalDatabase(BaseDB):
-    def __init__(self, dir_="./local_database", cache_maxsize=1000, cache_ttl=300):
+    def __init__(self, dir_=None, cache_maxsize=1000, cache_ttl=300):
         super().__init__(cache_maxsize=cache_maxsize, cache_ttl=cache_ttl)
+
+        if dir_ is None or dir_ == "./local_database":
+            dir_ = str(paths.RUNTIME_DIR / "local_database")
+
+        self.dir = dir_
 
         if not os.path.isdir(dir_):
             os.makedirs(dir_)
@@ -236,25 +243,28 @@ class MongoDatabase(BaseDB):
         await self._connect[collection][db_name].insert_one(data)
 
     async def update_from_json(self):
-        if not os.path.isdir("./local_dbs/backups"):
-            os.makedirs("./local_dbs/backups")
+        dbs_dir = paths.RUNTIME_DIR / "local_dbs"
+        backups_dir = dbs_dir / "backups"
+        if not backups_dir.is_dir():
+            backups_dir.mkdir(parents=True, exist_ok=True)
 
-        for f in os.listdir("./local_dbs"):
-            if not f.endswith(".json"):
-                continue
-
-            with open(f"./local_dbs/{f}") as file:
-                data = json.load(file)
-
-            for db_name, db_data in data.items():
-                if not db_data:
+        if dbs_dir.is_dir():
+            for f in os.listdir(dbs_dir):
+                if not f.endswith(".json"):
                     continue
 
-                for id_, data in db_data.items():
-                    await self.update_data(id_=id_, data=data, db_name=db_name, collection=f[:-5])
+                with open(dbs_dir / f) as file:
+                    data = json.load(file)
+
+                for db_name, db_data in data.items():
+                    if not db_data:
+                        continue
+
+                    for id_, d in db_data.items():
+                        await self.update_data(id_=id_, data=d, db_name=db_name, collection=f[:-5])
 
                 try:
-                    shutil.move(f"./local_dbs/{f}", f"./local_dbs/backups/{f}")
+                    shutil.move(str(dbs_dir / f), str(backups_dir / f))
                 except:
                     traceback.print_exc()
 

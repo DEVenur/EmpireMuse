@@ -15,6 +15,7 @@ from typing import Dict, Mapping, Optional, Tuple
 
 import requests
 
+from empiremuse import paths
 from empiremuse.utils import branding
 
 logger = logging.getLogger(__name__)
@@ -384,7 +385,7 @@ def run_lavalink(
     arch, osname = platform.architecture()
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
 
-    tmp_dir = tempfile.gettempdir() if os.name == "nt" else "."
+    tmp_dir = tempfile.gettempdir() if os.name == "nt" else str(paths.RUNTIME_DIR)
 
     if not (java_cmd := validate_java("java")):
         dirs = []
@@ -397,16 +398,17 @@ def run_lavalink(
         if os.name == "nt":
             dirs.append(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
             try:
-                shutil.rmtree("./.jabba")
+                shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"))
             except:
                 pass
 
         else:
             if use_jabba:
+                jabba_java = str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java")
                 dirs.extend(
                     [
-                        os.path.realpath("./.jabba/jdk/zulu@1.17.0-0/bin/java"),
-                        os.path.expanduser("./.jabba/jdk/zulu@1.17.0-0/bin/java"),
+                        os.path.realpath(jabba_java),
+                        os.path.expanduser(jabba_java),
                     ]
                 )
                 try:
@@ -417,7 +419,7 @@ def run_lavalink(
             else:
                 dirs.append(os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java"))
                 try:
-                    shutil.rmtree("./.jabba")
+                    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"))
                 except:
                     pass
 
@@ -432,21 +434,23 @@ def run_lavalink(
 
             elif use_jabba:
                 try:
-                    shutil.rmtree("./.jabba/jdk/zulu@1.17.0-0")
+                    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0"))
                 except:
                     pass
 
                 download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", "install_jabba.sh")
                 subprocess.call("bash install_jabba.sh", shell=True)
-                subprocess.call("./.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
+                subprocess.call(f"{paths.RUNTIME_DIR}/.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
                 os.remove("install_jabba.sh")
 
-                java_cmd = os.path.expanduser("./.jabba/jdk/zulu@1.17.0-0/bin/java")
+                java_cmd = os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
 
             else:
                 java_cmd = _install_jdk_linux(tmp_dir, jdk_platform, arch)
 
-    prepare_lavalink_files(".", lavalink_file_url=lavalink_file_url, lavalink_file_sha256=lavalink_file_sha256)
+    prepare_lavalink_files(
+        str(paths.RUNTIME_DIR), lavalink_file_url=lavalink_file_url, lavalink_file_sha256=lavalink_file_sha256
+    )
 
     if lavalink_cpu_cores >= 1:
         java_cmd += f" -XX:ActiveProcessorCount={lavalink_cpu_cores}"
@@ -458,12 +462,14 @@ def run_lavalink(
         java_cmd += f" -Xms{lavalink_ram_limit}m"
 
     if os.name != "nt":
-        if os.path.isdir("./.tempjar"):
-            shutil.rmtree("./.tempjar")
+        tempjar_dir = paths.RUNTIME_DIR / ".tempjar"
+        if tempjar_dir.is_dir():
+            shutil.rmtree(tempjar_dir)
 
-        os.makedirs("./.tempjar/undertow-docbase.80.2258596138812103750")
+        undertow_dir = tempjar_dir / "undertow-docbase.80.2258596138812103750"
+        undertow_dir.mkdir(parents=True, exist_ok=True)
 
-        java_cmd += f" -Djava.io.tmpdir={os.getcwd()}/.tempjar"
+        java_cmd += f" -Djava.io.tmpdir={tempjar_dir}"
 
     java_cmd += " -jar Lavalink.jar"
 
@@ -473,7 +479,10 @@ def run_lavalink(
     )
 
     lavalink_process = subprocess.Popen(
-        java_cmd.split(), stdout=subprocess.DEVNULL, env=lavalink_child_env(youtube_oauth_refresh_token)
+        java_cmd.split(),
+        stdout=subprocess.DEVNULL,
+        env=lavalink_child_env(youtube_oauth_refresh_token),
+        cwd=str(paths.RUNTIME_DIR),
     )
 
     if lavalink_additional_sleep:

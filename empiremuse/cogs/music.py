@@ -20,9 +20,11 @@ import aiohttp
 import disnake
 from async_timeout import timeout
 from disnake.ext import commands
+from pathlib import Path
 from yt_dlp import YoutubeDL
 
 import empiremuse.wavelink as wavelink
+from empiremuse import paths
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -120,6 +122,10 @@ def is_discord_attachment_url(url: str) -> bool:
     except ValueError:
         return False
     return hostname in DISCORD_CDN_HOSTS and parsed.path.startswith(DISCORD_ATTACHMENT_PATH_PREFIXES)
+
+
+def _user_saved_queue_path(user_id: int | str) -> Path:
+    return paths.RUNTIME_DIR / "local_database" / "saved_queues_v1" / "users" / f"{user_id}.pkl"
 
 
 class Music(commands.Cog):
@@ -1136,7 +1142,7 @@ class Music(commands.Cog):
                 f"### `[💾] Fila Salva [💾]`\n"
             )
 
-            if os.path.isfile(f"./local_database/saved_queues_v1/users/{inter.author.id}.pkl"):
+            if _user_saved_queue_path(inter.author.id).is_file():
                 txt += f"`Usar fila de música que você salvou via comando` {savequeue_slashcmd}.\n"
                 opts.append(disnake.SelectOption(label="Usar fila salva", value=">> [💾 Fila Salva 💾] <<", emoji="💾"))
 
@@ -1688,7 +1694,7 @@ class Music(commands.Cog):
 
         if query.startswith(">> [💾 Fila Salva 💾] <<"):
             try:
-                async with aiofiles.open(f"./local_database/saved_queues_v1/users/{inter.author.id}.pkl", "rb") as f:
+                async with aiofiles.open(_user_saved_queue_path(inter.author.id), "rb") as f:
                     f_content = await f.read()
                     try:
                         f_content = zlib.decompress(f_content)
@@ -2377,7 +2383,7 @@ class Music(commands.Cog):
 
         favs = [">> [⭐ Favoritos ⭐] <<", ">> [💠 Integrações 💠] <<", ">> [📌 Favoritos do servidor 📌] <<"]
 
-        if os.path.isfile(f"./local_database/saved_queues_v1/users/{inter.author.id}.pkl"):
+        if _user_saved_queue_path(inter.author.id).is_file():
             favs.append(">> [💾 Fila Salva 💾] <<")
 
         if not inter.guild_id:
@@ -4123,10 +4129,10 @@ class Music(commands.Cog):
         if len(tracks) < 3:
             raise GenericError(f"**É necessário ter no mínimo 3 músicas pra salvar (atual e/ou na fila)**")
 
-        if not os.path.isdir(f"./local_database/saved_queues_v1/users"):
-            os.makedirs(f"./local_database/saved_queues_v1/users")
+        queue_path = _user_saved_queue_path(inter.author.id)
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
 
-        async with aiofiles.open(f"./local_database/saved_queues_v1/users/{inter.author.id}.pkl", "wb") as f:
+        async with aiofiles.open(queue_path, "wb") as f:
             await f.write(
                 zlib.compress(
                     pickle.dumps({"tracks": tracks, "created_at": disnake.utils.utcnow(), "guild_id": inter.guild_id})

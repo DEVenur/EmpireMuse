@@ -21,6 +21,7 @@ import psutil
 from aiohttp import ClientSession
 from disnake.ext import commands
 
+from empiremuse import paths
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, db_models
@@ -904,8 +905,9 @@ class Misc(commands.Cog):
         "que ocasionam erros em algumas situações.",
     )
     async def fixfavs(self, ctx: CustomContext):
-        if not os.path.isdir("./local_database/fixfavs_backup"):
-            os.makedirs("./local_database/fixfavs_backup")
+        backup_dir = paths.RUNTIME_DIR / "local_database" / "fixfavs_backup"
+        if not backup_dir.is_dir():
+            backup_dir.mkdir(parents=True, exist_ok=True)
 
         async with ctx.typing():
             for bot in self.bot.pool.get_all_bots():
@@ -913,7 +915,7 @@ class Misc(commands.Cog):
                     collection=str(bot.user.id), db_name=DBModel.guilds, limit=300
                 )
 
-                async with aiofiles.open(f"./local_database/fixfavs_backup/guild_favs_{bot.user.id}.json", "w") as f:
+                async with aiofiles.open(backup_dir / f"guild_favs_{bot.user.id}.json", "w") as f:
                     await f.write(json.dumps(db_data, indent=4))
 
                 for data in db_data:
@@ -925,7 +927,7 @@ class Misc(commands.Cog):
 
             db_data = await self.bot.pool.database.query_data(collection="global", db_name=DBModel.users, limit=500)
 
-            async with aiofiles.open("./local_database/fixfavs_backup/user_favs.json", "w") as f:
+            async with aiofiles.open(backup_dir / "user_favs.json", "w") as f:
                 await f.write(json.dumps(db_data, indent=4))
 
             for data in db_data:

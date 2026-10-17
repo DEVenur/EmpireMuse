@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import pickle
 import time
@@ -6,6 +7,11 @@ import time
 from aiohttp import ClientSession
 from cachetools import TTLCache
 
+from empiremuse import paths
+
+logger = logging.getLogger(__name__)
+
+# Mantido por compatibilidade retroativa com código legado
 cache_file = "./.lastfm_cache"
 
 
@@ -23,18 +29,20 @@ class LastFM:
 
     def scrobble_load_cache(self):
         cache = TTLCache(maxsize=10000, ttl=600)
+        target = paths.RUNTIME_DIR / ".lastfm_cache"
 
-        if os.path.exists(cache_file):
-            with open(cache_file, "rb") as f:
-                try:
+        if target.is_file():
+            try:
+                with open(target, "rb") as f:
                     cache.update(pickle.load(f))
-                except EOFError:
-                    pass
+            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
+                logger.warning("Cache do Last.fm corrompido ou incompatível descartado (%s): %s", target, e)
 
         return cache
 
     def scrobble_save_cache(self):
-        with open(cache_file, "wb") as f:
+        target = paths.RUNTIME_DIR / ".lastfm_cache"
+        with open(target, "wb") as f:
             pickle.dump(self.cache, f)
 
     def generate_api_sig(self, params: dict):

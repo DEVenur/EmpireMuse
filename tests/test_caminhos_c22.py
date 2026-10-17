@@ -30,18 +30,25 @@ class TestCwdDoPopenLavalink:
         monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
         popen_calls = []
 
+        mock_proc = MagicMock()
+        mock_proc.__enter__.return_value = mock_proc
+        mock_proc.communicate.return_value = (b"", b"")
+
         monkeypatch.setattr(
-            subprocess,
+            ll.subprocess,
             "Popen",
-            lambda args, **kwargs: popen_calls.append((args, kwargs)) or MagicMock(),
+            lambda args, **kwargs: popen_calls.append((args, kwargs)) or mock_proc,
         )
+        monkeypatch.setattr(ll.platform, "architecture", lambda: ("64bit", "ELF"))
         monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
         monkeypatch.setattr(ll, "prepare_lavalink_files", lambda *a, **k: None)
 
         ll.run_lavalink()
 
-        assert len(popen_calls) == 1
-        _, kwargs = popen_calls[0]
+        assert len(popen_calls) >= 1
+        # O último ou o do Lavalink é o que inicia o jar
+        lavalink_call = [c for c in popen_calls if any("Lavalink.jar" in str(arg) for arg in c[0])][0]
+        _, kwargs = lavalink_call
         assert "cwd" in kwargs, "Popen do Lavalink deve receber o argumento 'cwd'"
         assert kwargs["cwd"] == str(tmp_path.resolve())
 
@@ -88,7 +95,7 @@ class TestGuardasDeCache:
         db_dir = tmp_path / "local_database"
         db_dir.mkdir(parents=True, exist_ok=True)
 
-        (db_dir / "playlist_cache.pkl").write_bytes(b"\x80\x04\x95NOT_A_VALID_PICKLE")
+        (db_dir / "playlist_cache.pkl").write_bytes(b"INVALID_PICKLE_BYTES")
 
         pool = BotPool.__new__(BotPool)
         pool.playlist_cache = {}

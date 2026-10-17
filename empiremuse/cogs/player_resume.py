@@ -9,12 +9,14 @@ import traceback
 import zlib
 from base64 import b64decode, b64encode
 from contextlib import suppress
+from pathlib import Path
 from typing import Union
 
 import aiofiles
 import disnake
 from disnake.ext import commands
 
+from empiremuse import paths
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import can_connect, can_send_message
@@ -722,11 +724,15 @@ class PlayerSession(commands.Cog):
 
         return guild_data
 
+    def _player_sessions_dir(self) -> Path:
+        return paths.RUNTIME_DIR / "local_database" / "player_sessions" / str(self.bot.user.id)
+
     async def get_player_sessions_local(self):
         guild_data = []
+        sessions_dir = self._player_sessions_dir()
 
         try:
-            files = os.listdir(f"./local_database/player_sessions/{self.bot.user.id}")
+            files = os.listdir(sessions_dir)
         except FileNotFoundError:
             return guild_data
 
@@ -736,7 +742,7 @@ class PlayerSession(commands.Cog):
 
             guild_id = file_content[:-4]
 
-            async with aiofiles.open(f"./local_database/player_sessions/{self.bot.user.id}/{guild_id}.pkl", "rb") as f:
+            async with aiofiles.open(sessions_dir / f"{guild_id}.pkl", "rb") as f:
                 file_content = await f.read()
                 try:
                     file_content = zlib.decompress(file_content)
@@ -758,10 +764,11 @@ class PlayerSession(commands.Cog):
         )
 
     async def save_session_local(self, id_: Union[int, str], data: dict):
-        if not os.path.isdir(f"./local_database/player_sessions/{self.bot.user.id}"):
-            os.makedirs(f"./local_database/player_sessions/{self.bot.user.id}")
+        sessions_dir = self._player_sessions_dir()
+        if not sessions_dir.is_dir():
+            sessions_dir.mkdir(parents=True, exist_ok=True)
 
-        path = f"./local_database/player_sessions/{self.bot.user.id}/{id_}"
+        path = sessions_dir / str(id_)
 
         try:
             async with aiofiles.open(f"{path}.pkl", "wb") as f:
@@ -806,9 +813,10 @@ class PlayerSession(commands.Cog):
         )
 
     def delete_data_local(self, id_: Union[LavalinkPlayer, int]):
+        sessions_dir = self._player_sessions_dir()
         for ext in (".pkl", ".bak"):
             try:
-                os.remove(f"./local_database/player_sessions/{self.bot.user.id}/{id_}{ext}")
+                (sessions_dir / f"{id_}{ext}").unlink()
             except FileNotFoundError:
                 continue
             except Exception:
