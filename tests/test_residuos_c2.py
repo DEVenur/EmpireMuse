@@ -59,7 +59,7 @@ class TestModulesImportability:
 
 
 class TestProductionImportsIsolation:
-    """Verifica que o código produtivo não depende das 8 dependências obsoletas."""
+    """Verifica que o código produtivo não depende das 7 dependências obsoletas e mantém o extra curl-cffi no yt-dlp."""
 
     DEAD_PACKAGES = {
         "aiosqlite",
@@ -67,7 +67,6 @@ class TestProductionImportsIsolation:
         "pylrc",
         "undetected_chromedriver",
         "nest_asyncio",
-        "curl_cffi",
         "emoji",
         "regex",
     }
@@ -102,6 +101,16 @@ class TestProductionImportsIsolation:
 
         overlap = imported_modules.intersection(self.DEAD_PACKAGES)
         assert not overlap, f"Dependências obsoletas ainda importadas em produção: {overlap}"
+
+    def test_yt_dlp_maintains_curl_cffi_extra(self):
+        """Garante que requirements.txt mantém o extra curl-cffi no yt-dlp.
+
+        O curl_cffi é carregado dinamicamente por yt_dlp/dependencies para
+        impersonação de navegador usada por múltiplos extractors, evitando
+        degradação silenciosa na extração de áudio de fontes externas.
+        """
+        req_text = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+        assert "yt-dlp[default,curl-cffi]" in req_text
 
 
 class TestListenalongResolution:
