@@ -154,7 +154,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Remoção do atalho redundante `app.py` na raiz, consolidando `python -m empiremuse` como ponto canônico e `main.py` como atalho direto.
   - Desativação do comando legado de auto-atualização em tempo de execução via Git (`@bot update` / `source_update.sh`) e seus componentes interativos (`update_buttons`), eliminando execuções de comandos externos em tempo de execução.
 - **Expurgo de Dependências Obsoletas e Superfície de Supply Chain (Bloco C2 / KI-05)**:
-  - Remoção de 8 dependências obsoletas em `requirements.txt` (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`), reduzindo a superfície de dependências e supply chain (resolução de KI-05).
+  - Remoção de 7 dependências obsoletas em `requirements.txt` (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `emoji`, `regex`), reduzindo a superfície de dependências e supply chain (resolução de KI-05).
+  - O `curl_cffi` passou a vir pelo extra `yt-dlp[default,curl-cffi]`.
 - **Limpeza de Código Morto e Imports Não Utilizados (Bloco C2)**:
   - Remoção de código inalcançável em `wavelink/node.py` (instrução de log posterior ao `return`).
   - Remoção de imports órfãos e variáveis mortas em `modules/music.py`, `modules/music_settings.py`, `panel/handlers/auth.py`, `utils/music/models.py` e arquivos de testes (`tests/panel/`, `tests/test_audio_fase2a.py` e `tests/test_request_channel_characterization.py`).
