@@ -9,6 +9,7 @@ Garante que:
 """
 
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from empiremuse.paths import PROJECT_DIR
@@ -94,3 +95,153 @@ class TestDeployLegadoD1:
         assert "desativad" in msg or "release" in msg or "imagem" in msg, (
             f"Mensagem de desativação do update inesperada: {exc_info.value}"
         )
+
+    def test_metodos_e_listeners_auto_update_removidos(self):
+        """Métodos destrutivos de git/pip e listener de updatecmd não devem existir no Owner."""
+        assert not hasattr(Owner, "cleanup_git"), "Owner.cleanup_git deve ser removido"
+        assert not hasattr(Owner, "update_deps"), "Owner.update_deps deve ser removido"
+        assert not hasattr(Owner, "update_flags"), "Owner.update_flags deve ser removido"
+        assert not hasattr(Owner, "update_buttons"), "Owner.update_buttons deve ser removido"
+
+        # Nenhum listener registrado responde a updatecmd
+        for listener in getattr(Owner, "_Cog__listeners", []):
+            listener_name = listener[1] if isinstance(listener, tuple) else str(listener)
+            assert "updatecmd" not in listener_name and "update_buttons" not in listener_name
+
+        dummy_bot = MagicMock()
+        dummy_bot.config = {"SOURCE_REPO": "https://github.com/test/repo.git", "EXTRA_HINTS": ""}
+        owner_inst = Owner(dummy_bot)
+        assert not hasattr(owner_inst, "git_init_cmds"), "Owner.git_init_cmds deve ser removido"
+
+    @pytest.mark.asyncio
+    async def test_botpool_shutdown_fecha_bots_mata_lavalink_e_define_exit_code(self):
+        """BotPool.shutdown deve definir exit_code, fechar bots abertos e finalizar Lavalink local."""
+        from empiremuse.utils.client import BotPool
+
+        pool = BotPool.__new__(BotPool)
+        pool.exit_code = 0
+        pool.killing_state = False
+        pool.lavalink_instance = MagicMock()
+        pool.loop = MagicMock()
+        pool.loop.is_running.return_value = True
+
+        bot_aberto = AsyncMock()
+        bot_aberto.is_closed = MagicMock(return_value=False)
+        bot_fechado = AsyncMock()
+        bot_fechado.is_closed = MagicMock(return_value=True)
+
+        pool.bots = [bot_aberto, bot_fechado]
+        pool.guild_bots = {}
+
+        await pool.shutdown(exit_code=42)
+
+        assert pool.exit_code == 42
+        assert pool.killing_state is True
+        bot_aberto.close.assert_awaited_once()
+        bot_fechado.close.assert_not_awaited()
+        pool.lavalink_instance.kill.assert_called_once()
+        pool.loop.stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ratelimit_429_aciona_shutdown(self, monkeypatch):
+        """Ratelimit 429 no start_bot deve acionar pool.shutdown(1)."""
+        import disnake
+        from empiremuse.utils.client import BotPool
+
+        pool = BotPool.__new__(BotPool)
+        pool.config = {"KILL_ON_429": True}
+        pool.killing_state = False
+        pool.shutdown = AsyncMock()
+
+        monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
+        mock_bot = AsyncMock()
+        mock_bot.http = MagicMock()
+        mock_bot.http.token = "fake-token"
+        resp = MagicMock()
+        resp.status = 429
+        resp.reason = "Too Many Requests"
+        mock_bot.start.side_effect = disnake.HTTPException(resp, "429 Too Many Requests")
+
+        await pool.start_bot(mock_bot)
+
+        pool.shutdown.assert_awaited_once_with(1)
+
+    @pytest.mark.asyncio
+    async def test_error_handler_process_interaction_error_aciona_shutdown(self, monkeypatch):
+        """process_interaction_error com kill_process=True deve acionar pool.shutdown(1)."""
+        from empiremuse.cogs.error_handler import ErrorHandler
+
+        dummy_bot = MagicMock()
+        dummy_bot.pool = MagicMock()
+        dummy_bot.pool.shutdown = AsyncMock()
+        dummy_bot.config = {
+            "AUTO_ERROR_REPORT_WEBHOOK": False,
+            "ERROR_REPORT_WEBHOOK": "",
+            "SUPPORT_SERVER": "",
+        }
+        handler = ErrorHandler(dummy_bot)
+
+        monkeypatch.setattr(
+            "empiremuse.cogs.error_handler.parse_error",
+            lambda inter, error, **kwargs: ("erro", "traceback", True, [], False),
+        )
+        monkeypatch.setattr("empiremuse.cogs.error_handler.send_message", AsyncMock())
+
+        mock_inter = MagicMock()
+        await handler.process_interaction_error(mock_inter, Exception("fatal"), resp_msg=False)
+
+        dummy_bot.pool.shutdown.assert_awaited_once_with(1)
+
+    @pytest.mark.asyncio
+    async def test_error_handler_legacy_command_error_aciona_shutdown(self, monkeypatch):
+        """on_legacy_command_error com kill_process=True deve acionar pool.shutdown(1)."""
+        from empiremuse.cogs.error_handler import ErrorHandler
+
+        dummy_bot = MagicMock()
+        dummy_bot.pool = MagicMock()
+        dummy_bot.pool.shutdown = AsyncMock()
+        dummy_bot.config = {
+            "AUTO_ERROR_REPORT_WEBHOOK": False,
+            "ERROR_REPORT_WEBHOOK": "",
+            "SUPPORT_SERVER": "",
+        }
+        dummy_bot.user = MagicMock()
+        dummy_bot.user.mention = "@bot"
+        handler = ErrorHandler(dummy_bot)
+
+        monkeypatch.setattr(
+            "empiremuse.cogs.error_handler.parse_error",
+            lambda ctx, error, **kwargs: ("erro", "traceback", True, [], False),
+        )
+
+        mock_ctx = MagicMock()
+        mock_ctx.bot = dummy_bot
+        mock_ctx.author = MagicMock()
+        mock_ctx.author.bot = False
+        mock_ctx.prefix = "!"
+        mock_ctx.command = MagicMock()
+        mock_ctx.command.name = "test"
+        mock_ctx.send = AsyncMock()
+
+        await handler.on_legacy_command_error(mock_ctx, Exception("fatal"), resp_msg=False)
+
+        dummy_bot.pool.shutdown.assert_awaited_once_with(1)
+
+    def test_main_sai_com_pool_exit_code(self, monkeypatch):
+        """__main__.main() deve sair com o exit_code configurado no pool."""
+        import empiremuse.__main__ as main_module
+
+        class MockPool:
+            def __init__(self):
+                self.exit_code = 42
+
+            def setup(self):
+                pass
+
+        monkeypatch.setattr(main_module, "BotPool", MockPool)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_module.main()
+
+        assert exc_info.value.code == 42

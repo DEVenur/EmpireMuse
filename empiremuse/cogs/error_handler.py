@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import traceback
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -129,7 +128,8 @@ class ErrorHandler(commands.Cog):
             send_webhook = True
 
         if kill_process:
-            sys.exit(1)
+            await self.bot.pool.shutdown(1)
+            return
 
         if not send_webhook or not full_error_msg:
             return
@@ -291,7 +291,8 @@ class ErrorHandler(commands.Cog):
             send_webhook = True
 
         if kill_process:
-            sys.exit(1)
+            await self.bot.pool.shutdown(1)
+            return
 
         if not send_webhook or not full_error_msg:
             return
