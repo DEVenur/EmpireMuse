@@ -15,6 +15,7 @@ Documentação técnica e tutoriais de configuração para administradores e des
 | **[Implantação com Docker](docker.md)** | Implantação e execução com a imagem oficial multi-stage, variáveis operacionais, volumes persistentes e supervisão de processos. |
 | **[Guia de Release e Publicação](release.md)** | Versionamento SemVer, publicação de tags no Git, esteira automatizada multi-arquitetura no Docker Hub com SBOM e provenance. |
 | **[Implantação no Pterodactyl](pterodactyl.md)** | Instalação via egg oficial no painel Pterodactyl, imagens `0.1` e `latest`, alocação de porta, persistência e recursos. |
+| **[Implantação na Discloud](discloud.md)** | Hospedagem no plano pago da Discloud (1 GB / 1 vCPU), integração com GitHub, variáveis de ambiente, Lavalink e MongoDB. |
 
 ---
 

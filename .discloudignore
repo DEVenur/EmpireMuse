@@ -1,0 +1,75 @@
+# Discloud ignore file - EmpireMuse
+# Define arquivos e diretorios que NAO devem ser enviados no pacote de deploy da Discloud.
+
+# Ambiente de desenvolvimento, controle de versao e orquestracao de agentes
+.git/
+.github/
+.claude/
+.agents/
+.maestri/
+repos/
+worktrees/
+.arquivo/
+.local/
+.venv/
+venv/
+.idea/
+.vscode/
+
+# Testes automatizados e documentacao
+tests/
+docs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Arquivos de container e deploy de outras plataformas
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.override.yml
+deploy/
+
+# Caches de runtime e arquivos temporarios
+__pycache__/
+*.py[cod]
+*.pkl
+.ytdl_cache/
+.lastfm_cache
+.lastfm_cache/
+.spotify_cache.json
+.tempjar/
+.logs/
+*.zip
+
+# Binarios e arquivos de execucao do Lavalink (o bot gerencia ou usa nos remotos)
+.java/
+Lavalink.jar
+application.yml
+plugins/
+# auto_lavalink.ini e gerado dinamicamente pelo bot e nao deve ser enviado
+auto_lavalink.ini
+
+# Persistencia local (nao sobrescrever dados de producao no upload)
+local_database/
+local_database
+.local_dbs/
+local_dbs/
+.player_sessions/
+.db_cache/
+.app_commands_sync_data/
+
+# Segredos, cookies, chaves e configuracoes locais
+.ytdl_cookie
+guild_bots.json
+.panel-cookie-secret
+*.key
+*.pem
+config.json
+
+# Variaveis de ambiente:
+# Bloqueia arquivos de ambiente auxiliares (.env.mongo, .env.example, backups, etc.).
+# O arquivo principal (.env) NAO e ignorado aqui para permitir o upload de credenciais
+# pelo usuario ao gerar o zip de deploy na Discloud (conforme documentacao oficial).
+.env.*
+
