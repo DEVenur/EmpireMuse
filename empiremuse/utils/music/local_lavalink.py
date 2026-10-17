@@ -10,8 +10,8 @@ import tempfile
 import time
 import zipfile
 from contextlib import suppress
-from pathlib import PurePosixPath
-from typing import Dict, Mapping, Optional, Tuple
+from pathlib import Path, PurePosixPath
+from typing import Callable, Dict, List, Mapping, Optional, Tuple
 
 import requests
 
@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um servidor parado trava o boot
 HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
+VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
+LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
+PLUGINS_OVERRIDE_RELATIVE = ".lavalink/plugins-override.yml"
+PLUGINS_OVERRIDE_CONTENT = "lavalink:\n  plugins: []\n"  # constante: sem hash, é regravada se divergir
 
 
 class LavalinkDownloadError(Exception):
@@ -115,11 +119,14 @@ def download_file(url, filename):
 
 
 def validate_java(cmd: str, debug: bool = False):
+    """Devolve ``cmd`` se for um Java 17+ executável; senão ``None``. Sem shell: o caminho vira UM argumento."""
     try:
-        java_info = subprocess.check_output(f"{cmd} -version", stderr=subprocess.STDOUT, text=True, shell=True)
+        java_info = subprocess.check_output(
+            [cmd, "-version"], stderr=subprocess.STDOUT, text=True, timeout=VALIDATE_JAVA_TIMEOUT
+        )
         if int(java_info.splitlines()[0].split()[2].strip('"').split(".")[0]) >= 17:
             return cmd
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError) as e:
         if debug:
             print(f"\nFalha ao obter versão do java...\nPath: {cmd} | Erro: {repr(e)}\n")
 
@@ -184,14 +191,61 @@ def _prepare_plugins(directory: str) -> None:
             download_verified(f"{branding.LAVALINK_BINARIES_URL}/{name}", path, sha256)
 
 
+def _offline_jar_sha256(url: Optional[str], configured_sha256: Optional[str]) -> str:
+    """SHA-256 esperado do jar pré-instalado: o oficial, ou o ``LAVALINK_FILE_SHA256`` se o dono usa um jar próprio."""
+    url = (url or "").strip()
+    if not url or url == branding.LAVALINK_JAR_URL or url in branding.LAVALINK_JAR_OFFICIAL_URLS:
+        return branding.LAVALINK_JAR_SHA256
+    if not (configured_sha256 or "").strip():
+        raise LavalinkDownloadError(
+            "LAVALINK_OFFLINE=true com LAVALINK_FILE_URL diferente do oficial: defina também LAVALINK_FILE_SHA256 "
+            "(SHA-256 do Lavalink.jar pré-instalado) ou esvazie LAVALINK_FILE_URL."
+        )
+    return configured_sha256.strip()
+
+
+def _verify_preinstalled(path: str, sha256: str) -> None:
+    """Confere um arquivo pré-instalado sem tocar nele: ausente => LavalinkDownloadError; hash errado => IntegrityError."""
+    name = os.path.basename(path)
+    if not os.path.isfile(path):
+        raise LavalinkDownloadError(
+            f"LAVALINK_OFFLINE=true: o arquivo {name} não foi encontrado em {os.path.dirname(path)}; "
+            "nada é baixado no modo offline."
+        )
+    try:
+        current = file_sha256(path)
+    except OSError as e:
+        raise LavalinkDownloadError(f"LAVALINK_OFFLINE=true: não foi possível ler {name}: {type(e).__name__}") from e
+    if current != sha256.lower():
+        raise IntegrityError(
+            f"LAVALINK_OFFLINE=true: o SHA-256 de {name} não confere com o esperado; o arquivo foi recusado."
+        )
+
+
+def _verify_preinstalled_files(directory: str, url: Optional[str], configured_sha256: Optional[str]) -> None:
+    """Modo offline: zero download e zero escrita; a pasta (talvez somente leitura) só é lida e verificada."""
+    _verify_preinstalled(os.path.join(directory, "Lavalink.jar"), _offline_jar_sha256(url, configured_sha256))
+    _verify_preinstalled(os.path.join(directory, "application.yml"), branding.LAVALINK_APPLICATION_YML_SHA256)
+    for name, sha256 in branding.LAVALINK_PLUGIN_SHA256.items():
+        _verify_preinstalled(os.path.join(directory, PLUGINS_DIR, name), sha256)
+
+
 def prepare_lavalink_files(
-    directory: str = ".", *, lavalink_file_url: str = None, lavalink_file_sha256: str = None
+    directory: str = ".",
+    *,
+    lavalink_file_url: str = None,
+    lavalink_file_sha256: str = None,
+    lavalink_offline: bool = False,
 ) -> None:
     """Garante ``Lavalink.jar``, ``application.yml`` e os plugins oficiais em ``directory``, todos verificados (SHA-256).
 
     Levanta ``LavalinkDownloadError`` (``IntegrityError`` se o hash não confere) antes de qualquer processo iniciar.
+    Com ``lavalink_offline`` nada é baixado nem criado: os arquivos pré-instalados só são conferidos.
     """
     directory = str(directory)
+    if lavalink_offline:
+        _verify_preinstalled_files(directory, lavalink_file_url, lavalink_file_sha256)
+        return
     url, jar_sha256 = _resolve_jar_source(lavalink_file_url, lavalink_file_sha256)
     jar_path = os.path.join(directory, "Lavalink.jar")
     if not _matches(jar_path, jar_sha256):
@@ -236,6 +290,10 @@ CHILD_ENV_ALLOWLIST_WINDOWS = frozenset(
     }
 )
 
+# O Lavalink local só atende o próprio bot: o endereço é forçado, nunca herdado (o ambiente do bot pode expô-lo em 0.0.0.0).
+LAVALINK_ENV_SERVER_ADDRESS = "SERVER_ADDRESS"
+LAVALINK_LOCAL_ADDRESS = "127.0.0.1"
+
 
 def lavalink_child_env(refresh_token: Optional[str], environ: Mapping[str, str] = os.environ) -> Dict[str, str]:
     """Ambiente do processo do Lavalink: só a allowlist (nomes sem distinguir caixa no Windows) e, com token, o OAuth.
@@ -253,12 +311,22 @@ def lavalink_child_env(refresh_token: Optional[str], environ: Mapping[str, str] 
             seen.add(key)
             child_env[name] = value
 
+    child_env[LAVALINK_ENV_SERVER_ADDRESS] = LAVALINK_LOCAL_ADDRESS
+
     token = (refresh_token or "").strip()
     if token:
         child_env[YOUTUBE_OAUTH_ENV_ENABLED] = "true"
         child_env[YOUTUBE_OAUTH_ENV_REFRESH_TOKEN] = token
         child_env[YOUTUBE_OAUTH_ENV_SKIP_INITIALIZATION] = "true"
     return child_env
+
+
+def watch_lavalink_process(process: subprocess.Popen, on_exit: Callable[[int], None]) -> None:
+    """Bloqueia (feita para rodar numa thread) até o processo sair e chama ``on_exit(returncode)`` uma única vez.
+
+    Não decide se a saída era esperada: isso é do callback de quem vigia (o ``BotPool``).
+    """
+    on_exit(process.wait())
 
 
 def _fetch_verified_jdk(archive_path: str, url: str, sha256: str) -> None:
@@ -371,6 +439,160 @@ def _install_extracted_jdk(archive_path: str, java_root: str, java_dir: str, jdk
         shutil.rmtree(staging, ignore_errors=True)
 
 
+def _configured_java(java_path: str) -> str:
+    """Java escolhido em LAVALINK_JAVA_PATH: se não servir é erro claro, nunca um fallback silencioso para outro Java."""
+    if not os.path.isfile(java_path) or not os.access(java_path, os.X_OK):
+        raise LavalinkDownloadError(
+            f"LAVALINK_JAVA_PATH ({java_path}) não aponta para um executável do Java: o arquivo não existe, "
+            "não é um arquivo ou não tem permissão de execução."
+        )
+    if not validate_java(java_path):
+        raise LavalinkDownloadError(
+            f"LAVALINK_JAVA_PATH ({java_path}) não é um Java 17 ou superior (ou não respondeu a '-version')."
+        )
+    return java_path
+
+
+def _lavalink_home(configured: Optional[str]) -> str:
+    """Pasta do Lavalink: LAVALINK_HOME, ou a pasta de dados do bot quando vazio."""
+    configured = (configured or "").strip()
+    if not configured:
+        return str(paths.RUNTIME_DIR)
+    if not os.path.isdir(configured):
+        raise LavalinkDownloadError(f"LAVALINK_HOME ({configured}) não é uma pasta existente.")
+    return configured
+
+
+def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool, allow_install: bool) -> str:
+    """Java 17+ do sistema, de JAVA_HOME ou já instalado pelo bot; só instala o JDK se ``allow_install``."""
+    if java_cmd := validate_java("java"):
+        return java_cmd
+
+    dirs = []
+
+    try:
+        dirs.append(os.path.join(os.environ["JAVA_HOME"] + "bin/java"))
+    except KeyError:
+        pass
+
+    if os.name == "nt":
+        dirs.append(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
+        shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)
+
+    elif use_jabba:
+        jabba_java = str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java")
+        dirs.extend([os.path.realpath(jabba_java), os.path.expanduser(jabba_java)])
+        shutil.rmtree(f"{tmp_dir}/.java", ignore_errors=True)
+
+    else:
+        dirs.append(os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java"))
+        shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)
+
+    for cmd in dirs:
+        if validate_java(cmd):
+            return cmd
+
+    if not allow_install:
+        raise LavalinkDownloadError(
+            "LAVALINK_OFFLINE=true: nenhum Java 17+ foi encontrado e o JDK não será baixado no modo offline; "
+            "defina LAVALINK_JAVA_PATH com o executável do Java instalado."
+        )
+    return _install_jdk(tmp_dir, jdk_platform, arch, use_jabba)
+
+
+def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool) -> str:
+    if os.name == "nt":
+        return _install_jdk_windows(tmp_dir, jdk_platform, arch)
+
+    if not use_jabba:
+        return _install_jdk_linux(tmp_dir, jdk_platform, arch)
+
+    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0"), ignore_errors=True)
+
+    download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", "install_jabba.sh")
+    subprocess.call("bash install_jabba.sh", shell=True)
+    subprocess.call(f"{paths.RUNTIME_DIR}/.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
+    os.remove("install_jabba.sh")
+
+    return os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
+
+
+def _has_override_content(path: str) -> bool:
+    """Ausente, ilegível ou divergente => False (o arquivo é então regravado)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read() == PLUGINS_OVERRIDE_CONTENT
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
+def _ensure_plugins_override() -> str:
+    """Grava (de forma atômica, só se divergir) o YAML que zera ``lavalink.plugins`` e devolve o caminho absoluto.
+
+    O Lavalink consulta o Maven a cada partida por plugin com ``dependency`` no application.yml (que tem SHA-256 fixo e
+    não pode mudar); sem rede isso é fatal. Os jars continuam vindo de ``plugins/``, verificados por SHA-256.
+    Fica sempre em RUNTIME_DIR (volume gravável), nunca em LAVALINK_HOME.
+    """
+    path = os.path.abspath(paths.RUNTIME_DIR / PLUGINS_OVERRIDE_RELATIVE)
+    if _has_override_content(path):
+        return path
+
+    temp_path = f"{path}.tmp"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(PLUGINS_OVERRIDE_CONTENT)
+        os.replace(temp_path, path)
+    except OSError as e:
+        with suppress(OSError):  # limpeza do temporário: não pode mascarar o erro original
+            os.remove(temp_path)
+        raise LavalinkDownloadError(
+            f"Não foi possível gravar {os.path.basename(path)} em {os.path.dirname(path)} (RUNTIME_DIR): "
+            f"{type(e).__name__}"
+        ) from e
+    return path
+
+
+def _logging_args(home: str) -> List[str]:
+    """Com LAVALINK_HOME fora de RUNTIME_DIR (talvez somente leitura) os logs do Lavalink vão para o volume gravável.
+
+    Vai pela linha de comando porque o application.yml tem SHA-256 fixo e o ambiente do Java é uma allowlist.
+    """
+    if Path(home).resolve() == paths.RUNTIME_DIR.resolve():
+        return []
+    logs_dir = paths.RUNTIME_DIR / LAVALINK_LOGS_SUBDIR
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    return [f"-Dlogging.file.path={logs_dir}"]
+
+
+def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, initial_ram: int) -> List[str]:
+    """Linha de comando do Java como lista: o caminho do Java (mesmo com espaços) é sempre UM argumento."""
+    args = [java_cmd]
+
+    if cpu_cores >= 1:
+        args.append(f"-XX:ActiveProcessorCount={cpu_cores}")
+
+    if ram_limit > 10:
+        args.append(f"-Xmx{ram_limit}m")
+
+    if 0 < initial_ram < ram_limit:
+        args.append(f"-Xms{ram_limit}m")
+
+    if os.name != "nt":
+        # O tmpdir fica sempre em RUNTIME_DIR (volume gravável), mesmo quando LAVALINK_HOME é somente leitura.
+        tempjar_dir = paths.RUNTIME_DIR / ".tempjar"
+        if tempjar_dir.is_dir():
+            shutil.rmtree(tempjar_dir)
+
+        undertow_dir = tempjar_dir / "undertow-docbase.80.2258596138812103750"
+        undertow_dir.mkdir(parents=True, exist_ok=True)
+
+        args.append(f"-Djava.io.tmpdir={tempjar_dir}")
+
+    override_arg = f"-Dspring.config.additional-location=file:{_ensure_plugins_override()}"
+    return [*args, *_logging_args(home), override_arg, "-jar", "Lavalink.jar"]
+
+
 def run_lavalink(
     lavalink_file_url: str = None,
     lavalink_initial_ram: int = 30,
@@ -381,97 +603,36 @@ def run_lavalink(
     *,
     lavalink_file_sha256: str = None,
     youtube_oauth_refresh_token: str = None,
+    lavalink_java_path: str = "",
+    lavalink_home: str = "",
+    lavalink_offline: bool = False,
 ):
     arch, osname = platform.architecture()
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
 
     tmp_dir = tempfile.gettempdir() if os.name == "nt" else str(paths.RUNTIME_DIR)
 
-    if not (java_cmd := validate_java("java")):
-        dirs = []
+    home = _lavalink_home(lavalink_home)
 
-        try:
-            dirs.append(os.path.join(os.environ["JAVA_HOME"] + "bin/java"))
-        except KeyError:
-            pass
-
-        if os.name == "nt":
-            dirs.append(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
-            try:
-                shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"))
-            except:
-                pass
-
-        else:
-            if use_jabba:
-                jabba_java = str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java")
-                dirs.extend(
-                    [
-                        os.path.realpath(jabba_java),
-                        os.path.expanduser(jabba_java),
-                    ]
-                )
-                try:
-                    shutil.rmtree(f"{tmp_dir}/.java")
-                except:
-                    pass
-
-            else:
-                dirs.append(os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java"))
-                try:
-                    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"))
-                except:
-                    pass
-
-        for cmd in dirs:
-            if validate_java(cmd):
-                java_cmd = cmd
-                break
-
-        if not java_cmd:
-            if os.name == "nt":
-                java_cmd = _install_jdk_windows(tmp_dir, jdk_platform, arch)
-
-            elif use_jabba:
-                try:
-                    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0"))
-                except:
-                    pass
-
-                download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", "install_jabba.sh")
-                subprocess.call("bash install_jabba.sh", shell=True)
-                subprocess.call(f"{paths.RUNTIME_DIR}/.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
-                os.remove("install_jabba.sh")
-
-                java_cmd = os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
-
-            else:
-                java_cmd = _install_jdk_linux(tmp_dir, jdk_platform, arch)
+    if configured_java := (lavalink_java_path or "").strip():
+        java_cmd = _configured_java(configured_java)
+    else:
+        java_cmd = _find_or_install_java(tmp_dir, jdk_platform, arch, use_jabba, allow_install=not lavalink_offline)
 
     prepare_lavalink_files(
-        str(paths.RUNTIME_DIR), lavalink_file_url=lavalink_file_url, lavalink_file_sha256=lavalink_file_sha256
+        home,
+        lavalink_file_url=lavalink_file_url,
+        lavalink_file_sha256=lavalink_file_sha256,
+        lavalink_offline=lavalink_offline,
     )
 
-    if lavalink_cpu_cores >= 1:
-        java_cmd += f" -XX:ActiveProcessorCount={lavalink_cpu_cores}"
-
-    if lavalink_ram_limit > 10:
-        java_cmd += f" -Xmx{lavalink_ram_limit}m"
-
-    if 0 < lavalink_initial_ram < lavalink_ram_limit:
-        java_cmd += f" -Xms{lavalink_ram_limit}m"
-
-    if os.name != "nt":
-        tempjar_dir = paths.RUNTIME_DIR / ".tempjar"
-        if tempjar_dir.is_dir():
-            shutil.rmtree(tempjar_dir)
-
-        undertow_dir = tempjar_dir / "undertow-docbase.80.2258596138812103750"
-        undertow_dir.mkdir(parents=True, exist_ok=True)
-
-        java_cmd += f" -Djava.io.tmpdir={tempjar_dir}"
-
-    java_cmd += " -jar Lavalink.jar"
+    java_args = _java_command(
+        java_cmd,
+        home=home,
+        cpu_cores=lavalink_cpu_cores,
+        ram_limit=lavalink_ram_limit,
+        initial_ram=lavalink_initial_ram,
+    )
 
     print(
         "🌋 - Iniciando o servidor Lavalink (dependendo da hospedagem o lavalink pode demorar iniciar, "
@@ -479,10 +640,10 @@ def run_lavalink(
     )
 
     lavalink_process = subprocess.Popen(
-        java_cmd.split(),
+        java_args,
         stdout=subprocess.DEVNULL,
         env=lavalink_child_env(youtube_oauth_refresh_token),
-        cwd=str(paths.RUNTIME_DIR),
+        cwd=home,
     )
 
     if lavalink_additional_sleep:

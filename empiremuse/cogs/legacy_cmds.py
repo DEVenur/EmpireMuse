@@ -126,11 +126,18 @@ class Owner(commands.Cog):
         action="store_true",
     )
 
+    def _local_lavalink_enabled(self) -> bool:
+        """Lavalink local ligado na config, ou com Java vivo (o boot também o sobe com a lista de servidores vazia).
+
+        Olhar só ``lavalink_instance`` impedia uma nova tentativa depois de uma falha no reinício (instância ``None``).
+        """
+        return bool(self.bot.config["RUN_LOCAL_LAVALINK"] or self.bot.pool.lavalink_instance)
+
     @commands.is_owner()
     @commands.max_concurrency(1, commands.BucketType.default)
     @commands.command(hidden=True, aliases=["restartll", "rtll", "rll"])
     async def restartlavalink(self, ctx: CustomContext):
-        if not self.bot.pool.lavalink_instance:
+        if not self._local_lavalink_enabled():
             raise GenericError("**O servidor LOCAL não está sendo usado!**")
 
         await self.bot.pool.start_lavalink()
@@ -147,15 +154,12 @@ class Owner(commands.Cog):
         hidden=True, aliases=["ull", "updatell", "llupdate", "llu"], extras={"flags": updatelavalink_flags}
     )
     async def updatelavalink(self, ctx: CustomContext, flags: str = ""):
-        if not self.bot.pool.lavalink_instance:
+        if not self._local_lavalink_enabled():
             raise GenericError("**O servidor LOCAL não está sendo usado!**")
 
         args, unknown = ctx.command.extras["flags"].parse_known_args(flags.split())
 
-        try:
-            self.bot.pool.lavalink_instance.kill()
-        except:
-            pass
+        self.bot.pool.stop_lavalink()
 
         async with ctx.typing():
             await asyncio.sleep(1.5)

@@ -8,6 +8,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Imagem Docker Oficial e Suporte a Lavalink Pré-instalado (Bloco D2 / Fase D)**:
+  - Criação da imagem Docker multi-stage oficial baseada em `python:3.13-slim` e `eclipse-temurin:21-jre`, executando o bot e o Lavalink 4.2.2 no mesmo contêiner sob usuário não-root dedicado (`10001:10001`), com inicializador `tini` (PID 1), código da aplicação em `/app` estritamente somente leitura e persistência de dados isolada no volume `/data`.
+  - Suporte completo a Lavalink pré-instalado configurável via variáveis de ambiente: `LAVALINK_JAVA_PATH` (caminho fixo do executável Java sem disparar download de JDK), `LAVALINK_HOME` (pasta com os binários validados do Lavalink) e `LAVALINK_OFFLINE` (modo estritamente offline que apenas verifica os hashes SHA-256 dos arquivos locais e recusa a inicialização se ausentes ou divergentes).
+  - Vinculação estrita do Lavalink local ao endereço de loopback (`SERVER_ADDRESS=127.0.0.1`), garantindo que o servidor de áudio não fique acessível externamente fora do contêiner.
+  - Implementação da rotina de vigia do processo Java (`watch_lavalink_process` no `BotPool`): monitoramento contínuo em thread dedicada que aciona encerramento ordenado (`shutdown(1)`) caso o processo Java termine inesperadamente, delegando o reinício automático da aplicação ao supervisor de contêineres (`--restart unless-stopped`).
+  - Atualização dos comandos administrativos de suporte e reinicialização do Lavalink (`restartll`, `updatelavalink`) para permitir nova tentativa e reinício controlado do subprocesso de áudio sem derrubar o bot.
+  - Novo guia prático de implantação em `docs/guides/docker.md` com instruções de build, execução com `docker run`, variáveis operacionais e dimensionamento de memória.
 - **Workspace Multipasta e Repositórios Irmãos (Fase A)**:
   - Adicionado layout de workspace para VS Code/Cursor em `EmpireMuse.code-workspace` integrando a raiz do projeto e repositórios irmãos em `repos/` (`EmpireMuse-LL-binaries` e `EmpireMuse-RPC-app`).
   - Configuração de regras estritas de ignorar no `.gitignore` e `.dockerignore`, cobrindo `repos/`, `worktrees/`, `.arquivo/` e `.local/`.
@@ -103,6 +110,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Otimização de Inicialização do Lavalink sem Consulta Externa (Bloco D2 / Tarefa D-09)**:
+  - O Lavalink local deixa de consultar o repositório remoto do Maven (`maven.lavalink.dev`) a cada partida: geração automática de arquivo de override (`plugins-override.yml` em `RUNTIME_DIR/.lavalink/`) passado via `-Dspring.config.additional-location` antes do jar, operando de forma imediata e compatível com ambientes offline e contêineres a partir dos plugins locais já verificados por SHA-256.
 - **Encerramento Ordenado do Pool de Bots (Bloco D1 / Tarefa D-02)**:
   - Implementação do método `shutdown()` em `BotPool` (`empiremuse/utils/client.py`), realizando o encerramento gracioso e ordenado de todos os bots conectados, fechamento de sessões do Lavalink e registro do código de saída do processo, com captura de falhas individuais via logging defensivo sem interromper o loop de eventos.
   - Substituição de chamadas duras de término de processo (`kill 1` e `sys.exit`) por encerramento controlado e cooperativo.
