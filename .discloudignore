@@ -53,10 +53,23 @@ auto_lavalink.ini
 # Persistencia local (nao sobrescrever dados de producao no upload)
 local_database/
 local_database
+.local_dbs/
+local_dbs/
+.player_sessions/
+.db_cache/
+.app_commands_sync_data/
+
+# Segredos, cookies, chaves e configuracoes locais
+.ytdl_cookie
+guild_bots.json
+.panel-cookie-secret
+*.key
+*.pem
+config.json
 
 # Variaveis de ambiente:
 # Bloqueia arquivos de ambiente auxiliares (.env.mongo, .env.example, backups, etc.).
 # O arquivo principal (.env) NAO e ignorado aqui para permitir o upload de credenciais
 # pelo usuario ao gerar o zip de deploy na Discloud (conforme documentacao oficial).
 .env.*
-config.json
+
