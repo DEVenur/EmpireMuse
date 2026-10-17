@@ -47,7 +47,7 @@ __pycache__/
 Lavalink.jar
 application.yml
 plugins/
-lavalink.ini
+# auto_lavalink.ini e gerado dinamicamente pelo bot e nao deve ser enviado
 auto_lavalink.ini
 
 # Persistencia local (nao sobrescrever dados de producao no upload)
