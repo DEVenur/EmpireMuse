@@ -96,8 +96,18 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Adição de testes de caracterização comportamental em `tests/test_residuos_c2.py` assegurando a integridade da API pública do WaveLink, resolução de instâncias no listenalong e isolamento contra dependências expurgadas.
 - **Testes de Caracterização de Mensagens e Branding (Bloco C3 / Task C-15)**:
   - Adição de teste automatizado em `tests/test_branding.py` garantindo a ausência de referências legadas à Repl.it na mensagem de token do bot.
+- **Estruturação do Pacote Canônico e Resolução de Caminhos (Bloco C4 / Saneamento)**:
+  - Criação do pacote canônico `empiremuse/` com ponto de entrada `empiremuse.__main__` (`python -m empiremuse`), mantendo `main.py` e `app.py` na raiz como atalhos diretos.
+  - Adição do módulo `empiremuse.paths` com distinção explícita entre `PROJECT_DIR` (raiz do repositório para estáticos `data/` e `assets/`), `PACKAGE_DIR` (pacote Python para código e `templates/status.html`) e `RUNTIME_DIR` (diretório de execução configurável via variável de ambiente `EMPIREMUSE_HOME`).
+  - Implementação de guardas defensivas de cache no `BotPool.load_cache` com captura explícita de `(ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError)`, descartando caches corrompidos ou com referências a classes órfãs via logging defensivo sem interromper a inicialização do bot.
+  - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Roteamento Seguro de Dados de Execução e Migração para Pacote empiremuse (Bloco C4 / Saneamento)**:
+  - Migração de todos os módulos, cogs, templates e utilitários para o pacote canônico `empiremuse/` (`empiremuse.cogs`, `empiremuse.utils`, `empiremuse.wavelink`, `empiremuse.panel`).
+  - Roteamento seguro de bancos de dados locais (`LocalDatabase` em `local_database/`), listas de servidores (`lavalink.ini`, `auto_lavalink.ini`), logs (`.logs/disnake.log`) e sincronização de comandos de barra (`.app_commands_sync_data/`) respeitando `RUNTIME_DIR` / `EMPIREMUSE_HOME`.
+  - Passagem explícita de `cwd=RUNTIME_DIR` no `subprocess.Popen` do Lavalink local (`empiremuse/utils/music/local_lavalink.py`), garantindo que binários, plugins e arquivos temporários permaneçam confinados ao diretório de runtime configurado.
+  - Atualização do script de teste local `.local/run-painel-local.py` para invocar o bot via `python -m empiremuse`.
 - **Alinhamento e Coerência de Documentação Técnica (Bloco C3 / Task C-17)**:
   - `CONTRIBUTING.md`: checklist de Pull Requests atualizado para refletir os comandos reais e ativos da suíte `pytest`, checagem de lint e formatação com `ruff` e compilação de bytecode com `compileall`.
   - `AGENTS.md` e `docs/architecture.md`: inventários e tabelas alinhados aos 4 guias técnicos oficiais mantidos em `docs/guides/` (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).

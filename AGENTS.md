@@ -23,34 +23,36 @@
 
 Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architecture.md) para detalhes de linha):
 
-- `main.py` / `app.py`: Ponto de entrada; instancia `BotPool` e inicializa o loop do processo.
-- `config_loader.py`: Carregamento, tipagem e precedência de configurações (`DEFAULT_CONFIG`, `.env`, `config.json`).
-- `web_app.py`: Servidor HTTP Tornado para página de status e relé WebSocket do RPC (Rich Presence).
-- `utils/client.py`: Classes centrais `BotPool` (gestão multi-bot, nós de áudio) e `BotCore` (bot disnake).
-- `utils/db.py`: Camada de persistência (`MongoDatabase` via motor e `LocalDatabase` via TinyMongo).
-- `utils/others.py`: Decorador `pool_command`, classes de paginação, contexto e identificadores do controlador.
-- `utils/owner_panel.py`: Interface administrativa do dono do bot (`PanelView`).
-- `utils/music/models.py`: Modelos centrais de reprodução (`LavalinkPlayer`, `LavalinkTrack`, `PartialTrack`).
-- `utils/music/interactions.py`: Componentes de UI do Discord (views, botões, modais e selects).
-- `utils/music/checks.py`: Verificações de permissão, voz, DJ e algoritmo de roteamento entre múltiplos bots.
-- `utils/music/local_lavalink.py`: Download e execução sob demanda de binários JDK e Lavalink local.
-- `utils/music/lavalink_server_list.py`: Validação da lista de servidores Lavalink baixada, com fallback para `data/lavalink_servers.ini`.
-- `panel/`: Sub-aplicação web Tornado do painel de administração (OAuth2, sessões, rotas, serviços, templates e estáticos vendorizados).
-- `utils/music/request_channel.py`: Lógica unificada de setup e reset de canais de texto e fóruns de pedidos, compartilhada entre os cogs e o painel web.
-- `utils/music/audio_sources/`: Provedores de metadados para plataformas externas (Spotify e Deezer).
-- `utils/music/skins/`: Coleção de 15 skins visuais para o player (10 no modo normal e 5 no modo estático).
-- `wavelink/`: Cliente Lavalink v3/v4 e NodeLink (nós, conexões WebSocket, players e eventos).
-- `modules/music.py`: Cog principal de comandos musicais (reprodução, filas, filtros e nós).
-- `modules/music_settings.py`: Cog de configurações de servidor/usuário, skins e favoritos.
-- `modules/player_resume.py`: Salvamento e restauração de sessões de reprodução ativas.
-- `modules/misc.py`: Comandos gerais de utilidade (ping, estatísticas, convite, sobre).
-- `modules/legacy_cmds.py`: Comandos administrativos e de suporte acionados via prefixo.
-- `modules/lastfm.py`: Cog de integração e scrobble na plataforma Last.fm.
-- `modules/error_handler.py`: Tratamento centralizado de exceções e envio de mensagens de erro formatadas.
-- `modules/help_cog.py`: Sistema interativo de ajuda.
-- `modules/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
-- `modules/server_manager.py`: Comandos administrativos para gerenciamento de servidores.
-- `utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
+- `empiremuse/__main__.py`: Ponto de entrada canônico do pacote (`python -m empiremuse`), instancia `BotPool` e inicializa o loop do processo.
+- `main.py` / `app.py`: Atalhos de execução na raiz que chamam `empiremuse.__main__.main()`.
+- `empiremuse/paths.py`: Ponto central de resolução de diretórios (`PROJECT_DIR` para raiz e arquivos estáticos, `PACKAGE_DIR` para pacote e templates, e `RUNTIME_DIR` para dados de execução configuráveis via `EMPIREMUSE_HOME`).
+- `empiremuse/config_loader.py`: Carregamento, tipagem e precedência de configurações (`DEFAULT_CONFIG`, `.env`, `config.json`).
+- `empiremuse/web_app.py`: Servidor HTTP Tornado para página de status e relé WebSocket do RPC (Rich Presence).
+- `empiremuse/utils/client.py`: Classes centrais `BotPool` (gestão multi-bot, nós de áudio) e `BotCore` (bot disnake).
+- `empiremuse/utils/db.py`: Camada de persistência (`MongoDatabase` via motor e `LocalDatabase` via TinyMongo).
+- `empiremuse/utils/others.py`: Decorador `pool_command`, classes de paginação, contexto e identificadores do controlador.
+- `empiremuse/utils/owner_panel.py`: Interface administrativa do dono do bot (`PanelView`).
+- `empiremuse/utils/music/models.py`: Modelos centrais de reprodução (`LavalinkPlayer`, `LavalinkTrack`, `PartialTrack`).
+- `empiremuse/utils/music/interactions.py`: Componentes de UI do Discord (views, botões, modais e selects).
+- `empiremuse/utils/music/checks.py`: Verificações de permissão, voz, DJ e algoritmo de roteamento entre múltiplos bots.
+- `empiremuse/utils/music/local_lavalink.py`: Download e execução sob demanda de binários JDK e Lavalink local.
+- `empiremuse/utils/music/lavalink_server_list.py`: Validação da lista de servidores Lavalink baixada, com fallback para `data/lavalink_servers.ini`.
+- `empiremuse/panel/`: Sub-aplicação web Tornado do painel de administração (OAuth2, sessões, rotas, serviços, templates e estáticos vendorizados).
+- `empiremuse/utils/music/request_channel.py`: Lógica unificada de setup e reset de canais de texto e fóruns de pedidos, compartilhada entre os cogs e o painel web.
+- `empiremuse/utils/music/audio_sources/`: Provedores de metadados para plataformas externas (Spotify e Deezer).
+- `empiremuse/utils/music/skins/`: Coleção de 15 skins visuais para o player (10 no modo normal e 5 no modo estático).
+- `empiremuse/wavelink/`: Cliente Lavalink v3/v4 e NodeLink (nós, conexões WebSocket, players e eventos).
+- `empiremuse/cogs/music.py`: Cog principal de comandos musicais (reprodução, filas, filtros e nós).
+- `empiremuse/cogs/music_settings.py`: Cog de configurações de servidor/usuário, skins e favoritos.
+- `empiremuse/cogs/player_resume.py`: Salvamento e restauração de sessões de reprodução ativas.
+- `empiremuse/cogs/misc.py`: Comandos gerais de utilidade (ping, estatísticas, convite, sobre).
+- `empiremuse/cogs/legacy_cmds.py`: Comandos administrativos e de suporte acionados via prefixo.
+- `empiremuse/cogs/lastfm.py`: Cog de integração e scrobble na plataforma Last.fm.
+- `empiremuse/cogs/error_handler.py`: Tratamento centralizado de exceções e envio de mensagens de erro formatadas.
+- `empiremuse/cogs/help_cog.py`: Sistema interativo de ajuda.
+- `empiremuse/cogs/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
+- `empiremuse/cogs/server_manager.py`: Comandos administrativos para gerenciamento de servidores.
+- `empiremuse/utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
 - `assets/`: Imagens re-hospedadas (previews, skins, ícones, tutoriais) e `SHA256SUMS`.
 - `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar e banner).
 - `data/`: Dados estáticos do projeto (`lavalink_servers.ini`, lista de servidores Lavalink).
@@ -74,7 +76,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   ```
 - **Execução do Bot**:
   ```bash
-  python main.py
+  python -m empiremuse                   # ponto de entrada canônico (ou python main.py)
   ```
 - **Lint e Testes Automatizados**:
   - Testes com `pytest` (config em `pyproject.toml`; dependências em `requirements-dev.txt`):
@@ -91,7 +93,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   - Ferramentas restantes de tipagem (`mypy`/`pyright`) estão a configurar em blocos posteriores; não execute comandos dessas ferramentas antes de sua homologação.
   - Para validação sintática estática básica:
     ```bash
-    python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink
+    python -m compileall -q main.py app.py empiremuse
     ```
 
 ---

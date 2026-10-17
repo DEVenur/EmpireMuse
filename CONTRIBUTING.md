@@ -72,7 +72,7 @@ Todas as alterações devem utilizar o padrão [Conventional Commits](https://ww
 
 Antes de solicitar a revisão de um Pull Request, certifique-se de preencher o modelo padrão em [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) e verificar os seguintes pontos obrigatórios:
 
-- [ ] **Testes e Validação**: Suíte pytest aprovada (`.venv/bin/python -m pytest`), verificação de lint e formatação com ruff (`.venv/bin/ruff check .` e `.venv/bin/ruff format --check .`), compilação de bytecode (`python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink`) e testes manuais descritos no PR.
+- [ ] **Testes e Validação**: Suíte pytest aprovada (`.venv/bin/python -m pytest`), verificação de lint e formatação com ruff (`.venv/bin/ruff check .` e `.venv/bin/ruff format --check .`), compilação de bytecode (`python -m compileall -q main.py app.py empiremuse`) e testes manuais descritos no PR.
 - [ ] **Changelog Atualizado**: Registro resumido das alterações incluído na seção `[Unreleased]` de [`CHANGELOG.md`](CHANGELOG.md).
 - [ ] **Sem Segredos ou Credenciais**: Nenhuma chave de API, token de bot (`TOKEN`, `TOKEN_BOT_*`), senha ou dado sensível foi incluído no histórico ou nos arquivos.
 - [ ] **Revisão de Segurança Obrigatória**: Caso a alteração envolva entrada de dados de usuário, processamento de rede/RPC/WebSocket, leitura/escrita de arquivos ou operações no banco de dados, certifique-se de que foram seguidas as diretrizes de [`SECURITY.md`](SECURITY.md) (política e relato responsável) e o checklist técnico em [`.claude/rules/empiremuse/security.md`](.claude/rules/empiremuse/security.md).
