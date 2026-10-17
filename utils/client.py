@@ -965,20 +965,11 @@ class BotPool:
         self.loop.create_task(self.setup_pool_extras())
 
         if not self.bots:
-            message = "O token do bot não foi configurado devidamente!"
-
-            if os.environ.get("REPL_SLUG"):
-                message += f"Confira se o token foi adicionado nas secrets da replit"
-
-                print(message + f": Guia de como configurar: {branding.GUIDES_URL}/replit-token.md")
-
-                message += f'. <a href="{branding.GUIDES_URL}/replit-token.md" target="_blank">Clique aqui</a> para ver o guia de como configurar.'
-
-            else:
-                message += " Confira se o token foi configurado na ENV/ENVIRONMENT ou no arquivo .env"
-
-                print(f"⚠️ - {message}")
-
+            message = (
+                "O token do bot não foi configurado devidamente! Confira se o token foi configurado na "
+                "ENV/ENVIRONMENT ou no arquivo .env"
+            )
+            print(f"⚠️ - {message}")
             message = f"\n\n{message}"
 
         else:
