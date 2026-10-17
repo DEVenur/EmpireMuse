@@ -118,7 +118,7 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 | :--- | :--- | :--- | :--- |
 | **MAESTRO** | Orquestração e arbitragem | Planejamento, delegação, validação de etapas e aprovação final de commits. | Claude Code · Claude Opus 5.5 |
 | **Backend Specialist** | Raciocínio arquitetural e backend | Regras de negócio, cogs, modelo do player, integração Lavalink, banco de dados e desempenho. | Claude Code |
-| **Frontend Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`web_app.py`). | Claude Code |
+| **Frontend Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`empiremuse/web_app.py`). | Claude Code |
 | **QA & Test Engineer** | Qualidade e testes | Testes TDD e de caracterização (RED antes, validação depois); **nunca altera código de produção**. | Claude Code |
 | **DevOps & Dependencies** | Infraestrutura e dependências | Docker, CI, runtime, lint, dependências e lockfiles. | Antigravity · Claude Sonnet 5.5 |
 | **AppSec Hunter** | Auditoria profunda e raciocínio crítico | Auditoria de segurança, validação de dados de entrada, proteção de segredos e supply chain (modo plano/leitura). | Antigravity · Claude Opus 5.5 |
@@ -145,13 +145,13 @@ A metodologia padrão do projeto utiliza o framework **Everything Claude Code (E
 4. **Auditoria de Segurança Proporcional (AppSec)**: Obrigatória em **toda demanda** (diretriz mandatória do dono do projeto), com profundidade proporcional:
    - **Auditoria Completa**: Aplicada obrigatoriamente quando a alteração tocar em:
      - Entrada de dados de usuário ou modais;
-     - Comunicação de rede, endpoints HTTP ou WebSockets do Tornado (`web_app.py`);
-     - Persistência e consultas a bancos de dados (`utils/db.py`) ou arquivos locais;
+     - Comunicação de rede, endpoints HTTP ou WebSockets do Tornado (`empiremuse/web_app.py`);
+     - Persistência e consultas a bancos de dados (`empiremuse/utils/db.py`) ou arquivos locais;
      - Manipulação de tokens, chaves de API, credenciais ou segredos;
      - Dependências do projeto (`requirements.txt`, arquivos de lock);
      - Scripts de instalação, atualização e deploy (`source_*`, Docker, YAMLs);
      - Downloads de binários ou scripts externos (Lavalink, JDK, plugins);
-     - Comandos administrativos de owner (`modules/legacy_cmds.py`, `utils/owner_panel.py`) ou execução de subprocessos.
+     - Comandos administrativos de owner (`empiremuse/cogs/legacy_cmds.py`, `empiremuse/utils/owner_panel.py`) ou execução de subprocessos.
    - **Checagem Rápida**: Verificação de ausência de segredos expostos e aderência estrita de escopo nas demais demandas (ex.: documentação pura, formatação ou textos estáticos).
 5. **Documentação e Changelog**: Atualização dos documentos técnicos correlatos e inclusão das mudanças na seção `[Unreleased]` de [`CHANGELOG.md`](CHANGELOG.md).
 6. **Padronização de Commits e Branches**:
