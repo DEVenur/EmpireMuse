@@ -8,6 +8,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Configuração de Implantação na Discloud (Bloco D6 / Fase D)**:
+  - Adicionados arquivos `discloud.config` e `.discloudignore` padronizados para hospedagem na Discloud no plano pago (1 GB de RAM, 1 vCPU e `AUTORESTART=true`), com validação pendente na plataforma real.
+  - Filtro defensivo no `.discloudignore` bloqueando o envio de arquivos auxiliares de ambiente (`.env.*`), chaves criptográficas, cookies, bancos de dados locais e caches.
+  - Documentação completa no novo guia técnico `docs/guides/discloud.md` detalhando integração via GitHub (método preferido sem arquivo de credenciais), boas práticas para upload alternativo via zip (`chmod 600`, exclusão imediata do zip), otimização de memória (`RUN_RPC_SERVER=false`, `PANEL_ENABLED=false`), persistência obrigatória via MongoDB externo e Lavalink local com integridade SHA-256.
 - **Egg Oficial para Pterodactyl (Bloco D5 / Fase D)**:
   - Adicionado egg em `deploy/pterodactyl/egg-empiremuse.json` para instalação e hospedagem do bot em painéis Pterodactyl e Pelican (não verificado num painel real, teste em homologação pendente).
   - Suporte às imagens Docker oficiais `or4cu1o/empiremuse:0.1` e `or4cu1o/empiremuse:latest`, script de instalação automática de diretórios de dados em Alpine, sinal de parada `^C` (SIGINT) e variáveis de configuração com segredos vazios por padrão.
