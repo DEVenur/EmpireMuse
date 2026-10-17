@@ -480,11 +480,14 @@ class TestChildEnvContract:
 
     def test_passes_exactly_the_common_allowlist_on_posix(self):
         env = ll.lavalink_child_env(None, sentinel_environ(**{n: f"w-{n}" for n in WINDOWS_ONLY_ALLOWED}))
-        assert set(env) == set(COMMON_ALLOWED)
+        assert set(env) == set(COMMON_ALLOWED) | {"SERVER_ADDRESS"}
         assert env["PATH"] == "/usr/bin:/bin" and env["JAVA_HOME"] == "/opt/jdk"
 
     def test_server_port_is_passed_because_the_bot_talks_to_the_local_lavalink_on_it(self):
-        assert ll.lavalink_child_env(None, {"SERVER_PORT": "9001"}) == {"SERVER_PORT": "9001"}
+        assert ll.lavalink_child_env(None, {"SERVER_PORT": "9001"}) == {
+            "SERVER_PORT": "9001",
+            "SERVER_ADDRESS": "127.0.0.1",
+        }
 
     @pytest.mark.parametrize("name", NEVER_PASSED)
     def test_nothing_outside_the_allowlist_ever_passes(self, name):
@@ -496,14 +499,16 @@ class TestChildEnvContract:
         assert not [k for k in env if k.upper() in {"JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"}]
 
     def test_absent_names_are_simply_absent_not_empty(self):
-        assert ll.lavalink_child_env(None, {"PATH": "/bin"}) == {"PATH": "/bin"}
-        assert ll.lavalink_child_env(None, {}) == {}
+        assert ll.lavalink_child_env(None, {"PATH": "/bin"}) == {"PATH": "/bin", "SERVER_ADDRESS": "127.0.0.1"}
+        assert ll.lavalink_child_env(None, {}) == {"SERVER_ADDRESS": "127.0.0.1"}
 
     def test_posix_names_are_case_sensitive(self):
-        assert ll.lavalink_child_env(None, {"path": "/x", "Home": "/y", "server_port": "1"}) == {}
+        assert ll.lavalink_child_env(None, {"path": "/x", "Home": "/y", "server_port": "1"}) == {
+            "SERVER_ADDRESS": "127.0.0.1"
+        }
 
     def test_windows_only_names_are_not_passed_on_posix(self):
-        assert ll.lavalink_child_env(None, {n: "x" for n in WINDOWS_ONLY_ALLOWED}) == {}
+        assert ll.lavalink_child_env(None, {n: "x" for n in WINDOWS_ONLY_ALLOWED}) == {"SERVER_ADDRESS": "127.0.0.1"}
 
     def test_returns_a_new_plain_dict_of_strings_and_never_mutates_its_input(self):
         source = sentinel_environ()
@@ -517,7 +522,7 @@ class TestChildEnvContract:
 
     def test_accepts_any_read_only_mapping(self):
         env = ll.lavalink_child_env(None, MappingProxyType(sentinel_environ()))
-        assert set(env) == set(COMMON_ALLOWED)
+        assert set(env) == set(COMMON_ALLOWED) | {"SERVER_ADDRESS"}
 
     def test_default_reads_the_current_process_environment_without_changing_it(self, monkeypatch):
         monkeypatch.setenv("SERVER_PORT", "7777")
@@ -548,7 +553,7 @@ class TestChildEnvOauth:
         assert env["PLUGINS_YOUTUBE_OAUTH_ENABLED"] == "true"
         assert env["PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN"] == FAKE_TOKEN
         assert env["PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION"] == "true"
-        assert set(env) == set(COMMON_ALLOWED) | set(OAUTH_VARS)
+        assert set(env) == set(COMMON_ALLOWED) | set(OAUTH_VARS) | {"SERVER_ADDRESS"}
 
     def test_the_token_is_stripped_of_surrounding_whitespace(self):
         env = ll.lavalink_child_env(f"  {FAKE_TOKEN}\n", {})
@@ -575,7 +580,9 @@ class TestChildEnvOnWindows:
 
     def test_passes_the_common_and_the_windows_allowlist(self):
         source = sentinel_environ(**{n: f"w-{n}" for n in WINDOWS_ONLY_ALLOWED})
-        assert set(ll.lavalink_child_env(None, source)) == set(COMMON_ALLOWED) | set(WINDOWS_ONLY_ALLOWED)
+        assert set(ll.lavalink_child_env(None, source)) == (
+            set(COMMON_ALLOWED) | set(WINDOWS_ONLY_ALLOWED) | {"SERVER_ADDRESS"}
+        )
 
     def test_names_are_matched_without_regard_to_case(self):
         source = {
@@ -595,12 +602,14 @@ class TestChildEnvOnWindows:
         }
         env = ll.lavalink_child_env(None, source)
         by_upper = {k.upper(): v for k, v in env.items()}
-        assert by_upper == {k.upper(): v for k, v in source.items()}
+        assert by_upper == {**{k.upper(): v for k, v in source.items()}, "SERVER_ADDRESS": "127.0.0.1"}
         assert len(by_upper) == len(env), "sem nomes duplicados que só diferem na caixa"
 
     def test_two_spellings_of_the_same_name_yield_a_single_entry(self):
         env = ll.lavalink_child_env(None, {"Path": "C:\\um", "PATH": "C:\\dois"})
-        assert [k.upper() for k in env] == ["PATH"], "no Windows Path e PATH são a mesma variável: apenas uma entrada"
+        assert [k.upper() for k in env] == ["PATH", "SERVER_ADDRESS"], (
+            "no Windows Path e PATH são a mesma variável: apenas uma entrada"
+        )
 
     def test_names_outside_the_allowlist_are_blocked_in_any_case(self):
         source = {
@@ -613,7 +622,7 @@ class TestChildEnvOnWindows:
             "Path": "C:\\bin",
         }
         env = ll.lavalink_child_env(None, source)
-        assert {k.upper() for k in env} == {"PATH"}
+        assert {k.upper() for k in env} == {"PATH", "SERVER_ADDRESS"}
 
     def test_oauth_variables_follow_the_same_rules_on_windows(self):
         assert [
@@ -699,7 +708,7 @@ class TestPopenAlwaysGetsTheAllowlistedEnv:
 
     def test_keys_are_only_allowlisted_names_plus_the_oauth_trio(self, lavalink_start):
         ll.run_lavalink(youtube_oauth_refresh_token=FAKE_TOKEN)
-        extra = sorted(set(lavalink_start[0][1]["env"]) - set(COMMON_ALLOWED) - set(OAUTH_VARS))
+        extra = sorted(set(lavalink_start[0][1]["env"]) - set(COMMON_ALLOWED) - set(OAUTH_VARS) - {"SERVER_ADDRESS"})
         if extra:
             fail(f"nomes fora da allowlist no ambiente do Lavalink: {extra}")
 
