@@ -6,6 +6,7 @@ esquecido, o teste quebra); ambiente do container (offline, Java e home do Laval
 exposta; e o .dockerignore barrando segredos e dados locais.
 """
 
+import fnmatch
 import re
 from pathlib import Path
 
@@ -218,6 +219,55 @@ class TestHigieneDoBuild:
         for line in dockerfile:
             assert not re.search(r"\|\s*(ba)?sh\b", line), f"download executado direto: {line[:60]}"
             assert not re.match(r"ADD\s+https?://", line, re.I)
+
+
+class TestCreditosGpl:
+    """A GPL-2.0 pede levar a licença e os créditos do upstream junto com o que é distribuído na imagem."""
+
+    @staticmethod
+    def _copia_para_app(stage: list[str], arquivo: str) -> bool:
+        """True se um COPY do contexto (sem --from) leva ``arquivo`` para /app, direto ou via WORKDIR /app."""
+        workdir = "/"
+        for line in stage:
+            if line.upper().startswith("WORKDIR "):
+                workdir = line.split(None, 1)[1].strip()
+            elif line.upper().startswith("COPY ") and "--from" not in line:
+                *origens, destino = line.split()[1:]
+                if arquivo in origens and (destino.startswith("/app") or (workdir == "/app" and destino[0] != "/")):
+                    return True
+        return False
+
+    @pytest.mark.parametrize("arquivo", ["LICENSE", "CREDITS.md"])
+    def test_licenca_e_creditos_vao_para_app_na_imagem_final(self, stages, arquivo):
+        assert self._copia_para_app(stages[-1], arquivo), f"o estágio final não copia {arquivo} para /app"
+
+    @pytest.mark.parametrize("arquivo", ["LICENSE", "CREDITS.md"])
+    def test_os_arquivos_existem_e_o_dockerignore_nao_os_barra(self, arquivo):
+        assert (ROOT / arquivo).is_file()
+        texto = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        for linha in texto.splitlines():
+            padrao = linha.strip().strip("/")
+            if padrao and not padrao.startswith(("#", "!")):
+                assert not fnmatch.fnmatch(arquivo, padrao), f".dockerignore ({linha.strip()}) barra {arquivo}"
+
+    @pytest.fixture
+    def labels(self, stages) -> dict[str, str]:
+        return {
+            chave: valor
+            for line in stages[-1]
+            if line.upper().startswith("LABEL ")
+            for chave, valor in re.findall(r'([\w.\-]+)="([^"]*)"', line)
+        }
+
+    def test_label_de_autoria_nao_cita_o_upstream(self, labels):
+        autores = labels["org.opencontainers.image.authors"]
+        assert autores.strip()
+        assert not re.search(r"zritsu|museheart", autores, re.I), f"authors cita o upstream: {autores}"
+
+    def test_labels_apontam_para_o_repositorio_a_licenca_e_os_creditos(self, labels):
+        assert labels["org.opencontainers.image.source"] == branding.REPO_URL
+        assert labels["org.opencontainers.image.licenses"] == "GPL-2.0-only"
+        assert labels["org.opencontainers.image.documentation"] == f"{branding.REPO_URL}/blob/main/CREDITS.md"
 
 
 class TestDockerignore:
