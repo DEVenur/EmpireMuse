@@ -7,7 +7,7 @@
     "exported_at": "2026-10-17T18:00:00-03:00",
     "name": "EmpireMuse",
     "author": "DiscordEmpireHub",
-    "description": "Bot de música multi-instância para Discord em Python 3.13 com suporte a nós Lavalink externos e servidor local embutido.",
+    "description": "Bot de música multi-instância para Discord em Python 3.13 com suporte a nós Lavalink externos e servidor local embutido. Não verificado num painel real (teste pendente). Memória mínima: 768 MB, recomendada: 1 GB.",
     "features": null,
     "docker_images": {
         "EmpireMuse 0.1": "or4cu1o/empiremuse:0.1",
@@ -934,15 +934,6 @@
             "description": "Diretório base de execução e persistência de dados do bot no contêiner do Pterodactyl.",
             "env_variable": "EMPIREMUSE_HOME",
             "default_value": "/home/container",
-            "user_viewable": true,
-            "user_editable": false,
-            "rules": "required|string"
-        },
-        {
-            "name": "Porta do servidor HTTP do bot",
-            "description": "Porta alocada pelo painel Pterodactyl para o servidor web e status do bot.",
-            "env_variable": "PORT",
-            "default_value": "{{SERVER_PORT}}",
             "user_viewable": true,
             "user_editable": false,
             "rules": "required|string"
