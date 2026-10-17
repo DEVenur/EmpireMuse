@@ -9,6 +9,7 @@ import logging
 import os
 import pickle
 import subprocess
+import sys
 import traceback
 from configparser import ConfigParser
 from copy import deepcopy
@@ -268,13 +269,13 @@ class BotPool:
                 if self.killing_state is True:
                     return
 
-                print("Aplicação com ratelimit do discord!\nFinalizando/Reiniciando o processo em 5 segundos...")
+                print("Aplicação com ratelimit do discord!\nFinalizando o processo em 5 segundos...")
 
                 self.killing_state = True
 
                 await asyncio.sleep(5)
 
-                await asyncio.create_subprocess_shell("kill 1")
+                sys.exit(1)
 
                 return
 

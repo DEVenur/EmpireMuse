@@ -6,7 +6,6 @@ from typing import Union, Optional
 import disnake
 from disnake.ext import commands
 from disnake.utils import escape_mentions
-from pymongo.errors import ServerSelectionTimeoutError
 
 from empiremuse.utils.music.converters import time_format, perms_translations
 from empiremuse.wavelink import WavelinkException, TrackNotFound, MissingSessionID
@@ -225,13 +224,6 @@ def parse_error(
             "O suporte a links/buscas do youtube está desativado devido a medidas reforçadas do próprio youtube "
             "que impede o funcionamento nativo de links do yt. Caso queira conferir a postagem do youtube sobre isso você pode [clicar aqui](<https://support.google.com/youtube/thread/269521462/enforcement-on-third-party-apps?hl=en>)."
         )
-
-    if isinstance(error, ServerSelectionTimeoutError) and os.environ.get("REPL_SLUG"):
-        error_txt = (
-            "Foi detectado um erro de dns na repl.it que me impede de conectar com minha database "
-            "do mongo/atlas. irei reiniciar e em breve estarei disponível novamente..."
-        )
-        kill_process = True
 
     elif isinstance(error, WavelinkException):
         if "Unknown file format" in (wave_error := str(error)):

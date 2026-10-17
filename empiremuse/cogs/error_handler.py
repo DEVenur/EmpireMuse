@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import traceback
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -128,8 +129,7 @@ class ErrorHandler(commands.Cog):
             send_webhook = True
 
         if kill_process:
-            await asyncio.create_subprocess_shell("kill 1")
-            return
+            sys.exit(1)
 
         if not send_webhook or not full_error_msg:
             return
@@ -291,8 +291,7 @@ class ErrorHandler(commands.Cog):
             send_webhook = True
 
         if kill_process:
-            await asyncio.create_subprocess_shell("kill 1")
-            return
+            sys.exit(1)
 
         if not send_webhook or not full_error_msg:
             return

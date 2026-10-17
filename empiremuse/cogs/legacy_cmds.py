@@ -74,11 +74,9 @@ class Owner(commands.Cog):
     git_format = f"--pretty=format:{os_quote}%H*****%h*****%s*****%ct{os_quote}"
 
     additional_files = [
-        "./lavalink.ini",
-        "./application.yml",
-        "./squarecloud.config",
-        "./squarecloud.app",
-        "./discloud.config",
+        "lavalink.ini",
+        "application.yml",
+        "discloud.config",
     ]
 
     extra_dirs = ["local_database", ".player_sessions"]
@@ -327,103 +325,11 @@ class Owner(commands.Cog):
         alt_name="Atualizar Bot",
         extras={"flags": update_flags},
     )
-    async def update(
-        self, ctx: Union[CustomContext, disnake.MessageInteraction], *, opts: str = ""
-    ):  # TODO: Rever se há alguma forma de usar commands.Flag sem um argumento obrigatório, ex: --pip.
-        out_git = ""
-
-        git_log = []
-
-        if shutil.which("poetry"):
-            file = "./pyproject.toml"
-            use_poetry = True
-        else:
-            file = "./requirements.txt"
-            use_poetry = False
-
-        requirements_old = ""
-        try:
-            with open(file) as f:
-                requirements_old = f.read()
-        except:
-            pass
-
-        args, unknown = self.bot.get_command("update").extras["flags"].parse_known_args(opts.split())
-
-        try:
-            await ctx.response.defer()
-        except:
-            pass
-
-        if git_clean := args.force or not os.path.exists(os.environ["GIT_DIR"]):
-            out_git += await self.cleanup_git(force=args.force)
-
-        try:
-            await run_command("git --work-tree=. reset --hard")
-        except:
-            pass
-
-        if not git_clean:
-            try:
-                pull_log = await run_command("git --work-tree=. pull --allow-unrelated-histories -X theirs")
-                if "Already up to date" in pull_log:
-                    raise GenericError("**Já estou com os ultimos updates instalados...**")
-                out_git += pull_log
-
-            except GenericError as e:
-                raise e
-
-            except Exception as e:
-                if "Already up to date" in str(e):
-                    raise GenericError("Já estou com os ultimos updates instalados...")
-
-                elif not "Fast-forward" in str(e):
-                    traceback.print_exc()
-                    try:
-                        await run_command("git --work-tree=. reset --hard origin/main")
-                    except:
-                        traceback.print_exc()
-                        out_git += await self.cleanup_git(force=True)
-
-                elif "Need to specify how to reconcile divergent branches" in str(e):
-                    out_git += await run_command("git --work-tree=. rebase --no-ff")
-
-        commit = ""
-
-        for l in out_git.split("\n"):
-            if l.startswith("Updating"):
-                commit = l.replace("Updating ", "").replace("..", "...")
-                break
-
-        data = (await run_command(f"git --work-tree=. log {commit} {self.git_format}")).split("\n")
-
-        git_log += format_git_log(data)
-
-        self.bot.pool.commit = commit.split("...")[-1]
-
-        text = "`Será necessário me reiniciar após as alterações.`"
-
-        txt = f"`✅` **[Atualização realizada com sucesso!]({self.bot.pool.remote_git_url}/commits/main)**"
-
-        if git_log:
-            txt += f"\n\n{self.format_log(git_log[:10])}"
-
-        if git_log_txt := out_git[:1000].split("Fast-forward")[-1]:
-            if git_clean:
-                git_log_txt = "\n".join(l for l in git_log_txt.split("\n") if not l.startswith("hint: "))
-            txt += f"\n\n`📄` **Log:** ```py\n{git_log_txt}```\n{text}"
-        else:
-            txt += f"\n\n{text}"
-
-        if isinstance(ctx, CustomContext):
-            embed = disnake.Embed(description=txt, color=self.bot.get_color(ctx.guild.me))
-            await ctx.send(embed=embed, view=self.owner_view)
-
-            self.bot.loop.create_task(self.update_deps(ctx, requirements_old, args, use_poetry=use_poetry))
-
-        else:
-            self.bot.loop.create_task(self.update_deps(ctx, requirements_old, args, use_poetry=use_poetry))
-            return txt
+    async def update(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, opts: str = ""):
+        raise GenericError(
+            "**O comando de atualização via git foi desativado.**\n"
+            "Para atualizar o EmpireMuse, implante a nova release/imagem oficial."
+        )
 
     async def update_deps(self, ctx, original_reqs, args, use_poetry=False):
         if use_poetry:
@@ -870,9 +776,9 @@ class Owner(commands.Cog):
                     continue
                 try:
                     if f == ".env-temp":
-                        zipf.write(str(env_temp), "./.env")
+                        zipf.write(str(env_temp), ".env")
                     else:
-                        zipf.write(f"./{f}")
+                        zipf.write(f)
                 except FileNotFoundError:
                     continue
 
