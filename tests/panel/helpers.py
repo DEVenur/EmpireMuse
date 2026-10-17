@@ -60,26 +60,15 @@ def https_config(**overrides) -> dict:
 
 
 def require(module_name: str):
-    """Importa um módulo do painel; falha o teste (não a coleta) com mensagem clara se não existir."""
-    if not module_name.startswith("empiremuse."):
-        first = module_name.split(".")[0]
-        if first in ("panel", "utils", "wavelink", "cogs", "config_loader", "web_app"):
-            target = f"empiremuse.{module_name}"
-        elif first == "modules":
-            rest = module_name[len("modules") :]
-            target = f"empiremuse.cogs{rest}"
-        else:
-            target = module_name
-    else:
-        target = module_name
+    """Importa um módulo do projeto; falha o teste (não a coleta) com mensagem clara se não existir."""
     try:
-        return importlib.import_module(target)
+        return importlib.import_module(module_name)
     except ImportError as exc:
-        pytest.fail(f"{target} ainda não existe ou não importa (RED esperado): {exc}", pytrace=False)
+        pytest.fail(f"{module_name} ainda não existe ou não importa (RED esperado): {exc}", pytrace=False)
 
 
 def load_settings(config: dict):
-    return require("panel.settings").load_panel_settings(config)
+    return require("empiremuse.panel.settings").load_panel_settings(config)
 
 
 def fake_pool():

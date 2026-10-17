@@ -39,11 +39,11 @@ class PanelTestBase(AsyncHTTPTestCase):
     config_factory = staticmethod(local_config)
 
     def setUp(self):
-        require("panel")
+        require("empiremuse.panel")
         super().setUp()
 
     def get_app(self):
-        panel = require("panel")
+        panel = require("empiremuse.panel")
         self.settings = load_settings(self.config_factory())
         self.panel_app = panel.build_panel_app(fake_pool(), self.settings)
         return panel.make_router(tornado.web.Application([(r"/", _Main)]), self.panel_app)

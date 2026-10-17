@@ -49,16 +49,16 @@ class LoginBase(AsyncHTTPTestCase):
         caplog.set_level(logging.DEBUG)
 
     def setUp(self):
-        require("panel"), require("panel.oauth"), require("panel.sessions")
+        require("empiremuse.panel"), require("empiremuse.panel.oauth"), require("empiremuse.panel.sessions")
         self.clock = FakeClock()
         super().setUp()
 
     def get_app(self):
         config = self.config_factory()
-        settings = require("panel.settings").load_panel_settings(config)
+        settings = require("empiremuse.panel.settings").load_panel_settings(config)
         self.fake = make_fake_oauth(settings, **self.fake_kwargs)
         self.settings, app = build_app(config, self.clock, self.fake)
-        return require("panel").make_router(tornado.web.Application([]), app)
+        return require("empiremuse.panel").make_router(tornado.web.Application([]), app)
 
     # ---- ações
     def browser(self, **kw):
@@ -407,7 +407,7 @@ class GuildFilterTest(LoginBase):
     fake_kwargs = {"guilds": RAW}
 
     def test_only_owner_administrator_or_manage_guild_are_stored(self):
-        sessions = require("panel.sessions")
+        sessions = require("empiremuse.panel.sessions")
         recorded = {}
         original = sessions.SessionStore.create
 

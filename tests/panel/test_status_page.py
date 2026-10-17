@@ -84,7 +84,7 @@ def make_pool(config, bots=(), failed=None, killing=False, commit=""):
 def get_index(
     monkeypatch, *, message="", bots=(), failed=None, killing=False, commit="", path="/", ws=False, **overrides
 ):
-    web_app = require("web_app")
+    web_app = require("empiremuse.web_app")
     config = local_config(PORT=0, **overrides)
     pool = make_pool(config, bots, failed, killing, commit)
     real = tornado.httpserver.HTTPServer

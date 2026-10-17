@@ -101,7 +101,7 @@ class FakePool:
 
 
 def make_session(user_id=USER_ID, guild_ids=("42",), name_prefix="Servidor"):
-    sessions = require("panel.sessions")
+    sessions = require("empiremuse.panel.sessions")
     user = sessions.PanelUser(id=user_id, username=f"user{user_id}", global_name=None, avatar=None)
     guilds = tuple(
         sessions.ManagedGuild(id=g, name=f"{name_prefix} {g}", icon=None, permissions=8, owner=False) for g in guild_ids

@@ -26,11 +26,11 @@ def _panel_app():
 
 class RouterWithPanelTest(AsyncHTTPTestCase):
     def setUp(self):
-        require("panel")
+        require("empiremuse.panel")
         super().setUp()
 
     def get_app(self):
-        return require("panel").make_router(_main_app(), _panel_app())
+        return require("empiremuse.panel").make_router(_main_app(), _panel_app())
 
     def _body(self, path):
         return self.fetch(path, follow_redirects=False).body.decode()
@@ -50,11 +50,11 @@ class RouterWithPanelTest(AsyncHTTPTestCase):
 
 class RouterWithoutPanelTest(AsyncHTTPTestCase):
     def setUp(self):
-        require("panel")
+        require("empiremuse.panel")
         super().setUp()
 
     def get_app(self):
-        return require("panel").make_router(_main_app(), None)
+        return require("empiremuse.panel").make_router(_main_app(), None)
 
     def test_everything_goes_to_main_app_when_panel_is_disabled(self):
         for path in ("/", "/ws", "/painel", "/painel/", "/painel/saude"):
@@ -65,7 +65,7 @@ def test_build_panel_app_returns_none_when_disabled():
     from tests.panel.helpers import fake_pool, load_settings
 
     settings = load_settings({"PANEL_ENABLED": False})
-    assert require("panel").build_panel_app(fake_pool(), settings) is None
+    assert require("empiremuse.panel").build_panel_app(fake_pool(), settings) is None
 
 
 def test_run_app_listens_through_the_router():

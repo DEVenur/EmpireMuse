@@ -57,7 +57,7 @@ class FakeDB:
 
     @staticmethod
     def _models():
-        db = require("utils.db")
+        db = require("empiremuse.utils.db")
         return db.db_models[db.DBModel.guilds], db.global_db_models[db.DBModel.guilds]
 
     def seed(self, scope, gid, doc):
@@ -512,8 +512,8 @@ class SettingsBase(LoginBase):
     raw_override = None
 
     def get_app(self):
-        panel = require("panel")
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        panel = require("empiremuse.panel")
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings, self.world = settings, SettingsWorld()
         self.pool, self.db, self.events = self.world.pool, self.world.db, self.world.events
         raw = self.world.raw if self.raw_override is None else self.raw_override

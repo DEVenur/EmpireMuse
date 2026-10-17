@@ -188,12 +188,12 @@ class ChannelBase(SettingsBase):
     world_kwargs: dict = {}
 
     def get_app(self):
-        panel = require("panel")
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        panel = require("empiremuse.panel")
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings, self.world = settings, ChannelWorld(**self.world_kwargs)
         self.pool, self.db, self.events = self.world.pool, self.world.db, self.world.j
         self.fake = make_fake_oauth(settings, guilds=self.world.raw)
-        request_channel = require("utils.music.request_channel")
+        request_channel = require("empiremuse.utils.music.request_channel")
         self.monkeypatch.setitem(
             request_channel.apply_request_channel.__kwdefaults__, "send_idle_embed", self.world.fake_send_idle_embed
         )

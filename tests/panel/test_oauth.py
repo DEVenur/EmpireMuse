@@ -15,7 +15,7 @@ UNRESERVED = re.compile(r"^[A-Za-z0-9\-._~]{43,128}$")
 
 
 def _oauth():
-    return require("panel.oauth")
+    return require("empiremuse.panel.oauth")
 
 
 # --------------------------------------------------------------------------- PKCE

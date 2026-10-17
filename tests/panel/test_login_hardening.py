@@ -24,9 +24,9 @@ class ClientIdBase(LoginBase):
         return local_config(**self.config_overrides)
 
     def get_app(self):
-        panel = require("panel")
+        panel = require("empiremuse.panel")
         self.pool = SimpleNamespace(bots=list(self.pool_bots), database=None)
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings = settings
         app = panel.build_panel_app(self.pool, settings, clock=self.clock)
         return panel.make_router(tornado.web.Application([]), app)
@@ -126,7 +126,7 @@ class AccessLogTest(LoginBase):
 
 class RevokeFailureTest(LoginBase):
     def test_revoke_failure_does_not_block_login_and_does_not_leak(self):
-        oauth = require("panel.oauth")
+        oauth = require("empiremuse.panel.oauth")
 
         async def failing_revoke(_token):
             raise oauth.DiscordOAuthError("revogação falhou")

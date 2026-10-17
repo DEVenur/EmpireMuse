@@ -353,7 +353,7 @@ class TaskLifecycleTest(TasksBase):
         assert browser.get(ref).code == 404
 
     def test_task_limits_are_pinned_by_constants(self):
-        tasks = require("panel.services.tasks")
+        tasks = require("empiremuse.panel.services.tasks")
         assert (
             tasks.TASK_TIMEOUT_SECONDS,
             tasks.MAX_TASKS_PER_USER,

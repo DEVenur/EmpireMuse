@@ -182,8 +182,8 @@ class AccountBase(SettingsBase):
     """Painel montado com o AccountWorld; `logged_in()` entra como o usuário 1001."""
 
     def get_app(self):
-        panel = require("panel")
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        panel = require("empiremuse.panel")
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings, self.world = settings, AccountWorld()
         self.pool, self.db = self.world.pool, self.world.db
         self.events = self.world.journal

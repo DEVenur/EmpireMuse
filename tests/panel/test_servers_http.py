@@ -79,8 +79,8 @@ class ServersBase(LoginBase):
     raw_override = None
 
     def get_app(self):
-        panel = require("panel")
-        settings = require("panel.settings").load_panel_settings(self.config_factory())
+        panel = require("empiremuse.panel")
+        settings = require("empiremuse.panel.settings").load_panel_settings(self.config_factory())
         self.settings, self.world = settings, World()
         self.pool = self.world.pool
         raw = self.world.raw if self.raw_override is None else self.raw_override

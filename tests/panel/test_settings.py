@@ -9,7 +9,7 @@ from tests.panel.helpers import COOKIE_SECRET, OAUTH_SECRET, https_config, load_
 
 
 def _error_type():
-    return require("panel.settings").PanelConfigError
+    return require("empiremuse.panel.settings").PanelConfigError
 
 
 def test_panel_config_error_is_a_value_error():

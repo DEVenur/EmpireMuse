@@ -50,7 +50,7 @@ def s256(verifier: str) -> str:
 
 def make_fake_oauth(settings, *, user=None, guilds=None, fail_at=None, token=ACCESS_TOKEN):
     """DiscordOAuthClient com a rede substituída. `fail_at` ∈ {None,'exchange','user','guilds'}; registra `calls`."""
-    oauth = require("panel.oauth")
+    oauth = require("empiremuse.panel.oauth")
 
     class FakeOAuthClient(oauth.DiscordOAuthClient):
         def __init__(self):
@@ -88,7 +88,7 @@ def make_fake_oauth(settings, *, user=None, guilds=None, fail_at=None, token=ACC
 
 
 def build_app(settings_config: dict, clock, fake):
-    panel = require("panel")
+    panel = require("empiremuse.panel")
     settings = load_settings(settings_config)
     return settings, panel.build_panel_app(fake_pool(), settings, oauth_client=fake, clock=clock)
 

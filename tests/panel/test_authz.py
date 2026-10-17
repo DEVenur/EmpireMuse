@@ -28,7 +28,7 @@ UID = int(USER_ID)
 
 
 def authz():
-    return require("panel.authz")
+    return require("empiremuse.panel.authz")
 
 
 def setup(*, owner=False, admin=False, manage=False, member=True, bot_ready=True, extra_bots=0, **kw):
