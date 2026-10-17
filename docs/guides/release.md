@@ -1,0 +1,173 @@
+# Guia de Release e Publicação de Versões
+
+Guia técnico para mantenedores do **EmpireMuse** detalhando a política de versionamento SemVer, o procedimento de publicação de versões, a esteira automatizada no GitHub Actions e a publicação de imagens multi-arquitetura no Docker Hub.
+
+---
+
+## 1. Estratégia de Versionamento (SemVer)
+
+O EmpireMuse segue rigorosamente o padrão de [Versionamento Semântico 2.0.0](https://semver.org/lang/pt-BR/) (`MAJOR.MINOR.PATCH`):
+
+- **MAJOR** (`X.0.0`): Mudanças incompatíveis na API, arquitetura ou nas configurações de banco de dados/execução.
+- **MINOR** (`0.Y.0`): Novas funcionalidades mantendo compatibilidade retroativa.
+- **PATCH** (`0.0.Z`): Correções de bugs, ajustes de documentação ou atualizações pontuais sem quebra de compatibilidade.
+
+### 1.1 Versão Inicial e Release Candidates
+
+- **Primeira versão estável oficial**: `v0.1.0`.
+- **Release Candidates (`-rc.N`)**: Antes de publicar a versão estável final `v0.1.0`, deve-se publicar versões prévias como `v0.1.0-rc.1` (e subsequentes `rc.2`, `rc.3`, se necessário).
+  - O objetivo dos Release Candidates é validar cenários de deploy e plataformas externas (como o *egg* do Pterodactyl e a plataforma Discloud) e garantir o funcionamento da imagem Docker multi-arquitetura no ambiente produtivo antes de promover a versão a oficial (`latest`).
+
+---
+
+## 2. Pré-requisitos de Configuração (Configuração Única)
+
+A publicação automatizada de imagens no Docker Hub exige credenciais configuradas nos segredos do repositório no GitHub:
+
+1. **Conta e Repositório no Docker Hub**:
+   - Conta ou organização com acesso de publicação ao repositório `or4cu1o/empiremuse`.
+2. **Personal Access Token (PAT) no Docker Hub**:
+   - Gerar um token em **Account Settings > Security > New Access Token** com permissões de **Read & Write**.
+3. **GitHub Actions Secrets e Environment `docker-release`**:
+   - O proprietário do repositório deve configurar as variáveis de segredo no GitHub sem expor valores publicamente (seja a nível de repositório ou no ambiente **`docker-release`**, onde também é possível definir revisores obrigatórios para aprovar o deploy antes da publicação):
+     - `DOCKERHUB_USERNAME`: Nome do usuário no Docker Hub (`or4cu1o`).
+     - `DOCKERHUB_TOKEN`: Personal Access Token com permissão de escrita gerado no Docker Hub.
+   
+   A configuração pode ser realizada via interface web do GitHub ou pelo GitHub CLI (`gh`):
+   ```bash
+   gh secret set DOCKERHUB_USERNAME
+   gh secret set DOCKERHUB_TOKEN
+   ```
+
+> [!NOTE]
+> Essa configuração é feita apenas uma única vez. Se esses secrets não estiverem presentes, a etapa de autenticação no Docker Hub falhará durante o workflow de release.
+
+---
+
+## 3. Procedimento de Publicação Passo a Passo
+
+Para manter a integridade do histórico do Git e a rastreabilidade das alterações, o fluxo de release deve ser executado rigorosamente na seguinte ordem:
+
+### Passo 1: Atualizar o `CHANGELOG.md`
+
+1. Na branch da tarefa/release, edite o arquivo [`CHANGELOG.md`](../../CHANGELOG.md);
+2. Mova todas as alterações documentadas sob a seção `## [Unreleased]` para uma nova seção com o número da versão e a data correspondente:
+   ```markdown
+   ## [Unreleased]
+
+   ## [0.1.0] - 2026-10-17
+   ### Adicionado
+   ...
+   ```
+   *(No caso de Release Candidate, utilize o formato `## [0.1.0-rc.1] - YYYY-MM-DD`)*;
+3. Crie uma nova seção `## [Unreleased]` vazia no topo, pronta para os próximos ciclos de desenvolvimento.
+
+### Passo 2: Submeter via Pull Request para a branch `main`
+
+> [!IMPORTANT]
+> A branch `main` possui proteção estrita contra commits diretos. Todas as alterações devem entrar via Pull Request.
+
+1. Comite as alterações do `CHANGELOG.md` e abra um Pull Request apontando para `main`;
+2. Aguarde a execução de todos os testes e verificações da esteira de integração contínua (CI);
+3. Conclua o merge do PR na branch `main`.
+
+### Passo 3: Criar a Tag Anotada no commit da `main`
+
+Com o merge concluído, atualize a branch `main` local e crie a tag Git apontando para o commit recém-integrado:
+
+```bash
+git checkout main
+git pull origin main
+git tag -a v0.1.0 -m "Release v0.1.0"
+```
+
+*(Para Release Candidate: `git tag -a v0.1.0-rc.1 -m "Release candidate v0.1.0-rc.1"`)*
+
+### Passo 4: Enviar a Tag para o Repositório Remoto
+
+Envie a tag Git criada para o GitHub para disparar automaticamente o pipeline de release:
+
+```bash
+git push origin v0.1.0
+```
+
+---
+
+## 4. O que o Workflow de Release Faz
+
+O arquivo de workflow [`.github/workflows/release.yml`](../../.github/workflows/release.yml) é acionado exclusivamente no push de tags no formato `v*.*.*`. Ele é dividido em três fases coordenadas:
+
+```mermaid
+flowchart TD
+    A["Push da tag vX.Y.Z"] --> B["verify-tag: Valida ancestralidade com origin/main"]
+    A --> C["test: Lint, compilação e pytest"]
+    B --> D["docker: Build multi-arch e push"]
+    C --> D
+    D --> E["Docker Hub: or4cu1o/empiremuse"]
+```
+
+### 4.1 Validação de Tag (`verify-tag`)
+- Executa `git merge-base --is-ancestor HEAD origin/main`.
+- **Garantia de segurança**: Se a tag apontar para um commit que não pertence ao histórico da branch `origin/main` (por exemplo, uma tag acidental em uma branch de feature ou trabalho isolado), o workflow falha imediatamente e aborta a esteira, impedindo a publicação indevida de imagens.
+
+### 4.2 Testes Automatizados (`test`)
+- Prepara o ambiente com Python 3.13 e `uv` fixado em `0.13.1`;
+- Executa a suíte de lint (`ruff check .`), conferência de formatação (`ruff format --check .`), validação de compilação de bytecode (`compileall`) e a suíte completa de testes (`pytest`).
+- Se qualquer teste falhar, a imagem não é construída nem publicada.
+
+### 4.3 Build e Push da Imagem (`docker`)
+- Configura emulação **QEMU** e **Docker Buildx** para compilação multi-plataforma nativa;
+- Autentica-se no Docker Hub utilizando os segredos `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN`;
+- **Multi-Arquitetura**: Constrói a imagem simultaneamente para `linux/amd64` (servidores x86_64 padrão) e `linux/arm64` (Apple Silicon, Raspberry Pi 4/5, servidores ARM na nuvem);
+- **Segurança da Cadeia de Suprimentos (Supply Chain)**:
+  - **SBOM** (`sbom: true`): Gera e anexa o inventário de software (Software Bill of Materials) diretamente ao registro;
+  - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
+- **Regras de Versionamento de Tags da Imagem**:
+  - **Versão Final Estável** (`vX.Y.Z`, ex.: `v0.1.0`):
+    - Publica as tags `X.Y.Z` (`0.1.0`), `X.Y` (`0.1`) e `latest` (graças ao modificador `latest=auto`).
+  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v0.1.0-rc.1`):
+    - Publica **estritamente** a tag do pré-lançamento (`0.1.0-rc.1`), **sem alterar nem sobrescrever** a tag `latest` nem as tags de versões estáveis anteriores.
+
+---
+
+## 5. Como Conferir a Publicação
+
+Após a conclusão com sucesso do workflow no GitHub Actions, realize a verificação externa:
+
+### 5.1 Teste de Pull Anônimo
+Em um terminal independente (ou sem autenticação no Docker Hub), teste o download da imagem publicada para validar que o repositório é público e acessível:
+
+```bash
+docker pull or4cu1o/empiremuse:0.1.0
+```
+
+*(Substitua `0.1.0` pela tag publicada, como `0.1.0-rc.1`)*.
+
+### 5.2 Inspeção do Manifesto Multi-Arquitetura
+Utilize o comando `docker buildx imagetools inspect` para verificar as arquiteturas publicadas e os atestados de segurança:
+
+```bash
+docker buildx imagetools inspect or4cu1o/empiremuse:0.1.0
+```
+
+O comando exibirá a lista de manifestos contendo:
+- Plataforma `linux/amd64`;
+- Plataforma `linux/arm64`;
+- Camadas de atestação (`application/vnd.in-toto+json`) referentes ao SBOM e Provenance.
+
+---
+
+## 6. O que Fazer em Caso de Erro na Tag ou na Release
+
+> [!CAUTION]
+> **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG JÁ PUBLICADA!**
+
+Imagens Docker e tags de pacotes são imutáveis e podem já ter sido baixadas por usuários finais, servidores de homologação ou sistemas de CI/CD. Mover ou forçar a sobrescrita de uma tag (`git push --force origin :vX.Y.Z`) quebra caches e compromete a rastreabilidade e integridade do projeto.
+
+Se for detectado qualquer defeito de código, falha de empacotamento ou inconsistência após a publicação:
+
+1. Trate o problema normalmente via branch de correção (`fix/...`) e submeta o Pull Request para a `main`;
+2. Após o merge na `main`, incremente o número da versão conforme as regras do SemVer:
+   - Se o erro ocorreu em um Release Candidate (ex.: `v0.1.0-rc.1`), publique a versão subsequente `v0.1.0-rc.2`;
+   - Se o erro ocorreu em uma versão final estável (ex.: `v0.1.0`), publique uma versão corretiva de patch `v0.1.1`;
+3. Crie e envie a nova tag Git no commit atualizado da `main`.
