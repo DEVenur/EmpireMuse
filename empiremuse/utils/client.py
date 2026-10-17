@@ -341,16 +341,20 @@ class BotPool:
                 if not bot.is_closed():
                     await bot.close()
             except Exception:
-                pass
+                logger.warning(
+                    "Falha ao fechar o bot %s durante o encerramento",
+                    getattr(bot, "identifier", bot),
+                    exc_info=True,
+                )
 
         if self.lavalink_instance:
             try:
                 self.lavalink_instance.kill()
             except Exception:
-                pass
-
-        if self.loop and self.loop.is_running():
-            self.loop.stop()
+                logger.warning(
+                    "Falha ao finalizar o processo do Lavalink local durante o encerramento",
+                    exc_info=True,
+                )
 
     async def connect_node(self, bot: BotCore, data: dict):
         while not bot.bot_ready:

@@ -9,7 +9,7 @@ Garante que:
 """
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from empiremuse.paths import PROJECT_DIR
@@ -122,8 +122,6 @@ class TestDeployLegadoD1:
         pool.exit_code = 0
         pool.killing_state = False
         pool.lavalink_instance = MagicMock()
-        pool.loop = MagicMock()
-        pool.loop.is_running.return_value = True
 
         bot_aberto = AsyncMock()
         bot_aberto.is_closed = MagicMock(return_value=False)
@@ -140,7 +138,85 @@ class TestDeployLegadoD1:
         bot_aberto.close.assert_awaited_once()
         bot_fechado.close.assert_not_awaited()
         pool.lavalink_instance.kill.assert_called_once()
-        pool.loop.stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_botpool_shutdown_registra_warning_se_fechamento_falhar(self):
+        """BotPool.shutdown deve registrar logger.warning com exc_info=True se fechar bot ou lavalink falhar."""
+        from empiremuse.utils.client import BotPool
+
+        pool = BotPool.__new__(BotPool)
+        pool.exit_code = 0
+        pool.killing_state = False
+        pool.lavalink_instance = MagicMock()
+        pool.lavalink_instance.kill.side_effect = RuntimeError("falha lavalink")
+
+        bot_falho = AsyncMock()
+        bot_falho.identifier = "bot_1"
+        bot_falho.is_closed = MagicMock(return_value=False)
+        bot_falho.close.side_effect = RuntimeError("falha fechar")
+
+        pool.bots = [bot_falho]
+        pool.guild_bots = {}
+
+        with patch("empiremuse.utils.client.logger.warning") as mock_warn:
+            await pool.shutdown(exit_code=1)
+
+            assert mock_warn.call_count == 2
+            bot_call = mock_warn.call_args_list[0]
+            assert "bot" in bot_call[0][0].lower()
+            assert bot_call[1].get("exc_info") is True
+            ll_call = mock_warn.call_args_list[1]
+            assert "lavalink" in ll_call[0][0].lower()
+            assert ll_call[1].get("exc_info") is True
+
+    def test_integracao_shutdown_ordena_loop_sem_runtime_error(self):
+        """Loop real com 2 bots que chamam shutdown(1) deve concluir run_until_complete sem RuntimeError."""
+        import asyncio
+        from empiremuse.utils.client import BotPool
+
+        loop = asyncio.new_event_loop()
+        try:
+            pool = BotPool.__new__(BotPool)
+            pool.exit_code = 0
+            pool.killing_state = False
+            pool.lavalink_instance = None
+            pool.loop = loop
+            pool.guild_bots = {}
+
+            class FakeBot:
+                def __init__(self, identifier: str, should_trigger_shutdown: bool = False):
+                    self.identifier = identifier
+                    self.should_trigger_shutdown = should_trigger_shutdown
+                    self._closed = False
+                    self.close_event = asyncio.Event()
+                    self.http = MagicMock()
+                    self.http.token = f"token-{identifier}"
+
+                def is_closed(self) -> bool:
+                    return self._closed
+
+                async def start(self, token: str):
+                    if self.should_trigger_shutdown:
+                        await asyncio.sleep(0.01)
+                        await pool.shutdown(1)
+                    await self.close_event.wait()
+
+                async def close(self):
+                    self._closed = True
+                    self.close_event.set()
+
+            bot1 = FakeBot("bot-1", should_trigger_shutdown=True)
+            bot2 = FakeBot("bot-2", should_trigger_shutdown=False)
+            pool.bots = [bot1, bot2]
+
+            # run_until_complete deve concluir normalmente sem levantar RuntimeError
+            loop.run_until_complete(pool.run_bots(pool.get_all_bots()))
+
+            assert pool.exit_code == 1
+            assert bot1.is_closed() is True
+            assert bot2.is_closed() is True
+        finally:
+            loop.close()
 
     @pytest.mark.asyncio
     async def test_ratelimit_429_aciona_shutdown(self, monkeypatch):
