@@ -10,22 +10,14 @@ psutil
 aiofiles
 git+https://github.com/zRitsu/jishaku.git@14d2dbd51d61382c687af8d8655f54f41674c0eb
 packaging
-aiosqlite
 yt-dlp[default]>=2025.08.11
 tornado>=6.4.2
-emoji
 urllib3>=2.5.0
 async-timeout
 cachetools
-regex
-syncedlyrics
-pylrc
 rapidfuzz
 nodriver==0.32
-undetected-chromedriver==3.5.5
 ruamel.yaml
-nest_asyncio
 setuptools>=70.0.0; python_version>='3.12'
-curl_cffi
 audioop-lts; python_version>='3.13'
 uvloop; sys_platform != 'win32'

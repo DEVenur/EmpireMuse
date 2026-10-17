@@ -14,7 +14,7 @@ from tests.panel.helpers import EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, COOKIE_
 from tests.panel.helpers_channel import ChannelBase, GID
 from tests.panel.helpers_settings import NOT_FOUND_TEXT, UID, acao_form, version_of
 from tests.panel.test_settings_http import Each, HttpBase, normalize
-from tests.helpers_request_channel import perms, FULL_TEXT, FakeText
+from tests.helpers_request_channel import perms, FULL_TEXT
 
 TASK_PATH = re.compile(r"/painel/servidores/\d+/canal/tarefas/")
 

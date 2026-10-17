@@ -8,7 +8,7 @@ import copy
 import html
 import re
 
-from tests.panel.helpers_settings import CONFLICT_TEXT, NOT_FOUND_TEXT, SAVED_TEXT, UID, acao_form, parse_forms
+from tests.panel.helpers_settings import CONFLICT_TEXT, NOT_FOUND_TEXT, SAVED_TEXT, UID, parse_forms
 from tests.panel.test_settings_http import Each, HttpBase, external_change
 
 HEX16 = re.compile(r"^[0-9a-f]{16}$")
@@ -178,7 +178,7 @@ class ListenAlongProtocolTest(ListenAlongBase):
         browser = self.logged_in()
         form = next(f for f in parse_forms(self.geral(browser, 800)) if f.value("acao") == REMOVE)
         url = self.url(800, "geral")
-        before, writes = self.db.doc("global", 800), len(self.db.writes)
+        writes = len(self.db.writes)
         assert self.submit(browser, url, form, pairs=[p for p in form.pairs() if p[0] != "_xsrf"]).code == 403
         assert self.submit(browser, url, form, pairs=[p for p in form.pairs() if p[0] != "versao"]).code == 422
         external_change(self.db, "global", 800, listen_along_invites={"123": "https://discord.gg/novo"})

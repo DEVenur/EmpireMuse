@@ -9,10 +9,8 @@ Sem rede e sem Discord reais: dublês simples (SimpleNamespace / AsyncMock).
 import ast
 import asyncio
 import re
-import types
 from pathlib import Path
 from types import SimpleNamespace
-from unittest import mock
 
 import disnake
 import pytest

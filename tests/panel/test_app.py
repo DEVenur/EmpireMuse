@@ -2,7 +2,6 @@
 
 import json
 
-import pytest
 import tornado.web
 from tornado.testing import AsyncHTTPTestCase
 

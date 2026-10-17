@@ -18,7 +18,7 @@ from disnake.ext import commands
 from utils import branding
 from utils.branding import asset_url
 from utils.db import DBModel
-from utils.music.converters import perms_translations, time_format
+from utils.music.converters import time_format
 from utils.music.errors import GenericError, NoVoice
 from utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
 from utils.music.models import LavalinkPlayer
@@ -1184,11 +1184,9 @@ class MusicSettings(commands.Cog):
     )
     async def listenalong(self, ctx: CustomContext):
         try:
-            bot = ctx.music_bot
-            guild = ctx.music_guild
+            _bot = ctx.music_bot
         except AttributeError:
-            bot = ctx.bot
-            guild = bot.get_guild(ctx.guild_id)
+            _bot = ctx.bot
 
         # if not guild.me.guild_permissions.create_instant_invite:
         #    raise GenericError(f"**{bot.user.mention} não possui permissão de criar convites instantâneos...**")

@@ -15,7 +15,6 @@ from disnake.ext import commands
 import modules.music_settings as ms
 from tests.helpers_request_channel import (
     ACTOR_MENTION,
-    BOT_ID,
     BOT_MENTION,
     GUILD_ID,
     CommandInter,

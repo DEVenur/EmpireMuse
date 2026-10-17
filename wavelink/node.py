@@ -561,8 +561,6 @@ class Node:
             for track in tracks
         ]
 
-        __log__.warning(f"REST | {self.identifier} | Failure to load tracks after 5 attempts.")
-
     async def build_track(self, identifier: str) -> Track:
         """|coro|
 

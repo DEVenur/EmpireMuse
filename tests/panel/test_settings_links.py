@@ -16,7 +16,6 @@ from tests.panel.helpers_settings import (
     SAVED_TEXT,
     UID,
     acao_form,
-    acao_forms,
     parse_forms,
 )
 from tests.panel.test_settings_http import Each, HttpBase, external_change
@@ -279,7 +278,6 @@ class LinksEditRemoveTest(LinksBase):
 
     def test_edit_cannot_rename_and_unknown_names_are_422(self):
         browser = self.logged_in()
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
         url = self.links_url(100)
         form = acao_form(self.body_of(browser, 100), "editar", "Fixo")
         renamed = self.submit(browser, url, form, pairs=form.pairs(url=BASE_URL + "z") + [("novo_nome", "Outro")])
@@ -486,7 +484,7 @@ class LinksProtocolTest(LinksBase):
         assert self.browser().get(self.links_url(100)).code == 302
         browser = self.logged_in()
         assert browser.get(self.links_url(100)).code == 200, "a rota deve existir"
-        reference = browser.get("/painel/servidores/999999/links").body.decode()
+        browser.get("/painel/servidores/999999/links")
         for gid, bot in ((300, None), (600, None), (500, None), (100, 2), (100, "abc"), (800, 3)):
             response = browser.get(self.links_url(gid, bot))
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), (gid, bot)
@@ -550,7 +548,7 @@ class LinksProtocolTest(LinksBase):
 
     def test_two_concurrent_adds_with_the_same_version_one_wins(self):
         import asyncio
-        from urllib.parse import urlencode, urlsplit
+        from urllib.parse import urlencode
 
         browser = self.logged_in()
         url = self.links_url(100)

@@ -11,7 +11,6 @@ Contrato (interpretações em .qa-e4c-interp.txt):
 """
 
 import asyncio
-import copy
 import html
 import logging
 import re
@@ -21,7 +20,6 @@ from tests.helpers_request_channel import FakePlayer, FakeThreadInfo
 from tests.panel.helpers import COOKIE_SECRET, OAUTH_SECRET, require
 from tests.panel.helpers_channel import GID, PANEL_USER, TASK_ID
 from tests.panel.helpers_login import DEFAULT_USER
-from tests.panel.helpers_servers import raw_guild
 from tests.panel.helpers_settings import NOT_FOUND_TEXT, UID, acao_form
 from tests.panel.test_channel_page import CanalBase
 from tests.panel.test_settings_http import Each, external_change

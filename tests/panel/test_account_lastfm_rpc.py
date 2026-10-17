@@ -11,7 +11,7 @@ import re
 
 from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET
 from tests.panel.helpers_account import RPC_TOKEN_OLD, SESSIONKEY, FakeRpcPlayer, OTHER_UID
-from tests.panel.helpers_settings import CONFLICT_TEXT, UID, acao_form, parse_forms
+from tests.panel.helpers_settings import CONFLICT_TEXT, UID, acao_form
 from tests.panel.test_account_page import URL, AccountCase
 from tests.panel.test_settings_http import Each
 

@@ -13,7 +13,7 @@ import re
 
 from tests.panel.helpers import EXPECTED_SECURITY_HEADERS
 from tests.panel.helpers_account import OTHER_UID
-from tests.panel.helpers_settings import UID, acao_form, acao_forms, parse_forms, version_of
+from tests.panel.helpers_settings import UID, acao_form, parse_forms, version_of
 from tests.panel.test_account_page import URL, AccountCase
 from tests.panel.test_settings_http import Each
 

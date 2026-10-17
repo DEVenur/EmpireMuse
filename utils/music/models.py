@@ -28,7 +28,6 @@ from utils.music.errors import GenericError, PoolException
 from utils.music.filters import AudioFilter
 from utils.music.lastfm_tools import LastFmException
 from utils.music.skin_utils import skin_converter
-from utils.music.track_encoder import encode_track, DataWriter
 from utils.others import music_source_emoji, send_idle_embed, PlayerControls, string_to_file
 from wavelink import TrackStart, TrackEnd
 

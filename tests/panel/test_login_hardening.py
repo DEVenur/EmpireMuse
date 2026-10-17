@@ -1,13 +1,12 @@
 """Endurecimento do login (Etapa 2, validação): client_id/503, Retry-After, logs sem query string,
 revogação mesmo em erro inesperado, cookies sem aspas."""
 
-import logging
 from types import SimpleNamespace
 
 import tornado.web
 
-from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, fake_pool, local_config, require
-from tests.panel.helpers_login import ACCESS_TOKEN, CODE, authorize_params, build_app, set_cookie_headers
+from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, local_config, require
+from tests.panel.helpers_login import ACCESS_TOKEN, CODE, authorize_params, set_cookie_headers
 from tests.panel.test_login_flow import SESSION_COOKIE, LoginBase
 
 PANEL_APP_ID = "111111111111111111"

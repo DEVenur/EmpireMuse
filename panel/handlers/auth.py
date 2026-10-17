@@ -8,8 +8,6 @@ import re
 import secrets
 from typing import Optional
 
-import tornado.web
-
 from panel.handlers.base import SESSION_COOKIE, PanelHandler
 from panel.handlers.pages import INDEX_PATH
 from panel.oauth import DiscordOAuthClient, DiscordOAuthError, make_pkce_pair, parse_managed_guilds, parse_user
