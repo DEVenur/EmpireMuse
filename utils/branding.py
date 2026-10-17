@@ -36,6 +36,26 @@ LAVALINK_APPLICATION_YML_KNOWN_SHA256 = frozenset({
     "0d17d65f3b7d7a889f2b23f2719bd8a1e1aac77b90e0b77e9dacdbd35ce94801",
     LAVALINK_APPLICATION_YML_SHA256,
 })
+# JDK baixado quando não há Java 17+ no sistema: plataforma -> (URL oficial da BellSoft, SHA-256 fixo do arquivo).
+# Para atualizar: baixe o arquivo novo, confira o SHA-1 que a BellSoft publica e só então calcule o SHA-256.
+JDK_DOWNLOADS = {
+    "windows-amd64": (
+        "https://download.bell-sw.com/java/17.0.13+12/bellsoft-jdk17.0.13+12-windows-amd64.zip",
+        "91b442a2952dc0e83b40406345a138b44c60ef41eed66afd80ae43d97ca155de",
+    ),
+    "windows-i586": (
+        "https://download.bell-sw.com/java/17.0.13+12/bellsoft-jdk17.0.13+12-windows-i586.zip",
+        "2cfe28ed102436dc7a03e71495ddd7ae2348de686e42d05b6bdf7b62b15684ed",
+    ),
+    "linux-amd64": (
+        "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-amd64-lite.tar.gz",
+        "525aa7ffea39e09f33ffd6eafb56322d614b315c51664170985dd1384579e2d1",
+    ),
+    "linux-i586": (
+        "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-i586-lite.tar.gz",
+        "d9de6f59b82db53894b03aa33675f20489844f9893bd6b75553145f43a05b0cd",
+    ),
+}
 # Plugins do Lavalink (nome canônico em plugins/ -> SHA-256); a URL é LAVALINK_BINARIES_URL + "/" + nome.
 LAVALINK_PLUGIN_SHA256 = {
     "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar":
