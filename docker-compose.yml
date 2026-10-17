@@ -24,9 +24,9 @@ services:
     restart: unless-stopped
     volumes:
       - empiremuse-mongo:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?}
+    env_file:
+      - path: .env.mongo
+        required: true
 
 volumes:
   empiremuse-data:
