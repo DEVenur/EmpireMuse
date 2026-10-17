@@ -142,6 +142,7 @@ discloud.txt
 .classpath
 .project
 *.jar
+Lavalink.jar
 *.zip
 *.rar
 *.7z
@@ -161,8 +162,10 @@ application.yml
 /.local_database_sqlite
 /.db_cache/
 /.app_commands_sync_data/
+.app_commands_sync_data/
 /.gitbak/
 /.tempjar/
+.tempjar/
 /emojis.json
 ai_prompt.txt
 /.spotify_cache.json
@@ -191,6 +194,7 @@ worktrees/
 .claude/ecc/
 .claude/settings.local.json
 .ruff_cache/
+.ask-*.log
 /config.json
 /plugins/
 .env*
