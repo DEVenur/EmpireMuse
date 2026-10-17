@@ -7100,9 +7100,6 @@ class Music(commands.Cog):
             if "bandcamp" not in node.info["sourceManagers"]:
                 self.remove_provider(node.search_providers, ["bcsearch"])
                 self.remove_provider(node.partial_providers, ["bcsearch:{author} - {title}"])
-            elif "bcsearch" not in node.search_providers:
-                self.add_provider(node.search_providers, ["bcsearch"])
-                self.add_provider(node.partial_providers, ["bcsearch:{author} - {title}"])
 
             if "spotify" not in node.info["sourceManagers"] or node.only_use_native_search_providers is True:
                 self.remove_provider(node.search_providers, ["spsearch"])
@@ -7372,9 +7369,7 @@ class Music(commands.Cog):
 
                 if not info:
                     txt = f"**Não houve resultados de mixes para sua busca: {artist} - {track}**"
-                    if exceptions:
-                        txt += f"\n\nErros: ```py\n" + "\n".join(repr(e) for e in exceptions) + "```"
-                    raise GenericError(txt)
+                    raise GenericError(txt, error="\n".join(repr(e) for e in exceptions) or None)
 
                 track_url = f"https://www.last.fm/music/{quote(artist)}"
                 playlist_name = f"TopTracks: {artist}"
@@ -7439,8 +7434,9 @@ class Music(commands.Cog):
 
                 if txt:
                     if "This track is not readable. Available countries:" in txt:
-                        txt = "A música informada não está disponível na minha região atual..."
-                    raise GenericError(f"**Ocorreu um erro ao processar sua busca:** \n{txt}", error=txt)
+                        raise GenericError("**A música informada não está disponível na minha região atual...**", error=txt)
+                    raise GenericError("**Não foi possível concluir sua busca agora. Tente novamente em instantes "
+                                       "ou use outro termo/link.**", error=txt)
                 raise GenericError("**Não houve resultados para sua busca.**")
 
         return tracks, node

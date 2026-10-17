@@ -136,8 +136,8 @@ licença MIT — mantenha o cabeçalho). Foi estendido para o Lavalink **v4** e 
 
 ### Lavalink local
 
-`utils/music/local_lavalink.py` valida Java ≥ 17 (`utils/music/local_lavalink.py:63`), baixa JDK/`Lavalink.jar`/`application.yml` se
-necessário (o jar e o yml vêm do espelho `DiscordEmpireHub/LL-binaries` `0.0.1`, veja `utils/branding.py`) e inicia o processo com `subprocess.Popen` (`utils/music/local_lavalink.py:264`). É chamado em executor para não bloquear o
+`utils/music/local_lavalink.py` valida Java ≥ 17 (`utils/music/local_lavalink.py:63`), baixa JDK/`Lavalink.jar`/`application.yml`/plugins se
+necessário (o jar, o yml e os plugins vêm do espelho `DiscordEmpireHub/EmpireMuse-LL-binaries` `0.0.3`, veja `utils/branding.py`, com validação de integridade por SHA-256; a 0.0.3 traz o cliente TV no `application.yml`, OAuth desligado por padrão e log do `YoutubeOauth2Handler` em WARN) e inicia o processo com `subprocess.Popen` (`utils/music/local_lavalink.py:264`). É chamado em executor para não bloquear o
 loop (`utils/client.py:219-233`). O node local usa identificador `LOCAL`, host `127.0.0.1` e porta
 `SERVER_PORT` ou `8090` (`utils/client.py:401-415`).
 
@@ -205,7 +205,7 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 
 | Integração | Onde | Observações |
 |---|---|---|
-| **Lavalink** (v3/v4, NodeLink) | `wavelink/`, `modules/music.py` | Fonte de áudio única; lista pública opcional (`utils/music/remote_lavalink_serverlist.py`, padrão `data/lavalink_servers.ini`). `Lavalink.jar` e `application.yml` vêm do espelho [DiscordEmpireHub/LL-binaries](https://github.com/DiscordEmpireHub/LL-binaries) `0.0.1`. |
+| **Lavalink** (v3/v4, NodeLink) | `wavelink/`, `modules/music.py` | Fonte de áudio única; lista pública opcional (`utils/music/remote_lavalink_serverlist.py`, padrão `data/lavalink_servers.ini`). `Lavalink.jar`, `application.yml` e plugins vêm do espelho [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) `0.0.3` (Lavalink oficial 4.2.2; `application.yml` com cliente TV, OAuth opcional desligado por padrão e log do `YoutubeOauth2Handler` em WARN). |
 | **App de RPC (Rich Presence)** | `web_app.py`, `utils/music/models.py` | Aplicativo desktop [DiscordEmpireHub/EmpireMuse-RPC-app](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app) (origem: upstream, GPL-3.0); URLs em `utils/branding.py`. |
 | **Spotify** | `utils/music/audio_sources/spotify.py` | API oficial por *client credentials* (`SPOTIFY_CLIENT_ID/SECRET`); só metadados, o áudio vem de outra fonte. Veja `known-issues.md`. |
 | **Deezer** | `utils/music/audio_sources/deezer.py` | API pública sem credenciais; metadados. |

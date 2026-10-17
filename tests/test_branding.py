@@ -30,9 +30,17 @@ EXPECTED_CONSTANTS = {
     "GUIDES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/docs/guides",
     "RPC_APP_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app",
     "RPC_APP_RELEASES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app/releases",
-    "LAVALINK_BINARIES_URL": "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1",
-    "LAVALINK_JAR_URL": "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/Lavalink.jar",
-    "LAVALINK_APPLICATION_YML_URL": "https://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/application.yml",
+    "LAVALINK_BINARIES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3",
+    "LAVALINK_JAR_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
+    "LAVALINK_APPLICATION_YML_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/application.yml",
+    "LAVALINK_JAR_SHA256": "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a",
+    "LAVALINK_APPLICATION_YML_SHA256": "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95",
+    "LAVALINK_PLUGIN_SHA256": {
+        "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar":
+            "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
+        "lavasrc-plugin-4.8.3.jar": "4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3",
+        "lavalink-2.6.1.jar": "1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3",
+    },
     "LAVALINK_SERVER_LIST_URL": "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/data/lavalink_servers.ini",
     "UPSTREAM_NAME": "MuseHeart-MusicBot",
     "UPSTREAM_AUTHOR": "zRitsu",
@@ -244,6 +252,27 @@ def test_lavalink_servers_ini_exists_and_is_valid_ini():
 def test_local_lavalink_does_not_use_upstream_binaries():
     violations = _scan(["utils/music/local_lavalink.py"], ["zRitsu/LL-binaries"])
     _fail_with("local_lavalink.py ainda aponta para zRitsu/LL-binaries", violations)
+
+
+RENAMED_LL_REPO = "DiscordEmpireHub/LL-binaries"   # renomeado para DiscordEmpireHub/EmpireMuse-LL-binaries (301 no GitHub)
+
+
+def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
+    """O CHANGELOG é histórico e pode citar o nome antigo; o restante (código, .example.env, docs, CREDITS) não."""
+    paths = [p for p in _repo_files()
+             if not p.startswith(("tests/", ".git/")) and p != "CHANGELOG.md"
+             and p.endswith((".py", ".md", ".env", ".yml", ".yaml", ".json", ".toml", ".txt", ".example"))]
+    # utils/branding.py (fonte única de identidade) lista de propósito o nome ANTIGO entre as URLs oficiais de versões
+    # anteriores, para que instalações com a URL antiga atualizem sozinhas; o upstream (zRitsu) segue proibido nele.
+    others = [p for p in paths if p != "utils/branding.py"]
+    _fail_with("nome antigo do repositório de binários (use EmpireMuse-LL-binaries)",
+               _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan(["utils/branding.py"], ["zRitsu/LL-binaries"]))
+
+
+def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror():
+    # Fase 2 (defeito de atualização): uma URL fixa no .env quebrava a cada versão nova. Detalhes: tests/test_audio_fase2a3.py.
+    match = re.search(r"^LAVALINK_FILE_URL=(.*)$", _read(".example.env"), re.MULTILINE)
+    assert match and match.group(1).strip().strip("'\"") == ""
 
 
 # --------------------------------------------------------------------------- R3 Recursos do upstream

@@ -251,8 +251,28 @@ class CanalSetupValidationTest(CanalBase):
 
     def test_non_admin_bot_needs_manage_permissions_on_an_existing_channel(self):
         self.world.text._perms = perms(**{k: v for k, v in FULL_TEXT.items() if k != "manage_permissions"})
-        body = html.unescape(self.check_422(modo="existente", canal="22"))
+        body = html.unescape(self.check_422(modo="existente", canal="22")).lower()
         assert "gerenciar permissões" in body or "administrador" in body
+
+    def test_missing_manage_permissions_is_explained_in_panel_terms_not_with_the_commands_text(self):
+        """Fase 2 / Trilha C: o texto do /setup ("use o comando sem selecionar um canal de destino") não serve ao painel."""
+        from utils import branding
+        self.world.text._perms = perms(**{k: v for k, v in FULL_TEXT.items() if k != "manage_permissions"})
+        body = " ".join(html.unescape(self.check_422(modo="existente", canal="22")).split())
+        assert (f"O {branding.BOT_NAME} precisa da permissão Gerenciar permissões neste canal (ou de Administrador). "
+                "Conceda a permissão ao cargo do bot ou escolha Criar um canal novo.") in body
+        lowered = body.lower()
+        for forbidden in ("comando", "sem selecionar um canal de destino", "genericerror"):
+            assert forbidden not in lowered, f"texto do comando vazou para o painel: {forbidden!r}"
+
+    def test_the_manage_permissions_message_is_the_same_in_fragment_and_whole_page(self):
+        self.world.text._perms = perms(**{k: v for k, v in FULL_TEXT.items() if k != "manage_permissions"})
+        browser = self.logged_in()
+        for htmx in (False, True):
+            response = self.configure(browser, htmx=htmx, modo="existente", canal="22")
+            text = " ".join(html.unescape(response.body.decode()).split())
+            assert response.code == 422 and "Gerenciar permissões neste canal" in text, htmx
+            assert "comando" not in text.lower(), htmx
 
     def test_clearing_messages_needs_manage_messages_and_read_message_history(self):
         for missing in ("manage_messages", "read_message_history"):

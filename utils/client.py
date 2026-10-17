@@ -225,6 +225,8 @@ class BotPool:
             self.lavalink_instance = await self.loop.run_in_executor(
                 None, lambda: run_lavalink(
                     lavalink_file_url=self.config['LAVALINK_FILE_URL'],
+                    lavalink_file_sha256=self.config['LAVALINK_FILE_SHA256'],
+                    youtube_oauth_refresh_token=self.config['YOUTUBE_OAUTH_REFRESH_TOKEN'],
                     lavalink_initial_ram=self.config['LAVALINK_INITIAL_RAM'],
                     lavalink_ram_limit=self.config['LAVALINK_RAM_LIMIT'],
                     lavalink_additional_sleep=int(self.config['LAVALINK_ADDITIONAL_SLEEP']),
@@ -412,7 +414,7 @@ class BotPool:
                 'retries': 120,
                 'prefer_youtube_native_playback': self.config["PREFER_YOUTUBE_NATIVE_PLAYBACK"],
                 'only_use_native_search_providers': self.config["ONLY_USE_NATIVE_SEARCH_PROVIDERS"],
-                'search_providers': self.config["SEARCH_PROVIDERS"].strip().split() or ["amsearch", "tdsearch", "spsearch", "ytsearch", "scsearch"]
+                'search_providers': self.config["SEARCH_PROVIDERS"].strip().split() or ["ytsearch", "ytmsearch", "scsearch"]
             }
             self.loop.create_task(self.check_node(localnode))
 

@@ -30,6 +30,9 @@ from utils.others import CustomContext, string_to_file, token_regex, CommandArgp
     select_bot_pool
 from utils.owner_panel import panel_command, PanelView
 
+# Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
+EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
+
 
 def format_git_log(data_list: list):
 
@@ -762,6 +765,9 @@ class Owner(commands.Cog):
 
         SECRETS.update(config_json)
         SECRETS.update(env_file)
+
+        for masked_key in EXPORT_MASKED_KEYS:
+            SECRETS[masked_key] = ""
 
         if any(f in flags.lower() for f in ("-autodll", "--autodll")):
             SECRETS["AUTO_DOWNLOAD_LAVALINK_SERVERLIST"] = True

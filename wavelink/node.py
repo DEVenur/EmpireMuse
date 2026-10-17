@@ -567,16 +567,19 @@ class Node:
         BuildTrackError
             Decoding and building the track failed.
         """
-        async with self.session.get(f'{self.rest_uri}/decodetrack?',
-                                    headers={'Authorization': self.password},
-                                    params={'track': identifier}) as resp:
+        if self.version == 4:
+            url, params = f'{self.rest_uri}/v4/decodetrack', {'encodedTrack': identifier}
+        else:
+            url, params = f'{self.rest_uri}/decodetrack?', {'track': identifier}
+
+        async with self.session.get(url, headers={'Authorization': self.password}, params=params) as resp:
             data = await resp.json()
 
             if not resp.status == 200:
                 raise BuildTrackError(f'Failed to build track. Status: {data["status"]}, Error: {data["error"]}.'
                                       f'Check the identifier is correct and try again.')
 
-            track = Track(id_=identifier, info=data)
+            track = Track(id_=identifier, info=data["info"] if self.version == 4 else data)
             return track
 
     @property

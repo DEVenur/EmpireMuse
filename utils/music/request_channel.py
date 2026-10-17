@@ -36,6 +36,10 @@ thread_perms = ("send_messages_in_threads", "embed_links", "view_channel")
 
 forum_perms = ("send_messages", "send_messages_in_threads", "embed_links", "view_channel")
 
+class MissingManagePermissions(GenericError):
+    """O bot não tem Administrador nem Gerenciar permissões no canal escolhido (o painel mapeia por este tipo)."""
+
+
 AskForumTitle = Callable[[str], Awaitable[Optional[str]]]
 Notify = Callable[[str], Awaitable[None]]
 
@@ -187,7 +191,7 @@ def validate_request_target(bot: BotCore, guild: disnake.Guild, target, *, exist
         return
 
     if existing_channel and not guild.me.guild_permissions.administrator and not target.permissions_for(guild.me).manage_permissions:
-        raise GenericError(f"**{guild.me.mention} não possui permissão de administrador ou permissão de "
+        raise MissingManagePermissions(f"**{guild.me.mention} não possui permissão de administrador ou permissão de "
                            f"gerenciar permissões do canal {target.mention}** para editar as permissões "
                            f"necessárias para o sistema de pedir música funcionar devidamente.\n\n"
                            f"Caso não queira fornecer a permissão de administrador ou editar as permissões do"

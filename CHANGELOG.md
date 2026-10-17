@@ -8,6 +8,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Página de Status Principal (`web_app.py`)**:
+  - Redesenho completo da página inicial `/` adotando a identidade visual "Nebulosa" (paleta de cores, tipografia, logo e responsividade harmonizados com o painel web).
+  - Exibição em tempo real do estado de cada bot do pool (nome, avatar, latência, total de servidores e botão de convite), link direto para o painel web quando ativo, servidor de suporte oficial e créditos à licença GPL-2.0.
+  - Escape defensivo de todas as saídas de texto e erros para prevenir injeções de conteúdo; cabeçalhos de segurança HTTP configurados (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`).
+- **YouTube com Cliente TV e OAuth Opcional (Trilha A2 / Fase 2)**:
+  - Suporte a autenticação OAuth para contornar o bloqueio anti-bot do YouTube ("Sign in to confirm you're not a bot" e exigência de login) através do cliente `TV` (único cliente que suporta OAuth no `youtube-plugin`).
+  - Nova variável de configuração `YOUTUBE_OAUTH_REFRESH_TOKEN` no `.env` (vazia por padrão), permitindo vincular uma conta Google descartável.
+  - Guia dedicado em `docs/guides/youtube-oauth.md` detalhando o bloqueio anti-bot desde ago/2026, aviso mandatório de uso exclusivo de conta descartável, fluxo de obtenção do token via comando `@teubot ytoauth` ou terminal temporário do Lavalink, injeção segura pelo ambiente do subprocesso e revogação de acessos.
+- **Guia do Lavalink Local**:
+  - Documentação completa em `docs/guides/atualizar-lavalink.md` detalhando a stack 0.0.3 (Lavalink 4.2.2 oficial e plugins homologados), regras de integridade SHA-256 (`LAVALINK_FILE_SHA256`), regras de download com `LAVALINK_FILE_URL` vazio por padrão, checklist de release do espelho `EmpireMuse-LL-binaries`, preservação de configurações personalizadas em `application.yml`, cifra remota e clientes suportados do YouTube.
 - **Painel Web Integrado (Fase 2)**:
   - Sub-aplicação web embutida sob `/painel/` no servidor HTTP Tornado (`web_app.py`), controlada por `PANEL_ENABLED` e atrelada a `RUN_RPC_SERVER=true`, com zero dependências de runtime adicionais no `requirements.txt`.
   - Autenticação OAuth2 com Discord (`panel/oauth.py`) utilizando *Authorization Code Grant*, `state` criptográfico de uso único e PKCE S256, revogando o token de acesso imediatamente após leitura do perfil e servidores (sem retenção de tokens em banco, cookies ou logs).
@@ -71,6 +81,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `docs/known-issues.md`: Catálogo de 31 problemas conhecidos, inconsistências de dependências e débitos técnicos para a fase de saneamento.
 
 ### Alterado
+- **Atualização da Stack de Áudio e Lavalink (Fase 2 / Release 0.0.3)**:
+  - Servidor de áudio atualizado para o **Lavalink 4.2.2 oficial** (substituindo builds SNAPSHOT de desenvolvimento), com suporte a Java 17+ e protocolo de voz **DAVE (E2EE)**.
+  - Artefatos e plugins espelhados na release `0.0.3` do repositório [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) (`youtube-plugin` snapshot `2be8e542`, `LavaSrc 4.8.3` e `lyrics 2.6.1`), baixados diretamente para `plugins/` com verificação de SHA-256 e dispensando requisições dinâmicas ao Maven em tempo de execução.
+  - `application.yml` oficial atualizado para a release 0.0.3: inclui o cliente `TV` (único cliente com suporte a OAuth, necessário para contornar o bloqueio anti-bot do YouTube), mantém OAuth desligado por padrão e define o log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` em `WARN` para evitar exposição de tokens nos logs.
+  - Configuração de download do jar (`LAVALINK_FILE_URL`): valor vazio por padrão no `.example.env`, representando o espelho oficial correspondente à versão do código. Endereços próprios passam a exigir obrigatoriamente protocolo HTTPS (`https://`) e a definição de `LAVALINK_FILE_SHA256`.
+  - Isolamento de credenciais e exportação segura: `YOUTUBE_OAUTH_REFRESH_TOKEN` é entregue ao Lavalink local apenas via variáveis de ambiente do subprocesso Java (`Popen`), sem gravação em arquivo, linha de comando ou logs; o comando de suporte `exportsource` mascara compulsoriamente a chave nos arquivos `.zip` exportados.
+  - Preservação de configurações personalizadas: arquivos `application.yml` alterados pelo usuário são mantidos intactos sem sobrescrita, emitindo aviso explicativo no log (substituindo apenas versões oficiais conhecidas como 0.0.1 e 0.0.2).
+  - Otimização da fonte YouTube: fluxo OAuth desativado por padrão (eliminando erros HTTP 400 em ciclos de polling contínuo e evitando riscos a contas Google); adoção de clientes recomendados (`MUSIC`, `TV`, `ANDROID_VR`, `WEB`, `WEBEMBEDDED`, `TVHTML5_SIMPLY`) e integração com serviço de cifra remota (`remoteCipher`).
+  - Provedores de busca padrão: reordenação de `SEARCH_PROVIDERS` para `"ytsearch ytmsearch scsearch"` (priorizando YouTube e YouTube Music); o provedor `bcsearch` deixa de ser acrescentado compulsoriamente pelo bot.
+  - Limitação documentada do SoundCloud: registrada falha de formato em streams HLS no lavaplayer upstream (`Did not detect any supported formats`), sem correção disponível no momento.
+- **Canal de Pedidos no Painel Web (`panel/`)**: mensagem de validação orientada à interface web quando o bot não possui permissão de "Gerenciar permissões" (ou Administrador) no canal ("O EmpireMuse precisa da permissão Gerenciar permissões neste canal (ou de Administrador). Conceda a permissão ao cargo do bot ou escolha Criar um canal novo."), eliminando instruções de comandos de chat.
 - **Servidor Web e Limite de Corpo**: `web_app.py` integra o roteador `make_router` para encaminhar requisições a `/painel/` mantendo `/` e `/ws` inalterados; define limite global de corpo de requisições de 64 KiB (`max_body_size = 65536`) no servidor HTTP Tornado; implementa encerramento gracioso de tarefas pendentes (`_shutdown_panel`).
 - **Refatoração dos Comandos de Configuração**: `modules/music_settings.py` refatorado para delegar operações de configuração e redefinição de canal de pedidos ao módulo compartilhado `utils/music/request_channel.py`.
 - **Servidor de Suporte e Comunidade**: inclusão do convite oficial permanente para o servidor [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) no `README.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/config.yml` e na constante `SUPPORT_SERVER_URL` de `utils/branding.py`.
@@ -85,6 +106,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
 
 ### Corrigido
+- **Atualização Automática de URLs Oficiais do Lavalink**:
+  - Correção do defeito de atualização onde instalações com `LAVALINK_FILE_URL` preenchido com a URL oficial de versões anteriores do espelho (como `0.0.2` ou sob o nome antigo `LL-binaries`) falhavam ao verificar integridade após atualização do código do bot. O bot agora reconhece URLs oficiais anteriores em `LAVALINK_JAR_OFFICIAL_URLS` e atualiza automaticamente para a versão oficial atual com aviso no log.
+  - O hash do `application.yml` da release `0.0.2` foi incluído em `LAVALINK_APPLICATION_YML_KNOWN_SHA256`, permitindo a atualização transparente do arquivo oficial enquanto preserva configurações personalizadas do usuário.
+- **Isolamento da Suíte de Testes do `.env` Real**:
+  - Ajuste nos testes automatizados (`tests/test_audio_fase2a2.py`, `tests/test_audio_fase2a3.py`, `tests/test_branding.py`, etc.) para isolamento completo em relação ao arquivo `.env` do ambiente real do desenvolvedor, prevenindo falhas decorrentes de variáveis locais preenchidas.
+- **Mensagens de Erro em Buscas Musicais**: falhas no carregamento de faixas ou no mix do Last.fm não exibem mais representações de exceção (`repr(e)`) ou blocos de código brutos ao usuário, mantendo mensagens amigáveis na interface e detalhes técnicos restritos aos logs.
+- **Notificação de Entrada em Novos Servidores (`modules/misc.py`)**: checagem prévia de permissões de envio e captura de exceções `Forbidden` do Discord no canal de boas-vindas sem emissão de traceback no terminal.
+- **Rota de Decodificação de Faixas (`wavelink/node.py`)**: endpoint `decodetrack` atualizado para o padrão da API v4 do Lavalink (`/v4/decodetrack?encodedTrack=`), tratando o payload estruturado de retorno e erros de decodificação.
+- **Repositório de Binários de Áudio**: renomeação definitiva do espelho de binários para `DiscordEmpireHub/EmpireMuse-LL-binaries` em `CREDITS.md`, `docs/architecture.md`, `docs/development.md` e configurações de runtime.
 - **Arquivos de Deploy**: `render.yaml`, `discloud.config.example` e `squarecloud.config.example` atualizados com a identidade do EmpireMuse — o `render.yaml` apontava para o repositório original — e Python 3.13.5 no Render (item I-7 da Fase 1, anteriormente adiado).
 - **Emojis de Plataformas de Áudio**: 25 emojis personalizados do projeto original (hospedados em servidores Discord do autor original, que não renderizavam nos bots do EmpireMuse) substituídos por emojis Unicode padronizados; o nome da plataforma aparece em texto onde antes havia apenas o ícone.
 - **Canal de Pedidos (`utils/music/request_channel.py`)**: o reset de fórum (`/reset`) agora limpa os campos `channel` e `message_id` salvos no banco de dados; a verificação de permissões (`check_channel_perm`) passa a utilizar os nomes canônicos do Discord/disnake (`view_channel` e `create_forum_threads`), detectando corretamente a ausência de permissões necessárias.
