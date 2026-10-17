@@ -29,8 +29,8 @@ from utils import branding
 from utils.music import local_lavalink as ll
 
 ROOT = Path(__file__).resolve().parent.parent
-STAGING = Path(os.environ.get("EMPIREMUSE_STAGING", "/home/admin/projects/empiremuse-guides-staging"))
-RELEASE_003 = STAGING / "ll-binaries-0.0.3"
+STAGING_ENV = os.environ.get("EMPIREMUSE_STAGING")
+RELEASE_003 = Path(STAGING_ENV) / "ll-binaries-0.0.3" if STAGING_ENV else None
 
 BASE_003 = "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3"
 YML_003_SHA256 = "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95"
@@ -595,8 +595,8 @@ class TestNoOutputSinkReceivesTheToken:
 
 @pytest.fixture(scope="module")
 def release_003():
-    if not RELEASE_003.is_dir():
-        pytest.skip(f"release 0.0.3 em staging ausente ({RELEASE_003}); defina EMPIREMUSE_STAGING")
+    if not RELEASE_003 or not RELEASE_003.is_dir():
+        pytest.skip("artefatos da release 0.0.3 ausentes; defina a variável EMPIREMUSE_STAGING para habilitar")
     return RELEASE_003
 
 
