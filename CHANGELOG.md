@@ -8,6 +8,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Egg Oficial para Pterodactyl (Bloco D5 / Fase D)**:
+  - Adicionado egg em `deploy/pterodactyl/egg-empiremuse.json` para instalação e hospedagem do bot em painéis Pterodactyl e Pelican (não verificado num painel real, teste em homologação pendente).
+  - Suporte às imagens Docker oficiais `or4cu1o/empiremuse:0.1` e `or4cu1o/empiremuse:latest`, script de instalação automática de diretórios de dados em Alpine, sinal de parada `^C` (SIGINT) e variáveis de configuração com segredos vazios por padrão.
+  - Documentação completa no novo guia técnico `docs/guides/pterodactyl.md` cobrindo fluxo de importação, criação do servidor, dimensionamento de memória (mínimo de 768 MB e recomendado 1 GB com Lavalink local), alocação automática de porta e segurança com subusuários.
 - **Workflow de Release Multi-Arquitetura e Verificação de Tags (Bloco D4 / Fase D)**:
   - Adicionado workflow automatizado no GitHub Actions (`.github/workflows/release.yml`) acionado no envio de tags semânticas (`v*.*.*`).
   - Verificação prévia de segurança (`verify-tag`) validando se o commit da tag pertence estritamente ao histórico da branch `origin/main` (`git merge-base --is-ancestor`) antes de disparar testes e compilação.
@@ -120,6 +124,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Entrada em Diretório de Dados e Resolução de Porta de Hospedagem (Bloco D5 / Tarefa D-23)**:
+  - O bot passa a mudar o diretório de trabalho (`os.chdir`) para `EMPIREMUSE_HOME` ao iniciar (`enter_runtime_dir` em `empiremuse/__main__.py`), garantindo persistência e permissões adequadas em contêineres criados sem `WorkingDir` (como no Pterodactyl Wings), com mensagens de erro claras em caso de diretório inexistente ou inválido.
+  - O carregador de configurações (`config_loader.resolve_port`) passa a utilizar a porta definida em `SERVER_PORT` quando a variável `PORT` não estiver definida, atendendo à alocação primária de portas do Pterodactyl para o servidor HTTP Tornado e o WebSocket do RPC.
 - **Modernização da CI para Node 24 e Fixação de Versão do uv (Bloco D4 / Fase D)**:
   - Atualização das GitHub Actions na esteira de integração contínua (`.github/workflows/ci.yml`) para versões baseadas em Node 24 (`actions/checkout@v7.0.1` e `actions/setup-python@v7.0.0`).
   - Fixação determinística da versão do gerenciador de pacotes `uv` (`uv==0.13.1`), prevenindo quebras inesperadas por atualizações automáticas upstream.
