@@ -535,11 +535,12 @@ SINK_NAMES = frozenset(
     }
 )
 SENSITIVE_IDENTIFIERS = frozenset({CONFIG_KEY, "youtube_oauth_refresh_token", "oauth_refresh_token", "refresh_token"})
-PRODUCTION_DIRS = ("modules", "utils", "panel", "wavelink")
-PRODUCTION_FILES = ("config_loader.py", "web_app.py", "main.py", "app.py")
+PRODUCTION_DIRS = ("empiremuse",)
+PRODUCTION_FILES = ("main.py", "app.py")
 
 
 def _production_python_files():
+    assert (ROOT / "empiremuse").is_dir(), "empiremuse/ deve ser o pacote raiz de produção"
     files = [ROOT / name for name in PRODUCTION_FILES if (ROOT / name).is_file()]
     for directory in PRODUCTION_DIRS:
         files.extend(p for p in (ROOT / directory).rglob("*.py") if "__pycache__" not in p.parts)

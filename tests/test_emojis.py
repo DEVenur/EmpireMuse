@@ -15,8 +15,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 CUSTOM_EMOJI_RE = re.compile(r"<a?:\w+:\d{15,20}>")
-RUNTIME_DIRS = ("modules/", "utils/", "panel/", "wavelink/")
-RUNTIME_FILES = ("main.py", "app.py", "config_loader.py", "web_app.py")
+RUNTIME_DIRS = ("empiremuse/",)
+RUNTIME_FILES = ("main.py", "app.py")
 
 
 def _runtime_py_files() -> list[str]:
@@ -27,11 +27,13 @@ def _runtime_py_files() -> list[str]:
         text=True,
         check=True,
     ).stdout.split("\0")
-    return sorted(
+    files = sorted(
         p
         for p in set(tracked)
         if p.endswith(".py") and (p.startswith(RUNTIME_DIRS) or p in RUNTIME_FILES) and (ROOT / p).is_file()
     )
+    assert any(p.startswith("empiremuse/") for p in files), "empiremuse/ deve conter arquivos rastreados"
+    return files
 
 
 def _component_emoji_literals():

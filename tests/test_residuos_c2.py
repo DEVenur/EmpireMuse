@@ -72,15 +72,11 @@ class TestProductionImportsIsolation:
     }
 
     def test_dead_packages_not_imported_in_production(self):
+        assert (ROOT / "empiremuse").is_dir(), "empiremuse/ deve existir como pacote principal de produção"
         production_paths = [
             ROOT / "main.py",
             ROOT / "app.py",
-            ROOT / "config_loader.py",
-            ROOT / "web_app.py",
-            ROOT / "modules",
-            ROOT / "utils",
-            ROOT / "wavelink",
-            ROOT / "panel",
+            ROOT / "empiremuse",
         ]
 
         imported_modules = set()

@@ -14,9 +14,11 @@ VALID_INI = (
 
 def _module():
     try:
-        from utils.music import lavalink_server_list
+        from empiremuse.utils.music import lavalink_server_list
     except ImportError as exc:
-        pytest.fail(f"utils/music/lavalink_server_list.py ainda não existe (RED esperado): {exc}", pytrace=False)
+        pytest.fail(
+            f"empiremuse/utils/music/lavalink_server_list.py ainda não existe (RED esperado): {exc}", pytrace=False
+        )
     return lavalink_server_list
 
 

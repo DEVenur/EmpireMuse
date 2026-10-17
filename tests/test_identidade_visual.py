@@ -235,20 +235,20 @@ def test_issue_template_config_links_support_and_security_advisory():
 
 CODEOWNERS_SENSITIVE_PATHS = [
     "/data/",
-    "/utils/branding.py",
-    "/utils/music/local_lavalink.py",
-    "/utils/music/lavalink_server_list.py",
+    "/empiremuse/utils/branding.py",
+    "/empiremuse/utils/music/local_lavalink.py",
+    "/empiremuse/utils/music/lavalink_server_list.py",
     "/source_update.sh",
     "/source_quick_update.sh",
     "/requirements*.txt",
     "/.github/",
     "/LICENSE",
     "/SECURITY.md",
-    "/config_loader.py",
-    "/web_app.py",
-    "/modules/legacy_cmds.py",
-    "/utils/owner_panel.py",
-    "/utils/db.py",
+    "/empiremuse/config_loader.py",
+    "/empiremuse/web_app.py",
+    "/empiremuse/cogs/legacy_cmds.py",
+    "/empiremuse/utils/owner_panel.py",
+    "/empiremuse/utils/db.py",
     "/pyproject.toml",
 ]
 

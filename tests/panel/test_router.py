@@ -69,5 +69,5 @@ def test_build_panel_app_returns_none_when_disabled():
 
 
 def test_run_app_listens_through_the_router():
-    source = (require("tests.panel.helpers").ROOT / "web_app.py").read_text(encoding="utf-8")
+    source = (require("tests.panel.helpers").ROOT / "empiremuse" / "web_app.py").read_text(encoding="utf-8")
     assert "make_router" in source, "web_app.run_app deve escutar com panel.make_router"

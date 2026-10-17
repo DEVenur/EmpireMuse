@@ -12,8 +12,9 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _isolate_real_dotenv(monkeypatch):
-    try:
-        import config_loader  # noqa: F401
-    except ImportError:  # dependências de runtime ausentes: os testes que importam config_loader já falham sozinhos
-        return
-    monkeypatch.setattr("config_loader.dotenv_values", lambda *args, **kwargs: {})
+    for mod in ("empiremuse.config_loader", "config_loader"):
+        try:
+            __import__(mod)
+        except ImportError:
+            continue
+        monkeypatch.setattr(f"{mod}.dotenv_values", lambda *args, **kwargs: {})

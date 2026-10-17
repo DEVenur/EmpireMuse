@@ -201,10 +201,10 @@ class PanelBrandTest(PanelTestBase):
         "/painel/marca/logo.svg/",
         "/painel/marca/logo.svg%00.png",
         "/painel/marca/..%2fanother",
-        "/painel/marca/..%2f..%2fconfig_loader.py",
+        "/painel/marca/..%2f..%2fempiremuse%2fconfig_loader.py",
         "/painel/marca/%2e%2e/%2e%2e/LICENSE",
         "/painel/marca/..%5c..%5cLICENSE",
-        "/painel/marca/../../config_loader.py",
+        "/painel/marca/../../empiremuse/config_loader.py",
         "/painel/marca/%2e%2e%2f%2e%2e%2fLICENSE",
         "/painel/marca/sub/logo.svg",
     ]
@@ -219,9 +219,9 @@ class PanelBrandTest(PanelTestBase):
         self.assert_all(self.BRAND_BLOCKED_PATHS, check)
 
     STATIC_BLOCKED_PATHS = [
-        "/painel/static/../../config_loader.py",
+        "/painel/static/../../empiremuse/config_loader.py",
         "/painel/static/%2e%2e/%2e%2e/LICENSE",
-        "/painel/static/..%2f..%2fconfig_loader.py",
+        "/painel/static/..%2f..%2fempiremuse%2fconfig_loader.py",
     ]
 
     def test_static_route_blocks_path_traversal(self):
