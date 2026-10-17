@@ -13,6 +13,10 @@ config.json
 .maestri/
 .agents/
 .claude/
+repos/
+worktrees/
+.arquivo/
+.local/
 .venv/
 local_database/
 **/*.pkl
