@@ -11,6 +11,7 @@ correções; os demais falham hoje pelo motivo descrito na docstring.
 import json
 import logging
 import os
+import re
 import secrets
 import stat
 import tempfile
@@ -1155,3 +1156,126 @@ async def test_guarda_cache_gravado_e_reaproveitado_por_outro_cliente_sem_pedir_
 
     assert obtido == primeiro.spotify_cache["access_token"]
     assert len(falsa.posts) == 1
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Cache do token: gravação segura e leitura tolerante
+# ---------------------------------------------------------------------------------------------------------------------
+
+SO_POSIX = pytest.mark.skipif(os.name != "posix", reason="permissões e links simbólicos POSIX")
+SEM_ROOT = pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() == 0, reason="root ignora permissões")
+
+
+async def _cache_gravado(cache_isolado, rede):
+    """Obtém um token (gravando o cache) e devolve (cliente, arquivo do cache, rede falsa, tokens emitidos)."""
+    ao_post, emitidos = _emissor_de_tokens()
+    falsa = rede(ao_post=ao_post)
+    cliente = _cliente(cache_isolado)
+    await cliente.get_access_token()
+    return cliente, _arquivo_do_cache(cache_isolado), falsa, emitidos
+
+
+def _avisos(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING and r.name == spotify.__name__]
+
+
+@SO_POSIX
+@pytest.mark.asyncio
+async def test_cache_do_token_regravado_corrige_permissao_frouxa(cache_isolado, rede):
+    cliente, arquivo, _, _ = await _cache_gravado(cache_isolado, rede)
+    arquivo.chmod(0o644)
+
+    await cliente.get_access_token()
+
+    assert stat.S_IMODE(arquivo.stat().st_mode) == 0o600
+
+
+@SO_POSIX
+@pytest.mark.asyncio
+async def test_cache_do_token_nao_segue_link_simbolico_no_arquivo_nem_no_temporario(cache_isolado, rede):
+    cliente, arquivo, _, emitidos = await _cache_gravado(cache_isolado, rede)
+    fora = cache_isolado.runtime.parent / "fora"
+    fora.mkdir()
+    alvo, isca = fora / "alvo", fora / "isca"
+    alvo.write_text("conteudo-original", "utf-8")
+    isca.write_text("conteudo-isca", "utf-8")
+    arquivo.unlink()
+    arquivo.symlink_to(alvo)
+    arquivo.with_name(arquivo.name + ".tmp").symlink_to(isca)  # nome previsível de temporário
+
+    await cliente.get_access_token()
+
+    assert alvo.read_text("utf-8") == "conteudo-original", "gravou através do link simbólico do cache"
+    assert isca.read_text("utf-8") == "conteudo-isca", "gravou através de um temporário previsível"
+    assert not arquivo.is_symlink()
+    assert json.loads(arquivo.read_text("utf-8"))["access_token"] == emitidos[1]
+
+
+@pytest.mark.asyncio
+async def test_cache_do_token_falha_na_gravacao_so_gera_aviso_e_nao_deixa_temporario(cache_isolado, rede, caplog):
+    """Não consegue gravar (o destino virou um diretório): só um aviso com o nome da exceção; o token segue em memória."""
+    cliente, arquivo, _, emitidos = await _cache_gravado(cache_isolado, rede)
+    arquivo.unlink()
+    arquivo.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        await cliente.get_access_token()
+
+    assert cliente.spotify_cache["access_token"] == emitidos[1]
+    assert _arquivos(cache_isolado.runtime, cache_isolado.sistema, cache_isolado.cwd) == [], "sobrou arquivo temporário"
+    assert any("Spotify" in a and re.search(r"\b\w+Error\b", a) for a in _avisos(caplog)), _avisos(caplog)
+    for sensivel in (str(arquivo), emitidos[0], emitidos[1]):
+        assert sensivel not in caplog.text, "o aviso expõe caminho ou token"
+
+
+@pytest.mark.asyncio
+async def test_cache_do_token_cria_o_diretorio_que_faltar(cache_isolado, rede, monkeypatch):
+    novo_home = cache_isolado.runtime / "a" / "b"
+    monkeypatch.setenv("EMPIREMUSE_HOME", str(novo_home))
+    rede(ao_post=_resposta_de_token(_valor_falso("tok")))
+
+    await _cliente(cache_isolado).get_access_token()
+
+    assert len(_arquivos(novo_home)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "modelo",
+    ["[]", '"texto"', "42", "null", "", '{"access_token": "SEGREDO'],
+    ids=["lista", "texto", "numero", "nulo", "vazio", "json-truncado"],
+)
+async def test_cache_do_token_com_conteudo_invalido_e_ignorado(cache_isolado, rede, caplog, modelo):
+    _, arquivo, falsa, emitidos = await _cache_gravado(cache_isolado, rede)
+    segredo = _valor_falso("segredo")
+    arquivo.write_text(modelo.replace("SEGREDO", segredo), "utf-8")
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        novo = _cliente(cache_isolado)
+        obtido = await novo.get_valid_access_token()
+
+    assert obtido == emitidos[1] and len(falsa.posts) == 2, "devia ignorar o arquivo e pedir um token novo"
+    assert segredo not in caplog.text
+
+
+@SO_POSIX
+@SEM_ROOT
+@pytest.mark.asyncio
+async def test_cache_do_token_ilegivel_e_ignorado_sem_expor_o_caminho(cache_isolado, rede, caplog):
+    _, arquivo, _, _ = await _cache_gravado(cache_isolado, rede)
+    arquivo.chmod(0o000)
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        novo = _cliente(cache_isolado)
+
+    assert novo.spotify_cache == {}
+    assert any("Spotify" in a for a in _avisos(caplog)), "devia avisar que ignorou o cache"
+    assert str(arquivo) not in caplog.text
+
+
+def test_guarda_cache_do_token_ausente_nao_gera_aviso(cache_isolado, caplog):
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        cliente = _cliente(cache_isolado)
+
+    assert cliente.spotify_cache == {}
+    assert _avisos(caplog) == []
