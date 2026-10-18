@@ -204,7 +204,7 @@ O painel web é ativado quando `PANEL_ENABLED=true` e requer `RUN_RPC_SERVER=tru
 
 Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos já sincronizados,
 `empiremuse/utils/client.py:1141-1176`), `guild_bots.json`, `auto_lavalink.ini` em `RUNTIME_DIR` e o cache de token do Spotify em
-`RUNTIME_DIR / ".spotify_cache.json"` (respeitando `EMPIREMUSE_HOME`, com permissão restrita `0600` e gravação atômica; `empiremuse/utils/music/audio_sources/spotify.py:39-75`).
+`RUNTIME_DIR / ".spotify_cache.json"` (respeitando `EMPIREMUSE_HOME`, com permissão restrita `0600` e gravação atômica; `spotify_cache_path()` em `empiremuse/utils/music/audio_sources/spotify.py`).
 
 ## 9. Integrações externas
 
