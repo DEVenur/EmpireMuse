@@ -8,6 +8,7 @@ interações são dublês (``tests/helpers_request_channel.py``) e os valores fa
 
 import copy
 import json
+import logging
 from types import SimpleNamespace
 
 import disnake
@@ -18,7 +19,7 @@ from empiremuse.utils.db import DBModel, LocalDatabase, db_models
 from empiremuse.utils.music import interactions, request_channel
 from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
-from empiremuse.utils.music.interactions import FavModalAdd, FavModalImport, ViewMode
+from empiremuse.utils.music.interactions import FavMenuView, FavModalAdd, FavModalImport, ViewMode
 from tests.helpers_request_channel import (
     BOT_MENTION,
     FULL_TEXT,
@@ -27,6 +28,7 @@ from tests.helpers_request_channel import (
     FakeDB,
     FakeForum,
     FakeGuild,
+    FakePlayer,
     FakeStage,
     FakeText,
     FakeVoice,
@@ -154,6 +156,65 @@ class TestKI36ResetFalhaNoDiscord:
         assert "resetado da base de dados" not in erro.text, (
             "KI-36: a mensagem afirma que o banco foi resetado, mas a configuração tem de ficar preservada"
         )
+
+    # ---- RED: ordem definida (Discord, banco, aviso, player), erro genérico e detalhe só no log
+
+    def provocar(self, world, falha):
+        """Configura a falha pedida e devolve o ``delete`` do ``/reset`` que a exercita."""
+        if falha == "apagar_post":
+            self.forum_com_post(world).fail_delete = RuntimeError("falha simulada")
+            return None
+        mensagem = configured(world)
+        if falha == "editar_mensagem":
+            mensagem.fail_edit = RuntimeError("falha simulada")
+            return None
+        world.text.fail_delete = RuntimeError("falha simulada")
+        return "sim"
+
+    FALHAS = ["editar_mensagem", "apagar_canal", "apagar_post"]
+
+    @pytest.mark.parametrize("falha", FALHAS)
+    def test_a_mensagem_de_erro_e_generica_sem_detalhe_interno(self, world, falha):
+        erro = run_reset(world, delete=self.provocar(world, falha))
+        assert isinstance(erro, GenericError)
+        for vazado in ("falha simulada", "RuntimeError", "```", "traceback"):
+            assert vazado not in erro.text, f"KI-36: a mensagem ao usuário traz detalhe interno ({vazado!r})"
+
+    @pytest.mark.parametrize("falha", FALHAS)
+    def test_o_detalhe_da_falha_vai_para_o_log(self, world, caplog, falha):
+        caplog.set_level(logging.ERROR)
+        run_reset(world, delete=self.provocar(world, falha))
+        registrado = " ".join(
+            f"{r.getMessage()} {r.exc_info[1] if r.exc_info else ''}" for r in caplog.records if r.levelno >= 40
+        )
+        assert "falha simulada" in registrado, "KI-36: o detalhe da falha precisa ir para o log do servidor"
+
+    @pytest.mark.parametrize("falha", FALHAS)
+    def test_falha_no_discord_nao_avisa_sucesso_nem_reseta_o_player(self, world, falha):
+        player = FakePlayer(world.j, world.guild, world.text, static=True, message=object())
+        world.bot.music.players[GUILD_ID] = player
+        run_reset(world, delete=self.provocar(world, falha))
+        assert world.j.of("player.process_hint") == [] and world.j.of("player.invoke_np") == []
+        assert (player.static, player.text_channel) == (True, world.text), "o player não pode ser desligado do canal"
+        assert world.j.of("inter.edit_original_message") == [], "KI-36: não se avisa sucesso de um reset que falhou"
+
+    def test_guarda_falha_ao_gravar_o_banco_nao_avisa_sucesso_nem_reseta_o_player(self, world):
+        configured(world)
+        player = FakePlayer(world.j, world.guild, world.text, static=True, message=object())
+        world.bot.music.players[GUILD_ID] = player
+
+        async def gravar_falha(data):
+            raise RuntimeError("banco indisponível")
+
+        world.db.update = gravar_falha
+        assert run_reset(world) is not None
+        assert world.j.of("player.process_hint") == [] and world.j.of("inter.edit_original_message") == []
+
+    def test_o_post_do_forum_e_apagado_antes_de_gravar_o_banco(self, world):
+        self.forum_com_post(world)
+        assert run_reset(world) is None
+        nomes = world.j.names()
+        assert nomes.index("channel.delete") < nomes.index("db.update"), "KI-36: Discord primeiro, banco depois"
 
 
 # ============================================================================ KI-37 — /setup de fórum × post.edit() vazio
@@ -309,6 +370,7 @@ class FakeMusicCog:
     fav_import_export_cd = SimpleNamespace(
         get_bucket=lambda inter: SimpleNamespace(update_rate_limit=lambda: None),
     )
+    fav_manager = SimpleNamespace(name="fav_manager")
 
 
 class ModalBot:
@@ -358,6 +420,9 @@ class ModalBot:
     def get_color(self, *args):
         return 0
 
+    def get_global_command_named(self, name, cmd_type=None):
+        return SimpleNamespace(id=1)
+
 
 class ModalContext:
     async def edit_original_message(self, **kwargs):
@@ -379,7 +444,8 @@ def modal_view(bot, mode):
 
 
 class ModalInteraction:
-    def __init__(self, **text_values):
+    def __init__(self, *, estrito=False, **text_values):
+        self.estrito, self.respondida, self.arquivos = estrito, False, []
         self.text_values = text_values
         self.author = SimpleNamespace(id=900)
         self.guild = None
@@ -388,12 +454,17 @@ class ModalInteraction:
         self.response = SimpleNamespace(defer=self._defer)
 
     async def _defer(self, **kwargs):
-        return None
+        self.respondida = True
 
     async def send(self, content=None, **kwargs):
+        self.respondida = True
+        if kwargs.get("file") is not None:
+            self.arquivos.append(kwargs["file"].fp.read().decode())
         self.enviados.append(self._texto(content, kwargs))
 
     async def edit_original_message(self, content=None, **kwargs):
+        if self.estrito and not self.respondida:
+            raise RuntimeError("edit_original_message antes de a interação ser respondida (o Discord recusa)")
         self.enviados.append(self._texto(content, kwargs))
 
     @staticmethod
@@ -428,11 +499,21 @@ async def adicionar_integracao(bot, url="https://www.deezer.com/br/profile/12345
     return inter
 
 
-async def importar(bot, modo, conteudo):
+async def importar(bot, modo, conteudo, *, estrito=False):
     view = modal_view(bot, modo)
-    inter = ModalInteraction(json_data=conteudo if isinstance(conteudo, str) else json.dumps(conteudo, indent=4))
+    texto = conteudo if isinstance(conteudo, str) else json.dumps(conteudo, indent=4)
+    inter = ModalInteraction(json_data=texto, estrito=estrito)
     await FavModalImport(view).callback(inter)
     return inter
+
+
+async def exportar_integracoes(bot):
+    """Roda o exportador REAL (``FavMenuView.export_callback``) e devolve o texto do arquivo enviado ao usuário."""
+    inter = ModalInteraction()
+    espelho = SimpleNamespace(bot=bot, mode=ViewMode.integrations_manager, data=bot.user_data)
+    await FavMenuView.export_callback(espelho, inter)
+    assert inter.arquivos, f"o exportador não enviou arquivo: {inter.texto!r}"
+    return inter.arquivos[-1]
 
 
 def favs_cheios(quantidade):
@@ -569,8 +650,11 @@ class TestKI40ImportadorDeIntegracoes:
         origem = ModalBot()
         await adicionar_integracao(origem)
         gravado = origem.salvos_usuario[-1]["integration_links"]
+        origem.user_data["integration_links"] = gravado
+        arquivo = await exportar_integracoes(origem)  # formato REAL do exportador, não um JSON montado à mão
+        assert json.loads(arquivo) == gravado
         destino = ModalBot()
-        await importar(destino, ViewMode.integrations_manager, json.dumps(gravado, indent=4))
+        await importar(destino, ViewMode.integrations_manager, arquivo)
         assert destino.salvos_usuario and destino.salvos_usuario[-1]["integration_links"] == gravado
 
     @pytest.mark.asyncio
@@ -653,6 +737,123 @@ class TestKI41ImportadorDeLinksRapidosDoServidor:
         assert bot.salvos_servidor == [] and "máxima permitida (25)" in inter.texto
 
 
+class TestKI41AmpliadoImportadoresDoUsuario:
+    """Os importadores de favoritos do USUÁRIO (``> fav:``) e de integrações (``> itg:``) têm o mesmo ``continue``."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("url", TestKI41ImportadorDeLinksRapidosDoServidor.URLS_INVALIDAS)
+    async def test_favorito_do_usuario_com_nome_fav_e_url_invalida_e_recusado(self, url):
+        bot = ModalBot()
+        await importar(bot, ViewMode.fav_manager, {"> fav: Antigo": url})
+        assert bot.salvos_usuario == [], f"KI-41: o favorito '> fav:' com URL {url!r} foi gravado sem validação"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("url", TestKI41ImportadorDeLinksRapidosDoServidor.URLS_INVALIDAS)
+    async def test_integracao_com_nome_itg_e_url_invalida_e_recusada(self, url):
+        bot = ModalBot()
+        await importar(bot, ViewMode.integrations_manager, {"> itg: Antiga": url})
+        assert bot.salvos_usuario == [], f"KI-41: a integração '> itg:' com URL {url!r} foi gravada sem validação"
+
+    @pytest.mark.asyncio
+    async def test_integracao_itg_em_objeto_com_url_invalida_e_recusada(self):
+        bot = ModalBot()
+        await importar(bot, ViewMode.integrations_manager, {"> itg: Antiga": {"url": "isto-nao-e-url"}})
+        assert bot.salvos_usuario == []
+
+    @pytest.mark.asyncio
+    async def test_guarda_favorito_do_usuario_fav_com_url_valida_continua_aceito(self):
+        bot = ModalBot()
+        await importar(bot, ViewMode.fav_manager, {"> fav: Antigo": f"{URL_BASE}/musica"})
+        assert bot.salvos_usuario[-1]["fav_links"]["> fav: Antigo"] == f"{URL_BASE}/musica"
+
+    @pytest.mark.asyncio
+    async def test_guarda_favorito_comum_do_usuario_com_url_invalida_e_recusado(self):
+        bot = ModalBot()
+        inter = await importar(bot, ViewMode.fav_manager, {"Comum": "isto-nao-e-url"})
+        assert bot.salvos_usuario == [] and "link inválido" in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_guarda_integracao_itg_com_url_valida_continua_aceita(self):
+        bot = ModalBot()
+        await importar(bot, ViewMode.integrations_manager, {"> itg: Antiga": f"{URL_BASE}/sets"})
+        assert url_guardada(bot.salvos_usuario[-1]["integration_links"]["> itg: Antiga"]) == f"{URL_BASE}/sets"
+
+
+class TestKI46ErrosDoImportadorDeIntegracoes:
+    """Antes do ``defer`` o Discord só aceita ``send``/``defer``: ``edit_original_message`` falha (modo ``estrito``)."""
+
+    CASOS = {
+        "texto_invalido": {"【YT】: Canal": "isto-nao-e-url"},
+        "objeto_invalido": {"【YT】: Canal": {"url": "isto-nao-e-url"}},
+        "url_longa_demais": {"【YT】: Canal": f"{URL_BASE}/" + "a" * 200},
+    }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("caso", CASOS)
+    async def test_erro_de_validacao_responde_por_um_caminho_valido_antes_do_defer(self, caso):
+        bot = ModalBot()
+        try:
+            inter = await importar(bot, ViewMode.integrations_manager, self.CASOS[caso], estrito=True)
+        except RuntimeError as erro:
+            pytest.fail(f"KI-46: {erro}")
+        assert bot.salvos_usuario == [] and inter.texto, "o usuário precisa receber o motivo da recusa"
+
+    @pytest.mark.asyncio
+    async def test_guarda_importacao_valida_nao_depende_do_caminho_de_erro(self):
+        bot = ModalBot()
+        await importar(bot, ViewMode.integrations_manager, {"【YT】: Canal": f"{URL_BASE}/c"}, estrito=True)
+        assert bot.salvos_usuario
+
+
+class TestKI47ItensMalFormadosNoImportadorDoServidor:
+    """Item que não é objeto, ou sem ``url``/``description``, levanta KeyError/TypeError sem aviso ao usuário."""
+
+    ITENS = {
+        "texto": "https://exemplo.invalid/a",
+        "lista": ["https://exemplo.invalid/a"],
+        "numero": 42,
+        "nulo": None,
+        "sem_url": {"description": "d"},
+        "sem_description": {"url": "https://exemplo.invalid/a"},
+        "url_nao_texto": {"url": 123, "description": "d"},
+        "description_nao_texto": {"url": "https://exemplo.invalid/a", "description": 5},
+    }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("item", ITENS)
+    async def test_item_mal_formado_e_recusado_com_mensagem_clara(self, item):
+        bot = ModalBot()
+        try:
+            inter = await importar(bot, ViewMode.guild_fav_manager, {"Item": self.ITENS[item]})
+        except (KeyError, TypeError) as erro:
+            pytest.fail(f"KI-47: {type(erro).__name__} escapou do importador: {erro}")
+        assert bot.salvos_servidor == [] and inter.texto, "o usuário precisa receber o motivo da recusa"
+
+    @pytest.mark.asyncio
+    async def test_item_mal_formado_com_nome_fav_tambem_e_recusado(self):
+        bot = ModalBot()
+        try:
+            inter = await importar(bot, ViewMode.guild_fav_manager, {"> fav: Item": "https://exemplo.invalid/a"})
+        except (KeyError, TypeError) as erro:
+            pytest.fail(f"KI-47: {type(erro).__name__} escapou do importador: {erro}")
+        assert bot.salvos_servidor == [] and inter.texto
+
+    @pytest.mark.asyncio
+    async def test_mensagem_do_limite_de_descricao_cita_o_limite_certo(self):
+        bot = ModalBot()
+        conteudo = {"Item": {"url": f"{URL_BASE}/a", "description": "d" * 51}}
+        inter = await importar(bot, ViewMode.guild_fav_manager, conteudo)
+        assert bot.salvos_servidor == [] and "50" in inter.texto, "KI-47: o limite de descrição é 50"
+        assert str(bot.config["USER_FAV_MAX_URL_LENGTH"]) not in inter.texto, "KI-47: citou o limite da URL"
+
+    @pytest.mark.asyncio
+    async def test_guarda_descricao_com_exatamente_50_caracteres_e_aceita(self):
+        bot = ModalBot()
+        conteudo = {"Item": {"url": f"{URL_BASE}/a", "description": "d" * 50}}
+        await importar(bot, ViewMode.guild_fav_manager, conteudo)
+        assert bot.salvos_servidor[-1]["player_controller"]["fav_links"] == conteudo
+
+
 # ============================================================================ KI-43 — setguildprefix e enable_prefixed_commands
 
 SERVIDOR_DO_COMANDO = 7001
@@ -725,6 +926,27 @@ class TestKI43PrefixoDoServidor:
         assert bot.gravados == [(SERVIDOR_ALVO, {"prefix": esperado})]
 
     @pytest.mark.asyncio
+    async def test_ki45_sem_prefixo_remove_o_prefixo_personalizado_sem_erro(self):
+        """KI-45: ``setguildprefix <id>`` sem prefixo é o uso documentado para remover (``prefix=None``)."""
+        cog, ctx, bot = owner_com_contexto()
+        try:
+            await legacy_cmds.Owner.setguildprefix.callback(cog, ctx, SERVIDOR_ALVO)
+        except AttributeError as erro:
+            pytest.fail(f"KI-45: {erro}")
+        assert bot.gravados == [(SERVIDOR_ALVO, {"prefix": ""})]
+
+    @pytest.mark.asyncio
+    async def test_ki45_sem_prefixo_zera_o_cache_do_servidor_alvo_e_nao_toca_no_do_comando(self):
+        cog, ctx, bot = owner_com_contexto()
+        cache = bot.pool.guild_prefix_cache
+        cache.update({SERVIDOR_ALVO: ">>", SERVIDOR_DO_COMANDO: "?"})
+        try:
+            await legacy_cmds.Owner.setguildprefix.callback(cog, ctx, SERVIDOR_ALVO)
+        except AttributeError as erro:
+            pytest.fail(f"KI-45: {erro}")
+        assert cache.get(SERVIDOR_ALVO, "") == "" and cache[SERVIDOR_DO_COMANDO] == "?"
+
+    @pytest.mark.asyncio
     async def test_guarda_setprefix_e_resetprefix_usam_o_cache_do_proprio_servidor(self):
         cog, ctx, bot = owner_com_contexto()
         cache = bot.pool.guild_prefix_cache
@@ -733,11 +955,18 @@ class TestKI43PrefixoDoServidor:
         assert cache == {SERVIDOR_ALVO: ">>"}
 
 
+VER_DO_MODELO_COM_O_CAMPO_ORFAO = 1.10
+
+
 class TestKI43CampoOrfaoEnablePrefixedCommands:
     """``enable_prefixed_commands`` está no modelo do servidor, mas nenhum código lê ou grava o campo."""
 
     def test_o_campo_orfao_nao_esta_mais_no_modelo_do_servidor(self):
         assert "enable_prefixed_commands" not in db_models[DBModel.guilds], "KI-43: campo órfão ainda no modelo"
+
+    def test_a_versao_do_modelo_do_servidor_foi_incrementada(self):
+        """Regra do projeto: mudou o formato do documento, incrementa ``ver`` (era 1.10 com o campo órfão)."""
+        assert db_models[DBModel.guilds]["ver"] > VER_DO_MODELO_COM_O_CAMPO_ORFAO
 
     @pytest.mark.asyncio
     async def test_guarda_documento_antigo_com_o_campo_e_lido_sem_quebrar_e_sem_perder_dados(self, tmp_path):

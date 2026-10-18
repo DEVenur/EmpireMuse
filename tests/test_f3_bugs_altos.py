@@ -286,7 +286,7 @@ class TestKI09MigracaoNoLocalDatabase:
         dados = await LocalDatabase(dir_=pasta_do_banco).get_data("900", db_name=DBModel.guilds, collection="bot1")
 
         assert dados["enable_restrict_mode"] is False
-        assert dados["enable_prefixed_commands"] is True
+        assert "enable_prefixed_commands" not in dados, "KI-43: o campo órfão saiu do modelo"
         assert dados["check_other_bots_in_vc"] is False
 
     @pytest.mark.asyncio

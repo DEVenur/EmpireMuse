@@ -134,7 +134,7 @@ class PlayerWriteTest(HttpBase):
         response = self.submit(browser, url, form, pairs=pairs)
         assert response.code in (200, 422), f"status {response.code}"
         after = self.db.doc("1", 100)
-        for key in ("djroles", "player_controller", "ver", "extra_flag", "enable_prefixed_commands"):
+        for key in ("djroles", "player_controller", "ver", "extra_flag"):
             assert after[key] == before[key], f"campo fora do formulário foi alterado: {key}"
         assert self.db.doc("global", 100)["prefix"] == "!"
 

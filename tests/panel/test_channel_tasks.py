@@ -547,7 +547,17 @@ class ResetFlowTest(TasksBase):
         delete = self.world.j.of("channel.delete")[0]
         assert delete[1] == "#pedidos" and PANEL_USER in delete[2]
         names = self.world.j.names()
-        assert names.index("db") < names.index("channel.delete"), "ordem do comando: banco antes do Discord"
+        assert names.index("channel.delete") < names.index("db"), "KI-36: Discord primeiro, banco depois"
+
+    def test_discord_failure_keeps_the_database_and_shows_no_internal_detail(self):
+        """KI-36: o reset do painel compartilha `reset_request_channel`: Discord primeiro, banco intacto se falhar."""
+        self.world.configured_text().fail_edit = RuntimeError("segredo-interno-123")
+        browser = self.logged_in()
+        state, body = self.finish(browser, self.confirm_reset(browser, self.reset_confirmation(browser)))
+        assert state == "erro"
+        assert "segredo-interno-123" not in body
+        assert self.world.doc["player_controller"]["channel"] == "22", "KI-36: o canal continua de pé e configurado"
+        assert self.world.doc["player_controller"]["message_id"] == "555"
 
     def test_tampering_with_the_delete_flag_in_step_two_still_requires_the_name(self):
         self.world.configured_text()
