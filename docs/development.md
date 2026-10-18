@@ -40,19 +40,19 @@ cp .example.env .env
 Edite o `.env` (se um valor tiver espaço, use aspas). **Nunca** versione o `.env`, o `config.json` nem
 qualquer token (`.env` e `config.json` já são ignorados pelo git; nunca use `git add -f` neles).
 
-### Precedência (`empiremuse/config_loader.py:160-183`)
+### Precedência (`load_config` em `empiremuse/config_loader.py`)
 
 Do menor para o maior peso — o último vence:
 
-1. `DEFAULT_CONFIG` (`empiremuse/config_loader.py:14`);
+1. `DEFAULT_CONFIG` em `empiremuse/config_loader.py`;
 2. variáveis de ambiente — **somente** as chaves de `DEFAULT_CONFIG`, `TOKEN`, `MONGO` e as que começam
    com `TOKEN_BOT_`, `TEST_GUILDS_` e `LAVALINK_NODE_`;
 3. `config.json` na raiz (JSON simples `{"CHAVE": "valor"}`);
 4. `.env` — **sobrescreve** todos os anteriores.
 
-Depois da mescla, números e booleanos são convertidos. Atenção: os booleanos aceitam apenas
-`true`/`false`/`none` em **minúsculas** (`empiremuse/config_loader.py:8-12`, `283`); `True` ou `FALSE` causam erro
-na inicialização (bug listado em `known-issues.md`).
+Depois da mescla, números e booleanos são convertidos. Os booleanos são convertidos via `bools` em
+`empiremuse/config_loader.py` e aceitam `true`/`false`/`none` em qualquer caixa (`True`, `FALSE`, etc.);
+apenas valores fora de `true`/`false`/`none` geram erro na inicialização citando a chave configurada.
 
 ### Variáveis essenciais
 
@@ -63,7 +63,10 @@ na inicialização (bug listado em `known-issues.md`).
 | `OWNER_IDS` | IDs de donos extras, separados por `\|\|` (`empiremuse/utils/client.py:1060`). |
 | `MONGO` | URL do MongoDB. **Vazio = TinyMongo local** em `local_database` sob o diretório de dados/runtime (configurável via `EMPIREMUSE_HOME`; `./local_database` por padrão em desenvolvimento). |
 | `PLAYER_SESSIONS_MONGODB` | Guardar sessões de players no Mongo (exige `MONGO`). |
-| `RUN_RPC_SERVER` / `PORT` | Liga a página de status e o WebSocket do RPC (tornado). O padrão do código é `true` (`empiremuse/config_loader.py:86`), mas o `.example.env` define `false`. Ligue `RUN_RPC_SERVER=true` só se for testar o RPC (com `PORT=8080`; a porta padrão é a 80); use `ENABLE_RPC_AUTH=true` e não exponha a porta publicamente (em ambientes compartilhados, mantenha a porta privada). |
+| `RUN_RPC_SERVER` / `PORT` | Liga a página de status e o WebSocket do RPC (tornado). O padrão do código é `true` (`DEFAULT_CONFIG` em `empiremuse/config_loader.py`), mas o `.example.env` define `false`. Ligue `RUN_RPC_SERVER=true` só se for testar o RPC (com `PORT=8080`; a porta padrão é a 80); use `ENABLE_RPC_AUTH=true` e não exponha a porta publicamente (em ambientes compartilhados, mantenha a porta privada). |
+| `RPC_SERVER_SECRET` | Segredo que o bot usa para se registrar no servidor RPC (cabeçalho X-RPC-Key). Vazio: o bot e o servidor RPC do mesmo processo usam um segredo gerado automaticamente a cada inicialização. Defina o MESMO valor nos dois lados quando o servidor RPC rodar em outra instância. Trate como senha e use wss://. |
+| `RPC_ALLOWED_ORIGINS` | Origens de navegador autorizadas a abrir o WebSocket do RPC, separadas por vírgula (ex.: https://painel.exemplo.com). Vazio: só clientes sem cabeçalho Origin (app, bot) e a mesma origem do servidor são aceitos. |
+| `WEB_BIND_ADDRESS` | Endereço de escuta do servidor web/RPC. 0.0.0.0 aceita conexões de qualquer interface (necessário em Docker e Pterodactyl); use 127.0.0.1 para aceitar apenas conexões locais ou um proxy reverso no mesmo host. Com 0.0.0.0 e ENABLE_RPC_AUTH=false, um aviso é registrado na inicialização. |
 | `RUN_LOCAL_LAVALINK` | Inicia um Lavalink local (ver seção 5). |
 | `AUTO_DOWNLOAD_LAVALINK_SERVERLIST` | Baixa a lista pública de Lavalink (ver seção 5). |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Credenciais do app Spotify (*client credentials*). Sem elas, o suporte interno ao Spotify fica desativado (`empiremuse/utils/client.py:726-734`). |
@@ -71,7 +74,7 @@ na inicialização (bug listado em `known-issues.md`).
 | `TEST_GUILDS_<NOME_DO_BOT>` | IDs de servidores de teste (separados por `\|\|`) para registrar comandos só neles (`empiremuse/utils/client.py:778`). |
 | `SUPPORT_SERVER` | Convite do servidor de suporte exibido no `/about` e em mensagens de erro (padrão aponta para o EmpireHUB). Em instâncias próprias, altere para o seu servidor ou deixe vazio (`SUPPORT_SERVER=''`) para não exibir o link. |
 | `EMBED_COLOR` | Cor dos embeds (hex de 6 dígitos; padrão `8B5CF6`). Defina `EMBED_COLOR=none` para restaurar e utilizar a cor do cargo mais alto do bot no servidor. |
-| `*_INTENT`, `MESSAGE_CONTENT_INTENT` etc. | Intents; os padrões estão em `empiremuse/config_loader.py:124-147`. |
+| `*_INTENT`, `MESSAGE_CONTENT_INTENT` etc. | Intents; os padrões estão em `DEFAULT_CONFIG` (`empiremuse/config_loader.py`). |
 
 A lista completa, comentada, está em `.example.env`. Em desenvolvimento, `ENABLE_LOGGER=true` grava
 `./.logs/disnake.log` e `COMMAND_LOG=true` registra os comandos de usuários que não são donos. Em instâncias

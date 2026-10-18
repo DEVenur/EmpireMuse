@@ -117,14 +117,15 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 | Agente | Capacidade Principal | Responsabilidades Principais | Ferramenta · Modelo Atual (pode mudar) |
 | :--- | :--- | :--- | :--- |
 | **MAESTRO** | Orquestração e arbitragem | Planejamento, delegação, validação de etapas e aprovação final de commits. | Claude Code · Claude Opus 5.5 |
-| **Backend Specialist** | Raciocínio arquitetural e backend | Regras de negócio, cogs, modelo do player, integração Lavalink, banco de dados e desempenho. | Claude Code |
-| **Frontend Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`empiremuse/web_app.py`). | Claude Code |
+| **Backend & Data Specialist** | Raciocínio arquitetural e backend | Regras de negócio, cogs, modelo do player, integração Lavalink, banco de dados e desempenho. | Claude Code |
+| **Frontend & UI/UX Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`empiremuse/web_app.py`). | Claude Code |
 | **QA & Test Engineer** | Qualidade e testes | Testes TDD e de caracterização (RED antes, validação depois); **nunca altera código de produção**. | Claude Code |
-| **DevOps & Dependencies** | Infraestrutura e dependências | Docker, CI, runtime, lint, dependências e lockfiles. | Antigravity · Claude Sonnet 5.5 |
-| **AppSec Hunter** | Auditoria profunda e raciocínio crítico | Auditoria de segurança, validação de dados de entrada, proteção de segredos e supply chain (modo plano/leitura). | Antigravity · Claude Opus 5.5 |
-| **Second Opinion (Devil's Advocate)** | Pensamento divergente e revisão crítica | Revisão crítica de coerência, formulação de hipóteses divergentes e desempate de impasses (modo plano/leitura). | Antigravity · Gemini 3.8 Flash high |
-| **Repetitive Runner** | Execução mecânica rápida | Tarefas mecânicas repetitivas, geração de esqueletos, mocks, formatações em lote e configs. **Nunca recebe arquivos críticos de segurança/infra.** | Antigravity · Gemini 3.8 Flash |
+| **DevOps & Infrastructure Specialist** | Infraestrutura e dependências | Docker, CI, runtime, lint, dependências e lockfiles. | Antigravity · Claude Sonnet 5.5 |
+| **Cybersecurity Specialist** | Auditoria profunda e raciocínio crítico | Auditoria de segurança, validação de dados de entrada, proteção de segredos e supply chain (modo plano/leitura). | Antigravity · Claude Opus 5.5 |
+| **Second Opinion (Devil's Advocate) (fora do canvas atual)** | Pensamento divergente e revisão crítica | Revisão crítica de coerência, formulação de hipóteses divergentes e desempate de impasses (modo plano/leitura). | Antigravity · Gemini 3.8 Flash high |
+| **Assistente Operacional** | Execução mecânica rápida | Tarefas mecânicas repetitivas, geração de esqueletos, mocks, formatações em lote e configs. **Nunca recebe arquivos críticos de segurança/infra.** | Antigravity · Gemini 3.8 Flash |
 | **Git & Documentation Keeper** | Governança de documentação | Governança de documentação, `CHANGELOG.md`, ADRs, padronização de commits e branches. | Antigravity · Claude Sonnet 5.5 |
+| **DeepSearch** | Pesquisa técnica (somente leitura) | Pesquisa técnica, levantamento de documentação externa e referências (somente leitura). | Antigravity |
 
 - **Isolamento de Escopo e Padrão de Git Worktrees**:
   - Cada agente deve modificar **estritamente os arquivos atribuídos à sua tarefa**. Alterações em arquivos de outros agentes devem ser solicitadas no relatório.

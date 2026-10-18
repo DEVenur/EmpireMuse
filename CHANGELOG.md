@@ -8,6 +8,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Configuração do Servidor Web e Relé RPC (Fase 3 / F3-4)**:
+  - Novas opções de configuração adicionadas ao `DEFAULT_CONFIG`, ao `.example.env` e ao template do Pterodactyl: `RPC_SERVER_SECRET`, `RPC_ALLOWED_ORIGINS` e `WEB_BIND_ADDRESS`.
+  - `RPC_SERVER_SECRET`: segredo para registro de bots no servidor RPC via cabeçalho `X-RPC-Key` (quando vazio, gera automaticamente um segredo criptográfico efêmero por processo para comunicação interna).
+  - `RPC_ALLOWED_ORIGINS`: lista de origens de navegador permitidas no WebSocket do RPC (vazio aceita apenas mesma origem e clientes nativos sem cabeçalho `Origin`).
+  - `WEB_BIND_ADDRESS`: endereço de escuta configurável do servidor web e relé RPC (padrão `0.0.0.0`, com suporte a `127.0.0.1` para ambientes locais/proxy reverso e registro de alerta caso exposto publicamente sem autenticação).
 - **Configuração de Implantação na Discloud (Bloco D6 / Fase D)**:
   - Adicionados arquivos `discloud.config` e `.discloudignore` padronizados para hospedagem na Discloud no plano pago (1 GB de RAM, 1 vCPU e `AUTORESTART=true`), com validação pendente na plataforma real.
   - Filtro defensivo no `.discloudignore` bloqueando o envio de arquivos auxiliares de ambiente (`.env.*`), chaves criptográficas, cookies, bancos de dados locais e caches.
@@ -199,6 +204,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Remoção de 6 tutoriais legados de hospedagem em `docs/guides/` (`heroku-hosting.md`, `mongodb.md`, `replit-atualizar.md`, `replit-hosting.md`, `replit-hosting-opcionais.md` e `replit-token.md`), reorganizando o índice em `docs/guides/README.md` exclusivamente em torno dos 4 guias técnicos oficiais do projeto (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
 
 ### Corrigido
+- **Tratamento de Desconexão e Mensagens no Relé RPC (Fase 3 / F3-4)**:
+  - **Tratamento de Desconexão de Conexões Não Registradas (`empiremuse/web_app.py`, KI-25)**: Em `WebSocketHandler.on_close`, conexões não registradas em `bots_ws` deixam de disparar tentativa de remoção da lista, eliminando ruído de log por exceção `ValueError` ao fechar conexões anônimas.
+  - **Tratamento Seguro de Mensagens Malformadas (`empiremuse/web_app.py`, KI-26)**: Em `WebSocketHandler.on_message`, payloads com formato JSON inválido ou inesperado são capturados defensivamente e encerram a conexão de forma ordenada com o código de fechamento `4400` (`CLOSE_MALFORMED`), em vez de propagar exceções não tratadas.
 - **Correção de Bugs de Spotify, Resolução de Faixas e Wavelink (Fase 3 / F3-3)**:
   - **Paginação de Playlists Grandes (`empiremuse/utils/music/audio_sources/spotify.py`, KI-16, KI-17)**: A segunda página de faixas de playlists agora inicia em `offset=100`, corrigindo a omissão da faixa de índice 100; o laço carrega no máximo `playlist_extra_page_limit` páginas extras (`for _ in range(...)`) e para quando não há próxima página.
   - **Busca com Acentos e Símbolos (`empiremuse/utils/music/audio_sources/spotify.py`, KI-18)**: Parâmetro de busca enviado diretamente via `params=` no aiohttp sem codificação redundante prévia com `quote()`, corrigindo pesquisas no Spotify contendo espaços, acentos e caracteres especiais.
@@ -238,6 +246,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
 
 ### Segurança
+- **Endurecimento do Relé RPC e Validação Estrutural de Protocolo (Fase 3 / F3-4)**:
+  - **Módulo de Protocolo Dedicado (`empiremuse/rpc_protocol.py`)**: Criação de módulo puro (sem I/O) para centralização de limites, sanitização de campos permitidos, validações de identificadores e controle de taxa.
+  - **Autenticação no Registro de Bots**: Conexões de bots exigem autenticação prévia via cabeçalho `X-RPC-Key` validada em tempo constante (`hmac.compare_digest`) com base em `RPC_SERVER_SECRET` (ou segredo efêmero por processo quando não configurado). Mensagens e eventos só são repassados aos usuários a partir de bots autenticados e registrados com sucesso.
+  - **Autenticação Estrita de Usuários**: Com `ENABLE_RPC_AUTH=true`, a entrega de dados ao usuário exige token não vazio e coincidente em ambas as pontas com comparação em tempo constante. Tokens vazios, nulos ou divergentes bloqueiam a sessão e emitem evento de exceção com orientação para emissão de novo token no bot.
+  - **Controle de Origem, Capacidade e Taxa**: Conexões de navegadores têm origem restrita à mesma origem do servidor ou a origens listadas em `RPC_ALLOWED_ORIGINS`. Limite global de 1000 conexões simultâneas (código de recusa 1013), limite de taxa por janela deslizante para clientes (código 4429), cota de até 3 IDs por usuário e 250 por bot, e limite máximo de corpo e mensagem de 64 KiB.
+  - **Sanitização de Dados Trafegados**: Filtragem estrita de campos permitidos entre bots e usuários (`pick_fields` com `USER_TO_BOT_FIELDS` e `BOT_TO_USER_FIELDS`), evitando tráfego de campos não autorizados ou tokens de autenticação.
 - **Proteção e Armazenamento do Token do Spotify (Fase 3 / F3-3)**:
   - **Renovação Única do Token (`empiremuse/utils/music/audio_sources/spotify.py`)**: A renovação do token do Spotify foi limitada a uma tentativa por requisição, gerando mensagem clara caso a autenticação continue recusada e prevenindo tentativas recursivas desnecessárias.
   - **Cache do Token no Diretório de Execução (`empiremuse/utils/music/audio_sources/spotify.py`)**: O cache do token (`.spotify_cache.json`) foi transferido para o diretório de execução da aplicação (`RUNTIME_DIR` / `EMPIREMUSE_HOME`), gravado com permissão restrita (`0600`) e substituição atômica via arquivo temporário.

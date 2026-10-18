@@ -90,8 +90,8 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-25 | `empiremuse/web_app.py` (`WebSocketHandler.on_close`) | `bots_ws.remove(self)` executa para conexões que nunca entraram em `bots_ws`. | `ValueError` no fechamento de conexões anônimas (ruído de log). | baixo |
-| KI-26 | `empiremuse/web_app.py` (`WebSocketHandler.on_message`) | `json.loads(message)` sem `try`/`except`. | Mensagem malformada gera exceção não tratada no handler do WebSocket. | médio |
+| KI-25 | `empiremuse/web_app.py` (`WebSocketHandler.on_close`) | [Resolvido] `bots_ws.remove(self)` executa para conexões que nunca entraram em `bots_ws`. | Resolvido na Fase 3 (F3-4): fechar uma conexão nunca registrada não gera erro. | baixo |
+| KI-26 | `empiremuse/web_app.py` (`WebSocketHandler.on_message`) | [Resolvido] `json.loads(message)` sem `try`/`except`. | Resolvido na Fase 3 (F3-4): mensagem malformada fecha a conexão com código 4400, em vez de gerar exceção. | médio |
 
 ## Qualidade, testes e modernização
 
