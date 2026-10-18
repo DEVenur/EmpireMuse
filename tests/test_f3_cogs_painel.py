@@ -998,3 +998,135 @@ class TestKI43CampoOrfaoEnablePrefixedCommands:
 
         assert dados["djroles"] == [5] and dados["ver"] == db_models[DBModel.guilds]["ver"]
         assert dados["enable_restrict_mode"] is False, "as demais chaves novas do modelo continuam recebendo o padrão"
+
+
+# ============================================================================ reforço pós-mutação (sobreviventes)
+
+
+class TestResetComRegistroDeMensagemIncompleto:
+    """O reset não pode depender de a mensagem ter thread nem de o ``message_id`` do banco ser válido."""
+
+    def test_guarda_mensagem_sem_thread_e_arquivada_sem_erro(self, world):
+        configured(world, thread=False)
+        assert run_reset(world) is None
+        assert (world.saved["channel"], world.saved["message_id"]) == (None, None)
+        assert len(world.j.of("message.edit")) == 1 and world.j.of("thread.edit") == []
+
+    @pytest.mark.parametrize("message_id", [None, "abc", ""])
+    def test_guarda_message_id_ausente_ou_invalido_nao_impede_o_reset(self, world, message_id):
+        configured(world)
+        world.db.doc["player_controller"]["message_id"] = message_id
+        assert run_reset(world) is None, "o canal continua configurado: o reset precisa limpar o registro"
+        assert (world.saved["channel"], world.saved["message_id"]) == (None, None)
+        assert world.j.of("message.edit") == []
+
+
+def url_com_tamanho(prefixo, tamanho):
+    return prefixo + "a" * (tamanho - len(prefixo))
+
+
+class TestImportadorDeIntegracoesAvatarELimites:
+    """O avatar do objeto ``{url, avatar}`` é validado (URL, texto, até 250 caracteres) e a URL vai até 150."""
+
+    PREFIXO = "https://avatar.invalid/"
+
+    async def importar_com_avatar(self, avatar):
+        bot = ModalBot()
+        inter = await importar(
+            bot,
+            ViewMode.integrations_manager,
+            {"【YT】: Canal": {"url": f"{URL_BASE}/c", "avatar": avatar}},
+            estrito=True,
+        )
+        return bot, inter
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("avatar", ["isto-nao-e-url", "ftp://exemplo.invalid/a.png", 123, ["x"], {"u": 1}, True])
+    async def test_avatar_invalido_derruba_a_importacao(self, avatar):
+        bot, inter = await self.importar_com_avatar(avatar)
+        assert bot.salvos_usuario == [] and "link inválido" in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_avatar_com_250_caracteres_e_aceito_e_com_251_e_recusado(self):
+        aceito, _ = await self.importar_com_avatar(url_com_tamanho(self.PREFIXO, 250))
+        assert aceito.salvos_usuario, "250 caracteres é o limite do avatar"
+        recusado, inter = await self.importar_com_avatar(url_com_tamanho(self.PREFIXO, 251))
+        assert recusado.salvos_usuario == [] and "link inválido" in inter.texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("avatar", [None, ""])
+    async def test_avatar_ausente_ou_vazio_e_aceito(self, avatar):
+        bot, _ = await self.importar_com_avatar(avatar)
+        assert url_guardada(bot.salvos_usuario[-1]["integration_links"]["【YT】: Canal"]) == f"{URL_BASE}/c"
+
+    @pytest.mark.asyncio
+    async def test_url_com_150_caracteres_e_aceita_e_com_151_e_recusada(self):
+        for tamanho, aceita in ((150, True), (151, False)):
+            bot = ModalBot()
+            nome = {"【YT】: Canal": url_com_tamanho(f"{URL_BASE}/", tamanho)}
+            inter = await importar(bot, ViewMode.integrations_manager, nome, estrito=True)
+            assert bool(bot.salvos_usuario) is aceita, f"{tamanho} caracteres: {inter.texto!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("valor", [5, None, ["https://exemplo.invalid/a"], {"url": 5}, {"url": None}, {}])
+    async def test_valor_que_nao_e_texto_nem_objeto_com_url_e_recusado_antes_do_defer(self, valor):
+        bot = ModalBot()
+        try:
+            inter = await importar(bot, ViewMode.integrations_manager, {"【YT】: Canal": valor}, estrito=True)
+        except (RuntimeError, TypeError, AttributeError) as erro:
+            pytest.fail(f"KI-46: {type(erro).__name__}: {erro}")
+        assert bot.salvos_usuario == [] and "link inválido" in inter.texto
+
+
+class TestImportadoresGravamSoOsCamposEsperados:
+    @pytest.mark.asyncio
+    async def test_servidor_grava_so_url_e_description(self):
+        bot = ModalBot()
+        item = {"url": f"{URL_BASE}/a", "description": "d", "extra": "x", "outro": 1}
+        await importar(bot, ViewMode.guild_fav_manager, {"Item": item})
+        assert bot.salvos_servidor[-1]["player_controller"]["fav_links"]["Item"] == {
+            "url": f"{URL_BASE}/a",
+            "description": "d",
+        }
+
+    @pytest.mark.asyncio
+    async def test_integracao_grava_so_url_e_avatar(self):
+        bot = ModalBot()
+        item = {"url": f"{URL_BASE}/c", "avatar": f"{URL_BASE}/a.png", "title": "t", "extra": 1}
+        await importar(bot, ViewMode.integrations_manager, {"【YT】: Canal": item})
+        assert bot.salvos_usuario[-1]["integration_links"]["【YT】: Canal"] == {
+            "url": f"{URL_BASE}/c",
+            "avatar": f"{URL_BASE}/a.png",
+        }
+
+    @pytest.mark.asyncio
+    async def test_integracao_sem_avatar_nao_ganha_a_chave(self):
+        bot = ModalBot()
+        await importar(bot, ViewMode.integrations_manager, {"【YT】: Canal": {"url": f"{URL_BASE}/c", "extra": 1}})
+        assert bot.salvos_usuario[-1]["integration_links"]["【YT】: Canal"] == {"url": f"{URL_BASE}/c"}
+
+
+class TestImportadoresRecusamJsonQueNaoEObjetoOuEVazio:
+    """Lista, texto, número, ``null`` e ``{}`` são recusados com mensagem, nos três modos, sem gravar nada."""
+
+    MODOS = [ViewMode.fav_manager, ViewMode.guild_fav_manager, ViewMode.integrations_manager]
+    CONTEUDOS = ["[]", '"texto"', "5", "null", "{}", '[{"url": "https://exemplo.invalid/a"}]']
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS)
+    @pytest.mark.parametrize("conteudo", CONTEUDOS)
+    async def test_recusa_com_mensagem_e_sem_gravar(self, modo, conteudo):
+        bot = ModalBot()
+        inter = await importar(bot, modo, conteudo, estrito=True)
+        assert bot.salvos_usuario == [] and bot.salvos_servidor == []
+        assert "objeto json" in inter.texto, f"o usuário precisa receber o motivo: {inter.texto!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("valor", [5, None, ["https://exemplo.invalid/a"], {"url": "https://exemplo.invalid/a"}])
+    async def test_favorito_do_usuario_que_nao_e_texto_e_recusado_sem_excecao(self, valor):
+        bot = ModalBot()
+        try:
+            inter = await importar(bot, ViewMode.fav_manager, {"Item": valor}, estrito=True)
+        except (TypeError, AttributeError) as erro:
+            pytest.fail(f"{type(erro).__name__} escapou do importador: {erro}")
+        assert bot.salvos_usuario == [] and "link inválido" in inter.texto

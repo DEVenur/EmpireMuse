@@ -558,6 +558,7 @@ class ResetFlowTest(TasksBase):
         assert "segredo-interno-123" not in body
         assert self.world.doc["player_controller"]["channel"] == "22", "KI-36: o canal continua de pé e configurado"
         assert self.world.doc["player_controller"]["message_id"] == "555"
+        assert self.audit_text() == "", "o reset falhou: não há alteração de configuração para auditar"
 
     def test_tampering_with_the_delete_flag_in_step_two_still_requires_the_name(self):
         self.world.configured_text()
