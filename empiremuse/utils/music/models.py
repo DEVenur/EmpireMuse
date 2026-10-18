@@ -36,6 +36,10 @@ if TYPE_CHECKING:
 
 exclude_tags = ["remix", "edit", "extend", "compilation", "mashup", "mixed"]
 exclude_tags_2 = ["extend", "compilation", "mashup", "nightcore", "8d", "mixed"]
+
+# Similaridade mínima (token_set_ratio, 0-100) entre o título da candidata e o da faixa original.
+TITLE_MATCH_THRESHOLD = 75
+
 emoji_pattern = re.compile(r"<a?:.+?:\d+?>")
 
 thread_archive_time = {
@@ -2141,7 +2145,7 @@ class LavalinkPlayer(wavelink.Player):
                                         if (
                                             t.is_stream
                                             or not min_duration < t.duration < max_duration
-                                            or fuzz.token_sort_ratio(t.title, track.title) < 75
+                                            or fuzz.token_set_ratio(t.title, track.title) < TITLE_MATCH_THRESHOLD
                                         ):
                                             continue
                                         final_result.append(t)
