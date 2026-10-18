@@ -2219,7 +2219,7 @@ class Music(commands.Cog):
                                 "lazy_playlist": True,
                                 "simulate": True,
                                 "playlistend": 0,
-                                "cachedir": "./.ytdl_cache",
+                                "cachedir": str(paths.RUNTIME_DIR / ".ytdl_cache"),
                                 "allowed_extractors": [
                                     r".*youtube.*",
                                 ],

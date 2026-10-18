@@ -11,9 +11,6 @@ from empiremuse import paths
 
 logger = logging.getLogger(__name__)
 
-# Mantido por compatibilidade retroativa com código legado
-cache_file = "./.lastfm_cache"
-
 
 class LastFmException(Exception):
     def __init__(self, data: dict):
