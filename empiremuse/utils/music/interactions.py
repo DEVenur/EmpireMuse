@@ -848,7 +848,7 @@ class FavModalImport(disnake.ui.Modal):
 
             await inter.response.defer(ephemeral=True)
 
-            self.view.data = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+            work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
 
             for name in json_data.keys():
                 if len(name) > (max_name_chars := self.view.bot.config["USER_FAV_MAX_NAME_LENGTH"]):
@@ -857,7 +857,7 @@ class FavModalImport(disnake.ui.Modal):
                     )
                     return
 
-            _drop_same_names(self.view.data["fav_links"], json_data)
+            _drop_same_names(work["fav_links"], json_data)
 
             if self.view.bot.config["MAX_USER_FAVS"] > 0 and not (await self.view.bot.is_owner(inter.author)):
                 if (json_size := len(json_data)) > self.view.bot.config["MAX_USER_FAVS"]:
@@ -867,9 +867,7 @@ class FavModalImport(disnake.ui.Modal):
                     )
                     return
 
-                if (json_size + (user_favs := len(self.view.data["fav_links"]))) > self.view.bot.config[
-                    "MAX_USER_FAVS"
-                ]:
+                if (json_size + (user_favs := len(work["fav_links"]))) > self.view.bot.config["MAX_USER_FAVS"]:
                     await inter.edit_original_message(
                         "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
                         f"Limite atual: {self.view.bot.config['MAX_USER_FAVS']}\n"
@@ -878,6 +876,7 @@ class FavModalImport(disnake.ui.Modal):
                     )
                     return
 
+            self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
             self.view.data["fav_links"].update(json_data)
 
             await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
@@ -940,17 +939,17 @@ class FavModalImport(disnake.ui.Modal):
 
             await inter.response.defer(ephemeral=True)
 
-            self.view.guild_data = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
+            work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
 
-            if not self.view.guild_data["player_controller"]["channel"] or not self.view.bot.get_channel(
-                int(self.view.guild_data["player_controller"]["channel"])
+            if not work["player_controller"]["channel"] or not self.view.bot.get_channel(
+                int(work["player_controller"]["channel"])
             ):
                 await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
                 return
 
             for name in json_data.keys():
                 try:
-                    del self.view.guild_data["player_controller"]["fav_links"][name]
+                    del work["player_controller"]["fav_links"][name]
                 except KeyError:
                     continue
 
@@ -960,7 +959,7 @@ class FavModalImport(disnake.ui.Modal):
                 )
                 return
 
-            if (json_size + (user_favs := len(self.view.guild_data["player_controller"]["fav_links"]))) > 25:
+            if (json_size + (user_favs := len(work["player_controller"]["fav_links"]))) > 25:
                 await inter.edit_original_message(
                     "A lista de músicas/playlist do servidor não possui espaço suficiente para adicionar todos os itens de seu arquivo...\n"
                     f"Limite atual: 25\n"
@@ -969,6 +968,7 @@ class FavModalImport(disnake.ui.Modal):
                 )
                 return
 
+            self.view.guild_data = work  # só depois de todas as checagens: uma recusa não altera a tela
             self.view.guild_data["player_controller"]["fav_links"].update(json_data)
 
             await self.view.bot.update_data(inter.guild_id, self.view.guild_data, db_name=DBModel.guilds)
@@ -1024,15 +1024,9 @@ class FavModalImport(disnake.ui.Modal):
 
             await inter.response.defer(ephemeral=True)
 
-            self.view.data = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+            work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
 
-            _drop_same_names(self.view.data["integration_links"], json_data)
-
-            for name in json_data.keys():
-                try:
-                    del self.view.data["integration_links"][name.lower()[:90]]  # chave antiga: minúscula e truncada
-                except KeyError:
-                    continue
+            _drop_same_names(work["integration_links"], json_data)
 
             if self.view.bot.config["MAX_USER_INTEGRATIONS"] > 0 and not (await self.view.bot.is_owner(inter.author)):
                 if (json_size := len(json_data)) > self.view.bot.config["MAX_USER_INTEGRATIONS"]:
@@ -1042,7 +1036,7 @@ class FavModalImport(disnake.ui.Modal):
                     )
                     return
 
-                if (json_size + (user_integrations := len(self.view.data["integration_links"]))) > self.view.bot.config[
+                if (json_size + (user_integrations := len(work["integration_links"]))) > self.view.bot.config[
                     "MAX_USER_INTEGRATIONS"
                 ]:
                     await inter.edit_original_message(
@@ -1052,6 +1046,14 @@ class FavModalImport(disnake.ui.Modal):
                         f"Você precisa de: {(json_size + user_integrations) - self.view.bot.config['MAX_USER_INTEGRATIONS']}"
                     )
                     return
+
+            self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
+
+            for name in json_data.keys():
+                try:
+                    del self.view.data["integration_links"][name.lower()[:90]]  # chave antiga: minúscula e truncada
+                except KeyError:
+                    continue
 
             self.view.data["integration_links"].update(json_data)
 
@@ -1165,21 +1167,22 @@ class FavModalAdd(disnake.ui.Modal):
 
             await inter.response.defer(ephemeral=True)
 
-            self.view.data = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+            work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
 
             name = inter.text_values["user_fav_name"].strip()
 
             if name != self.name:
-                self.view.data["fav_links"].pop(self.name, None)
+                work["fav_links"].pop(self.name, None)
 
-            if name not in self.view.data["fav_links"]:
+            if name not in work["fav_links"]:
                 limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_FAVS")
-                if limit and len(self.view.data["fav_links"]) >= limit:
+                if limit and len(work["fav_links"]) >= limit:
                     await inter.edit_original_message(
                         "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
                     )
                     return
 
+            self.view.data = work
             self.view.data["fav_links"][name] = valid_url
 
             await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
