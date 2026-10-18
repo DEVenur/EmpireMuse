@@ -10,11 +10,14 @@ from base64 import b64decode, b64encode
 from copy import deepcopy
 from io import BytesIO
 from itertools import islice
+from types import SimpleNamespace
 from typing import List, Union, Optional, TYPE_CHECKING, Literal
 
 import disnake
 from disnake.ext import commands
 
+from empiremuse.panel.services.account_base import effective_limit
+from empiremuse.panel.services.account_links import ITG_AVATAR_MAX
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
@@ -660,6 +663,31 @@ class ViewMode:
     integrations_manager = "2"
 
 
+def _integration_url(entry) -> Optional[str]:
+    """URL de uma integração importada: texto simples (formato antigo) ou ``{"url": ..., "avatar": ...}`` (exportador)."""
+    return entry.get("url") if isinstance(entry, dict) else entry
+
+
+def _valid_integration_avatar(entry) -> bool:
+    """O avatar é opcional; quando presente precisa ser uma URL (``None`` e vazio contam como ausente)."""
+    avatar = entry.get("avatar") if isinstance(entry, dict) else None
+    if avatar in (None, ""):
+        return True
+    return isinstance(avatar, str) and len(avatar) <= ITG_AVATAR_MAX and bool(URL_REG.match(avatar))
+
+
+def _integration_entry(entry):
+    """O que é gravado: o texto simples como veio, ou só ``url`` e ``avatar`` do objeto (nada além disso)."""
+    if not isinstance(entry, dict):
+        return entry
+    return {key: entry[key] for key in ("url", "avatar") if key in entry}
+
+
+async def _quota_limit(bot, user, config_key: str) -> int:
+    """Limite de cota do usuário: ``0`` = sem limite (configuração ``0`` ou dono do bot), regra única do painel."""
+    return await effective_limit(SimpleNamespace(bot=bot, user=user), config_key)
+
+
 class FavModalImport(disnake.ui.Modal):
     def __init__(self, view):
         self.view = view
@@ -722,6 +750,13 @@ class FavModalImport(disnake.ui.Modal):
             )
             return
 
+        if not isinstance(json_data, dict) or not json_data:
+            await inter.send(
+                "**O arquivo precisa conter um objeto json com pelo menos um item.**",
+                ephemeral=True,
+            )
+            return
+
         if self.view.mode == ViewMode.fav_manager:
             if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
                 if retry_after < 1:
@@ -735,8 +770,9 @@ class FavModalImport(disnake.ui.Modal):
                 return
 
             for name, url in json_data.items():
-                if "> fav:" in name.lower():
-                    continue
+                if not isinstance(url, str):
+                    await inter.send(f"O seu arquivo contém link inválido: ```ldif\n{url}```", ephemeral=True)
+                    return
 
                 if len(url) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"]):
                     await inter.send(
@@ -745,7 +781,7 @@ class FavModalImport(disnake.ui.Modal):
                     )
                     return
 
-                if not isinstance(url, str) or not URL_REG.match(url):
+                if not URL_REG.match(url):
                     await inter.send(f"O seu arquivo contém link inválido: ```ldif\n{url}```", ephemeral=True)
                     return
 
@@ -808,8 +844,17 @@ class FavModalImport(disnake.ui.Modal):
                 return
 
             for name, data in json_data.items():
-                if "> fav:" in name.lower():
-                    continue
+                if not (
+                    isinstance(data, dict)
+                    and isinstance(data.get("url"), str)
+                    and isinstance(data.get("description"), str)
+                ):
+                    await inter.send(
+                        f"**O item `{name[:25]}` do seu arquivo está mal formatado:** cada item precisa ser um "
+                        'objeto com os campos "url" e "description" em texto.',
+                        ephemeral=True,
+                    )
+                    return
 
                 if len(data["url"]) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"]):
                     await inter.send(
@@ -818,16 +863,20 @@ class FavModalImport(disnake.ui.Modal):
                     )
                     return
 
-                if len(data["description"]) > 50:
+                if len(data["description"]) > (max_description_chars := 50):
                     await inter.send(
-                        f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_url_chars}\nDescrição:** {data['description']}",
+                        f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_description_chars}\nDescrição:** {data['description']}",
                         ephemeral=True,
                     )
                     return
 
-                if not isinstance(data["url"], str) or not URL_REG.match(data["url"]):
+                if not URL_REG.match(data["url"]):
                     await inter.send(f"O seu arquivo contém link inválido: ```ldif\n{data['url']}```", ephemeral=True)
                     return
+
+            json_data = {
+                name: {"url": data["url"], "description": data["description"]} for name, data in json_data.items()
+            }
 
             await inter.response.defer(ephemeral=True)
 
@@ -893,19 +942,25 @@ class FavModalImport(disnake.ui.Modal):
                 )
                 return
 
-            for name, url in json_data.items():
-                if "> itg:" in name.lower():
-                    continue
+            for name, value in json_data.items():
+                url = value.get("url") if isinstance(value, dict) else value
+
+                if not isinstance(url, str):
+                    await inter.send(f"O seu arquivo contém link inválido: ```ldif\n{url}```", ephemeral=True)
+                    return
 
                 if len(url) > (max_url_chars := 150):
-                    await inter.edit_original_message(
-                        f"**Um item de seu arquivo {url} ultrapassa a quantidade de caracteres permitido:{max_url_chars}**"
+                    await inter.send(
+                        f"**Um item de seu arquivo {url} ultrapassa a quantidade de caracteres permitido:{max_url_chars}**",
+                        ephemeral=True,
                     )
                     return
 
-                if not isinstance(url, str) or not URL_REG.match(url):
-                    await inter.edit_original_message(f"O seu arquivo contém link inválido: ```ldif\n{url}```")
+                if not URL_REG.match(url) or not _valid_integration_avatar(value):
+                    await inter.send(f"O seu arquivo contém link inválido: ```ldif\n{url}```", ephemeral=True)
                     return
+
+            json_data = {name: _integration_entry(value) for name, value in json_data.items()}
 
             await inter.response.defer(ephemeral=True)
 
@@ -946,7 +1001,9 @@ class FavModalImport(disnake.ui.Modal):
                 self.view.log = f"{s} integrações foram importadas com sucesso."
             else:
                 name = next(iter(json_data))
-                self.view.log = f"A integração [`{name}`]({json_data[name]}) foi importada com sucesso."
+                self.view.log = (
+                    f"A integração [`{name}`]({_integration_url(json_data[name])}) foi importada com sucesso."
+                )
 
         else:
             raise GenericError(f"**Modo ainda não implementado: {self.view.mode} | {type(self.view.mode)}**")
@@ -1054,7 +1111,8 @@ class FavModalAdd(disnake.ui.Modal):
                 if name != self.name:
                     del self.view.data["fav_links"][self.name]
             except KeyError:
-                if len(self.view.data["fav_links"]) >= self.view.bot.config["MAX_USER_FAVS"]:
+                limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_FAVS")
+                if limit and len(self.view.data["fav_links"]) >= limit:
                     await inter.edit_original_message(
                         "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
                     )
@@ -1151,7 +1209,8 @@ class FavModalAdd(disnake.ui.Modal):
 
             self.view.data = await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users)
 
-            if len(self.view.data["integration_links"]) >= self.view.bot.config["MAX_USER_FAVS"]:
+            limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
+            if limit and len(self.view.data["integration_links"]) >= limit:
                 await inter.edit_original_message(
                     "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
                 )
