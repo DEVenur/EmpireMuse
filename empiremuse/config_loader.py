@@ -109,6 +109,9 @@ DEFAULT_CONFIG = {
     "RPC_PUBLIC_URL": "",
     "ENABLE_RPC_COMMAND": False,
     "ENABLE_RPC_AUTH": False,
+    "RPC_SERVER_SECRET": "",
+    "RPC_ALLOWED_ORIGINS": "",
+    "WEB_BIND_ADDRESS": "0.0.0.0",
     ##################################################
     ### Painel web (OAuth2 Discord, sob /painel):  ###
     ##################################################

@@ -5,8 +5,6 @@ import asyncio
 import base64
 import json
 import logging
-import os
-from traceback import print_exc
 from typing import TYPE_CHECKING, Optional
 
 import aiohttp
@@ -22,6 +20,33 @@ from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
 from empiremuse.panel import build_panel_app, make_router
 from empiremuse.panel.settings import PanelConfigError, load_panel_settings
+from empiremuse.rpc_protocol import (
+    BOT_OPS,
+    BOT_TO_USER_FIELDS,
+    CLOSE_MALFORMED,
+    CLOSE_RATE_LIMITED,
+    CLOSE_REFUSED,
+    CLOSE_TRY_AGAIN_LATER,
+    CLOSE_UNAUTHORIZED,
+    MAX_BOT_IDS,
+    MAX_CONNECTIONS,
+    MAX_MESSAGE_SIZE,
+    MAX_USER_IDS,
+    RPC_KEY_HEADER,
+    TOKEN_LENGTHS,
+    USER_OP,
+    USER_TO_BOT_FIELDS,
+    RateLimiter,
+    authenticates,
+    get_rpc_secret,
+    is_valid_id,
+    is_valid_id_list,
+    normalize_origin,
+    parse_allowed_origins,
+    parse_app_version,
+    pick_fields,
+    same_secret,
+)
 from empiremuse.utils import branding
 
 # Limite de corpo de requisição da porta inteira (painel, relé do RPC e página de status): 64 KiB.
@@ -31,6 +56,11 @@ if TYPE_CHECKING:
     from empiremuse.utils.client import BotPool
 
 logging.getLogger("tornado.access").disabled = True
+
+logger = logging.getLogger(__name__)
+
+PUBLIC_BIND_ADDRESSES = ("0.0.0.0", "::")
+DEFAULT_BIND_ADDRESS = "0.0.0.0"
 
 users_ws = {}
 bots_ws = []
@@ -140,153 +170,249 @@ class IndexHandler(tornado.web.RequestHandler):
 
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
+    """Relé entre o app de Rich Presence (usuários) e os bots.
+
+    Só uma conexão autenticada (``X-RPC-Key``) e registrada com ``"bot": true`` é tratada como bot e pode enviar
+    dados aos usuários. A autenticação por token (``ENABLE_RPC_AUTH``) é decidida pela configuração do servidor.
+    """
+
+    def initialize(self, config: Optional[dict] = None, connections: Optional[set] = None):
+        config = config or {}
+        self.rpc_secret = get_rpc_secret(config)
+        self.server_auth = bool(config.get("ENABLE_RPC_AUTH"))
+        self.allowed_origins = parse_allowed_origins(config.get("RPC_ALLOWED_ORIGINS"))
+        self.connections = connections if connections is not None else set()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_ids: list = []
         self.bot_ids: list = []
         self.token = ""
         self.blocked = False
-        self.auth_enabled = False
+        self.authenticated = False
+        self.is_bot = False
+        self.rejected = False
+        self.rate_limiter = RateLimiter()
+
+    def check_origin(self, origin: str) -> bool:
+        # Clientes nativos (app e bot) não enviam Origin e nem chegam aqui; navegadores só passam na mesma origem
+        # ou se a origem estiver em RPC_ALLOWED_ORIGINS.
+        return super().check_origin(origin) or normalize_origin(origin) in self.allowed_origins
+
+    def open(self, *args, **kwargs):
+        if len(self.connections) >= MAX_CONNECTIONS:
+            self._reject(CLOSE_TRY_AGAIN_LATER, "Servidor ocupado, tente novamente mais tarde.")
+            return
+
+        self.connections.add(self)
+        self.authenticated = same_secret(self.request.headers.get(RPC_KEY_HEADER), self.rpc_secret)
+
+    def _reject(self, code: int, reason: str) -> None:
+        self.rejected = True
+        self.close(code=code, reason=reason)
+
+    def _disconnect(self, reason: str) -> None:
+        self.write_message(json.dumps({"op": "disconnect", "reason": reason}))
+        self._reject(CLOSE_REFUSED, "Desconectado.")
+
+    def _parse(self, message) -> Optional[dict]:
+        try:
+            data = json.loads(message)
+        except (ValueError, RecursionError) as e:
+            logger.warning("Relé RPC: mensagem descartada, JSON inválido (%s).", type(e).__name__)
+        else:
+            if isinstance(data, dict):
+                return data
+            logger.warning("Relé RPC: mensagem descartada, o JSON não é um objeto (ValueError).")
+
+        self._reject(CLOSE_MALFORMED, "Mensagem inválida.")
+        return None
 
     def on_message(self, message):
-        data = json.loads(message)
-
-        ws_id = data.get("user_ids")
-        bot_id = data.get("bot_id")
-        token = data.pop("token", "") or ""
-        app_version = version.parse(data.get("version", "0"))
-        self.auth_enabled = data.pop("auth_enabled", False)
-
-        if not ws_id:
-            if not bot_id:
-                print(f"desconectando: por falta de id de usuario {self.request.remote_ip}\nDados: {data}")
-                self.write_message(
-                    json.dumps({"op": "disconnect", "reason": "Desconectando por falta de ids de usuario"})
-                )
-                self.close(code=4200)
-                return
-
-            try:
-                if self.auth_enabled:
-                    if users_ws[data["user"]].token != token:
-                        if users_ws[data["user"]].blocked:
-                            return
-
-                        data.update(
-                            {
-                                "op": "exception",
-                                "message": "token inválido! Por via das dúvidas gere um novo token usando o comando no "
-                                "bot: /rich_presence.",
-                            }
-                        )
-
-                        for d in ("token", "track", "info"):
-                            data.pop(d, None)
-
-                        users_ws[data["user"]].blocked = True
-
-                    else:
-                        users_ws[data["user"]].blocked = False
-
-                users_ws[data["user"]].write_message(json.dumps(data))
-
-            except KeyError:
-                pass
-            except Exception as e:
-                print(f"Erro ao processar dados do rpc para o user [{data['user']}]: {repr(e)}")
-
+        if self.rejected:
             return
 
-        is_bot = data.pop("bot", False)
-
-        if is_bot:
-            print(f"🤖 - Nova conexão - Bot: {ws_id} {self.request.remote_ip}")
-            self.bot_ids = ws_id
-            bots_ws.append(self)
+        if not self.is_bot and not self.rate_limiter.allow():
+            self._reject(CLOSE_RATE_LIMITED, "Mensagens demais em pouco tempo.")
             return
 
-        if app_version < minimal_version:
-            self.write_message(
-                json.dumps(
-                    {
-                        "op": "disconnect",
-                        "reason": "Versão do app não suportado! Certifique-se de que está usando "
-                        f"a versão mais recente do app ({minimal_version} ou superior).",
-                    }
-                )
+        data = self._parse(message)
+        if data is None:
+            return
+
+        if self.is_bot:
+            self._on_bot_message(data)
+        elif "user_ids" in data:
+            self._on_registration(data)
+        else:
+            self._on_message_without_ids(data)
+
+    def _on_message_without_ids(self, data: dict) -> None:
+        if data.get("bot_id") or "user" in data:
+            # Dado bot -> usuário de uma conexão que não é um bot autenticado e registrado.
+            self._reject(CLOSE_UNAUTHORIZED, "Não autorizado.")
+            return
+
+        logger.info("Relé RPC: desconectando %s por falta de ids de usuário.", self.request.remote_ip)
+        self._disconnect("Desconectando por falta de ids de usuário")
+
+    def _on_registration(self, data: dict) -> None:
+        if data.get("bot"):
+            self._register_bot(data)
+        else:
+            self._register_user(data)
+
+    def _register_bot(self, data: dict) -> None:
+        if not self.authenticated:
+            self._reject(CLOSE_UNAUTHORIZED, "Não autorizado.")
+            return
+
+        ids = data["user_ids"]
+        if not is_valid_id_list(ids, MAX_BOT_IDS):
+            self._reject(CLOSE_MALFORMED, "Lista de ids inválida.")
+            return
+
+        print(f"🤖 - Nova conexão - Bot: {ids} {self.request.remote_ip}")
+        self.bot_ids = ids
+        self.is_bot = True
+        bots_ws.append(self)
+
+    def _register_user(self, data: dict) -> None:
+        ids = data["user_ids"]
+        if not is_valid_id_list(ids):
+            self._reject(CLOSE_MALFORMED, "Lista de ids inválida.")
+            return
+
+        if parse_app_version(data.get("version")) < minimal_version:
+            self._disconnect(
+                "Versão do app não suportado! Certifique-se de que está usando "
+                f"a versão mais recente do app ({minimal_version} ou superior)."
             )
-            self.close(code=4200)
             return
 
-        if len(ws_id) > 3:
-            self.write_message(
-                json.dumps(
-                    {"op": "disconnect", "reason": "Você está tentando conectar mais de 3 usuários consecutivamente..."}
-                )
-            )
-            self.close(code=4200)
+        if len(ids) > MAX_USER_IDS:
+            self._disconnect(f"Você está tentando conectar mais de {MAX_USER_IDS} usuários consecutivamente...")
             return
 
-        if len(token) not in (0, 50):
-            self.write_message(json.dumps({"op": "disconnect", "reason": f"O token precisa ter 50 caracteres..."}))
-            self.close(code=4200)
+        token = data.get("token") or ""
+        if not isinstance(token, str) or len(token) not in TOKEN_LENGTHS:
+            self._disconnect("O token precisa ter 50 caracteres...")
             return
 
-        self.user_ids = ws_id
-
-        print("\n".join(f"👤 - Nova conexão - User: {u}" for u in self.user_ids))
-
-        for u_id in ws_id:
-            try:
-                users_ws[u_id].write_message(
-                    json.dumps({"op": "disconnect", "reason": "Nova sessão iniciada em outro local..."})
-                )
-                users_ws[u_id].close(code=4200)
-            except:
-                pass
-            users_ws[u_id] = self
-
+        self._forget_users()
+        self.user_ids = ids
         self.token = token
+        print("\n".join(f"👤 - Nova conexão - User: {u}" for u in ids))
 
-        for w in bots_ws:
+        for u_id in ids:
+            self._replace_session(u_id)
+
+        self._relay_registration(data)
+
+    def _replace_session(self, user_id: int) -> None:
+        previous = users_ws.get(user_id)
+        users_ws[user_id] = self
+        if previous is None or previous is self:
+            return
+
+        try:
+            previous.write_message(json.dumps({"op": "disconnect", "reason": "Nova sessão iniciada em outro local..."}))
+            previous.close(code=CLOSE_REFUSED)
+        except tornado.websocket.WebSocketClosedError:
+            pass
+
+    def _relay_registration(self, data: dict) -> None:
+        payload = {"op": USER_OP, "user_ids": self.user_ids}
+        if isinstance(data.get("version"), str):
+            payload["version"] = data["version"]
+
+        encoded = json.dumps(pick_fields(payload, USER_TO_BOT_FIELDS))
+        for w in list(bots_ws):
             try:
-                w.write_message(json.dumps(data))
+                w.write_message(encoded)
             except Exception as e:
-                print(f"🤖 - Erro ao processar dados do rpc para os bot's {w.bot_ids}: {repr(e)}")
+                logger.warning("Relé RPC: falha ao repassar o registro ao bot %s (%s).", w.bot_ids, type(e).__name__)
 
-    def check_origin(self, origin: str):
-        return True
+    def _on_bot_message(self, data: dict) -> None:
+        if "user_ids" in data:
+            self._reject(CLOSE_MALFORMED, "Registro duplicado.")
+            return
+
+        user_id = data.get("user")
+        if data.get("op") not in BOT_OPS or not is_valid_id(user_id):
+            logger.warning("Relé RPC: mensagem do bot %s ignorada, formato inesperado.", self.bot_ids)
+            return
+
+        target = users_ws.get(user_id)
+        if target is None:
+            return
+
+        payload = pick_fields(data, BOT_TO_USER_FIELDS)
+
+        if self.server_auth:
+            if authenticates(data.get("token"), target.token):
+                target.blocked = False
+            elif target.blocked:
+                return
+            else:
+                target.blocked = True
+                payload = self._token_error(payload)
+
+        try:
+            target.write_message(json.dumps(payload))
+        except Exception as e:
+            logger.warning("Relé RPC: falha ao entregar dados ao usuário %s (%s).", user_id, type(e).__name__)
+
+    @staticmethod
+    def _token_error(payload: dict) -> dict:
+        error = {k: v for k, v in payload.items() if k not in ("track",)}
+        error.update(
+            {
+                "op": "exception",
+                "message": "token inválido! Por via das dúvidas gere um novo token usando o comando no "
+                "bot: /rich_presence.",
+            }
+        )
+        return error
+
+    def _forget_users(self) -> None:
+        """Remove só as sessões que ainda pertencem a esta conexão (outra pode ter assumido o mesmo id)."""
+        for u_id in self.user_ids:
+            if users_ws.get(u_id) is self:
+                del users_ws[u_id]
+        self.user_ids = []
 
     def on_close(self):
+        self.connections.discard(self)
+
         if self.user_ids:
             print("\n".join(f"👤 - Conexão Finalizada - User: {u}" for u in self.user_ids))
-            for u_id in self.user_ids:
-                try:
-                    del users_ws[u_id]
-                except KeyError:
-                    continue
-            return
-
-        if not self.bot_ids:
+            self._forget_users()
+        elif self.is_bot:
+            self._on_bot_close()
+        else:
             print(f"Conexão Finalizada - IP: {self.request.remote_ip}")
 
-        else:
-            print(f"🌐 - Conexão Finalizada - Bot ID's: {self.bot_ids}")
+    def _on_bot_close(self) -> None:
+        print(f"🌐 - Conexão Finalizada - Bot ID's: {self.bot_ids}")
 
-            data = {"op": "close", "bot_id": self.bot_ids}
+        if self in bots_ws:
+            bots_ws.remove(self)
 
-            for w in users_ws.values():
-                if w.blocked:
-                    continue
+        data = {"op": "close", "bot_id": self.bot_ids}
 
-                try:
-                    w.write_message(data)
-                except Exception as e:
-                    print(
-                        f"👤 - Erro ao processar dados do rpc para os usuários: [{', '.join(str(i) for i in w.user_ids)}]: {repr(e)}"
-                    )
+        for w in list(users_ws.values()):
+            if w.blocked:
+                continue
 
-        bots_ws.remove(self)
+            try:
+                w.write_message(data)
+            except Exception as e:
+                logger.warning(
+                    "Relé RPC: falha ao avisar os usuários %s sobre o fim da conexão do bot (%s).",
+                    w.user_ids,
+                    type(e).__name__,
+                )
 
 
 class WSClient:
@@ -299,6 +425,11 @@ class WSClient:
         self.data: dict = {}
         self.session: Optional[aiohttp.ClientSession] = None
         self.connect_task = []
+        self.registered = False
+
+    @property
+    def rpc_headers(self) -> dict:
+        return {RPC_KEY_HEADER: get_rpc_secret(self.pool.config)}
 
     async def connect(self):
         for t in self.connect_task:
@@ -310,7 +441,9 @@ class WSClient:
         if not self.session:
             self.session = aiohttp.ClientSession()
 
-        self.connection = await self.session.ws_connect(self.url, heartbeat=30)
+        self.registered = False
+
+        self.connection = await self.session.ws_connect(self.url, headers=self.rpc_headers, heartbeat=30)
 
         self.backoff = 7
 
@@ -336,7 +469,10 @@ class WSClient:
             print("🌐 - Conexão com servidor RPC ignorado: Lista de bots vazia...")
             return
 
-        await self.send({"user_ids": list(bot_ids), "bot": True, "auth_enabled": self.pool.config["ENABLE_RPC_AUTH"]})
+        await self._send_json(
+            {"user_ids": list(bot_ids), "bot": True, "auth_enabled": self.pool.config["ENABLE_RPC_AUTH"]}
+        )
+        self.registered = True
 
         await asyncio.sleep(1)
 
@@ -351,13 +487,21 @@ class WSClient:
         print(f"🌐 - [RPC client] - Os dados de rpc foram sincronizados com sucesso.")
 
     async def send(self, data: dict):
+        # O servidor só aceita dados do bot depois do registro; o que for gerado antes é reenviado pela
+        # sincronização de ``connect_bot_rpc``, que roda logo após o registro.
+        if not self.registered:
+            return
+
+        await self._send_json(data)
+
+    async def _send_json(self, data: dict):
         if not self.is_connected:
             return
 
         try:
             await self.connection.send_json(data)
-        except:
-            print_exc()
+        except Exception as e:
+            logger.warning("Cliente RPC: falha ao enviar dados ao servidor (%s).", type(e).__name__)
 
     def clear_tasks(self):
         for t in self.connect_task:
@@ -397,19 +541,27 @@ class WSClient:
                 continue
 
             elif message.type in (aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSE):
+                if self.connection.close_code == CLOSE_UNAUTHORIZED:
+                    logger.warning(
+                        "Cliente RPC: o servidor recusou o registro (confira se RPC_SERVER_SECRET é o mesmo nos dois lados)."
+                    )
                 print(f"🌐 - RPC Websocket Finalizado: {message.extra}")
                 return
 
-            data = json.loads(message.data)
+            try:
+                data = json.loads(message.data)
+            except (ValueError, RecursionError) as e:
+                logger.warning("Cliente RPC: mensagem descartada, JSON inválido (%s).", type(e).__name__)
+                continue
 
-            users: list = data.get("user_ids")
+            users = data.get("user_ids") if isinstance(data, dict) else None
 
-            if not users:
+            if not users or not isinstance(users, list):
                 continue
 
             op = data.get("op")
 
-            if op == "rpc_update":
+            if op == USER_OP:
                 for bot in self.all_bots:
                     for player in bot.music.players.values():
                         if not player.guild.me.voice:
@@ -436,6 +588,15 @@ def _build_panel(pool: BotPool, config: dict):
     return panel_app, settings.trust_proxy
 
 
+def _warn_if_exposed_without_auth(config: dict, bind_address: str) -> None:
+    if bind_address in PUBLIC_BIND_ADDRESSES and not config.get("ENABLE_RPC_AUTH"):
+        logger.warning(
+            "Servidor RPC escutando em %s com ENABLE_RPC_AUTH desativado: qualquer cliente que alcance a porta pode "
+            "registrar usuários. Ative ENABLE_RPC_AUTH ou restrinja WEB_BIND_ADDRESS (ex.: 127.0.0.1).",
+            bind_address,
+        )
+
+
 def run_app(pool: BotPool, message: str = "", config: dict = None):
     if not config:
         try:
@@ -452,14 +613,17 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
                 IndexHandler,
                 {"pool": pool, "message": message, "config": config, "panel_enabled": panel_app is not None},
             ),
-            (r"/ws", WebSocketHandler),
-        ]
+            (r"/ws", WebSocketHandler, {"config": config, "connections": set()}),
+        ],
+        websocket_max_message_size=MAX_MESSAGE_SIZE,
     )
 
     server = tornado.httpserver.HTTPServer(
         make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy), max_body_size=MAX_BODY_SIZE
     )
-    server.listen(resolve_port(config.get("PORT")))
+    bind_address = config.get("WEB_BIND_ADDRESS") or DEFAULT_BIND_ADDRESS
+    _warn_if_exposed_without_auth(config, bind_address)
+    server.listen(resolve_port(config.get("PORT")), address=bind_address)
     return panel_app
 
 

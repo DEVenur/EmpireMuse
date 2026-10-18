@@ -131,10 +131,10 @@ Pesquisas de segurança feitas de boa-fé e dentro destas regras são bem-vindas
 
 ### Servidor RPC e página web
 
-- Se não for usar Rich Presence, desative o servidor com `RUN_RPC_SERVER=false`.
-- Se for usar, ative a autenticação com `ENABLE_RPC_AUTH=true`.
-- Para expor o servidor à internet, use um proxy reverso com TLS (`https`/`wss`) e evite publicar
-  portas desnecessárias.
+- Se não for usar Rich Presence ou painel web, desative o servidor com `RUN_RPC_SERVER=false`.
+- Ao expor o servidor à rede ou à internet, ative a autenticação com `ENABLE_RPC_AUTH=true` e utilize um proxy reverso com TLS (`https`/`wss`), evitando publicar portas desnecessárias.
+- Quando o `RPC_SERVER` for remoto, configure o mesmo `RPC_SERVER_SECRET` nos dois lados e utilize conexão segura via `wss://`.
+- Utilize `WEB_BIND_ADDRESS=127.0.0.1` quando não precisar de acesso externo, mantendo `0.0.0.0` em contêineres Docker e painéis como Pterodactyl.
 
 ### Servidor de áudio (Lavalink/NodeLink)
 

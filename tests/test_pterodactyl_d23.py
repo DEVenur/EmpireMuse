@@ -202,7 +202,7 @@ class TestServidorHttp:
             def __init__(self, *args, **kwargs):
                 pass
 
-            def listen(self, porta):
+            def listen(self, porta, address=None, **kwargs):
                 chamadas.append(porta)
 
         monkeypatch.setattr(web_app.tornado.httpserver, "HTTPServer", ServidorFalso)
