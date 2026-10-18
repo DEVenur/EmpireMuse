@@ -1,0 +1,251 @@
+"""F3-2 — erros inesperados chegam ao usuário sem detalhe interno (regra 4 de .claude/rules/empiremuse/security.md).
+
+Com a falha de gravação do LocalDatabase propagando (KI-10), um OSError cai no tratador global. O usuário vê uma mensagem
+genérica em pt-BR (sem repr, caminho ou traceback); o detalhe completo vai para o log do servidor (logger.error com
+exc_info) e para o webhook de erro, sem o token do bot. GenericError e as mensagens próprias de ``parse_error`` não mudam.
+Sem rede, sem Discord e sem .env real.
+"""
+
+import logging
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from disnake.ext import commands
+
+from empiremuse.cogs import error_handler
+from empiremuse.cogs.error_handler import ErrorHandler
+from empiremuse.utils.music.errors import GenericError
+
+TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"
+CAMINHO = "/data/local_database/guilds.json"
+LOGGER = "empiremuse.cogs.error_handler"
+
+
+def _erro_de_disco() -> OSError:
+    try:
+        raise OSError(28, f"No space left on device: '{CAMINHO}' (token {TOKEN_FALSO})")
+    except OSError as e:
+        return e
+
+
+def _proibidos_na_tela(texto: str) -> list[str]:
+    return [
+        p
+        for p in ("OSError", "No space left", CAMINHO, "local_database", "Traceback", "```py", TOKEN_FALSO)
+        if p in texto
+    ]
+
+
+@pytest.fixture
+def handler(monkeypatch) -> ErrorHandler:
+    h = ErrorHandler.__new__(ErrorHandler)
+    h.bot = SimpleNamespace(
+        config={"AUTO_ERROR_REPORT_WEBHOOK": "", "ERROR_REPORT_WEBHOOK": "", "SUPPORT_SERVER": ""},
+        http=SimpleNamespace(token=TOKEN_FALSO),
+        pool=SimpleNamespace(shutdown=AsyncMock()),
+        user=SimpleNamespace(mention="<@1>"),
+    )
+    h.components = []
+    h.webhook_max_concurrency = SimpleNamespace(acquire=AsyncMock(), release=AsyncMock())
+    h.send_webhook = AsyncMock()
+    h.build_report_embed = MagicMock(return_value="embed")
+    monkeypatch.setattr(error_handler.asyncio, "sleep", AsyncMock())
+    return h
+
+
+@pytest.fixture
+def enviado(monkeypatch) -> AsyncMock:
+    """send_message (caminho de interação) dublado: guarda o que seria mostrado ao usuário."""
+    enviar = AsyncMock()
+    monkeypatch.setattr(error_handler, "send_message", enviar)
+    return enviar
+
+
+@pytest.fixture
+def arquivos_do_webhook(monkeypatch) -> list[str]:
+    textos: list[str] = []
+
+    def guardar(texto, nome):
+        textos.append(texto)
+        return f"arquivo:{nome}"
+
+    monkeypatch.setattr(error_handler, "string_to_file", guardar)
+    return textos
+
+
+def _interacao() -> MagicMock:
+    inter = MagicMock()
+    inter.message.author.bot = False
+    inter.data.name = "play"
+    return inter
+
+
+class _Contexto:
+    """Contexto de prefixo mínimo (sem ``inter``/``store_message``: a resposta sai por ``ctx.send``)."""
+
+    def __init__(self, embed_links: bool):
+        self.bot = None
+        self.author = SimpleNamespace(bot=False, id=7, mention="<@7>")
+        self.prefix = "!"
+        self.cog = None
+        self.command = SimpleNamespace(name="play", usage=None, full_parent_name="")
+        self.channel = MagicMock()
+        self.channel.permissions_for.return_value.embed_links = embed_links
+        self.guild = SimpleNamespace(me=object())
+        self.message = SimpleNamespace(content="!play x", delete=AsyncMock())
+        self.send = AsyncMock()
+
+
+def _texto_da_interacao(enviar: AsyncMock) -> str:
+    kwargs = enviar.await_args.kwargs
+    partes = [e.description or "" for e in kwargs.get("embeds", [])]
+    if "embed" in kwargs:
+        partes.append(kwargs["embed"].description or "")
+    partes.append(kwargs.get("text", "") or "")
+    return "\n".join(partes)
+
+
+def _texto_do_prefixo(ctx: _Contexto) -> str:
+    kwargs = ctx.send.await_args.kwargs
+    partes = [kwargs.get("content", "") or ""]
+    if "embed" in kwargs:
+        partes.append(kwargs["embed"].description or "")
+    return "\n".join(partes)
+
+
+class TestInteracao:
+    @pytest.mark.asyncio
+    async def test_oserror_mostra_mensagem_generica_sem_detalhe_interno(self, handler, enviado):
+        await handler.process_interaction_error(_interacao(), _erro_de_disco())
+
+        texto = _texto_da_interacao(enviado)
+        assert "Ocorreu um erro" in texto, texto
+        assert not _proibidos_na_tela(texto), f"vazou para o usuário: {_proibidos_na_tela(texto)} em {texto!r}"
+
+    @pytest.mark.asyncio
+    async def test_qualquer_excecao_inesperada_tem_o_mesmo_tratamento(self, handler, enviado):
+        await handler.process_interaction_error(_interacao(), KeyError(CAMINHO))
+
+        assert not _proibidos_na_tela(_texto_da_interacao(enviado))
+
+    @pytest.mark.asyncio
+    async def test_erro_embrulhado_em_command_invoke_error_tambem_e_generico(self, handler, enviado):
+        embrulhado = Exception("falha")
+        embrulhado.original = _erro_de_disco()
+
+        await handler.process_interaction_error(_interacao(), embrulhado)
+
+        assert not _proibidos_na_tela(_texto_da_interacao(enviado))
+
+    @pytest.mark.asyncio
+    async def test_o_detalhe_completo_vai_para_o_log_do_servidor(self, handler, enviado, caplog):
+        with caplog.at_level(logging.ERROR, logger=LOGGER):
+            await handler.process_interaction_error(_interacao(), _erro_de_disco())
+
+        registros = [r for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR]
+        assert registros, "o erro inesperado não foi registrado no log do servidor"
+        tipo, valor, _ = registros[0].exc_info
+        assert tipo is OSError and CAMINHO in str(valor), "o log precisa levar o exc_info com o detalhe completo"
+        assert TOKEN_FALSO not in registros[0].getMessage()
+
+    @pytest.mark.asyncio
+    async def test_no_report_do_webhook_o_detalhe_fica_e_o_token_nao(self, handler, enviado, arquivos_do_webhook):
+        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
+
+        await handler.process_interaction_error(_interacao(), _erro_de_disco())
+
+        handler.send_webhook.assert_awaited_once()
+        relatorio = "\n".join(arquivos_do_webhook)
+        assert CAMINHO in relatorio and "OSError" in relatorio, "o webhook precisa do traceback completo"
+        assert TOKEN_FALSO not in relatorio, "o token do bot não pode ir para o webhook"
+        assert "será notificado" in _texto_da_interacao(enviado)
+
+    @pytest.mark.asyncio
+    async def test_generic_error_continua_igual(self, handler, enviado):
+        await handler.process_interaction_error(_interacao(), GenericError("**Você não pode fazer isso.**"))
+
+        assert "**Você não pode fazer isso.**" in _texto_da_interacao(enviado)
+
+    @pytest.mark.asyncio
+    async def test_mensagem_propria_do_parse_error_continua_igual(self, handler, enviado):
+        await handler.process_interaction_error(_interacao(), commands.NotOwner())
+
+        assert "Apenas meu(s) desenvolvedor(es)" in _texto_da_interacao(enviado)
+
+    @pytest.mark.asyncio
+    async def test_generic_error_nao_vai_para_o_log_de_erro_inesperado(self, handler, enviado, caplog):
+        with caplog.at_level(logging.ERROR, logger=LOGGER):
+            await handler.process_interaction_error(_interacao(), GenericError("**ok**"))
+
+        assert not [r for r in caplog.records if r.name == LOGGER]
+
+    @pytest.mark.asyncio
+    async def test_no_log_do_chamador_e_respeitado(self, handler, enviado, caplog):
+        with caplog.at_level(logging.ERROR, logger=LOGGER):
+            await handler.process_interaction_error(_interacao(), _erro_de_disco(), no_log=True)
+
+        assert not [r for r in caplog.records if r.name == LOGGER]
+        assert not _proibidos_na_tela(_texto_da_interacao(enviado))
+
+
+class TestComandoDePrefixo:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("embed_links", [True, False], ids=["com_embed", "sem_embed"])
+    async def test_oserror_mostra_mensagem_generica_nos_dois_formatos(self, handler, embed_links):
+        ctx = _Contexto(embed_links)
+
+        await handler.on_legacy_command_error(ctx, _erro_de_disco())
+
+        texto = _texto_do_prefixo(ctx)
+        assert "Ocorreu um erro" in texto, texto
+        assert not _proibidos_na_tela(texto), f"vazou para o usuário: {_proibidos_na_tela(texto)} em {texto!r}"
+
+    @pytest.mark.asyncio
+    async def test_o_detalhe_completo_vai_para_o_log_do_servidor(self, handler, caplog):
+        with caplog.at_level(logging.ERROR, logger=LOGGER):
+            await handler.on_legacy_command_error(_Contexto(True), _erro_de_disco())
+
+        registros = [r for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR]
+        assert registros and registros[0].exc_info[0] is OSError
+        assert TOKEN_FALSO not in registros[0].getMessage()
+
+    @pytest.mark.asyncio
+    async def test_no_report_do_webhook_o_detalhe_fica_e_o_token_nao(self, handler, arquivos_do_webhook):
+        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
+
+        await handler.on_legacy_command_error(_Contexto(True), _erro_de_disco())
+
+        handler.send_webhook.assert_awaited_once()
+        relatorio = "\n".join(arquivos_do_webhook)
+        assert CAMINHO in relatorio and TOKEN_FALSO not in relatorio
+
+    @pytest.mark.asyncio
+    async def test_generic_error_continua_igual(self, handler):
+        ctx = _Contexto(True)
+
+        await handler.on_legacy_command_error(ctx, GenericError("**Sem permissão aqui.**"))
+
+        assert "**Sem permissão aqui.**" in _texto_do_prefixo(ctx)
+
+    @pytest.mark.asyncio
+    async def test_mensagem_propria_do_parse_error_continua_igual(self, handler):
+        ctx = _Contexto(False)
+
+        await handler.on_legacy_command_error(ctx, commands.NoPrivateMessage())
+
+        assert "não pode ser executado em mensagens privadas" in _texto_do_prefixo(ctx)
+
+
+def test_nao_ha_repr_do_erro_na_resposta_ao_usuario():
+    """Estrutura: nenhum ``repr(error)`` é montado em descrição/conteúdo no error_handler."""
+    import ast
+    from pathlib import Path
+
+    fonte = Path(error_handler.__file__).read_text(encoding="utf-8")
+    achados = [
+        no.lineno
+        for no in ast.walk(ast.parse(fonte))
+        if isinstance(no, ast.Call) and isinstance(no.func, ast.Name) and no.func.id == "repr"
+    ]
+    assert not achados, f"repr(...) no error_handler.py nas linhas {achados}"
