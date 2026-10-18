@@ -5,17 +5,18 @@ import asyncio
 import base64
 import json
 import logging
-import os.path
+import os
 import re
+import tempfile
 import time
-from tempfile import gettempdir
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING, Union
 from urllib.parse import quote
 
-import aiofiles
 from aiohttp import ClientSession
 from rapidfuzz import fuzz
 
+from empiremuse import paths
 from empiremuse.utils.music.converters import fix_characters, URL_REG
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, LavalinkPlaylist
@@ -28,11 +29,49 @@ spotify_regex = re.compile("https://open.spotify.com?.+(album|playlist|artist|tr
 spotify_link_regex = re.compile(r"(?i)https?:\/\/spotify\.link\/?(?P<id>[a-zA-Z0-9]+)")
 spotify_regex_w_user = re.compile("https://open.spotify.com?.+(album|playlist|artist|track|user)/([a-zA-Z0-9]+)")
 
-spotify_cache_file = os.path.join(gettempdir(), ".spotify_cache.json")
+SPOTIFY_CACHE_FILENAME = ".spotify_cache.json"
+SPOTIFY_CACHE_MODE = 0o600
 
 logger = logging.getLogger(__name__)
 
 PLAYLIST_PAGE_SIZE = 100
+
+
+def spotify_cache_path() -> Path:
+    """Caminho do cache do token, resolvido a cada uso a partir do RUNTIME_DIR (EMPIREMUSE_HOME)."""
+    return paths.get_runtime_dir() / SPOTIFY_CACHE_FILENAME
+
+
+def _read_cache_file(path: Path) -> dict:
+    """Lê o cache do token; arquivo ausente, ilegível ou corrompido resulta em cache vazio."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        logger.warning("Spotify: cache do token ignorado (%s).", type(e).__name__)
+        return {}
+
+    return data if isinstance(data, dict) else {}
+
+
+def _write_cache_file(path: Path, content: str) -> None:
+    """Grava o cache com permissão 0600 num temporário do mesmo diretório e troca de forma atômica."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f"{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            if hasattr(os, "fchmod"):
+                os.fchmod(f.fileno(), SPOTIFY_CACHE_MODE)
+            f.write(content)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 class SpotifyClient:
@@ -54,13 +93,9 @@ class SpotifyClient:
         self.token_refresh = False
         self.playlist_extra_page_limit = playlist_extra_page_limit
 
-        try:
-            with open(spotify_cache_file) as f:
-                self.spotify_cache = json.load(f)
-        except FileNotFoundError:
-            pass
+        self.spotify_cache = _read_cache_file(spotify_cache_path())
 
-    async def request(self, path: str, params: dict = None):
+    async def request(self, path: str, params: dict = None, _renovado: bool = False):
         if self.disabled:
             return
 
@@ -71,8 +106,13 @@ class SpotifyClient:
                 if response.status == 200:
                     return await response.json()
                 elif response.status == 401:
+                    if _renovado:
+                        raise GenericError(
+                            "**Não foi possível autenticar no Spotify: o acesso foi recusado mesmo após renovar o "
+                            "token (confira SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET).**"
+                        )
                     await self.get_access_token()
-                    return await self.request(path=path, params=params)
+                    return await self.request(path=path, params=params, _renovado=True)
                 elif response.status == 403:
                     raise GenericError(
                         "**O Spotify não permitiu o acesso a este conteúdo (ele pode ser privado, restrito ou "
@@ -180,8 +220,10 @@ class SpotifyClient:
         finally:
             self.token_refresh = False
 
-        async with aiofiles.open(spotify_cache_file, "w") as f:
-            await f.write(json.dumps(self.spotify_cache))
+        try:
+            await asyncio.to_thread(_write_cache_file, spotify_cache_path(), json.dumps(self.spotify_cache))
+        except OSError as e:
+            logger.warning("Spotify: não foi possível gravar o cache do token (%s).", type(e).__name__)
 
     async def get_valid_access_token(self):
         if time.time() >= self.spotify_cache.get("expires_at", 0):
