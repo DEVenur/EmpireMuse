@@ -226,9 +226,9 @@ class TestIntegrationsRules:
     async def test_remove_deletes_by_exact_title(self):
         bot = ModalBot(integration_links={"Canal": {"url": URL}, "canal": {"url": f"{URL_BASE}/b"}})
         view = modal_view(bot, INTEGRACOES)
-        view.current = "canal"
+        view.current = "Canal"
         await FavMenuView.remove_callback(view, ModalInteraction())
-        assert list(bot.salvos_usuario[-1]["integration_links"]) == ["Canal"]
+        assert list(bot.salvos_usuario[-1]["integration_links"]) == ["canal"]
 
 
 class TestLastFmRules:

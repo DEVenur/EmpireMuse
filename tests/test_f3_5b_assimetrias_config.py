@@ -239,6 +239,7 @@ class TestA19StatusDoCanalDeVoz:
         no_comando, _ = await status_no_comando(BotDeComandos(), texto)
         assert no_comando == "Agora:\r {track.title}"
         assert status_no_painel(texto)[0] == "Agora: {track.title}"
+        assert status_no_painel("Agora:\r{track.title}")[0] == "Agora: {track.title}"  # \r solto também vira espaço
 
     @pytest.mark.asyncio
     async def test_o_limite_de_496_e_do_campo_do_discord_no_comando_e_do_texto_normalizado_no_painel(self):
@@ -286,16 +287,19 @@ class TestA20VolumePadrao:
 # ============================================================================ A21, A22 — cargos de DJ
 
 
+TETO_DE_CARGOS_DJ = 25
+
+
 class TestA21CargosDeDj:
     @pytest.mark.asyncio
     async def test_o_comando_adiciona_alem_de_25_sem_teto(self, monkeypatch):  # MUDA (etapa 6b, A21/D7): recusa o 26º
-        existentes = cargos(MAX_DJ_ROLES)
+        existentes = cargos(TETO_DE_CARGOS_DJ)
         novo = CargoFalso(5000)
         bot = BotDeComandos()
         bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"] = [str(c.id) for c in existentes]
         guilda = GuildaFalsa([*existentes, novo])
         await comando_de_dj(monkeypatch, "add_dj_role", bot, guilda, novo)
-        assert len(bot.ultimo_do_bot["djroles"]) == MAX_DJ_ROLES + 1
+        assert len(bot.ultimo_do_bot["djroles"]) == TETO_DE_CARGOS_DJ + 1
 
     @pytest.mark.asyncio
     async def test_o_comando_recusa_everyone_e_repetido_e_guarda_ids_em_texto(self, monkeypatch):
@@ -314,11 +318,12 @@ class TestA21CargosDeDj:
         return FormContext(pool=SimpleNamespace(), bot=SimpleNamespace(), guild=guilda, guild_id=guilda.id, user_id="1")
 
     def test_o_painel_aceita_25_e_recusa_26(self):
-        existentes = cargos(MAX_DJ_ROLES + 1)
+        assert MAX_DJ_ROLES == TETO_DE_CARGOS_DJ
+        existentes = cargos(TETO_DE_CARGOS_DJ + 1)
         guilda = GuildaFalsa(existentes)
         ctx = self.contexto_do_painel(guilda)
         ids = [str(c.id) for c in existentes]
-        aceito = DjForm().parse(ctx, {"djroles": []}, {"djroles": ids[:MAX_DJ_ROLES]})
+        aceito = DjForm().parse(ctx, {"djroles": []}, {"djroles": ids[:TETO_DE_CARGOS_DJ]})
         recusado = DjForm().parse(ctx, {"djroles": []}, {"djroles": ids})
         assert aceito.errors == {} and recusado.new == {} and recusado.errors.get("djroles")
 
@@ -421,3 +426,23 @@ class TestA24TituloDoPostDeForum:
         world.setup()
         campo = world.j.of("response.send_modal")[0][2]["components"][0]
         assert (campo.custom_id, campo.min_length, campo.max_length) == ("forum_title", 4, 30)
+
+
+class TestEfeitosDosPrefixosNoPainel:
+    """Depois de gravar, o painel atualiza o cache de prefixos do pool com a chave INT, como os comandos."""
+
+    @pytest.mark.asyncio
+    async def test_prefixo_do_servidor(self):
+        pool = SimpleNamespace(guild_prefix_cache={})
+        ctx = SimpleNamespace(pool=pool, guild_id=SERVIDOR_DO_COMANDO)
+        await PrefixForm().effects(ctx, {"prefix": ""}, {"prefix": ">>"})
+        assert pool.guild_prefix_cache == {SERVIDOR_DO_COMANDO: ">>"}
+        assert all(isinstance(chave, int) for chave in pool.guild_prefix_cache)
+
+    @pytest.mark.asyncio
+    async def test_prefixo_do_usuario(self):
+        pool = SimpleNamespace(user_prefix_cache={})
+        ctx = AccountContext(pool=pool, bot=SimpleNamespace(), user_id=AUTOR)
+        await PrefixSection().effects(ctx, {"custom_prefix": ">>"})
+        assert pool.user_prefix_cache == {AUTOR: ">>"}
+        assert all(isinstance(chave, int) for chave in pool.user_prefix_cache)

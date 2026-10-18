@@ -7,8 +7,7 @@ indicada inverte; o resto é guarda e deve continuar igual depois da extração.
 
 import pytest
 
-from empiremuse.panel.services.account_links import FAV_NAME_MAX, ITG_AVATAR_MAX, ITG_TITLE_MAX, ITG_URL_MAX
-from empiremuse.panel.services.links import MAX_LINKS
+from empiremuse.panel.services import account_links, links
 from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import ViewMode
 from tests.helpers_f3_5b import (
@@ -38,7 +37,9 @@ MODOS = [
     pytest.param(INTEGRACOES, id="integracoes"),
 ]
 URL = f"{URL_BASE}/a"
-DEZ = "0123456789"
+TETO_DE_LINKS = 25
+LIMITE_DO_AVATAR = 250
+LIMITE_DA_URL_DO_LINK = 250
 
 
 @pytest.fixture(autouse=True)
@@ -189,8 +190,8 @@ class TestA3LimiteDoNomeDoFavorito:
 
     def test_o_modal_do_discord_limita_o_nome_em_25(self):
         campos = campos_do_modal(FAVORITOS)
-        assert FAV_NAME_MAX == 25
-        assert (campos["user_fav_name"].min_length, campos["user_fav_name"].max_length) == (2, FAV_NAME_MAX)
+        assert account_links.FAV_NAME_MAX == 25
+        assert (campos["user_fav_name"].min_length, campos["user_fav_name"].max_length) == (2, 25)
 
     @pytest.mark.asyncio
     async def test_painel_recusa_26_ao_adicionar(self):
@@ -404,7 +405,7 @@ class TestA11AvatarDaIntegracao:
 
     @pytest.mark.asyncio
     async def test_guarda_limite_de_250_e_avatar_vazio_nos_dois(self):
-        longo = url_com_tamanho(ITG_AVATAR_MAX)
+        longo = url_com_tamanho(LIMITE_DO_AVATAR)
         for avatar, aceito in ((longo, True), (longo + "x", False)):
             item = {"Canal": {"url": URL, "avatar": avatar}}
             no_painel, _ = await importar_no_painel(INTEGRACOES, item)
@@ -419,7 +420,7 @@ class TestA11AvatarDaIntegracao:
 class TestA12LimiteDeUrlDasIntegracoes:
     @pytest.mark.asyncio
     async def test_150_aceita_e_151_recusa_nos_dois_sem_depender_da_configuracao(self):  # MUDA (etapa 5, D4): 200
-        assert ITG_URL_MAX == 150
+        assert account_links.ITG_URL_MAX == 150
         for tamanho, aceito in ((150, True), (151, False)):
             item = {"Canal": url_com_tamanho(tamanho)}
             no_painel, _ = await importar_no_painel(INTEGRACOES, item, bot=BotDoPainel(url_max=90))
@@ -431,12 +432,30 @@ class TestA12LimiteDeUrlDasIntegracoes:
 
     @pytest.mark.asyncio
     async def test_titulo_ate_90_nos_dois_e_o_modal_cria_ate_80(self):
-        assert ITG_TITLE_MAX == 90
+        assert account_links.ITG_TITLE_MAX == 90
         for tamanho, aceito in ((90, True), (91, False)):
             item = {"t" * tamanho: URL}
             no_painel, _ = await importar_no_painel(INTEGRACOES, item)
             no_bot, _ = await importar_no_bot(INTEGRACOES, item)
             assert (no_painel is not None, no_bot is not None) == (aceito, aceito)
+
+
+class TestA12TituloCriadoPeloModal:
+    @pytest.mark.asyncio
+    async def test_o_modal_corta_o_titulo_em_80_e_o_importador_aceita_ate_90(self):
+        async def perfil_longo(user_id):
+            return {
+                "name": "n" * 100,
+                "link": f"https://www.deezer.com/br/profile/{user_id}",
+                "picture": f"{URL_BASE}/a.png",
+            }
+
+        bot = ModalBot()
+        bot.deezer.get_user_info = perfil_longo
+        await adicionar_integracao(bot)
+        titulo = next(iter(bot.salvos_usuario[-1]["integration_links"]))
+        assert len(titulo) == 83 and titulo.endswith("..."), "80 caracteres e reticências"
+        assert account_links.ITG_TITLE_MAX == 90
 
 
 # ============================================================================ A13, A14, A15, A16 — links fixos do servidor
@@ -525,41 +544,41 @@ class TestA15SobrescritaNosLinksDoServidor:
     async def test_modal_do_bot_com_25_itens_recusa_ate_a_sobrescrita(self):  # MUDA (etapa 5, A15)
         bot = ModalBot()
         bot.guild_data["player_controller"]["fav_links"] = {
-            f"item{i}": {"url": URL, "description": ""} for i in range(MAX_LINKS)
+            f"item{i}": {"url": URL, "description": ""} for i in range(TETO_DE_LINKS)
         }
         inter = await adicionar_link_do_servidor(bot, "item3", URL, "nova")
         assert bot.salvos_servidor == [] and "Não há espaço disponível" in inter.texto
 
     @pytest.mark.asyncio
     async def test_guarda_importadores_sobrescrever_nao_ocupa_vaga_com_25_itens(self):
-        existentes = {f"item{i}": {"url": URL, "description": "d"} for i in range(MAX_LINKS)}
+        existentes = {f"item{i}": {"url": URL, "description": "d"} for i in range(TETO_DE_LINKS)}
         item = {"item3": {"url": f"{URL_BASE}/nova", "description": "nova"}}
         no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item, existentes=existentes)
         no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item, existentes=existentes)
-        assert erros == {} and len(no_bot) == len(no_painel) == MAX_LINKS
+        assert erros == {} and len(no_bot) == len(no_painel) == TETO_DE_LINKS
         assert no_bot["item3"]["description"] == no_painel["item3"]["description"] == "nova"
 
 
 class TestA16TetoDeVinteECincoLinks:
-    """Literais ``24``/``25`` no bot e ``MAX_LINKS`` no painel: o mesmo teto de 25, a manter na regra única."""
+    """Literais ``24``/``25`` no bot e ``TETO_DE_LINKS`` no painel: o mesmo teto de 25, a manter na regra única."""
 
     @pytest.mark.asyncio
     async def test_modal_do_bot_aceita_o_25o_e_recusa_o_26o(self):
         bot = ModalBot()
         bot.guild_data["player_controller"]["fav_links"] = {
-            f"item{i}": {"url": URL, "description": ""} for i in range(MAX_LINKS - 1)
+            f"item{i}": {"url": URL, "description": ""} for i in range(TETO_DE_LINKS - 1)
         }
         await adicionar_link_do_servidor(bot, "ultimo", URL)
-        assert len(bot.salvos_servidor[-1]["player_controller"]["fav_links"]) == MAX_LINKS
+        assert len(bot.salvos_servidor[-1]["player_controller"]["fav_links"]) == TETO_DE_LINKS
         cheio = ModalBot()
         cheio.guild_data["player_controller"]["fav_links"] = {
-            f"item{i}": {"url": URL, "description": ""} for i in range(MAX_LINKS)
+            f"item{i}": {"url": URL, "description": ""} for i in range(TETO_DE_LINKS)
         }
         inter = await adicionar_link_do_servidor(cheio, "extra", URL)
         assert cheio.salvos_servidor == [] and "Não há espaço" in inter.texto
 
     def test_painel_aceita_o_25o_e_recusa_o_26o(self):
-        quase = {f"item{i}": {"url": URL, "description": ""} for i in range(MAX_LINKS - 1)}
+        quase = {f"item{i}": {"url": URL, "description": ""} for i in range(TETO_DE_LINKS - 1)}
         aceito = painel_links(BotDoPainel(), "adicionar", quase, nome="ultimo", url=URL, descricao="")
         assert aceito.errors == {}
         cheio = {**quase, "ultimo": {"url": URL, "description": ""}}
@@ -571,7 +590,7 @@ class TestA16TetoDeVinteECincoLinks:
         def arquivo(quantidade):
             return {f"item{i}": {"url": URL, "description": "d"} for i in range(quantidade)}
 
-        for quantidade, aceito in ((MAX_LINKS, True), (MAX_LINKS + 1, False)):
+        for quantidade, aceito in ((TETO_DE_LINKS, True), (TETO_DE_LINKS + 1, False)):
             no_bot, _ = await importar_no_bot(SERVIDOR_MODO, arquivo(quantidade))
             no_painel, _ = await importar_no_painel(SERVIDOR_MODO, arquivo(quantidade))
             assert (no_bot is not None, no_painel is not None) == (aceito, aceito)
@@ -617,3 +636,60 @@ class TestGuardasDosFavoritosPessoais:
         assert inexistente.new == {} and inexistente.errors
         integracoes = await painel_integracoes(BotDoPainel(), "integracao_remover", {"A": {"url": URL}}, nome="A")
         assert integracoes.new["integration_links"] == {}
+
+
+class TestA16MensagensDoTetoNoImportadorDoBot:
+    """O bot tem duas checagens do teto (arquivo grande demais; arquivo + o que já existe): cada uma com sua mensagem."""
+
+    @pytest.mark.asyncio
+    async def test_arquivo_com_26_itens_diz_que_excede_o_maximo(self):
+        arquivo = {f"item{i}": {"url": URL, "description": "d"} for i in range(TETO_DE_LINKS + 1)}
+        guardado, texto = await importar_no_bot(SERVIDOR_MODO, arquivo)
+        assert guardado is None and "excede a quantidade máxima permitida (25)" in texto
+
+    @pytest.mark.asyncio
+    async def test_arquivo_pequeno_mais_o_que_ja_existe_diz_que_nao_ha_espaco(self):
+        existentes = {f"item{i}": {"url": URL, "description": "d"} for i in range(TETO_DE_LINKS)}
+        guardado, texto = await importar_no_bot(
+            SERVIDOR_MODO, {"novo": {"url": URL, "description": "d"}}, existentes=existentes
+        )
+        assert guardado is None and "não possui espaço suficiente" in texto and "Limite atual: 25" in texto
+
+
+class TestLimitesDoPainelSaoLiteraisAquiEConstantesLa:
+    """As constantes do painel são conferidas contra os números deste arquivo, que não mudam com elas."""
+
+    def test_constantes(self):
+        assert (account_links.FAV_NAME_MIN, account_links.FAV_NAME_MAX) == (2, 25)
+        assert (account_links.ITG_TITLE_MAX, account_links.ITG_URL_MAX, account_links.ITG_AVATAR_MAX) == (90, 150, 250)
+        assert links.MAX_LINKS == TETO_DE_LINKS and (links.URL_MIN, links.URL_MAX) == (10, LIMITE_DA_URL_DO_LINK)
+        assert (links.NAME_MIN, links.NAME_MAX, links.DESCRIPTION_MIN, links.DESCRIPTION_MAX) == (2, 25, 3, 50)
+
+    def test_o_painel_aceita_url_de_link_com_250_e_recusa_251_ao_adicionar(self):
+        for tamanho, aceito in ((LIMITE_DA_URL_DO_LINK, True), (LIMITE_DA_URL_DO_LINK + 1, False)):
+            resultado = painel_links(
+                BotDoPainel(), "adicionar", {}, nome="Link", url=url_com_tamanho(tamanho), descricao=""
+            )
+            assert (resultado.errors == {}) is aceito, tamanho
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("favs", "dono", "cabe"),
+        [(2, False, False), (3, False, True), (0, False, True), (2, True, True)],
+        ids=["no_limite", "abaixo", "sem_limite", "dono_isento"],
+    )
+    async def test_cota_do_painel_ao_adicionar_um_favorito(self, favs, dono, cabe):
+        existentes = {"a1": URL, "a2": URL}
+        resultado = await painel_favoritos(
+            BotDoPainel(favs=favs, dono=dono), "favorito_adicionar", existentes, nome="novo", url=URL
+        )
+        assert (resultado.errors == {}) is cabe
+
+    @pytest.mark.asyncio
+    async def test_nome_com_espacos_nas_pontas_no_arquivo_e_aparado_nos_dois_importadores(self):
+        no_painel, _ = await importar_no_painel(FAVORITOS, {"  Rock  ": URL})
+        no_bot, _ = await importar_no_bot(FAVORITOS, {"  Rock  ": URL})
+        assert list(no_painel) == list(no_bot) == ["Rock"]
+        itg_painel, _ = await importar_no_painel(INTEGRACOES, {" Canal ": URL})
+        itg_bot, _ = await importar_no_bot(INTEGRACOES, {" Canal ": URL})
+        assert list(itg_painel) == list(itg_bot) == ["Canal"]
