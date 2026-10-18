@@ -286,6 +286,7 @@ class BotPool:
                     youtube_oauth_refresh_token=self.config["YOUTUBE_OAUTH_REFRESH_TOKEN"],
                     lavalink_initial_ram=self.config["LAVALINK_INITIAL_RAM"],
                     lavalink_ram_limit=self.config["LAVALINK_RAM_LIMIT"],
+                    lavalink_cpu_cores=self.config["LAVALINK_CPU_CORES"],
                     lavalink_additional_sleep=int(self.config["LAVALINK_ADDITIONAL_SLEEP"]),
                     use_jabba=self.config["USE_JABBA"],
                     lavalink_java_path=self.config["LAVALINK_JAVA_PATH"],

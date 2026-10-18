@@ -925,7 +925,7 @@ class TestGuardaDosComandosDeOwner:
 
 
 OVERRIDE_RELATIVO = Path(".lavalink") / "plugins-override.yml"
-PREFIXO_OVERRIDE = "-Dspring.config.additional-location=file:"
+PREFIXO_OVERRIDE = "-Dspring.config.additional-location="
 
 
 def carregar_yaml_seguro(caminho: Path):
@@ -951,10 +951,10 @@ class TestSemConsultaAoMaven:
         ll.run_lavalink(lavalink_offline=offline)
 
         args = popen[0][0]
-        esperado = f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve()}"
+        esperado = f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve().as_uri()}"
         assert esperado in args
         assert args.index(esperado) < args.index("-jar"), "a propriedade precisa vir antes do -jar"
-        assert Path(esperado.removeprefix(PREFIXO_OVERRIDE)).is_absolute()
+        assert esperado.removeprefix(PREFIXO_OVERRIDE).startswith("file:///")
 
     def test_o_arquivo_tem_exatamente_a_lista_de_plugins_vazia(self, runtime, popen, proibidos, monkeypatch):
         instalar_binarios(runtime, monkeypatch)
@@ -1001,7 +1001,7 @@ class TestSemConsultaAoMaven:
         assert arvore(pre_instalado) == antes
         assert (runtime / OVERRIDE_RELATIVO).is_file(), "o override mora em RUNTIME_DIR, nunca em LAVALINK_HOME"
         args = popen[0][0]
-        assert f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve()}" in args
+        assert f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve().as_uri()}" in args
 
     def test_falha_ao_gravar_o_override_e_erro_claro_citando_o_arquivo(self, runtime, popen, proibidos, monkeypatch):
         instalar_binarios(runtime, monkeypatch)
