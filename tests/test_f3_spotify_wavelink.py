@@ -10,10 +10,14 @@ correções; os demais falham hoje pelo motivo descrito na docstring.
 
 import json
 import logging
+import os
 import secrets
+import stat
+import tempfile
 import time
 from collections import deque
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import parse_qsl, urlsplit
 
@@ -23,6 +27,7 @@ from multidict import CIMultiDict
 from rapidfuzz import fuzz
 from yarl import URL
 
+from empiremuse import paths
 from empiremuse.utils.music import models
 from empiremuse.utils.music.audio_sources import spotify
 from empiremuse.utils.music.errors import GenericError
@@ -76,6 +81,7 @@ class _RedeFalsa:
         self.ao_get = ao_get or (lambda url, params: _RespostaFalsa())
         self.ao_post = ao_post or (lambda url, data: _RespostaFalsa())
         self.gets: list[tuple[str, dict | None]] = []
+        self.cabecalhos: list[dict | None] = []
         self.posts: list[str] = []
 
     def __call__(self, *args, **kwargs):  # substitui ClientSession(...)
@@ -89,6 +95,7 @@ class _RedeFalsa:
 
     def get(self, url, headers=None, params=None, **kwargs):
         self.gets.append((url, params))
+        self.cabecalhos.append(headers)
         return self.ao_get(url, params)
 
     def post(self, url, headers=None, data=None, **kwargs):
@@ -98,9 +105,29 @@ class _RedeFalsa:
 
 @pytest.fixture
 def cache_isolado(tmp_path, monkeypatch):
-    caminho = tmp_path / "spotify_cache.json"
-    monkeypatch.setattr(spotify, "spotify_cache_file", str(caminho))
-    return caminho
+    """Isola todo lugar onde o cache do token poderia ir: RUNTIME_DIR (via EMPIREMUSE_HOME), cwd e o tmp do sistema.
+
+    Nada aqui fixa o nome nem o local do arquivo: os testes o encontram com ``_arquivo_do_cache``.
+    """
+    pastas = SimpleNamespace(runtime=tmp_path / "runtime", sistema=tmp_path / "sistema", cwd=tmp_path / "cwd")
+    for pasta in (pastas.runtime, pastas.sistema, pastas.cwd):
+        pasta.mkdir()
+    monkeypatch.setenv("EMPIREMUSE_HOME", str(pastas.runtime))
+    monkeypatch.chdir(pastas.cwd)
+    monkeypatch.setattr(tempfile, "tempdir", str(pastas.sistema))
+    monkeypatch.setattr(spotify, "spotify_cache_file", str(pastas.sistema / ".spotify_cache.json"), raising=False)
+    return pastas
+
+
+def _arquivos(*pastas: Path) -> list[Path]:
+    return [p for pasta in pastas for p in pasta.rglob("*") if p.is_file()]
+
+
+def _arquivo_do_cache(pastas) -> Path:
+    """O único arquivo gravado em qualquer das pastas isoladas (o cache do token), onde quer que esteja."""
+    achados = _arquivos(pastas.runtime, pastas.sistema, pastas.cwd)
+    assert len(achados) == 1, f"esperado exatamente 1 arquivo de cache, achei {achados}"
+    return achados[0]
 
 
 @pytest.fixture
@@ -338,7 +365,7 @@ async def test_ki19_arquivo_de_cache_persistido_usa_a_chave_type(cache_isolado, 
 
     await cliente.get_access_token()
 
-    gravado = json.loads(cache_isolado.read_text("utf-8"))
+    gravado = json.loads(_arquivo_do_cache(cache_isolado).read_text("utf-8"))
     assert gravado.get("type") == "api"
     assert "tyoe" not in gravado
 
@@ -347,16 +374,19 @@ async def test_ki19_arquivo_de_cache_persistido_usa_a_chave_type(cache_isolado, 
 async def test_guarda_cache_antigo_com_tyoe_continua_valido(cache_isolado, rede):
     """Um cache gravado por versão anterior (com ``tyoe``) ainda vale: o token é reaproveitado, sem pedir outro."""
     token = _valor_falso("tok")
-    cache_isolado.write_text(
-        json.dumps({"access_token": token, "tyoe": "api", "expires_at": time.time() + 3600}), "utf-8"
-    )
-    falsa = rede(ao_post=_resposta_de_token(_valor_falso("outro")))
-    cliente = _cliente(cache_isolado)
+    falsa = rede(ao_post=_resposta_de_token(token))
+    await _cliente(cache_isolado).get_access_token()  # grava o cache onde o cliente grava
+    arquivo = _arquivo_do_cache(cache_isolado)
+    dados = json.loads(arquivo.read_text("utf-8"))
+    dados.pop("type", None)
+    dados["tyoe"] = "api"  # formato das versões anteriores
+    arquivo.write_text(json.dumps(dados), "utf-8")
+    posts_antes = len(falsa.posts)
 
-    obtido = await cliente.get_valid_access_token()
+    obtido = await _cliente(cache_isolado).get_valid_access_token()
 
     assert obtido == token
-    assert falsa.posts == []
+    assert len(falsa.posts) == posts_antes
 
 
 @pytest.mark.asyncio
@@ -944,3 +974,184 @@ async def test_guarda_ki44_descartadas_no_primeiro_provedor_e_boa_no_ultimo_a_bo
 
     assert _id_mandado_tocar(jogador) == "boa"
     jogador.process_next.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Renovação de token após 401
+# ---------------------------------------------------------------------------------------------------------------------
+
+LIMITE_DE_GETS = 6  # trava de segurança do teste: acima disso a requisição está sendo repetida sem limite
+
+
+def _emissor_de_tokens():
+    """Callback de POST que emite um token novo a cada renovação e guarda os emitidos."""
+    emitidos: list[str] = []
+
+    def ao_post(url, data):
+        token = _valor_falso("tok")
+        emitidos.append(token)
+        return _RespostaFalsa(payload={"access_token": token, "token_type": "Bearer", "expires_in": 3600})
+
+    return ao_post, emitidos
+
+
+def _gets_com_status(*status: int, corpo: str = "", token_na_url: str = ""):
+    """Responde aos GETs na sequência de ``status`` (repete o último); 200 devolve ``{"ok": True}``."""
+    contagem = {"n": 0}
+
+    def ao_get(url, params):
+        contagem["n"] += 1
+        if contagem["n"] > LIMITE_DE_GETS:
+            raise AssertionError(f"mais de {LIMITE_DE_GETS} GETs: a requisição está sendo repetida sem limite")
+        atual = status[min(contagem["n"], len(status)) - 1]
+        if atual == 200:
+            return _RespostaFalsa(payload={"ok": True})
+        url_com_token = f"{API_SPOTIFY}/tracks/x?access_token={token_na_url}"
+        return _RespostaFalsa(status=atual, texto=corpo, url=url_com_token)
+
+    return ao_get
+
+
+async def _requisicao_com_dois_401(cache_isolado, rede):
+    """Faz uma requisição em que TODA resposta é 401; devolve (exceção, rede falsa, emitidos, token antigo, corpo, cliente)."""
+    ao_post, emitidos = _emissor_de_tokens()
+    cliente = _cliente_com_token_valido(cache_isolado)
+    antigo = cliente.spotify_cache["access_token"]
+    corpo = f"corpo-cru-{secrets.token_hex(6)}"
+    falsa = rede(ao_get=_gets_com_status(401, corpo=corpo, token_na_url=antigo), ao_post=ao_post)
+
+    with pytest.raises(Exception) as capturado:
+        await cliente.get_track_info("x")
+
+    return capturado.value, falsa, emitidos, antigo, corpo, cliente
+
+
+@pytest.mark.asyncio
+async def test_renovacao_de_token_segundo_401_termina_com_erro_e_uma_unica_renovacao(cache_isolado, rede):
+    """Um 401 renova o token e repete UMA vez; um segundo 401 termina com ``GenericError``, sem outra renovação."""
+    erro, falsa, _, _, _, cliente = await _requisicao_com_dois_401(cache_isolado, rede)
+
+    assert isinstance(erro, GenericError), f"esperado GenericError, veio {type(erro).__name__}: {erro}"
+    assert len(falsa.posts) == 1, f"{len(falsa.posts)} renovações de token"
+    assert len(falsa.gets) == 2, f"{len(falsa.gets)} requisições"
+    assert cliente.token_refresh is False
+
+
+@pytest.mark.asyncio
+async def test_renovacao_de_token_erro_do_segundo_401_e_generico_e_em_portugues(cache_isolado, rede):
+    erro, _, emitidos, antigo, corpo, cliente = await _requisicao_com_dois_401(cache_isolado, rede)
+
+    assert isinstance(erro, GenericError), f"esperado GenericError, veio {type(erro).__name__}: {erro}"
+    texto = erro.text
+    assert "spotify" in texto.lower()
+    assert any(palavra in texto.lower() for palavra in ("não", "falha", "autentic"))
+    for nome, valor in {
+        "token antigo": antigo,
+        "token novo": emitidos[0],
+        "client_secret": cliente.client_secret,
+        "corpo da resposta": corpo,
+    }.items():
+        assert valor not in texto, f"a mensagem expõe {nome}"
+    assert "access_token" not in texto
+    assert "api.spotify.com" not in texto
+
+
+@pytest.mark.asyncio
+async def test_guarda_renovacao_de_token_401_seguido_de_200_renova_uma_vez_e_repete_com_o_token_novo(
+    cache_isolado, rede
+):
+    ao_post, emitidos = _emissor_de_tokens()
+    cliente = _cliente_com_token_valido(cache_isolado)
+    antigo = cliente.spotify_cache["access_token"]
+    falsa = rede(ao_get=_gets_com_status(401, 200), ao_post=ao_post)
+
+    resultado = await cliente.get_track_info("x")
+
+    assert resultado == {"ok": True}
+    assert len(falsa.posts) == 1
+    assert len(falsa.gets) == 2
+    assert falsa.cabecalhos[0]["Authorization"] == f"Bearer {antigo}"
+    assert falsa.cabecalhos[1]["Authorization"] == f"Bearer {emitidos[0]}"
+
+
+@pytest.mark.asyncio
+async def test_guarda_renovacao_de_token_resposta_200_nao_renova(cache_isolado, rede):
+    cliente = _cliente_com_token_valido(cache_isolado)
+    falsa = rede(ao_get=_gets_com_status(200), ao_post=_emissor_de_tokens()[0])
+
+    assert await cliente.get_track_info("x") == {"ok": True}
+    assert falsa.posts == []
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Cache do token: local e permissão
+# ---------------------------------------------------------------------------------------------------------------------
+# O local não é fixado pelo nome: o arquivo é achado depois de ``get_access_token``. O RUNTIME_DIR é resolvido em tempo
+# de uso (EMPIREMUSE_HOME), como nos demais módulos; um cache antigo no tmp do sistema não pode ser lido.
+
+
+def test_guarda_isolamento_do_cache_runtime_dir_aponta_para_tmp_path(cache_isolado):
+    assert paths.RUNTIME_DIR == cache_isolado.runtime.resolve()
+    assert Path(tempfile.gettempdir()) == cache_isolado.sistema
+
+
+@pytest.mark.asyncio
+async def test_cache_do_token_e_gravado_sob_o_runtime_dir(cache_isolado, rede):
+    token = _valor_falso("tok")
+    rede(ao_post=_resposta_de_token(token))
+
+    await _cliente(cache_isolado).get_access_token()
+
+    sob_runtime = _arquivos(cache_isolado.runtime)
+    assert len(sob_runtime) == 1, "nenhum arquivo de cache sob RUNTIME_DIR"
+    assert json.loads(sob_runtime[0].read_text("utf-8"))["access_token"] == token
+
+
+@pytest.mark.asyncio
+async def test_cache_do_token_nao_e_gravado_no_tmp_do_sistema(cache_isolado, rede):
+    rede(ao_post=_resposta_de_token(_valor_falso("tok")))
+
+    await _cliente(cache_isolado).get_access_token()
+
+    assert _arquivos(cache_isolado.sistema, cache_isolado.cwd) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="permissões POSIX")
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mascara", [0o000, 0o022])
+async def test_cache_do_token_e_criado_com_permissao_0600(cache_isolado, rede, mascara):
+    rede(ao_post=_resposta_de_token(_valor_falso("tok")))
+    anterior = os.umask(mascara)
+    try:
+        await _cliente(cache_isolado).get_access_token()
+    finally:
+        os.umask(anterior)
+
+    modo = stat.S_IMODE(_arquivo_do_cache(cache_isolado).stat().st_mode)
+    assert modo == 0o600, f"permissão {modo:#o} (umask {mascara:#o})"
+
+
+@pytest.mark.asyncio
+async def test_cache_antigo_no_tmp_do_sistema_nao_e_lido(cache_isolado, rede):
+    antigo = _valor_falso("velho")
+    legado = Path(tempfile.gettempdir()) / ".spotify_cache.json"
+    legado.write_text(json.dumps({"access_token": antigo, "type": "api", "expires_at": time.time() + 3600}), "utf-8")
+    ao_post, emitidos = _emissor_de_tokens()
+    falsa = rede(ao_post=ao_post)
+
+    obtido = await _cliente(cache_isolado).get_valid_access_token()
+
+    assert obtido != antigo, "usou o token do cache antigo do tmp do sistema"
+    assert len(falsa.posts) == 1 and obtido == emitidos[0]
+
+
+@pytest.mark.asyncio
+async def test_guarda_cache_gravado_e_reaproveitado_por_outro_cliente_sem_pedir_token_novo(cache_isolado, rede):
+    falsa = rede(ao_post=_resposta_de_token(_valor_falso("tok")))
+    primeiro = _cliente(cache_isolado)
+    await primeiro.get_access_token()
+
+    obtido = await _cliente(cache_isolado).get_valid_access_token()
+
+    assert obtido == primeiro.spotify_cache["access_token"]
+    assert len(falsa.posts) == 1
