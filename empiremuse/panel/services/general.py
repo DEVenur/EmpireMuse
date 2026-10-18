@@ -10,23 +10,15 @@ import disnake
 
 from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, first
 from empiremuse.panel.services.player import active_player
+from empiremuse.rules.limits import (
+    PREFIX_MAX_LENGTH as PREFIX_MAX_LENGTH,
+    VOICE_PLACEHOLDERS as VOICE_PLACEHOLDERS,
+    VOICE_STATUS_MAX_LENGTH as VOICE_STATUS_MAX_LENGTH,
+)
+from empiremuse.rules.text import normalize_status as normalize_status
 
 logger = logging.getLogger(__name__)
 
-# Mesmos limites dos comandos: legacy_cmds.setprefix (5 caracteres) e SetStageTitle (496 caracteres, 9 placeholders).
-PREFIX_MAX_LENGTH = 5
-VOICE_STATUS_MAX_LENGTH = 496
-VOICE_PLACEHOLDERS = (
-    "{track.title}",
-    "{track.timestamp}",
-    "{track.emoji}",
-    "{track.author}",
-    "{track.duration}",
-    "{track.source}",
-    "{track.playlist}",
-    "{requester.name}",
-    "{requester.id}",
-)
 MSG_PREFIX_LENGTH = f"O prefixo pode ter no máximo {PREFIX_MAX_LENGTH} caracteres."
 MSG_PREFIX_CHARS = "O prefixo não pode conter espaços nem caracteres de controle."
 MSG_VOICE_PLACEHOLDER = "Use pelo menos um placeholder válido, como {track.title}."
@@ -57,12 +49,6 @@ class PrefixForm(SettingsForm):
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
         ctx.pool.guild_prefix_cache[ctx.guild_id] = new["prefix"]
-
-
-def normalize_status(text: str) -> str:
-    """Quebras de linha viram espaço e as pontas são aparadas, como o modal do comando."""
-    flat = text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
-    return flat.strip()
 
 
 class VoiceStatusForm(SettingsForm):

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any, NamedTuple, Optional
 
 from empiremuse.panel.services.base import Args
+from empiremuse.rules.quota import quota_limit
 
 ACCOUNT_PATH = "/painel/conta"
 ACTION_UNKNOWN_TEXT = "Ação desconhecida."
@@ -52,7 +53,7 @@ async def effective_limit(ctx: AccountContext, config_key: str) -> int:
     maximum = int(ctx.bot.config[config_key])
     if maximum <= 0:
         return 0
-    return 0 if await ctx.bot.is_owner(ctx.user) else maximum
+    return quota_limit(maximum, await ctx.bot.is_owner(ctx.user))
 
 
 class AccountSection:

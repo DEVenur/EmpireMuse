@@ -21,14 +21,19 @@ from empiremuse.panel.services.base import (
     first,
     load_json_object,
 )
-from empiremuse.utils.music.converters import URL_REG
+from empiremuse.rules.limits import (
+    GUILD_LINK_DESCRIPTION_MAX as DESCRIPTION_MAX,
+    GUILD_LINK_DESCRIPTION_MIN as DESCRIPTION_MIN,
+    GUILD_LINK_NAME_MAX as NAME_MAX,
+    GUILD_LINK_NAME_MIN as NAME_MIN,
+    GUILD_LINK_URL_MAX as URL_MAX,
+    GUILD_LINK_URL_MIN as URL_MIN,
+    MAX_GUILD_LINKS as MAX_LINKS,
+)
+from empiremuse.rules.urls import URL_REG, extract_url_legacy
 
 logger = logging.getLogger(__name__)
 
-MAX_LINKS = 25
-NAME_MIN, NAME_MAX = 2, 25
-URL_MIN, URL_MAX = 10, 250
-DESCRIPTION_MIN, DESCRIPTION_MAX = 3, 50
 ACTIONS = ("adicionar", "editar", "remover", "importar")
 MSG_ACTION = "Ação desconhecida."
 MSG_NO_CHANNEL = "Configure o canal de pedidos primeiro."
@@ -69,8 +74,7 @@ def _valid_fields(url_raw: str, description: str, stored: str = "") -> tuple[Opt
     errors: dict[str, str] = {}
     url = None
     if URL_MIN <= len(url_raw) <= URL_MAX:
-        found = URL_REG.findall(url_raw)
-        url = found[0] if found else None
+        url = extract_url_legacy(url_raw)
     if url is None:
         errors["url"] = MSG_URL
     if description and description != stored and not DESCRIPTION_MIN <= len(description) <= DESCRIPTION_MAX:

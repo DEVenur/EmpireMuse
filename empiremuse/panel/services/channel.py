@@ -21,6 +21,7 @@ from empiremuse.panel.services.channel_tokens import ResetTokens
 from empiremuse.panel.services.base import DBModel, DIGITS, Args, FormContext, first, flag, version_of
 from empiremuse.panel.services.service import SettingsService
 from empiremuse.panel.services.tasks import Job, Task, TaskFailure, TaskRunner
+from empiremuse.rules.limits import FORUM_TITLE_MAX as FORUM_TITLE_MAX, FORUM_TITLE_MIN as FORUM_TITLE_MIN
 from empiremuse.utils import branding
 from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
@@ -42,7 +43,6 @@ logger = logging.getLogger(__name__)
 
 MODES = ("existente", "criar")
 KINDS = {"texto": "text", "voz": "voice", "palco": "stage"}
-FORUM_TITLE_MIN, FORUM_TITLE_MAX = 4, 30
 _ACCEPTED = (disnake.TextChannel, disnake.VoiceChannel, disnake.StageChannel, disnake.ForumChannel)
 _TYPE_NAMES = (
     (disnake.StageChannel, "palco"),

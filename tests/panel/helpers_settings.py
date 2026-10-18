@@ -569,81 +569,42 @@ class SettingsBase(LoginBase):
         return self.submit(browser, url, form, htmx=htmx, **overrides)
 
 
-# ============================================================================ regras extraídas do código dos comandos
+# ============================================================================ regras dos comandos (contrato)
+#
+# São o contrato que o painel espelha. Quem prova que os COMANDOS cumprem é o teste de comportamento de
+# tests/panel/test_settings_rules.py (TestCommandRules): ele chama os callbacks reais com dublês e compara com estas
+# constantes. Nenhum teste lê o texto do código-fonte, então a refatoração das regras (F3-5b) não os quebra.
 
-
-def _tree(relative):
-    import ast
-    from tests.panel.helpers import ROOT
-
-    path = ROOT / relative
-    if not path.is_file():
-        if relative.startswith("utils/"):
-            path = ROOT / "empiremuse" / relative
-        elif relative.startswith("modules/"):
-            path = ROOT / "empiremuse" / "cogs" / relative.removeprefix("modules/")
-        elif relative in ("config_loader.py", "web_app.py"):
-            path = ROOT / "empiremuse" / relative
-    source = path.read_text(encoding="utf-8")
-    return source, ast.parse(source)
-
-
-def _class_node(tree, name):
-    import ast
-
-    return next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == name)
-
-
-def command_volume_ranges():
-    """Argumentos constantes dos `range(...)` da classe PlayerSettings (modules/music_settings.py)."""
-    import ast
-
-    _, tree = _tree("modules/music_settings.py")
-    ranges = []
-    for node in ast.walk(_class_node(tree, "PlayerSettings")):
-        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "range":
-            ranges.append(tuple(a.value for a in node.args if isinstance(a, ast.Constant)))
-    return sorted(set(ranges))
+COMMAND_VOLUMES = frozenset(range(5, 101, 5)) | frozenset(range(110, 151, 10))
+COMMAND_VOICE_PLACEHOLDERS = (
+    "{track.title}",
+    "{track.timestamp}",
+    "{track.emoji}",
+    "{track.author}",
+    "{track.duration}",
+    "{track.source}",
+    "{track.playlist}",
+    "{requester.name}",
+    "{requester.id}",
+)
+COMMAND_VOICE_MAX_LENGTH = 496
+COMMAND_PREFIX_MAX_LENGTH = 5
 
 
 def command_allowed_volumes():
-    allowed = set()
-    for args in command_volume_ranges():
-        allowed.update(range(*args))
-    return allowed
+    return set(COMMAND_VOLUMES)
 
 
 def command_voice_placeholders():
-    """Tupla `placeholders` de SetStageTitle (utils/music/interactions.py)."""
-    import ast
-
-    _, tree = _tree("utils/music/interactions.py")
-    for node in _class_node(tree, "SetStageTitle").body:
-        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", None) == "placeholders":
-            return tuple(e.value for e in node.value.elts)
-    raise AssertionError("SetStageTitle.placeholders não encontrado")
+    return COMMAND_VOICE_PLACEHOLDERS
 
 
 def command_voice_max_length():
-    """max_length (constante) dos TextInput de SetStageTitle."""
-    import ast
-
-    _, tree = _tree("utils/music/interactions.py")
-    lengths = {
-        kw.value.value
-        for node in ast.walk(_class_node(tree, "SetStageTitle"))
-        if isinstance(node, ast.Call)
-        for kw in node.keywords
-        if kw.arg == "max_length" and isinstance(kw.value, ast.Constant)
-    }
-    return lengths
+    return {COMMAND_VOICE_MAX_LENGTH}
 
 
 def command_prefix_max_length():
-    """Limite de `len(prefix) > N` em setprefix (modules/legacy_cmds.py)."""
-    source, _ = _tree("modules/legacy_cmds.py")
-    block = source[source.index("async def setprefix") : source.index("async def resetprefix")]
-    return int(re.search(r"len\(prefix\)\s*>\s*(\d+)", block).group(1))
+    return COMMAND_PREFIX_MAX_LENGTH
 
 
 # ============================================================================ E4b: formulários identificados por `acao`

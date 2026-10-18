@@ -6,10 +6,8 @@ import re
 from typing import Any, NamedTuple
 
 from empiremuse.panel.services.base import DIGITS, Args, FormContext, ParseResult, SettingsForm, flag, first
+from empiremuse.rules.limits import MAX_DJ_ROLES as MAX_DJ_ROLES, VOLUMES as VOLUMES
 
-# Mesmo conjunto do comando (modules/music_settings.py, PlayerSettings): 5…100 de 5 em 5 e 110…150 de 10 em 10.
-VOLUMES = tuple(range(5, 101, 5)) + tuple(range(110, 151, 10))
-MAX_DJ_ROLES = 25
 _VOLUME = re.compile(r"[0-9]{1,3}", re.ASCII)
 MSG_VOLUME = "Escolha um volume válido: de 5 a 100 (de 5 em 5) ou de 110 a 150 (de 10 em 10)."
 MSG_ROLE_INVALID = "Selecione apenas cargos que existem neste servidor."

@@ -1,33 +1,56 @@
-"""E4a — caracterização: as regras que o painel espelha, extraídas do CÓDIGO dos comandos (não do briefing),
-mais a sanidade dos dublês (FakeDB e parser de formulário). Estes testes ficam verdes desde já: são a âncora que
-detecta se um comando mudar e o painel ficar para trás (ou o contrário).
+"""E4a — caracterização: as regras que o painel espelha, medidas no COMPORTAMENTO dos comandos (callbacks reais com
+dublês, nunca lendo o texto do código-fonte), mais a sanidade dos dublês (FakeDB e parser de formulário). Estes testes
+ficam verdes desde já: são a âncora que detecta se um comando mudar e o painel ficar para trás (ou o contrário).
 """
 
 import asyncio
 
-from tests.panel.helpers import ROOT
+import pytest
+
+import empiremuse.cogs.legacy_cmds as legacy_cmds
+from empiremuse.utils.db import DBModel
+from tests.helpers_f3_5b import (
+    BotDeComandos,
+    CargoFalso,
+    GuildaFalsa,
+    abrir_modal_do_status_permanente,
+    comando_de_dj,
+    executar,
+    opcoes_de_volume,
+    opcoes_do_change_skin,
+    skins_do_bot,
+    status_no_comando,
+)
+from tests.helpers_modais import SERVIDOR_DO_COMANDO
 from tests.panel.helpers_settings import (
     SettingsWorld,
     command_allowed_volumes,
     command_prefix_max_length,
     command_voice_max_length,
     command_voice_placeholders,
-    command_volume_ranges,
     parse_forms,
     version_of,
 )
 
-LEGACY = (ROOT / "empiremuse/cogs/legacy_cmds.py").read_text(encoding="utf-8")
-SETTINGS = (ROOT / "empiremuse/cogs/music_settings.py").read_text(encoding="utf-8")
-INTERACTIONS = (ROOT / "empiremuse/utils/music/interactions.py").read_text(encoding="utf-8")
-
 
 class TestCommandRules:
-    def test_volume_set_is_5_to_100_step_5_and_110_to_150_step_10(self):
-        assert command_volume_ranges() == [(5, 101, 5), (110, 151, 10)]
+    @pytest.mark.asyncio
+    async def test_volume_set_is_5_to_100_step_5_and_110_to_150_step_10(self):
+        offered, default = await opcoes_de_volume(100)
         allowed = command_allowed_volumes()
+        assert sorted(offered) == sorted(allowed) and default == [100]
         assert len(allowed) == 25 and min(allowed) == 5 and max(allowed) == 150
         assert 105 not in allowed and 100 in allowed and 110 in allowed and 0 not in allowed
+
+    @pytest.mark.asyncio
+    async def test_volume_select_marks_the_saved_volume_as_the_default(self):
+        assert (await opcoes_de_volume(150))[1] == [150] and (await opcoes_de_volume(5))[1] == [5]
+
+    @pytest.mark.parametrize("placeholder", command_voice_placeholders())
+    @pytest.mark.asyncio
+    async def test_each_voice_status_placeholder_is_accepted_alone_by_the_command(self, placeholder):
+        saved, _ = await status_no_comando(BotDeComandos(), placeholder)
+        assert saved == placeholder
 
     def test_voice_status_placeholders_are_the_nine_of_the_command(self):
         assert set(command_voice_placeholders()) == {
@@ -42,35 +65,60 @@ class TestCommandRules:
             "{requester.id}",
         }
 
-    def test_voice_status_modal_limit_is_496_and_at_least_one_placeholder_is_required(self):
-        assert command_voice_max_length() == {496}
-        flat = " ".join(INTERACTIONS.split())
-        assert (
-            'not any(p in values["status_voice_value"] for p in self.placeholders)' in flat
-            or 'not any( p in values["status_voice_value"] for p in self.placeholders)' in flat
-        )
-        assert '.replace("\\n", " ").strip()' in INTERACTIONS, "o comando troca quebras de linha por espaço"
+    @pytest.mark.parametrize("text", ["Tocando agora", "{foo}", "{track.titulo}", "track.title", "{TRACK.TITLE}"])
+    @pytest.mark.asyncio
+    async def test_voice_status_without_a_valid_placeholder_is_refused_by_the_command(self, text):
+        saved, message = await status_no_comando(BotDeComandos(), text)
+        assert saved is None and "placeholder" in message
 
-    def test_prefix_limit_is_five_and_reset_stores_empty_in_the_pool_cache_with_an_int_key(self):
-        assert command_prefix_max_length() == 5
-        assert "prefix = prefix.strip()" in LEGACY
-        assert "self.bot.pool.guild_prefix_cache[ctx.guild.id] = prefix" in LEGACY
-        assert 'self.bot.pool.guild_prefix_cache[ctx.guild.id] = ""' in LEGACY
+    @pytest.mark.asyncio
+    async def test_voice_status_modal_limit_is_496_and_line_breaks_become_spaces(self):
+        field = await abrir_modal_do_status_permanente()
+        assert {field.max_length} == command_voice_max_length() and field.required is False
+        saved, _ = await status_no_comando(BotDeComandos(), "\n Agora:\n{track.title}\n")
+        assert saved == "Agora: {track.title}", "o comando troca quebras de linha por espaço e apara as pontas"
 
-    def test_skin_choices_exclude_the_ignore_lists_read_from_bot_config(self):
-        assert '[s for s in bot.player_skins if s not in bot.config["IGNORE_SKINS"].split()]' in SETTINGS
-        assert '[s for s in bot.player_static_skins if s not in bot.config["IGNORE_STATIC_SKINS"].split()]' in SETTINGS
-        assert "> custom_skin: " in SETTINGS
+    @pytest.mark.asyncio
+    async def test_prefix_limit_is_five_and_reset_stores_empty_in_the_pool_cache_with_an_int_key(self):
+        limit = command_prefix_max_length()
+        assert limit == 5
+        bot = BotDeComandos()
+        ok = await executar(bot, legacy_cmds.Owner.setprefix, " " + "a" * limit + " ")
+        assert not ok.recusado and bot.ultimo_global["prefix"] == "a" * limit, "o comando apara as pontas"
+        assert bot.pool.guild_prefix_cache == {SERVIDOR_DO_COMANDO: "a" * limit}
+        assert all(isinstance(key, int) for key in bot.pool.guild_prefix_cache)
+        too_long = await executar(BotDeComandos(), legacy_cmds.Owner.setprefix, "a" * (limit + 1))
+        assert too_long.recusado
+        reset = await executar(bot, legacy_cmds.Owner.resetprefix)
+        assert not reset.recusado and bot.ultimo_global["prefix"] == ""
+        assert bot.pool.guild_prefix_cache == {SERVIDOR_DO_COMANDO: ""}
 
-    def test_dj_roles_are_string_ids_and_everyone_is_refused(self):
-        assert "if role == guild.default_role:" in SETTINGS
-        assert (
-            "str(role.id) in guild_data['djroles']" in SETTINGS or 'str(role.id) in guild_data["djroles"]' in SETTINGS
+    @pytest.mark.asyncio
+    async def test_skin_choices_exclude_the_ignore_lists_read_from_bot_config(self, monkeypatch):
+        bot = BotDeComandos(config={"IGNORE_SKINS": "modern ghost", "IGNORE_STATIC_SKINS": "bar"})
+        skins_do_bot(
+            bot,
+            ["classic", "modern", "compact"],
+            ["simple", "bar"],
+            personalizadas=["minha"],
+            personalizadas_estaticas=["fixa"],
         )
-        assert (
-            "guild_data['djroles'].append(str(role.id))" in SETTINGS
-            or 'guild_data["djroles"].append(str(role.id))' in SETTINGS
-        )
+        normal, static, global_normal, global_static = await opcoes_do_change_skin(monkeypatch, bot, GuildaFalsa())
+        assert normal == global_normal == ["classic", "compact", "> custom_skin: minha"]
+        assert static == global_static == ["simple", "> custom_skin: fixa"]
+
+    @pytest.mark.asyncio
+    async def test_dj_roles_are_string_ids_and_everyone_is_refused(self, monkeypatch):
+        role = CargoFalso(1001)
+        guild = GuildaFalsa([role])
+        bot = BotDeComandos()
+        refused = await comando_de_dj(monkeypatch, "add_dj_role", bot, guild, guild.default_role)
+        assert bot.gravacoes == [] and "não pode adicionar" in refused.texto
+        await comando_de_dj(monkeypatch, "add_dj_role", bot, guild, role)
+        assert bot.ultimo_do_bot["djroles"] == ["1001"], "ids como texto, na ordem de inclusão"
+        bot.documento("bot", DBModel.guilds, SERVIDOR_DO_COMANDO)["djroles"] = ["1001"]
+        repeated = await comando_de_dj(monkeypatch, "add_dj_role", bot, guild, role)
+        assert "já está na lista" in repeated.texto
 
     def test_models_hold_the_fields_the_panel_writes(self):
         from empiremuse.utils.db import DBModel, db_models, global_db_models

@@ -9,12 +9,12 @@ from typing import Union, TYPE_CHECKING
 
 import disnake
 
+from empiremuse.rules.urls import URL_REG as URL_REG  # reexportado: cogs e testes importam daqui
 from empiremuse.utils.branding import asset_url
 
 if TYPE_CHECKING:
     pass
 
-URL_REG = re.compile("http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|%[0-9a-fA-F][0-9a-fA-F])+")
 YOUTUBE_VIDEO_REG = re.compile(r"(https?://)?(www\.|music\.)?youtube\.(com|nl)/watch\?v=([-\w]+)")
 
 replaces = [
