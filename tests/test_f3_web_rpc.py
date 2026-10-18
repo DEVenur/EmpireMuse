@@ -1315,3 +1315,127 @@ async def test_guarda_sem_aviso_quando_o_bind_e_local(iniciar_servidor, caplog, 
         iniciar_servidor({"WEB_BIND_ADDRESS": "127.0.0.1"})
 
     assert not _avisou_sobre_a_auth(caplog, capsys)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Quem pode enviar mensagens bot -> usuário: só uma conexão autenticada E registrada como bot
+# ---------------------------------------------------------------------------------------------------------------------
+
+REMETENTES_NAO_AUTORIZADOS = [
+    "anonima",
+    "chave-errada",
+    "chave-valida-sem-registro",
+    "usuario-registrado",
+    "bot-rejeitado",
+]
+AMBIENTES_DE_AUTH = {"auth-desligada": {}, "auth-ligada": AUTH_LIGADA}
+
+
+async def _remetente(servidor, sessao, segredo: str, tipo: str):
+    if tipo == "anonima":
+        return await _conectar(servidor, sessao)
+    if tipo == "chave-errada":
+        return await _conectar(servidor, sessao, chave=secrets.token_hex(16))
+    if tipo == "chave-valida-sem-registro":
+        return await _conectar(servidor, sessao, chave=segredo)  # autenticada, mas nunca registrada com bot: true
+    if tipo == "usuario-registrado":
+        return await _registrar_usuario(servidor, sessao, [_snowflake()])
+    ws = await _conectar(servidor, sessao, chave=secrets.token_hex(16))  # bot-rejeitado: registro com chave errada
+    await ws.send_json({"user_ids": [_snowflake()], "bot": True})
+    await asyncio.sleep(ASSENTAR)
+    return ws
+
+
+async def _tentar_enviar(ws, payload: dict) -> None:
+    """Envia, aceitando que o servidor já possa ter fechado a conexão (o que é o esperado para quem não é bot)."""
+    try:
+        await ws.send_json(payload)
+    except (ConnectionError, aiohttp.ClientError, RuntimeError):
+        pass
+
+
+def _mensagens_para_usuario(usuario: int, bot_id: int) -> dict:
+    """Formas de mensagem bot -> usuário (sem ``user_ids``), incluindo as que o servidor também gera."""
+    return {
+        "minimo": {"op": "update", "bot_id": bot_id, "user": usuario},
+        "exception": {"op": "exception", "message": "mensagem forjada", "bot_id": bot_id, "user": usuario},
+        "close": {"op": "close", "bot_id": bot_id, "user": usuario},
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auth", sorted(AMBIENTES_DE_AUTH))
+@pytest.mark.parametrize("tipo", REMETENTES_NAO_AUTORIZADOS)
+async def test_so_conexao_autenticada_como_bot_pode_enviar_dados_ao_usuario(
+    iniciar_servidor, sessao, segredo, tipo, auth
+):
+    """Hoje qualquer conexão que mande ``bot_id`` + ``user`` entrega o conteúdo ao usuário conectado."""
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AMBIENTES_DE_AUTH[auth]})
+    token = _token_do_app()  # o mesmo token na mensagem: a recusa tem de vir do remetente, não da comparação do token
+    usuario = _snowflake()
+    usuario_ws = await _registrar_usuario(servidor, sessao, [usuario], token)
+    remetente = await _remetente(servidor, sessao, segredo, tipo)
+
+    await _tentar_enviar(remetente, await _stats("update", usuario, token, auth=(auth == "auth-ligada")))
+
+    assert await _nada_recebido(usuario_ws), "o usuário recebeu dados de uma conexão que não é um bot autenticado"
+    assert await _fechamento(remetente) == 4401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("forma", sorted(_mensagens_para_usuario(0, 0)))
+async def test_mensagem_bot_para_usuario_de_conexao_anonima_e_recusada_em_qualquer_forma(
+    iniciar_servidor, sessao, segredo, forma
+):
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
+    usuario = _snowflake()
+    usuario_ws = await _registrar_usuario(servidor, sessao, [usuario])
+    anonima = await _conectar(servidor, sessao)
+
+    await _tentar_enviar(anonima, _mensagens_para_usuario(usuario, _snowflake())[forma])
+
+    assert await _nada_recebido(usuario_ws), "o usuário recebeu uma mensagem de uma conexão anônima"
+    assert await _fechamento(anonima) == 4401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auth", sorted(AMBIENTES_DE_AUTH))
+async def test_guarda_bot_autenticado_continua_entregando_ao_usuario(iniciar_servidor, sessao, segredo, auth):
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AMBIENTES_DE_AUTH[auth]})
+    token = _token_do_app()
+    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo, token)
+
+    await bot_ws.send_json(await _stats("update", usuario, token, auth=(auth == "auth-ligada")))
+
+    assert (await _receber(usuario_ws))["op"] == "update"
+    assert not bot_ws.closed
+
+
+@pytest.mark.asyncio
+async def test_guarda_bot_autenticado_entrega_update_idle_e_close_em_sequencia(iniciar_servidor, sessao, segredo):
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
+    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo)
+
+    for op in ("update", "idle", "close"):
+        await bot_ws.send_json(await _stats(op, usuario, _token_do_app()))
+        assert (await _receber(usuario_ws))["op"] == op
+    assert not bot_ws.closed
+
+
+@pytest.mark.asyncio
+async def test_guarda_bot_interno_via_wsclient_entrega_dados_ao_usuario_sem_segredo_configurado(
+    iniciar_servidor, sessao
+):
+    """O fluxo real do bot: WSClient registra e depois envia pelo ``send`` (o mesmo caminho do ``_send_rpc_data``)."""
+    servidor = iniciar_servidor()
+    usuario = _snowflake()
+    usuario_ws = await _registrar_usuario(servidor, sessao, [usuario])
+    client = await _wsclient_interno(servidor)
+    try:
+        await client.send(await _stats("update", usuario, _token_do_app()))
+        entregue = await _receber(usuario_ws)
+    finally:
+        await client.connection.close()
+        await client.session.close()
+
+    assert entregue["op"] == "update" and entregue["user"] == usuario
