@@ -820,6 +820,84 @@ async def test_guarda_auth_ligada_usuario_bloqueado_nao_recebe_ate_o_token_volta
     assert (await _receber(usuario_ws))["op"] == "update"
 
 
+# Como o bot informa o token na mensagem: texto vazio, campo ausente ou ``null``.
+TOKEN_DO_BOT_VAZIO = ["", "ausente", None]
+TOKEN_DO_BOT_VAZIO_IDS = ["vazio", "ausente", "null"]
+
+
+async def _entrega_com_token_do_bot(servidor, sessao, segredo, *, token_do_usuario, token_do_bot, auth: bool):
+    """Como ``_entrega``, mas deixa o token do bot vazio, ausente ou ``null`` na mensagem enviada ao servidor."""
+    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo, token_do_usuario)
+    # O process_rpc real não monta o update com token vazio e auth ligada: parte de um token válido e o esvazia.
+    stats = await _stats("update", usuario, _token_do_app(), auth=auth)
+    if token_do_bot == "ausente":
+        stats.pop("token", None)
+    else:
+        stats["token"] = token_do_bot
+    await bot_ws.send_json(stats)
+    return await _receber(usuario_ws)
+
+
+def _bloqueou_com_o_aviso_de_token(entregue: dict) -> bool:
+    return entregue["op"] == "exception" and "token" in entregue["message"].lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_do_bot", TOKEN_DO_BOT_VAZIO, ids=TOKEN_DO_BOT_VAZIO_IDS)
+async def test_auth_ligada_usuario_sem_token_e_bot_sem_token_nao_entrega(
+    iniciar_servidor, sessao, segredo, token_do_bot
+):
+    """Hoje ``same_token("", "")`` é verdadeiro: dois tokens vazios "batem" e a entrega acontece."""
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
+
+    entregue = await _entrega_com_token_do_bot(
+        servidor, sessao, segredo, token_do_usuario="", token_do_bot=token_do_bot, auth=True
+    )
+
+    assert _bloqueou_com_o_aviso_de_token(entregue), f"entregou com tokens vazios: {entregue.get('op')}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_do_bot", TOKEN_DO_BOT_VAZIO, ids=TOKEN_DO_BOT_VAZIO_IDS)
+async def test_guarda_auth_ligada_usuario_com_token_e_bot_sem_token_nao_entrega(
+    iniciar_servidor, sessao, segredo, token_do_bot
+):
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
+
+    entregue = await _entrega_com_token_do_bot(
+        servidor, sessao, segredo, token_do_usuario=_token_do_app(), token_do_bot=token_do_bot, auth=True
+    )
+
+    assert _bloqueou_com_o_aviso_de_token(entregue)
+
+
+@pytest.mark.asyncio
+async def test_auth_ligada_token_vazio_nao_vaza_nada_na_mensagem_de_bloqueio(iniciar_servidor, sessao, segredo):
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
+
+    entregue = await _entrega_com_token_do_bot(
+        servidor, sessao, segredo, token_do_usuario="", token_do_bot="", auth=True
+    )
+
+    assert _bloqueou_com_o_aviso_de_token(entregue)
+    assert not {"token", "track", "info"} & set(entregue)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_do_bot", ["", "ausente"], ids=["vazio", "ausente"])
+async def test_guarda_auth_desligada_usuario_sem_token_continua_recebendo(
+    iniciar_servidor, sessao, segredo, token_do_bot
+):
+    """Compatibilidade: o app sem token (auth desligada) segue recebendo os dados do bot."""
+    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
+
+    entregue = await _entrega_com_token_do_bot(
+        servidor, sessao, segredo, token_do_usuario="", token_do_bot=token_do_bot, auth=False
+    )
+
+    assert entregue["op"] == "update"
+
+
 @pytest.mark.asyncio
 async def test_auth_ligada_token_que_volta_a_bater_desbloqueia_e_uma_nova_divergencia_avisa_de_novo(
     iniciar_servidor, sessao, segredo
