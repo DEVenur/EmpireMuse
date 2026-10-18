@@ -17,7 +17,7 @@ import pytest
 import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.utils.db import DBModel, LocalDatabase, db_models
 from empiremuse.utils.music import interactions, request_channel
-from empiremuse.utils.music.converters import perms_translations
+from empiremuse.utils.music.converters import perms_translations, time_format
 from empiremuse.panel.services.account_links import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import CustomContext
@@ -378,14 +378,25 @@ class FakeMusicCog:
 class ModalBot:
     """Só o que os modais de ``interactions.py`` pedem ao bot; os dados são o MESMO dict (como no BaseDB)."""
 
-    def __init__(self, *, favs=10, integracoes=10, dono=False, fav_links=None, integration_links=None):
+    def __init__(
+        self,
+        *,
+        favs=10,
+        integracoes=10,
+        dono=False,
+        fav_links=None,
+        integration_links=None,
+        nome_max=25,
+        retry_after=None,
+    ):
         self.config = {
             "MAX_USER_FAVS": favs,
             "MAX_USER_INTEGRATIONS": integracoes,
             "USER_FAV_MAX_URL_LENGTH": 200,
-            "USER_FAV_MAX_NAME_LENGTH": 25,
+            "USER_FAV_MAX_NAME_LENGTH": nome_max,
         }
         self.dono = dono
+        self.retry_after = retry_after
         self.user_data = {"fav_links": dict(fav_links or {}), "integration_links": dict(integration_links or {})}
         self.guild_data = {"player_controller": {"channel": "22", "message_id": "555", "fav_links": {}}}
         self.salvos_usuario, self.salvos_servidor = [], []
@@ -396,7 +407,12 @@ class ModalBot:
         return {"name": "Ana", "link": f"https://www.deezer.com/br/profile/{user_id}", "picture": f"{URL_BASE}/ana.png"}
 
     def get_cog(self, nome):
-        return FakeMusicCog
+        return SimpleNamespace(
+            fav_import_export_cd=SimpleNamespace(
+                get_bucket=lambda inter: SimpleNamespace(update_rate_limit=lambda: self.retry_after)
+            ),
+            fav_manager=SimpleNamespace(name="fav_manager"),
+        )
 
     async def is_owner(self, user):
         return self.dono
@@ -458,7 +474,7 @@ class ViewDoMenu(SimpleNamespace):
         raise AttributeError(f"a FavMenuView real não tem {nome!r}")
 
 
-def modal_view(bot, mode, *, real=False, prefixo=False):
+def modal_view(bot, mode, *, real=True, prefixo=False):
     ctx = ContextoDePrefixo() if prefixo else ModalContext()
     campos = dict(mode=mode, bot=bot, data=None, guild_data=None, ctx=ctx, log="")
     campos["message"] = MensagemDoMenu() if prefixo else None
@@ -1559,3 +1575,221 @@ class TestKI54CotaNoModalDeFavorito:
         bot = ModalBot(favs=2, fav_links=favs_cheios(2))
         inter = await adicionar_favorito(bot, nome="renomeado", editando="removido")
         assert bot.salvos_usuario == [] and "Não há espaço disponível" in inter.texto
+
+
+# ============================================================================ KI-51 — resíduo na view depois da recusa
+
+
+class TestKI51ResiduoNaView:
+    """A recusa deixava a cópia já podada em ``view.data``/``view.guild_data``; o ``remove_callback`` seguinte
+    persistia esse documento e apagava dos dados os itens que o arquivo só ia sobrescrever."""
+
+    URL = f"{URL_BASE}/a"
+
+    def cenario(self, modo):
+        """(bot, arquivo recusado, nome do item que o usuário remove depois, atributo da view com os dados)."""
+        if modo == ViewMode.guild_fav_manager:
+            bot = ModalBot()
+            bot.guild_data["player_controller"]["fav_links"] = {
+                f"item{i}": {"url": self.URL, "description": "d"} for i in range(24)
+            }
+            arquivo = {
+                "item0": {"url": self.URL, "description": "novo"},
+                "item1": {"url": self.URL, "description": "novo"},
+                "novo1": {"url": self.URL, "description": "d"},
+                "novo2": {"url": self.URL, "description": "d"},
+                "novo3": {"url": self.URL, "description": "d"},
+            }
+            return bot, arquivo, "item5", "guild_data"
+        if modo == ViewMode.fav_manager:
+            bot = ModalBot(favs=5, fav_links=favs_cheios(4))
+            arquivo = {"fav0": self.URL, "novo1": self.URL, "novo2": self.URL, "novo3": self.URL}
+            return bot, arquivo, "fav2", "data"
+        bot = ModalBot(integracoes=5, integration_links={f"canal{i}": {"url": self.URL} for i in range(4)})
+        arquivo = {"canal0": self.URL, "novo1": self.URL, "novo2": self.URL, "novo3": self.URL}
+        return bot, arquivo, "canal2", "data"
+
+    @staticmethod
+    def documento(bot, modo):
+        if modo == ViewMode.guild_fav_manager:
+            return bot.guild_data
+        return bot.user_data
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    async def test_depois_da_recusa_os_dados_da_view_ficam_como_antes(self, modo):
+        bot, arquivo, _, atributo = self.cenario(modo)
+        view = modal_view(bot, modo)
+        setattr(view, atributo, self.documento(bot, modo))  # o que a tela já tinha carregado
+        antes = copy.deepcopy(getattr(view, atributo))
+        inter = await importar(bot, modo, arquivo, view=view)
+        assert inter.texto and bot.salvos_usuario == [] and bot.salvos_servidor == [], (
+            "a importação deveria ser recusada"
+        )
+        assert getattr(view, atributo) == antes, f"KI-51: a recusa deixou a view com dados alterados ({atributo})"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    async def test_remover_um_item_depois_da_recusa_nao_persiste_um_documento_podado(self, modo):
+        bot, arquivo, alvo, atributo = self.cenario(modo)
+        view = modal_view(bot, modo)
+        setattr(view, atributo, self.documento(bot, modo))
+        antes = copy.deepcopy(self.documento(bot, modo))
+        await importar(bot, modo, arquivo, view=view)
+
+        view.current = alvo
+        remocao = ModalInteraction()
+        await FavMenuView.remove_callback(view, remocao)
+
+        if modo == ViewMode.guild_fav_manager:
+            esperado = copy.deepcopy(antes)
+            del esperado["player_controller"]["fav_links"][alvo]
+            persistido = bot.salvos_servidor[-1]
+        else:
+            esperado = copy.deepcopy(antes)
+            del esperado["fav_links" if modo == ViewMode.fav_manager else "integration_links"][alvo]
+            persistido = bot.salvos_usuario[-1]
+        assert persistido == esperado, (
+            "KI-51: a remoção persistiu um documento sem os itens que o arquivo sobrescreveria"
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    async def test_guarda_importacao_aceita_atualiza_a_view_e_a_remocao_seguinte_enxerga_o_novo_item(self, modo):
+        bot, arquivo, alvo, atributo = self.cenario(modo)
+        if modo == ViewMode.guild_fav_manager:
+            arquivo = {k: arquivo[k] for k in ("item0", "novo1")}
+        elif modo == ViewMode.fav_manager:
+            arquivo = {k: arquivo[k] for k in ("fav0", "novo1")}
+        else:
+            arquivo = {k: arquivo[k] for k in ("canal0", "novo1")}
+        view = modal_view(bot, modo)
+        await importar(bot, modo, arquivo, view=view)
+        assert "novo1" in json.dumps(getattr(view, atributo)), "a view precisa refletir o que foi importado"
+
+
+# ============================================================================ sobreviventes da mutação do endurecimento
+
+
+def url_com(modo, url, **extra):
+    return arquivo_com(modo, "Musica", url, **extra)
+
+
+class TestUrlDosImportadoresRigorosa:
+    """URL INTEIRA validada: texto depois, colchetes e menções em massa são recusados; as pontas são aparadas."""
+
+    TEXTO_DEPOIS = ["https://a.com/x texto extra", "https://a.com/x\ntexto", "https://a.com/x\tfim"]
+    COLCHETES = ["https://a.com/x[y", "https://a.com/x]y"]
+    MENCOES = ["https://a.com/x@everyone", "https://a.com/x@here", "https://a.com/x@EVERYONE", "https://a.com/x@Here"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    @pytest.mark.parametrize("url", TEXTO_DEPOIS + COLCHETES + MENCOES)
+    async def test_url_suja_e_recusada_com_mensagem_e_nada_e_gravado(self, modo, url):
+        bot = ModalBot()
+        inter = await importar(bot, modo, url_com(modo, url))
+        assert gravados(bot, modo) == {}, f"URL suja gravada: {url!r}"
+        assert "link inválido" in inter.texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("avatar", TEXTO_DEPOIS + COLCHETES + MENCOES)
+    async def test_avatar_sujo_e_recusado_com_mensagem(self, avatar):
+        bot = ModalBot()
+        modo = ViewMode.integrations_manager
+        inter = await importar(bot, modo, url_com(modo, f"{URL_BASE}/c", avatar=avatar))
+        assert gravados(bot, modo) == {}
+        assert "link inválido" in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_mensagem_do_avatar_invalido_cita_o_avatar_e_nao_a_url(self):
+        bot = ModalBot()
+        modo = ViewMode.integrations_manager
+        inter = await importar(bot, modo, url_com(modo, f"{URL_BASE}/boa", avatar="avatar-invalido-123"))
+        assert "avatar-invalido-123" in inter.texto and "/boa" not in inter.texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    async def test_espacos_nas_pontas_da_url_sao_removidos_ao_gravar(self, modo):
+        bot = ModalBot()
+        await importar(bot, modo, url_com(modo, "  https://a.com/x  "))
+        assert url_de(gravados(bot, modo)["Musica"]) == "https://a.com/x"
+
+    @pytest.mark.asyncio
+    async def test_espacos_nas_pontas_do_avatar_sao_removidos_ao_gravar(self):
+        bot = ModalBot()
+        modo = ViewMode.integrations_manager
+        await importar(bot, modo, url_com(modo, f"{URL_BASE}/c", avatar="  https://a.com/a.png  "))
+        assert gravados(bot, modo)["Musica"] == {"url": f"{URL_BASE}/c", "avatar": "https://a.com/a.png"}
+
+
+class TestNomesRepetidosEConfiguracao:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    @pytest.mark.parametrize(
+        "repetido", [("Rock", "rock"), ("Rock", " Rock "), ("Rock", "ROCK")], ids=["caixa", "espaco", "maiusculas"]
+    )
+    async def test_nomes_repetidos_no_proprio_arquivo_sao_recusados(self, modo, repetido):
+        bot = ModalBot()
+        arquivo = {**arquivo_com(modo, repetido[0], f"{URL_BASE}/1"), **arquivo_com(modo, repetido[1], f"{URL_BASE}/2")}
+        inter = await importar(bot, modo, arquivo)
+        assert gravados(bot, modo) == {} and inter.texto, (
+            "o nome repetido (sem diferenciar caixa) deve recusar o arquivo"
+        )
+
+    @pytest.mark.asyncio
+    async def test_nome_de_favorito_tem_no_maximo_25_mesmo_com_configuracao_maior(self):
+        bot = ModalBot(nome_max=40)
+        inter = await importar(bot, ViewMode.fav_manager, {"n" * 26: f"{URL_BASE}/a"})
+        assert gravados(bot, ViewMode.fav_manager) == {} and inter.texto
+
+    @pytest.mark.asyncio
+    async def test_a_configuracao_menor_que_25_continua_valendo_no_importador_de_favoritos(self):
+        recusado = ModalBot(nome_max=10)
+        inter = await importar(recusado, ViewMode.fav_manager, {"n" * 11: f"{URL_BASE}/a"})
+        assert gravados(recusado, ViewMode.fav_manager) == {} and inter.texto
+        aceito = ModalBot(nome_max=10)
+        await importar(aceito, ViewMode.fav_manager, {"n" * 10: f"{URL_BASE}/a"})
+        assert list(gravados(aceito, ViewMode.fav_manager)) == ["n" * 10]
+
+
+class TestLimiteDeTaxaDosImportadores:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
+    @pytest.mark.parametrize(("espera", "segundos"), [(0.4, 1), (7.9, 7)])
+    async def test_importacao_dentro_do_limite_de_taxa_avisa_quanto_esperar_e_nao_grava(self, modo, espera, segundos):
+        bot = ModalBot(retry_after=espera)
+        inter = await importar(bot, modo, arquivo_com(modo, "Musica", f"{URL_BASE}/a"))
+        assert gravados(bot, modo) == {}
+        assert "aguardar" in inter.texto and time_format(segundos * 1000, use_names=True) in inter.texto
+
+
+class TestKI52MensagensDeItemMalFormado:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("nome", ["n" * 5000, "a```b" + "n" * 500])
+    async def test_item_mal_formado_com_nome_gigante_ou_com_crases_cabe_no_discord(self, nome):
+        bot = ModalBot()
+        inter = await importar(bot, ViewMode.guild_fav_manager, {nome: "texto"})
+        assert inter.enviados and bot.salvos_servidor == []
+        for mensagem in inter.enviados:
+            assert len(mensagem) < 2000 and mensagem.count("```") <= 2
+
+
+class TestModalDeFavoritoNaoAlteraOCacheNemAOrdem:
+    @pytest.mark.asyncio
+    async def test_recusa_por_cota_ja_estourada_deixa_o_cache_e_a_view_intactos(self):
+        """Com o limite diminuído depois (4 favoritos, limite 2), renomear libera 1 vaga mas ainda não cabe."""
+        bot = ModalBot(favs=2, fav_links=favs_cheios(4))
+        view = modal_view(bot, ViewMode.fav_manager)
+        view.data = bot.user_data
+        antes = copy.deepcopy(bot.user_data)
+        inter = ModalInteraction(user_fav_name="novo", user_fav_url=f"{URL_BASE}/novo")
+        await FavModalAdd("fav0", None, view).callback(inter)
+        assert bot.salvos_usuario == [] and "Não há espaço disponível" in inter.texto
+        assert bot.user_data == antes, "KI-51: a recusa do modal removeu o favorito da memória"
+        assert view.data == antes
+
+    @pytest.mark.asyncio
+    async def test_editar_a_url_de_um_favorito_mantem_a_posicao_dele_na_lista(self):
+        bot = ModalBot(favs=5, fav_links=favs_cheios(3))
+        await adicionar_favorito(bot, nome="fav1", url=f"{URL_BASE}/novo", editando="fav1")
+        assert list(bot.salvos_usuario[-1]["fav_links"]) == ["fav0", "fav1", "fav2"]
