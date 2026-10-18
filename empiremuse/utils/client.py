@@ -937,7 +937,7 @@ class BotPool:
                     try:
                         print(
                             f"cmd log: [user: {inter.author} - {inter.author.id}] - [guild: {inter.guild.name} - {inter.guild.id}]"
-                            f" - [cmd: {inter.data.name}] {datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M:%S')} (UTC) - {inter.filled_options}\n"
+                            f" - [cmd: {inter.data.name}] {datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y - %H:%M:%S')} (UTC) - {inter.filled_options}\n"
                             + ("-" * 15)
                         )
                     except:
@@ -991,7 +991,7 @@ class BotPool:
 
                     print(
                         f"cmd (prefix) log: [user: {ctx.author} - {ctx.author.id}] - [guild: {ctx.guild.name} - {ctx.guild.id}]"
-                        f" - [cmd: {ctx.message.content}] {datetime.datetime.utcnow().strftime('%d/%m/%Y - %H:%M:%S')} (UTC)\n"
+                        f" - [cmd: {ctx.message.content}] {datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y - %H:%M:%S')} (UTC)\n"
                         + ("-" * 15)
                     )
 
