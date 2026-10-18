@@ -15,6 +15,7 @@ os pontos em que a UI se mistura à lógica entram como callbacks:
 
 from __future__ import annotations
 
+import logging
 import traceback
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple, Optional, Union
 
@@ -24,6 +25,8 @@ from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import send_idle_embed as default_send_idle_embed
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -207,9 +210,6 @@ def validate_request_target(bot: BotCore, guild: disnake.Guild, target, *, exist
             f"sem selecionar um canal de destino."
         )
 
-    if not target.permissions_for(guild.me).read_messages:
-        raise GenericError(f"{bot.user.mention} permissão para ler mensagens no canal {target.mention}")
-
 
 async def apply_request_channel(
     bot: BotCore,
@@ -320,7 +320,7 @@ async def apply_request_channel(
                     message = m
                     break
 
-    if existing_channel:
+    if existing_channel and channel_kwargs:
         try:
             await target.edit(**channel_kwargs)
         except:
@@ -420,6 +420,45 @@ async def _reset_player(player, channel_inter):
     await player.invoke_np(force=True)
 
 
+MSG_RESET_DISCORD_FAILED = (
+    "**Não foi possível concluir o reset do canal de pedir música no Discord. "
+    "A configuração foi mantida; confira as permissões do bot no canal e tente novamente.**"
+)
+
+
+async def _fetch_configured_message(channel, guild_data: dict):
+    """Mensagem do canal de pedidos registrada no banco; ``None`` se não existe mais ou o registro é inválido."""
+    try:
+        return await channel.fetch_message(int(guild_data["player_controller"]["message_id"]))
+    except (disnake.HTTPException, KeyError, TypeError, ValueError):
+        return None
+
+
+async def _clear_in_discord(actor: Any, channel, delete_channel: Optional[str], guild_data: dict) -> bool:
+    """Apaga o post/canal ou devolve a mensagem ao estado "reconfigurar". ``True`` se era um post de fórum."""
+    if isinstance(getattr(channel, "parent", None), disnake.ForumChannel):
+        await channel.delete(reason=f"{actor.id} resetou player")
+        return True
+
+    original_message = await _fetch_configured_message(channel, guild_data)
+
+    if delete_channel == "sim":
+        await channel.delete(reason=f"Player resetado por: {actor}")
+
+    elif original_message:
+        await original_message.edit(
+            content=f"Canal de pedir música foi resetado pelo membro {actor.mention}.",
+            embed=None,
+            components=[
+                disnake.ui.Button(label="Reconfigurar este canal", emoji="💠", custom_id="musicplayer_request_channel")
+            ],
+        )
+        if original_message.thread:
+            await original_message.thread.edit(archived=True, reason=f"Player resetado por {actor}.")
+
+    return False
+
+
 async def reset_request_channel(
     bot: BotCore,
     guild: disnake.Guild,
@@ -433,65 +472,30 @@ async def reset_request_channel(
 ) -> None:
     """Passos do ``/reset`` depois de achar o canal. ``delete_channel == "sim"`` apaga o canal.
 
-    Mantém a ordem original: nos canais comuns o banco é limpo ANTES de mexer no Discord.
+    Ordem: Discord primeiro, banco depois; só então o aviso (``notify``) e o reset do player. Se o Discord falhar, o
+    banco continua intacto e o usuário recebe uma ``GenericError`` genérica (o detalhe vai para o log).
     """
     try:
-        if isinstance(channel.parent, disnake.ForumChannel):
-            # E4c: o reset de fórum também limpa o banco (antes o apontamento ficava até o próximo uso).
-            guild_data["player_controller"].update({"message_id": None, "channel": None})
-            await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
-
-            await channel.delete(reason=f"{actor.id} resetou player")
-            await notify("forum_deleted")
-
-            try:
-                player: LavalinkPlayer = bot.music.players[guild.id]
-            except KeyError:
-                pass
-            else:
-                await _reset_player(player, channel_inter)
-
-            return
-
-    except AttributeError:
-        pass
-
-    try:
-        original_message = await channel.fetch_message(int(guild_data["player_controller"]["message_id"]))
-    except:
-        original_message = None
+        was_forum = await _clear_in_discord(actor, channel, delete_channel, guild_data)
+    except Exception as exc:
+        logger.error(
+            "Reset do canal de pedidos: falha no Discord (servidor=%s, canal=%s): %s",
+            guild.id,
+            getattr(channel, "id", None),
+            exc,
+            exc_info=True,
+        )
+        raise GenericError(MSG_RESET_DISCORD_FAILED) from exc
 
     guild_data["player_controller"].update({"message_id": None, "channel": None})
 
     await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
 
-    await notify("reset_done")
+    await notify("forum_deleted" if was_forum else "reset_done")
 
     try:
         player: LavalinkPlayer = bot.music.players[guild.id]
     except KeyError:
-        pass
-    else:
-        await _reset_player(player, channel_inter)
+        return
 
-    try:
-        if delete_channel == "sim":
-            await channel.delete(reason=f"Player resetado por: {actor}")
-
-        elif original_message:
-            await original_message.edit(
-                content=f"Canal de pedir música foi resetado pelo membro {actor.mention}.",
-                embed=None,
-                components=[
-                    disnake.ui.Button(
-                        label="Reconfigurar este canal", emoji="💠", custom_id="musicplayer_request_channel"
-                    )
-                ],
-            )
-            await original_message.thread.edit(archived=True, reason=f"Player resetado por {actor}.")
-    except Exception as e:
-        traceback.print_exc()
-        raise GenericError(
-            "**O canal de pedir música foi resetado da base de dados mas ocorreu um erro no processo:** "
-            f"```py\n{repr(e)}```"
-        )
+    await _reset_player(player, channel_inter)
