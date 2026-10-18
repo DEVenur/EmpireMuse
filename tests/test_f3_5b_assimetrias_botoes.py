@@ -7,91 +7,20 @@ sobrescrita como vaga. Chama o ``player_controller`` REAL com dublês. ``# MUDA 
 
 from types import SimpleNamespace
 
-import disnake
 import pytest
 
 from empiremuse.cogs.music import Music
 from empiremuse.utils.others import PlayerControls
-from tests.helpers_f3_5b import AUTOR, BotDeComandos, InteracaoFalsa
+from tests.helpers_f3_5b import (
+    BotDoPlayer,
+    MusicaFalsa,
+    favoritar_pelo_embed,
+    favoritar_pelo_seletor,
+    gravou,
+    interacao,
+)
 
 URL = "https://exemplo.invalid/musica"
-SERVIDOR = 5000
-
-
-class BotDoPlayer(BotDeComandos):
-    """``BotDeComandos`` com o que o ``player_controller`` pede antes de chegar nos botões de favoritar."""
-
-    bot_ready = True
-
-    def __init__(self, *, favs=10, dono=False, url_max=90, favoritos=None):
-        super().__init__(dono=dono)
-        self.config.update({"MAX_USER_FAVS": favs, "USER_FAV_MAX_URL_LENGTH": url_max})
-        self.pool.add_fav_embed_cooldown = SimpleNamespace(
-            get_bucket=lambda inter: SimpleNamespace(update_rate_limit=lambda: None)
-        )
-        self.eventos = []
-        self.documento("global", "users", AUTOR)["fav_links"].update(favoritos or {})
-
-    def dispatch(self, nome, *args):
-        self.eventos.append(nome)
-
-    @property
-    def favoritos(self):
-        return self.documento("global", "users", AUTOR)["fav_links"]
-
-
-class MusicaFalsa:
-    """O ``self`` de ``Music.player_controller``: só o bot, os nomes dos comandos de prefixo e a trava de concorrência."""
-
-    def __init__(self, bot):
-        self.bot = bot
-        self.play_legacy = SimpleNamespace(name="play")
-        self.fav_manager_legacy = SimpleNamespace(name="fav_manager")
-        self.player_interaction_concurrency = SimpleNamespace(acquire=self._nada, release=self._nada)
-
-    @staticmethod
-    async def _nada(*args, **kwargs):
-        return None
-
-
-def interacao(guild):
-    inter = InteracaoFalsa(guild_id=SERVIDOR, guild=guild)
-    inter.message = SimpleNamespace(
-        embeds=[], flags=SimpleNamespace(ephemeral=True), edit=inter._nada, content=str(AUTOR)
-    )
-    return inter
-
-
-async def favoritar_pelo_embed(bot, titulo, url=URL):
-    """Clica em "Favoritar" no embed da música (``PlayerControls.embed_add_fav``); o nome é o autor do embed sem o 1º char."""
-    guild = SimpleNamespace(me=SimpleNamespace())
-    inter = interacao(guild)
-    inter.message.embeds = [disnake.Embed(description="x").set_author(name=f"⠂{titulo}", url=url)]
-    await Music.player_controller(MusicaFalsa(bot), inter, PlayerControls.embed_add_fav)
-    return inter
-
-
-async def favoritar_pelo_seletor(bot, titulo, url=URL):
-    """Clica em "Favoritar" no player da música atual (``PlayerControls.add_favorite``) com um único item para escolher."""
-    canal = SimpleNamespace(id=77)
-    guild = SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(channel=canal)))
-    inter = interacao(guild)
-    inter.author.voice = SimpleNamespace(channel=canal)
-    player = SimpleNamespace(
-        message=inter.message,
-        interaction_cooldown=False,
-        guild=guild,
-        current=SimpleNamespace(
-            uri=url, title=titulo, album_url=None, album_name=None, playlist_url=None, playlist_name=None
-        ),
-    )
-    bot.music.players[SERVIDOR] = player
-    await Music.player_controller(MusicaFalsa(bot), inter, PlayerControls.add_favorite)
-    return inter
-
-
-def gravou(bot):
-    return bool(bot.gravacoes)
 
 
 class TestA4BotaoDoEmbed:

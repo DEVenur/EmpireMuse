@@ -36,7 +36,11 @@ from tests.helpers_f3_5b import (
     cargos,
     comando_de_dj,
     executar,
+    STATUS_ANTIGO,
+    opcoes_de_volume,
     opcoes_do_change_skin,
+    status_no_comando,
+    ContextoDoStatus,
     skins_do_bot,
 )
 
@@ -182,30 +186,6 @@ PLACEHOLDERS = (
     "{requester.name}",
     "{requester.id}",
 )
-STATUS_ANTIGO = "Tocando {track.title}"
-
-
-class ContextoDoStatus:
-    """``ctx`` da view ``SetStageTitle``: só o autor e a mensagem editável que o ``close`` tenta atualizar."""
-
-    def __init__(self):
-        self.author = SimpleNamespace(id=AUTOR, mention=f"<@{AUTOR}>")
-
-    async def edit_original_message(self, **kwargs):
-        return None
-
-
-async def status_no_comando(bot, texto, *, atual=STATUS_ANTIGO):
-    """(texto gravado ou ``None``, mensagem mostrada) do modal PERMANENTE do ``SetStageTitle`` REAL."""
-    guilda = GuildaFalsa()
-    bot.guilds[guilda.id] = guilda
-    bot.pool.get_guild_bots = lambda guild_id: [bot]
-    view = interactions.SetStageTitle(ContextoDoStatus(), bot, guilda, {"voice_channel_status": atual})
-    inter = InteracaoFalsa(guild_id=guilda.id, guild=guilda, custom_id="status_voice_channel_perm")
-    inter.text_values = {"status_voice_value": texto}
-    await view.modal_handler(inter)
-    gravou = bot.ultimo_global is not None
-    return (bot.ultimo_global["voice_channel_status"] if gravou else None), inter.texto
 
 
 def status_no_painel(texto):
@@ -286,19 +266,8 @@ class TestA20VolumePadrao:
 
     @pytest.mark.asyncio
     async def test_o_select_do_comando_oferece_exatamente_o_conjunto(self):
-        view = music_settings.PlayerSettings(
-            SimpleNamespace(author=SimpleNamespace(id=AUTOR)),
-            BotDeComandos(),
-            {
-                "autoplay": False,
-                "check_other_bots_in_vc": False,
-                "enable_restrict_mode": False,
-                "default_player_volume": 100,
-            },
-        )
-        oferecidos = [int(opcao.value) for opcao in view.children[0].options]
-        assert len(oferecidos) == 25 and set(oferecidos) == self.ESPERADO
-        assert [o.value for o in view.children[0].options if o.default] == ["100"]
+        oferecidos, padrao = await opcoes_de_volume(100)
+        assert len(oferecidos) == 25 and set(oferecidos) == self.ESPERADO and padrao == [100]
 
     def test_o_painel_aceita_exatamente_o_mesmo_conjunto(self):
         assert set(VOLUMES) == self.ESPERADO

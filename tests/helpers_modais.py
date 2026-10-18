@@ -135,7 +135,7 @@ def modal_view(bot, mode, *, real=True, prefixo=False):
 
 class ModalInteraction:
     def __init__(self, *, estrito=False, **text_values):
-        self.estrito, self.respondida, self.arquivos = estrito, False, []
+        self.estrito, self.respondida, self.arquivos, self.nomes_de_arquivo = estrito, False, [], []
         self.text_values = text_values
         self.author = SimpleNamespace(id=900)
         self.guild = None
@@ -150,6 +150,7 @@ class ModalInteraction:
         self.respondida = True
         if kwargs.get("file") is not None:
             self.arquivos.append(kwargs["file"].fp.read().decode())
+            self.nomes_de_arquivo.append(kwargs["file"].filename)
         self.enviados.append(self._texto(content, kwargs))
 
     async def edit_original_message(self, content=None, **kwargs):
@@ -189,13 +190,18 @@ async def importar(bot, modo, conteudo, *, estrito=False, view=None):
     return inter
 
 
-async def exportar_integracoes(bot):
-    """Roda o exportador REAL (``FavMenuView.export_callback``) e devolve o texto do arquivo enviado ao usuário."""
+async def exportar(bot, modo):
+    """Roda o exportador REAL (``FavMenuView.export_callback``) e devolve ``(nome do arquivo, texto enviado)``."""
     inter = ModalInteraction()
-    espelho = SimpleNamespace(bot=bot, mode=ViewMode.integrations_manager, data=bot.user_data)
+    espelho = SimpleNamespace(bot=bot, mode=modo, data=bot.user_data, guild_data=bot.guild_data)
     await FavMenuView.export_callback(espelho, inter)
     assert inter.arquivos, f"o exportador não enviou arquivo: {inter.texto!r}"
-    return inter.arquivos[-1]
+    return inter.nomes_de_arquivo[-1], inter.arquivos[-1]
+
+
+async def exportar_integracoes(bot):
+    """O texto do arquivo que o exportador REAL de integrações envia ao usuário."""
+    return (await exportar(bot, ViewMode.integrations_manager))[1]
 
 
 def favs_cheios(quantidade):
