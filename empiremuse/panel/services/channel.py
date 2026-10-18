@@ -65,10 +65,6 @@ MSG_NAME = "Digite o nome exato do canal para confirmar a exclusão."
 MSG_TOKEN = "A confirmação expirou ou é inválida. Peça a reinicialização de novo."
 MSG_BUSY = "Já existe uma operação em andamento neste servidor. Aguarde terminar e tente de novo."
 MSG_LIMIT = "Há operações demais em andamento. Aguarde um pouco e tente de novo."
-MSG_PARTIAL = (
-    "O canal de pedidos foi reiniciado no banco de dados, mas ocorreu um erro ao atualizar o Discord. "
-    "Verifique o canal manualmente."
-)
 MSG_SETUP_OK = "O canal de pedidos foi configurado com sucesso."
 MSG_RESET_OK = "O canal de pedidos foi reiniciado com sucesso."
 
@@ -408,10 +404,7 @@ class ChannelService:
                 notify=notify,
             )
         except GenericError as exc:
-            if "```" not in exc.text:
-                raise TaskFailure(refusal_message(exc))
-            self._audit(ctx, "reset")  # o banco já foi limpo; só o Discord falhou
-            raise TaskFailure(MSG_PARTIAL)
+            raise TaskFailure(refusal_message(exc))
         self._audit(ctx, "reset")
 
     @staticmethod

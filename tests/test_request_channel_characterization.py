@@ -639,16 +639,16 @@ class TestSetupForum:
         assert (world.saved["channel"], world.saved["message_id"]) == (str(post.id), str(post.id))
         assert world.j.of("channel.purge") == [] and world.j.of("message.create_thread") == []
 
-    def test_after_the_idle_embed_the_post_is_edited_with_no_arguments_quirk(self, world):
+    def test_after_the_idle_embed_the_post_is_not_edited_with_no_arguments(self, world):
+        """KI-37 (era o quirk do `edit()` vazio): sem argumentos úteis não há requisição ao Discord."""
         modal_answer(world, "Pedidos do bot")
         world.setup(target=world.forum)
-        edits = world.j.of("thread.edit")
-        assert len(edits) == 1 and edits[0][2] == {}, "channel_kwargs é limpo e mesmo assim o post é `edit()`ado"
+        assert world.j.of("thread.edit") == [], "channel_kwargs é limpo: não há o que editar no post"
         assert world.j.of("channel.edit") == [], "o fórum em si nunca é editado"
         names = [
             n for n in world.j.names() if n in ("forum.create_thread", "send_idle_embed", "thread.edit", "db.update")
         ]
-        assert names == ["forum.create_thread", "send_idle_embed", "thread.edit", "db.update"]
+        assert names == ["forum.create_thread", "send_idle_embed", "db.update"]
 
     def test_purge_is_ignored_for_forums(self, world):
         modal_answer(world, "Pedidos do bot")
@@ -791,7 +791,7 @@ class TestResetRefusals:
 
 
 class TestResetTextChannel:
-    def test_clears_the_database_first_then_replies_then_edits_the_message_and_archives_the_thread(self, world):
+    def test_edits_the_message_and_archives_the_thread_first_then_clears_the_database_then_replies(self, world):
         message = configured(world)
         world.reset()
         names = [
@@ -799,7 +799,7 @@ class TestResetTextChannel:
             for n in world.j.names()
             if n in ("db.update", "inter.edit_original_message", "message.edit", "thread.edit", "channel.delete")
         ]
-        assert names == ["db.update", "inter.edit_original_message", "message.edit", "thread.edit"]
+        assert names == ["message.edit", "thread.edit", "db.update", "inter.edit_original_message"]
         assert world.saved["channel"] is None and world.saved["message_id"] is None
         reply = world.j.of("inter.edit_original_message")[-1][3]
         assert reply["embed"].description == "**O Canal de pedir música foi resetado com sucesso.**"
@@ -833,14 +833,14 @@ class TestResetTextChannel:
         assert world.j.of("channel.delete") == [("channel.delete", "#pedidos", "Player resetado por: Autor#0001")]
         assert world.j.of("message.edit") == [] and world.j.of("thread.edit") == []
         names = world.j.names()
-        assert names.index("db.update") < names.index("channel.delete"), "banco limpo antes de apagar no Discord"
+        assert names.index("channel.delete") < names.index("db.update"), "KI-36: Discord primeiro, banco depois"
 
     def test_missing_message_is_not_an_error(self, world):
         world.db.doc["player_controller"].update({"channel": "22", "message_id": "404"})
         world.reset()
         assert world.saved["channel"] is None and world.j.of("message.edit") == []
 
-    def test_player_is_reset_after_the_reply_and_before_the_discord_cleanup(self, world):
+    def test_player_is_reset_after_the_discord_cleanup_the_database_and_the_reply(self, world):
         configured(world)
         player = FakePlayer(world.j, world.guild, world.text, static=True, message=object())
         world.bot.music.players[GUILD_ID] = player
@@ -852,30 +852,29 @@ class TestResetTextChannel:
             in ("db.update", "inter.edit_original_message", "player.process_hint", "player.invoke_np", "message.edit")
         ]
         assert names == [
+            "message.edit",
             "db.update",
             "inter.edit_original_message",
             "player.process_hint",
             "player.invoke_np",
-            "message.edit",
         ]
         assert player.static is False and player.message is None and player.text_channel is world.lobby
         assert world.j.of("player.invoke_np") == [("player.invoke_np", True)]
 
-    def test_discord_failure_after_the_database_was_cleared_is_reported_as_a_partial_error(self, world):
+    def test_discord_failure_keeps_the_database_and_reports_a_generic_error(self, world):
+        """KI-36 (era o erro parcial): o banco fica intacto e a mensagem não traz `repr(e)` nem diz "resetado"."""
         message = configured(world)
         message.fail_edit = RuntimeError("falha simulada")
         text = error_text(world.reset)
-        assert text == (
-            "**O canal de pedir música foi resetado da base de dados mas ocorreu um erro no processo:** "
-            "```py\nRuntimeError('falha simulada')```"
-        )
-        assert world.saved["channel"] is None, "o banco JÁ foi limpo (ordem banco × Discord)"
+        assert "falha simulada" not in text and "RuntimeError" not in text and "resetado da base" not in text
+        assert (world.saved["channel"], world.saved["message_id"]) == ("22", "555")
 
-    def test_channel_delete_failure_is_also_a_partial_error(self, world):
+    def test_channel_delete_failure_also_keeps_the_database(self, world):
         configured(world)
         world.text.fail_delete = disnake.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "Missing Access")
-        assert "foi resetado da base de dados" in error_text(world.reset, delete="sim")
-        assert world.saved["channel"] is None
+        text = error_text(world.reset, delete="sim")
+        assert "Missing Access" not in text and "resetado da base" not in text
+        assert (world.saved["channel"], world.saved["message_id"]) == ("22", "555")
 
 
 class TestResetForum:

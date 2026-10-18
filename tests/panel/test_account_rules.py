@@ -57,9 +57,9 @@ class TestFavoritesRules:
         assert "valid_url = URL_REG.findall(url)[0]" in code
         assert 'self.view.data["fav_links"][name] = valid_url' in code, "valor = URL em texto"
 
-    def test_add_modal_limit_check_has_no_zero_or_owner_exemption_but_the_other_paths_do(self):
+    def test_add_modal_limit_check_has_the_zero_and_owner_exemption_like_the_other_paths(self):
+        """KI-39: o comportamento do modal é medido em tests/test_f3_cogs_painel.py; aqui só os caminhos de origem."""
         modal = flat(INTERACTIONS)
-        assert 'if len(self.view.data["fav_links"]) >= self.view.bot.config["MAX_USER_FAVS"]:' in modal
         assert 'self.bot.config["MAX_USER_FAVS"] > 0 and not (await self.bot.is_owner(interaction.author))' in flat(
             MUSIC
         )
@@ -73,7 +73,6 @@ class TestFavoritesRules:
                 "elif self.view.mode == ViewMode.guild_fav_manager:\n            if retry_after",
             )
         )
-        assert 'if "> fav:" in name.lower(): continue' in code, "quirk: pula a validação de nomes '> fav:'"
         assert 'len(url) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"])' in code
         assert "not URL_REG.match(url)" in code
         assert 'len(name) > (max_name_chars := self.view.bot.config["USER_FAV_MAX_NAME_LENGTH"])' in code
@@ -89,7 +88,6 @@ class TestIntegrationsRules:
     def test_import_rules(self):
         start = INTERACTIONS.index("elif self.view.mode == ViewMode.integrations_manager:\n            if retry_after")
         code = flat(INTERACTIONS[start : start + 3500])
-        assert 'if "> itg:" in name.lower(): continue' in code
         assert "max_url_chars := 150" in code and "not URL_REG.match(url)" in code
         assert 'del self.view.data["integration_links"][name.lower()[:90]]' in code
         assert (

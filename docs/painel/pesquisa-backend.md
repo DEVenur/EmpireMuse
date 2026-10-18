@@ -9,8 +9,8 @@
 
 ## Resumo executivo
 
-1. **Inventário:** 19 opções de **servidor** (G-01…G-19), 6 de **usuário** (U-01…U-06), **101 chaves** de configuração
-   do **dono** (`DEFAULT_CONFIG`, só leitura no painel v1) e 7 itens de ação do dono. Total inventariado: **133 itens**.
+1. **Inventário:** 18 opções de **servidor** (G-01…G-16, G-18, G-19; G-17 removido na versão 1.11 do modelo), 6 de **usuário** (U-01…U-06), **101 chaves** de configuração
+   do **dono** (`DEFAULT_CONFIG`, só leitura no painel v1) e 7 itens de ação do dono. Total inventariado: **132 itens**.
 2. **Recomendação de arquitetura: (A)** — sub-aplicação Tornado montada no `web_app.py`, no **mesmo processo, loop e porta**
    (`/painel/…`), em um pacote novo `panel/`. O DB (TinyMongo em arquivo ou Mongo) e os caches TTL são do processo do bot;
    (B) e (C) criariam uma segunda porta/processo e incoerência de cache/arquivo.
@@ -31,7 +31,7 @@
 
 | Camada | API no bot | Coleção no DB | Escopo real | Modelo (`utils/db.py`) |
 |---|---|---|---|---|
-| **Por bot × servidor** | `bot.get_data/update_data(id, db_name=DBModel.guilds)` | `str(bot.user.id)` | cada bot do pool tem a **sua** cópia | `db_models[guilds]` `ver 1.10` (l.31-47) |
+| **Por bot × servidor** | `bot.get_data/update_data(id, db_name=DBModel.guilds)` | `str(bot.user.id)` | cada bot do pool tem a **sua** cópia | `db_models[guilds]` `ver 1.11` |
 | **Por bot × usuário** | `bot.get_data(…, DBModel.users)` | `str(bot.user.id)` | idem | `db_models[users]` `ver 1.0` (só `fav_links`, legado) |
 | **Global × servidor** | `bot.get_global_data/update_global_data(id, DBModel.guilds)` | `"global"` | **compartilhado por todos os bots** | `global_db_models[guilds]` `ver 1.4` (l.75-85) |
 | **Global × usuário** | `bot.get_global_data(…, DBModel.users)` | `"global"` | compartilhado | `global_db_models[users]` `ver 1.6` (l.61-74) |
@@ -81,7 +81,7 @@ testáveis (a regra de projeto já pede isso), chamada pelo comando **e** pelo p
 Convenções: **Escopo** = Servidor (S), Usuário (U), Dono do bot (D). **Camada** = bot×servidor (`b`), global (`g`).
 **Perm.** = permissão exigida hoje. Linhas referem-se à `main`. "Ação" = tem efeito no Discord além do campo no banco.
 
-### 2.1 Servidor (S) — 19 opções
+### 2.1 Servidor (S) — 18 opções
 
 | ID | Opção | Origem (arquivo:linha) | Campo no banco | Tipo / valores válidos | Camada | Perm. hoje | Notas para o painel |
 |---|---|---|---|---|---|---|---|
@@ -101,7 +101,7 @@ Convenções: **Escopo** = Servidor (S), Usuário (U), Dono do bot (D). **Camada
 | G-14 | Skins personalizadas (editor) | `music_settings.py:1656-1680` (`/custom_skin`), `interactions.py:2345-3170` (`SkinEditorMenu`) | `custom_skins`, `custom_skins_static` (g) | dict `{nome: <formato legado>}` | g | **`administrator`** | **FORA DA v1** (formato de armazenamento legado inseguro; rastreado em privado, S-04). Reabrir só após migrar para JSON validado (tarefa própria, regra `security.md` §2) |
 | G-15 | Convites "ouvir junto" (RPC) | `music_settings.py:1363-1500` (`listenalong`, modal `listen_along_modal`) | `listen_along_invites` (g) | dict `{str(voice_channel_id): invite_url}`; máx. **5**; convite sem limite de usos e não restrito a um usuário; canal de voz | g | `manage_channels` + estar em voz | painel pode **listar/remover**; **adicionar** exige `fetch_invite` (chamada externa) e checagens. Cooldown de 45 s por servidor |
 | G-16 | Links fixos do servidor (favoritos do servidor) | `interactions.py:669-1130, 1328-1760` (`FavMenuView` modo `guild_fav_manager`); `/fav_manager` `music.py:4890` | `player_controller.fav_links` | dict `{nome: {"url": str, "description": str}}`; máx. **25**; só com canal de player configurado; URL via `URL_REG`; nome ≤ `USER_FAV_MAX_NAME_LENGTH` | b | `manage_guild` (ou dono) | importação/exportação JSON existe no bot (`FavModalImport`); no painel, CRUD + import com os mesmos limites |
-| G-17 | Comandos com prefixo habilitados | `utils/db.py:45` | `enable_prefixed_commands` | bool | b | — | **campo órfão**: nenhum código lê ou grava fora do modelo. Sem tela (listar como "não implementado") |
+| G-17 | *(Removido)* | `empiremuse/utils/db.py` (`db_models`) | — | — | b | — | **campo removido**: antigo campo órfão de prefixo excluído na versão 1.11 (KI-43). Sem tela. |
 | G-18 | Escolha do bot (multi-bot) | `utils/others.py` `select_bot_pool`; `music_settings.py:323, 400, 944, 1153` | — | id de um bot do `pool.get_guild_bots(guild_id)` | — | — | afeta G-01…G-11 e G-16. Contrato: parâmetro `bot_id` |
 | G-19 | Adicionar mais bots ao servidor | botão `bot_invite` (`music.py`, `music_settings.py`) e `misc.py:780-880` (`/invite`) | — | link de convite por bot | — | qualquer um | tela "adicionar bot"; usa `INVITE_PERMISSIONS` (config). Gerar o link a partir do `client_id` de cada bot do pool |
 
@@ -151,11 +151,11 @@ Recomendação v1: **somente leitura** (diagnóstico), com **máscara** nos segr
 
 ### 2.4 Contagem
 
-- **Servidor:** 19 linhas (G-01…G-19). Editáveis no painel v1: G-01…G-13, G-15 (listar/remover), G-16; G-19 é link;
-  G-14 **adiado**, G-17 **órfão**, G-18 é meta (seletor de bot).
+- **Servidor:** 18 linhas ativas/planejadas (G-01…G-16, G-18, G-19; G-17 removido na versão 1.11 do modelo). Editáveis no painel v1: G-01…G-13, G-15 (listar/remover), G-16; G-19 é link;
+  G-14 **adiado**, G-18 é meta (seletor de bot).
 - **Usuário:** 6 (U-01…U-06). Editáveis v1: U-01, U-02, U-03 (listar/remover/importar), U-04 (toggle), U-05 (condicional a D-4).
 - **Dono:** 101 chaves (leitura) + 7 itens de ação (O-1 e O-2 liberados; O-3 opcional; O-4/O-5/O-6 vetados; O-7 v2).
-- **Total inventariado: 19 + 6 + 101 + 7 = 133 itens.**
+- **Total inventariado: 18 + 6 + 101 + 7 = 132 itens.**
 
 ---
 
@@ -477,7 +477,7 @@ na página, CSP `script-src 'self'` sem inline/eval, módulo JS próprio servido
 | R7 | Segredos (`client_secret`, `cookie_secret`) | só variáveis de ambiente; validação no boot; nunca em log; `.example.env` vazio |
 | R8 | Hospedagens de porta única (Render/Replit/Discloud) | opção (A) atende; (B) não |
 | R9 | Mensagens e menções reenviadas | `AllowedMentions.none()`; escape de markdown |
-| R10 | Campo órfão `enable_prefixed_commands` | sem UI; registrar em `known-issues` |
+| R10 | Antigo campo órfão de prefixo | campo removido do modelo na versão 1.11 (KI-43) |
 | R11 | `setguildprefix` usa `ctx.guild.id` no cache (bug) | não replicar; abrir item de backlog |
 
 ---

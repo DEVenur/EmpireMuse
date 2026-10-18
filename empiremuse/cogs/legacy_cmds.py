@@ -475,7 +475,7 @@ class Owner(commands.Cog):
 
         embed = disnake.Embed(color=self.bot.get_color(ctx.guild.me))
 
-        prefix = prefix.strip()
+        prefix = (prefix or "").strip()
 
         if not prefix:
             guild_data["prefix"] = ""
@@ -489,7 +489,7 @@ class Owner(commands.Cog):
                 f"**O prefixo para o servidor com o id informado agora é:** {disnake.utils.escape_markdown(prefix)}"
             )
 
-        self.bot.pool.guild_prefix_cache[ctx.guild.id] = prefix
+        self.bot.pool.guild_prefix_cache[server_id] = prefix
 
         await ctx.send(embed=embed)
 
