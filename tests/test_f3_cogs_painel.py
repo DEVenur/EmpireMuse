@@ -37,6 +37,21 @@ from tests.helpers_request_channel import (
     Journal,
     perms,
 )
+from tests.helpers_modais import (
+    SERVIDOR_ALVO,
+    SERVIDOR_DO_COMANDO,
+    URL_BASE,
+    ModalBot,
+    ModalInteraction,
+    adicionar_favorito,
+    adicionar_integracao,
+    exportar_integracoes,
+    favs_cheios,
+    importar,
+    integracoes_cheias,
+    modal_view,
+    owner_com_contexto,
+)
 from tests.test_request_channel_characterization import Scenario, configured, modal_answer
 from tests.test_request_channel_permissions import exact, without
 
@@ -364,158 +379,6 @@ class TestKI38ValidacaoDeViewChannel:
 
 # ============================================================================ KI-39 / KI-40 / KI-41 — modais de favoritos e integrações
 
-SERVIDOR = 5000
-URL_BASE = "https://exemplo.invalid"
-
-
-class FakeMusicCog:
-    fav_import_export_cd = SimpleNamespace(
-        get_bucket=lambda inter: SimpleNamespace(update_rate_limit=lambda: None),
-    )
-    fav_manager = SimpleNamespace(name="fav_manager")
-
-
-class ModalBot:
-    """Só o que os modais de ``interactions.py`` pedem ao bot; os dados são o MESMO dict (como no BaseDB)."""
-
-    def __init__(
-        self,
-        *,
-        favs=10,
-        integracoes=10,
-        dono=False,
-        fav_links=None,
-        integration_links=None,
-        nome_max=25,
-        retry_after=None,
-    ):
-        self.config = {
-            "MAX_USER_FAVS": favs,
-            "MAX_USER_INTEGRATIONS": integracoes,
-            "USER_FAV_MAX_URL_LENGTH": 200,
-            "USER_FAV_MAX_NAME_LENGTH": nome_max,
-        }
-        self.dono = dono
-        self.retry_after = retry_after
-        self.user_data = {"fav_links": dict(fav_links or {}), "integration_links": dict(integration_links or {})}
-        self.guild_data = {"player_controller": {"channel": "22", "message_id": "555", "fav_links": {}}}
-        self.salvos_usuario, self.salvos_servidor = [], []
-        self.spotify = None
-        self.deezer = SimpleNamespace(get_user_info=self._deezer_user)
-
-    async def _deezer_user(self, user_id):
-        return {"name": "Ana", "link": f"https://www.deezer.com/br/profile/{user_id}", "picture": f"{URL_BASE}/ana.png"}
-
-    def get_cog(self, nome):
-        return SimpleNamespace(
-            fav_import_export_cd=SimpleNamespace(
-                get_bucket=lambda inter: SimpleNamespace(update_rate_limit=lambda: self.retry_after)
-            ),
-            fav_manager=SimpleNamespace(name="fav_manager"),
-        )
-
-    async def is_owner(self, user):
-        return self.dono
-
-    async def get_global_data(self, id_, *, db_name):
-        return self.user_data
-
-    async def update_global_data(self, id_, data, *, db_name):
-        self.salvos_usuario.append(copy.deepcopy(data))
-
-    async def get_data(self, id_, *, db_name):
-        return self.guild_data
-
-    async def update_data(self, id_, data, *, db_name):
-        self.salvos_servidor.append(copy.deepcopy(data))
-
-    def get_channel(self, cid):
-        return object()
-
-    def get_guild(self, gid):
-        return SimpleNamespace(id=gid, me=SimpleNamespace())
-
-    def get_color(self, *args):
-        return 0
-
-    def get_global_command_named(self, name, cmd_type=None):
-        return SimpleNamespace(id=1)
-
-
-class ModalContext:
-    def __init__(self):
-        self.atualizacoes = []
-
-    async def edit_original_message(self, **kwargs):
-        self.atualizacoes.append(kwargs)
-
-
-class ContextoDePrefixo(CustomContext):
-    """``isinstance(ctx, CustomContext)`` verdadeiro, sem a montagem pesada do contexto real."""
-
-    def __init__(self):
-        self.atualizacoes = []
-
-
-class MensagemDoMenu:
-    def __init__(self):
-        self.atualizacoes = []
-
-    async def edit(self, **kwargs):
-        self.atualizacoes.append(kwargs)
-
-
-class ViewDoMenu(SimpleNamespace):
-    """Só expõe os métodos que a ``FavMenuView`` REAL tem: o resto levanta ``AttributeError`` como em produção."""
-
-    def __getattr__(self, nome):
-        if not nome.startswith("__") and callable(getattr(FavMenuView, nome, None)):
-            return lambda *args, **kwargs: ""
-        raise AttributeError(f"a FavMenuView real não tem {nome!r}")
-
-
-def modal_view(bot, mode, *, real=True, prefixo=False):
-    ctx = ContextoDePrefixo() if prefixo else ModalContext()
-    campos = dict(mode=mode, bot=bot, data=None, guild_data=None, ctx=ctx, log="")
-    campos["message"] = MensagemDoMenu() if prefixo else None
-    if real:
-        return ViewDoMenu(**campos)
-    return SimpleNamespace(**campos, build_txt=lambda: "", build_embed=lambda: None)
-
-
-class ModalInteraction:
-    def __init__(self, *, estrito=False, **text_values):
-        self.estrito, self.respondida, self.arquivos = estrito, False, []
-        self.text_values = text_values
-        self.author = SimpleNamespace(id=900)
-        self.guild = None
-        self.guild_id = SERVIDOR
-        self.enviados = []
-        self.response = SimpleNamespace(defer=self._defer)
-
-    async def _defer(self, **kwargs):
-        self.respondida = True
-
-    async def send(self, content=None, **kwargs):
-        self.respondida = True
-        if kwargs.get("file") is not None:
-            self.arquivos.append(kwargs["file"].fp.read().decode())
-        self.enviados.append(self._texto(content, kwargs))
-
-    async def edit_original_message(self, content=None, **kwargs):
-        if self.estrito and not self.respondida:
-            raise RuntimeError("edit_original_message antes de a interação ser respondida (o Discord recusa)")
-        self.enviados.append(self._texto(content, kwargs))
-
-    @staticmethod
-    def _texto(content, kwargs):
-        embed = kwargs.get("embed")
-        return f"{content or ''}{embed.description if embed is not None else ''}"
-
-    @property
-    def texto(self):
-        return "\n".join(self.enviados)
-
 
 @pytest.fixture(autouse=True)
 def _sem_idle_embed(monkeypatch):
@@ -523,45 +386,6 @@ def _sem_idle_embed(monkeypatch):
         return None
 
     monkeypatch.setattr(interactions, "process_idle_embed", nada)
-
-
-async def adicionar_favorito(bot, nome="novo", url=f"{URL_BASE}/musica", *, editando=None):
-    view = modal_view(bot, ViewMode.fav_manager)
-    inter = ModalInteraction(user_fav_name=nome, user_fav_url=url)
-    await FavModalAdd(editando, None, view).callback(inter)
-    return inter
-
-
-async def adicionar_integracao(bot, url="https://www.deezer.com/br/profile/123456"):
-    view = modal_view(bot, ViewMode.integrations_manager)
-    inter = ModalInteraction(user_integration_url=url)
-    await FavModalAdd(None, None, view).callback(inter)
-    return inter
-
-
-async def importar(bot, modo, conteudo, *, estrito=False, view=None):
-    view = view or modal_view(bot, modo)
-    texto = conteudo if isinstance(conteudo, str) else json.dumps(conteudo, indent=4)
-    inter = ModalInteraction(json_data=texto, estrito=estrito)
-    await FavModalImport(view).callback(inter)
-    return inter
-
-
-async def exportar_integracoes(bot):
-    """Roda o exportador REAL (``FavMenuView.export_callback``) e devolve o texto do arquivo enviado ao usuário."""
-    inter = ModalInteraction()
-    espelho = SimpleNamespace(bot=bot, mode=ViewMode.integrations_manager, data=bot.user_data)
-    await FavMenuView.export_callback(espelho, inter)
-    assert inter.arquivos, f"o exportador não enviou arquivo: {inter.texto!r}"
-    return inter.arquivos[-1]
-
-
-def favs_cheios(quantidade):
-    return {f"fav{i}": f"{URL_BASE}/{i}" for i in range(quantidade)}
-
-
-def integracoes_cheias(quantidade):
-    return {f"【DZ】: Antiga {i}": {"url": f"{URL_BASE}/{i}"} for i in range(quantidade)}
 
 
 class TestKI39ModalDeFavorito:
@@ -895,38 +719,6 @@ class TestKI47ItensMalFormadosNoImportadorDoServidor:
 
 
 # ============================================================================ KI-43 — setguildprefix e enable_prefixed_commands
-
-SERVIDOR_DO_COMANDO = 7001
-SERVIDOR_ALVO = 123456789012345678  # 18 dígitos: passa a checagem de tamanho do comando
-
-
-class OwnerBot:
-    def __init__(self):
-        self.config = {"EXTRA_HINTS": ""}
-        self.pool = SimpleNamespace(guild_prefix_cache={})
-        self.gravados = []
-
-    async def get_global_data(self, id_, *, db_name):
-        return {"prefix": ""}
-
-    async def update_global_data(self, id_, data, *, db_name):
-        self.gravados.append((id_, copy.deepcopy(data)))
-
-    def get_color(self, *args):
-        return 0
-
-
-def owner_com_contexto():
-    bot = OwnerBot()
-    enviados = []
-
-    async def enviar(*args, **kwargs):
-        enviados.append(kwargs)
-
-    ctx = SimpleNamespace(
-        bot=bot, guild=SimpleNamespace(id=SERVIDOR_DO_COMANDO, me=SimpleNamespace(), name="origem"), send=enviar
-    )
-    return legacy_cmds.Owner(bot), ctx, bot
 
 
 class TestKI43PrefixoDoServidor:
