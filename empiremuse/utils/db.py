@@ -198,11 +198,10 @@ class LocalDatabase(BaseDB):
         id_ = str(id_)
         data["_id"] = id_
 
-        try:
-            if not self._connect[collection][db_name].update_one({"_id": id_}, {"$set": data}).raw_result:
-                self._connect[collection][db_name].insert_one(data)
-        except:
-            traceback.print_exc()
+        # upsert como no MongoDatabase: documento novo também vai para o disco. Se a gravação falhar, o erro original
+        # sobe e o cache não é atualizado (senão o dado "salvo" some quando o cache expirar).
+        if not self._connect[collection][db_name].update_one({"_id": id_}, {"$set": data}, upsert=True).raw_result:
+            self._connect[collection][db_name].insert_one(data)
 
         self.cache[f"{collection}:{db_name}:{id_}"] = data
 
