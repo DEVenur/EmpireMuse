@@ -28,3 +28,14 @@ Nota: Caso apareça uma página como na imagem abaixo, marque a opção e clique
 * 5 = Copie o Client ID e Client Secret para usar no projeto do seu bot.
 
 ![](https://cdn.discordapp.com/attachments/480195401543188483/903838145051787264/Screenshot_4.png)
+
+---
+
+## Cache de Autenticação e Tratamento de Erros
+
+O bot autentica na API do Spotify utilizando as credenciais configuradas (`SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET`) e gerencia o token de acesso temporário:
+
+- **Localização do Cache**: O token é mantido no arquivo `.spotify_cache.json` dentro do diretório de execução da aplicação (`RUNTIME_DIR`, configurável via variável de ambiente `EMPIREMUSE_HOME`), gravado com permissões restritas e substituição atômica.
+- **Migração do Cache Legado**: Instalações anteriores que mantinham o cache no diretório temporário (`/tmp/.spotify_cache.json`) solicitarão automaticamente um novo token de acesso na primeira execução, salvando-o no diretório de execução atual.
+- **Tratamento de Falhas de Acesso**: Em caso de expiração (HTTP 401), a renovação do token é limitada a uma tentativa por requisição. Falhas como conteúdo restrito/privado (HTTP 403) ou recurso inexistente (HTTP 404) geram mensagens claras em português na interface sem expor dados brutos da requisição.
+

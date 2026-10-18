@@ -618,10 +618,10 @@ class Player:
         if identifier:
             node = client.get_node(identifier)
 
-            if not node.is_available:
-                raise WavelinkException(f"Node unavailable:: {identifier}")
             if not node:
                 raise WavelinkException(f"No Nodes matching identifier:: {identifier}")
+            if not node.is_available:
+                raise WavelinkException(f"Node unavailable:: {identifier}")
         else:
             self.node.close()
             node = None

@@ -27,6 +27,7 @@ import base64
 import copy
 import re
 import sys
+import tempfile
 from importlib import metadata
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -399,10 +400,23 @@ class _SessaoFake:
     get = post
 
 
+def _arquivos_gravados(raiz) -> list:
+    return [p for p in raiz.rglob("*") if p.is_file()]
+
+
 @pytest.fixture
 def spotify_fake(monkeypatch, tmp_path):
-    """SpotifyClient com o aiohttp substituído e o arquivo de cache isolado em tmp_path (nunca o do sistema)."""
-    monkeypatch.setattr(spotify, "spotify_cache_file", str(tmp_path / ".spotify_cache.json"))
+    """SpotifyClient com o aiohttp substituído e o cache do token isolado em tmp_path (nunca o do sistema nem o RUNTIME_DIR real).
+
+    O local do arquivo de cache não é fixado aqui: RUNTIME_DIR (EMPIREMUSE_HOME), cwd e o tmp do sistema apontam para
+    pastas de tmp_path, e os testes só olham se ALGUM arquivo foi gravado em tmp_path.
+    """
+    for pasta in ("runtime", "cwd", "sistema"):
+        (tmp_path / pasta).mkdir()
+    monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path / "runtime"))
+    monkeypatch.chdir(tmp_path / "cwd")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "sistema"))
+    monkeypatch.setattr(spotify, "spotify_cache_file", str(tmp_path / "sistema" / ".spotify_cache.json"), raising=False)
 
     def preparar(status=401, corpo=None, falha_de_rede=False):
         chamadas: list[dict] = []
@@ -516,7 +530,7 @@ class TestKI15SpotifyCredenciaisInvalidas:
 
         assert cliente.spotify_cache == anterior, "a resposta de erro sobrescreveu o cache do token"
         assert (cliente.client_id, cliente.client_secret) == (ID_FAKE, SEGREDO_FAKE), "as credenciais foram apagadas"
-        assert not (tmp_path / ".spotify_cache.json").exists(), "a falha gravou o arquivo de cache"
+        assert not _arquivos_gravados(tmp_path), "a falha gravou o arquivo de cache"
 
     @pytest.mark.asyncio
     async def test_credenciais_nao_vazam_para_logs_nem_para_a_saida(self, spotify_fake, caplog, capsys):
@@ -552,4 +566,4 @@ class TestKI15SpotifyCredenciaisInvalidas:
         assert cliente.spotify_cache["access_token"] == "tok" and cliente.spotify_cache["expires_at"] > 0
         assert cliente.token_refresh is False
         assert len(chamadas) == 1 and chamadas[0]["data"] == {"grant_type": "client_credentials"}
-        assert (tmp_path / ".spotify_cache.json").is_file()
+        assert _arquivos_gravados(tmp_path), "o caminho feliz não gravou o arquivo de cache"

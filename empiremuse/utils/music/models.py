@@ -36,6 +36,10 @@ if TYPE_CHECKING:
 
 exclude_tags = ["remix", "edit", "extend", "compilation", "mashup", "mixed"]
 exclude_tags_2 = ["extend", "compilation", "mashup", "nightcore", "8d", "mixed"]
+
+# Similaridade mínima (token_set_ratio, 0-100) entre o título da candidata e o da faixa original.
+TITLE_MATCH_THRESHOLD = 75
+
 emoji_pattern = re.compile(r"<a?:.+?:\d+?>")
 
 thread_archive_time = {
@@ -1822,7 +1826,7 @@ class LavalinkPlayer(wavelink.Player):
 
                         break
 
-                    if not [i in track_data.title.lower() for i in exclude_tags_2]:
+                    if not any(i in track_data.title.lower() for i in exclude_tags_2):
                         final_tracks = []
                         for t in tracks:
                             if not any(
@@ -2125,12 +2129,11 @@ class LavalinkPlayer(wavelink.Player):
 
                                         self.bot.pool.partial_track_cache[query] = tracks
 
-                                    if not [i in track.title.lower() for i in exclude_tags]:
+                                    if not any(i in track.title.lower() for i in exclude_tags):
                                         final_result = []
                                         for t in tracks:
                                             if not any((i in t.title.lower()) for i in exclude_tags):
                                                 final_result.append(t)
-                                                break
                                         tracks = final_result or tracks
 
                                     min_duration = track.duration - 7000
@@ -2142,12 +2145,13 @@ class LavalinkPlayer(wavelink.Player):
                                         if (
                                             t.is_stream
                                             or not min_duration < t.duration < max_duration
-                                            and fuzz.token_sort_ratio(t.title, track.title) < 75
+                                            or fuzz.token_set_ratio(t.title, track.title) < TITLE_MATCH_THRESHOLD
                                         ):
                                             continue
                                         final_result.append(t)
 
                                     if not final_result:
+                                        tracks = []
                                         continue
 
                                     tracks = final_result
