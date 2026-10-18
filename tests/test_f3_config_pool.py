@@ -28,7 +28,7 @@ from empiremuse import config_loader, paths
 from empiremuse.cogs.music import Music
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
-from empiremuse.utils.db import DBModel, LocalDatabase
+from empiremuse.utils.db import BaseDB, DBModel, LocalDatabase, MongoDatabase
 from empiremuse.utils.music import lastfm_tools
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -132,9 +132,18 @@ class TestKI07TentativasDeReconexao:
 
 
 class TestKI08FalhaAoLerODotenv:
-    def test_falha_vira_warning_com_tipo_e_caminho_sem_conteudo(self, runtime, monkeypatch, caplog):
+    @pytest.mark.parametrize(
+        "erro",
+        [
+            PermissionError("conteudo-secreto-do-env TOKEN=abc.def.ghi"),
+            IsADirectoryError("conteudo-secreto-do-env TOKEN=abc.def.ghi"),
+            UnicodeDecodeError("utf-8", b"TOKEN=abc.def.ghi\xff", 17, 18, "conteudo-secreto-do-env TOKEN=abc.def.ghi"),
+        ],
+        ids=lambda erro: type(erro).__name__,
+    )
+    def test_falha_vira_warning_com_tipo_e_caminho_sem_conteudo(self, runtime, monkeypatch, caplog, erro):
         def quebrar(*args, **kwargs):
-            raise PermissionError("conteudo-secreto-do-env TOKEN=abc.def.ghi")
+            raise erro
 
         monkeypatch.setattr(config_loader, "dotenv_values", quebrar)
 
@@ -144,7 +153,7 @@ class TestKI08FalhaAoLerODotenv:
         avisos = [r for r in caplog.records if r.levelno == logging.WARNING and r.name == "empiremuse.config_loader"]
         assert avisos, "KI-08: a falha ao ler o .env foi engolida em silêncio"
         texto = " ".join(r.getMessage() for r in avisos)
-        assert "PermissionError" in texto, "o warning precisa citar o TIPO do erro"
+        assert type(erro).__name__ in texto, "o warning precisa citar o TIPO do erro"
         assert str(paths.RUNTIME_DIR / ".env") in texto, "o warning precisa citar o caminho do .env"
         assert "conteudo-secreto-do-env" not in caplog.text and "abc.def.ghi" not in caplog.text
 
@@ -229,6 +238,19 @@ class TestKI10UpdateDataComFalhaDeGravacao:
             await banco.update_data("3", {"ver": 1.0, "valor": "novo"}, db_name=DBModel.guilds, collection="c")
 
         assert banco.cache["c:guilds:3"]["valor"] == "antigo"
+
+    @pytest.mark.asyncio
+    async def test_o_mongo_database_continua_usando_upsert(self):
+        """GUARDA: o LocalDatabase foi alinhado ao MongoDatabase (``upsert=True``); este é o comportamento de referência."""
+        colecao = SimpleNamespace(update_one=AsyncMock())
+        banco = MongoDatabase.__new__(MongoDatabase)
+        BaseDB.__init__(banco)
+        banco._connect = MagicMock()
+        banco._connect.__getitem__.return_value.__getitem__.return_value = colecao
+
+        await banco.update_data("1", {"ver": 1.0}, db_name=DBModel.guilds, collection="c")
+
+        assert colecao.update_one.await_args.kwargs.get("upsert") is True
 
     @pytest.mark.asyncio
     async def test_gravacao_bem_sucedida_atualiza_banco_e_cache(self, banco):
@@ -348,9 +370,6 @@ class TestKI13RateLimitSemMatarOProcesso:
 @pytest.fixture
 def pool_com_bots_falsos(runtime, monkeypatch):
     """Roda o BotPool.setup REAL com BotCore dublado e o loop principal neutralizado; o guild_bots.json fica no cwd."""
-    # bots/guild_bots são atributos de CLASSE (compartilhados entre instâncias): isola cada teste e restaura no fim
-    monkeypatch.setattr(BotPool, "bots", [])
-    monkeypatch.setattr(BotPool, "guild_bots", {})
     monkeypatch.setenv("RUN_LOCAL_LAVALINK", "false")  # sem Java: o setup não pode subir o Lavalink local
     monkeypatch.setenv("RUN_RPC_SERVER", "false")  # o padrão (True) sobe um servidor tornado na porta do painel
     monkeypatch.setenv("TOKEN", TOKEN_FALSO)  # o setup só reconhece valores com FORMATO de token do Discord
@@ -571,6 +590,18 @@ class TestCachesSobOutroDiretorio:
         monkeypatch.delenv("GIT_DIR", raising=False)
 
         assert config_loader.load_config()["GIT_DIR"] == str(runtime / ".git")
+
+    def test_nenhum_literal_de_caminho_oculto_relativo_no_pacote(self):
+        """Qualquer ``"./.algo"`` (cache, git, estado) depende do cwd. A única exceção é o padrão sentinela do GIT_DIR, que o
+        ``load_config`` troca por RUNTIME_DIR/.git."""
+        permitido = ("empiremuse/config_loader.py", "./.git")
+        achados = []
+        for arquivo in sorted(PACOTE.rglob("*.py")):
+            for no in ast.walk(ast.parse(arquivo.read_text(encoding="utf-8"))):
+                if isinstance(no, ast.Constant) and isinstance(no.value, str) and no.value.startswith("./."):
+                    if (arquivo.relative_to(ROOT).as_posix(), no.value) != permitido:
+                        achados.append(f"{arquivo.relative_to(ROOT)}:{no.lineno} {no.value!r}")
+        assert not achados, f"caminhos ocultos relativos ao cwd: {achados}"
 
     def test_git_dir_configurado_pelo_usuario_e_respeitado(self, runtime, monkeypatch):
         """GUARDA."""
