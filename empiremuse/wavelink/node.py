@@ -142,7 +142,7 @@ class Node:
         self._is_connecting = False
 
         self._retry_count = 0
-        self._retry_dt = datetime.datetime.utcnow()
+        self._retry_dt = datetime.datetime.now(datetime.timezone.utc)
 
     def __repr__(self):
         return f"{self.identifier} | {self.region} | (Shard: {self.shard_id})"

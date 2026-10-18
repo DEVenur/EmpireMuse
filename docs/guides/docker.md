@@ -131,13 +131,18 @@ A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente o
 | `LAVALINK_JAVA_PATH` | `/opt/java/openjdk/bin/java` | Caminho do executável do runtime Java 21 JRE pré-instalado. |
 | `PORT` | `8080` | Porta do servidor HTTP Tornado (status, RPC e painel). |
 
-### 4.2 Dimensionamento de Memória (RAM)
+### 4.2 Dimensionamento de Memória (RAM) e Recursos
 
 O uso de memória do contêiner é a soma de dois componentes principais:
-1. **Processo do Bot (Python)**: Consumo estimado entre ~200 MB e ~300 MB dependendo do número de servidores e filas ativas.
-2. **Processo do Lavalink (Java)**: Controlado pelas variáveis `LAVALINK_INITIAL_RAM` (heap inicial `-Xms`, padrão `30` MB) e `LAVALINK_RAM_LIMIT` (heap máximo `-Xmx`, padrão `120` MB).
+1. **Processo do Bot (Python)**: Consumo estimado entre ~200 MB e ~300 MB dependendo da quantidade de servidores conectados, filas ativas e uso do painel web.
+2. **Processo do Lavalink (Java)**: A JVM tem seu heap de memória configurado pelas variáveis:
+   - `LAVALINK_INITIAL_RAM` (heap inicial `-Xms`, padrão `30` MB): define a memória inicial reservada pela JVM (repassada quando `0 < LAVALINK_INITIAL_RAM < LAVALINK_RAM_LIMIT`).
+   - `LAVALINK_RAM_LIMIT` (heap máximo `-Xmx`, padrão `120` MB): define o teto máximo de memória que o Lavalink pode alocar (repassada quando `LAVALINK_RAM_LIMIT > 10`).
+   - Além da memória, a alocação de núcleos de CPU da JVM é definida por `LAVALINK_CPU_CORES` (padrão `1`, repassada via `-XX:ActiveProcessorCount=`).
 
-Ao configurar um limite de memória para o contêiner (como a flag `--memory` do `docker run` ou `mem_limit` no Docker Compose), certifique-se de que o limite total atribuído cubra com folga o processo do bot somado ao heap configurado para o Java.
+Ao configurar um limite de memória para o contêiner (como a flag `--memory` do `docker run` ou `mem_limit` / `EMPIREMUSE_MEM_LIMIT` no Docker Compose):
+- O limite padrão recomendado do contêiner é de **768 MB** (`768m`), suficiente para cobrir com folga o processo Python, a JVM e as bibliotecas nativas de áudio.
+- Para instâncias com grande volume de servidores ou dezenas de conexões de voz simultâneas, recomenda-se alocar **1 GB** (`1024m`) ou mais para o contêiner e expandir `LAVALINK_RAM_LIMIT` (por exemplo, `256` a `512` MB) conforme a demanda de faixas em fila.
 
 > [!NOTE]
 > Valores oficiais medidos em testes de carga e homologação real (etapa D-16) serão incluídos em revisões posteriores desta documentação.

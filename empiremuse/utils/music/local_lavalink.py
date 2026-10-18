@@ -471,7 +471,7 @@ def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba:
     dirs = []
 
     try:
-        dirs.append(os.path.join(os.environ["JAVA_HOME"] + "bin/java"))
+        dirs.append(os.path.join(os.environ["JAVA_HOME"], "bin", "java"))
     except KeyError:
         pass
 
@@ -576,7 +576,7 @@ def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, i
         args.append(f"-Xmx{ram_limit}m")
 
     if 0 < initial_ram < ram_limit:
-        args.append(f"-Xms{ram_limit}m")
+        args.append(f"-Xms{initial_ram}m")
 
     if os.name != "nt":
         # O tmpdir fica sempre em RUNTIME_DIR (volume gravável), mesmo quando LAVALINK_HOME é somente leitura.
@@ -589,7 +589,8 @@ def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, i
 
         args.append(f"-Djava.io.tmpdir={tempjar_dir}")
 
-    override_arg = f"-Dspring.config.additional-location=file:{_ensure_plugins_override()}"
+    # URI (e não o caminho cru): o Spring separa os locais por vírgula e o espaço quebraria o caminho
+    override_arg = f"-Dspring.config.additional-location={Path(_ensure_plugins_override()).as_uri()}"
     return [*args, *_logging_args(home), override_arg, "-jar", "Lavalink.jar"]
 
 

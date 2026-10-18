@@ -2219,7 +2219,7 @@ class Music(commands.Cog):
                                 "lazy_playlist": True,
                                 "simulate": True,
                                 "playlistend": 0,
-                                "cachedir": "./.ytdl_cache",
+                                "cachedir": str(paths.RUNTIME_DIR / ".ytdl_cache"),
                                 "allowed_extractors": [
                                     r".*youtube.*",
                                 ],
@@ -7732,7 +7732,7 @@ class Music(commands.Cog):
         retries = 0
         backoff = 7
 
-        if ((dt_now := datetime.datetime.now()) - node._retry_dt).total_seconds() < 7:
+        if ((dt_now := datetime.datetime.now(datetime.timezone.utc)) - node._retry_dt).total_seconds() < 7:
             node._retry_count += 1
         if node._retry_count >= 4:
             print(f"❌ - {self.bot.user} - [{node.identifier} / v{node.version}] Reconexão cancelada.")

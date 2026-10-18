@@ -475,7 +475,7 @@ class LastFmCog(commands.Cog):
             if (
                 fm_user["last_url"] == player.current.uri
                 and fm_user["last_timestamp"]
-                and datetime.datetime.utcnow() < fm_user["last_timestamp"]
+                and datetime.datetime.now(datetime.timezone.utc) < fm_user["last_timestamp"]
             ):
                 return
 
@@ -708,7 +708,7 @@ class LastFmCog(commands.Cog):
 
             player.lastfm_users[fminfo["user_id"]] = {
                 "last_url": track.url,
-                "last_timestamp": datetime.datetime.utcnow() + datetime.timedelta(seconds=duration),
+                "last_timestamp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=duration),
             }
 
     async def deezer_search(self, **kwargs):

@@ -235,8 +235,17 @@ def load_config():
 
     try:
         CONFIG.update(dotenv_values(paths.RUNTIME_DIR / ".env"))
-    except:
-        pass
+    except (OSError, UnicodeError) as e:
+        # só o tipo e o caminho: o conteúdo do .env pode ter segredos
+        logger.warning(
+            "Não foi possível ler o arquivo %s (%s); seguindo só com o ambiente e o config.json.",
+            paths.RUNTIME_DIR / ".env",
+            type(e).__name__,
+        )
+
+    # o padrão relativo ao cwd vira o repositório do RUNTIME_DIR; um GIT_DIR configurado pelo usuário é respeitado
+    if CONFIG["GIT_DIR"] == DEFAULT_CONFIG["GIT_DIR"]:
+        CONFIG["GIT_DIR"] = str(paths.RUNTIME_DIR / ".git")
 
     CONFIG["EMBED_COLOR"] = parse_embed_color(CONFIG["EMBED_COLOR"])
 
@@ -334,7 +343,7 @@ def load_config():
             continue
 
         try:
-            CONFIG[i] = bools[CONFIG[i]]
+            CONFIG[i] = bools[str(CONFIG[i]).lower()]
         except KeyError as e:
             raise Exception(f"Você usou uma configuração inválida! {i}: {CONFIG[i]}\n{repr(e)}")
 
@@ -358,7 +367,10 @@ def load_config():
     if CONFIG["PLAYER_INFO_BACKUP_INTERVAL_MONGO"] < 120:
         CONFIG["PLAYER_INFO_BACKUP_INTERVAL_MONGO"] = 120
 
-    if CONFIG["LAVALINK_RECONNECT_RETRIES"] < 5:
-        CONFIG["LAVALINK_RECONNECT_RETRIES"] = 0
+    if CONFIG["LAVALINK_RECONNECT_RETRIES"] < 0:
+        raise Exception(
+            "Você usou uma configuração inválida! LAVALINK_RECONNECT_RETRIES: "
+            f"{CONFIG['LAVALINK_RECONNECT_RETRIES']} (use 0 para tentar sem limite ou um número positivo)"
+        )
 
     return CONFIG

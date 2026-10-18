@@ -40,25 +40,25 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-06 | `empiremuse/config_loader.py` (`bools`, `load_config`) | A tabela de booleanos só tem chaves em minúsculas; `bools[CONFIG[i]]` não normaliza o valor. | `FLAG=True` ou `FLAG=FALSE` aborta a inicialização com "configuração inválida". | médio |
-| KI-07 | `empiremuse/config_loader.py` (`load_config`), `empiremuse/cogs/music.py` (`Music.node_reconnect`) | `LAVALINK_RECONNECT_RETRIES < 5` vira `0`, e `0` é tratado como "sem limite" em `Music.node_reconnect`. | Quem configura 1–4 tentativas obtém tentativas **infinitas**. | médio |
-| KI-08 | `empiremuse/config_loader.py` (`load_config`) | `except:` nu ao ler o `.env`. | Erros de leitura do `.env` são engolidos silenciosamente. | baixo |
+| KI-06 | `empiremuse/config_loader.py` (`bools`, `load_config`) | [Resolvido] A tabela de booleanos só tem chaves em minúsculas; `bools[CONFIG[i]]` não normaliza o valor. | Resolvido na Fase 3 (F3-2): booleanos do ambiente/.env/config.json são normalizados para minúsculas e aceitam qualquer combinação de maiúsculas/minúsculas. | médio |
+| KI-07 | `empiremuse/config_loader.py` (`load_config`), `empiremuse/cogs/music.py` (`Music.node_reconnect`) | [Resolvido] `LAVALINK_RECONNECT_RETRIES < 5` vira `0`, e `0` é tratado como "sem limite" em `Music.node_reconnect`. | Resolvido na Fase 3 (F3-2): tentativas entre 1 e 4 são respeitadas, 0 permanece como sem limite e valores negativos geram erro claro. | médio |
+| KI-08 | `empiremuse/config_loader.py` (`load_config`) | [Resolvido] `except:` nu ao ler o `.env`. | Resolvido na Fase 3 (F3-2): captura apenas OSError e UnicodeError com aviso em log citando o caminho, sem engolir nem vazar o conteúdo. | baixo |
 
 ## Banco de dados
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
 | KI-09 | `empiremuse/utils/db.py` (`update_values`) | [Resolvido] `update_values` ignora valores do tipo lista (`elif not isinstance(v, list)`) ao migrar a versão do esquema. | Resolvido na Fase 3 (F3-1): a migração preserva listas e chaves do usuário. | alto |
-| KI-10 | `empiremuse/utils/db.py` (`LocalDatabase.update_data`) | `LocalDatabase.update_data` captura qualquer exceção, imprime e segue, atualizando o cache como se tivesse gravado. | Falha de gravação no TinyMongo fica invisível; o dado some após o cache expirar. | médio |
+| KI-10 | `empiremuse/utils/db.py` (`LocalDatabase.update_data`) | [Resolvido] `LocalDatabase.update_data` captura qualquer exceção, imprime e segue, atualizando o cache como se tivesse gravado. | Resolvido na Fase 3 (F3-2): falhas de gravação sobem como erro, o cache só atualiza após gravação e documentos novos usam upsert. | médio |
 
 ## Pool de bots e inicialização
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-11 | `empiremuse/utils/client.py` (`BotPool.setup`) | No `except KeyError`, `self.guild_bots = {guild_id: [bot]}` **substitui** o dicionário inteiro. | Com `guild_bots.json` com vários servidores, só o último continua registrado (os demais perdem seus bots exclusivos em `get_guild_bots`). | médio |
-| KI-12 | `empiremuse/utils/client.py` (`BotPool.__init__`, `BotPool.reset_useragent`) | `reset_useragent` atribui a `self.current_useragent` mas **não retorna** nada; `__init__` reatribui o resultado (`None`). | `current_useragent` fica `None` na inicialização. Hoje o uso está comentado em `empiremuse/cogs/music.py`. | baixo |
-| KI-13 | `empiremuse/utils/client.py` (`BotPool.start_bot`) | A condição usa `str(e)` com `e = None` (deveria ser `error`), e `raise e` levanta `TypeError` quando `e` é `None`. | Com `KILL_ON_429=false`, o tratamento de rate limit do Discord falha com `TypeError` em vez de propagar o erro original. | médio |
-| KI-14 | `empiremuse/utils/client.py` (`BotPool.start_lavalink`); `empiremuse/utils/music/local_lavalink.py` (`_java_command`, `run_lavalink`) | `LAVALINK_CPU_CORES` nunca é repassado a `run_lavalink` (usa o padrão `1`), e `-Xms` recebe `lavalink_ram_limit` em vez de `lavalink_initial_ram`. | Configurações de CPU e RAM inicial do Lavalink local não têm efeito. | baixo |
+| KI-11 | `empiremuse/utils/client.py` (`BotPool.setup`) | [Resolvido] No `except KeyError`, `self.guild_bots = {guild_id: [bot]}` **substitui** o dicionário inteiro. | Resolvido na Fase 3 (F3-2): registro correto com setdefault mantendo múltiplos servidores e listas isoladas por instância do pool. | médio |
+| KI-12 | `empiremuse/utils/client.py` (`BotPool.__init__`, `BotPool.reset_useragent`) | [Resolvido] `reset_useragent` atribui a `self.current_useragent` mas **não retorna** nada; `__init__` reatribui o resultado (`None`). | Resolvido na Fase 3 (F3-2): reset_useragent retorna o user-agent gerado em vez de None. | baixo |
+| KI-13 | `empiremuse/utils/client.py` (`BotPool.start_bot`) | [Resolvido] A condição usa `str(e)` com `e = None` (deveria ser `error`), e `raise e` levanta `TypeError` quando `e` é `None`. | Resolvido na Fase 3 (F3-2): com KILL_ON_429=false a condição verifica o erro recebido e propaga a exceção original da API do Discord. | médio |
+| KI-14 | `empiremuse/utils/client.py` (`BotPool.start_lavalink`); `empiremuse/utils/music/local_lavalink.py` (`_java_command`, `run_lavalink`) | [Resolvido] `LAVALINK_CPU_CORES` nunca é repassado a `run_lavalink` (usa o padrão `1`), e `-Xms` recebe `lavalink_ram_limit` em vez de `lavalink_initial_ram`. | Resolvido na Fase 3 (F3-2): LAVALINK_CPU_CORES é repassado ao subprocesso e -Xms usa LAVALINK_INITIAL_RAM corretamente. | baixo |
 
 ## Spotify (`empiremuse/utils/music/audio_sources/spotify.py`)
 
@@ -83,7 +83,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
 | KI-23 | `empiremuse/wavelink/player.py` (`Player.change_node`) | `node.is_available` é lido antes de checar `if not node`. | `AttributeError` ao trocar para um identificador de node inexistente, em vez da mensagem amigável. | médio |
-| KI-24 | `empiremuse/utils/music/local_lavalink.py` (`_find_or_install_java`) | `os.environ["JAVA_HOME"] + "bin/java"` sem separador. | `JAVA_HOME` nunca é aproveitado (caminho inválido); o bot cai no download de um JDK. | médio |
+| KI-24 | `empiremuse/utils/music/local_lavalink.py` (`_find_or_install_java`) | [Resolvido] `os.environ["JAVA_HOME"] + "bin/java"` sem separador. | Resolvido na Fase 3 (F3-2): detecção de JAVA_HOME utiliza os.path.join com o separador correto. | médio |
 
 ## Servidor web e RPC (robustez)
 
@@ -100,7 +100,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | KI-28 | `empiremuse/` (`cogs/`, `utils/`, `wavelink/`, `web_app.py`, `config_loader.py`) | ~365 ocorrências de `except:` nu. | Erros reais são engolidos; inclui `KeyboardInterrupt`/cancelamentos de tasks. | médio |
 | KI-29 | `empiremuse/cogs/music.py` (8.688 linhas), `empiremuse/utils/music/models.py` (4.018), `empiremuse/utils/music/interactions.py` (3.534) | Arquivos muito grandes e com muitas responsabilidades. | Revisão e teste difíceis. | médio |
 | KI-30 | `requirements.txt` (`disnake`, `jishaku`) | `disnake` e `jishaku` fixados em commits Git (o `disnake` é anterior à 2.12.0; há 2.12.2 estável). Demais pacotes sem versão fixa e sem *lockfile*. | Builds não reproduzíveis e dependência de repositórios Git externos. | médio |
-| KI-31 | `empiremuse/utils/client.py` (`BotPool.setup`) | Uso de `datetime.datetime.utcnow()` (obsoleto desde o Python 3.12). | Avisos de depreciação e remoção futura. | baixo |
+| KI-31 | `empiremuse/utils/client.py` (`BotPool.setup`) | [Resolvido] Uso de `datetime.datetime.utcnow()` (obsoleto desde o Python 3.12). | Resolvido na Fase 3 (F3-2): substituído por datetime.now(timezone.utc) ciente de fuso horário em todo o projeto. | baixo |
 
 ## Identidade, guias e testes de marca (Fase 1)
 

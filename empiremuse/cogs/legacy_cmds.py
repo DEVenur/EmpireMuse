@@ -565,7 +565,7 @@ class Owner(commands.Cog):
             dotenv.set_key(str(env_temp), i, SECRETS[i])
 
         filelist = ""
-        git_dir = os.environ.get("GIT_DIR", "./.git")
+        git_dir = os.environ.get("GIT_DIR", str(paths.RUNTIME_DIR / ".git"))
         if os.path.isdir(git_dir):
             try:
                 filelist = await run_command("git ls-files --others --exclude-standard --cached")

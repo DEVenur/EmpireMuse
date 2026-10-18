@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 .logs/
+.lavalink/
 logs/
 .vscode/
 .idea/
