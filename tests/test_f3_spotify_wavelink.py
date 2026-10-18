@@ -9,6 +9,7 @@ correções; os demais falham hoje pelo motivo descrito na docstring.
 """
 
 import json
+import logging
 import secrets
 import time
 from collections import deque
@@ -127,7 +128,7 @@ def _cliente_com_token_valido(cache_isolado, **kwargs) -> spotify.SpotifyClient:
 # ---------------------------------------------------------------------------------------------------------------------
 
 
-def _playlist_falsa(total: int):
+def _playlist_falsa(total: int, falha_no_offset: tuple[int, Exception] | None = None):
     """Devolve (substituto de ``request``, offsets das páginas extras pedidas)."""
     itens = [{"track": {"id": f"faixa-{i}"}} for i in range(total)]
     offsets_pedidos: list[int] = []
@@ -146,6 +147,8 @@ def _playlist_falsa(total: int):
 
         offset = int(consulta["offset"])
         offsets_pedidos.append(offset)
+        if falha_no_offset and offset == falha_no_offset[0]:
+            raise falha_no_offset[1]
         tem_proxima = offset + TAMANHO_PAGINA < total
         proxima = f"{API_SPOTIFY}/{partes.path}?offset={offset + TAMANHO_PAGINA}" if tem_proxima else None
         return {"items": itens[offset : offset + TAMANHO_PAGINA], "next": proxima}
@@ -192,6 +195,33 @@ async def test_ki17_carrega_no_maximo_o_limite_de_paginas_extras(cache_isolado, 
     await cliente.get_playlist_info("abc")
 
     assert len(offsets) == limite
+
+
+@pytest.mark.asyncio
+async def test_ki16_para_de_pedir_paginas_quando_nao_ha_proxima(cache_isolado):
+    """250 faixas = 2 páginas extras (offsets 100 e 200); o ``next`` vazio encerra mesmo com limite maior."""
+    cliente = _cliente(cache_isolado, playlist_extra_page_limit=5)
+    cliente.request, offsets = _playlist_falsa(total=250)
+
+    await cliente.get_playlist_info("abc")
+
+    assert offsets == [100, 200]
+
+
+@pytest.mark.asyncio
+async def test_ki16_falha_em_pagina_extra_devolve_o_que_ja_veio_sem_vazar_o_erro(cache_isolado, caplog):
+    """Falha na 2ª página extra: mantém as faixas já carregadas, não tenta de novo e registra aviso sem o detalhe."""
+    detalhe = _valor_falso("detalhe")
+    cliente = _cliente(cache_isolado, playlist_extra_page_limit=5)
+    cliente.request, offsets = _playlist_falsa(total=1000, falha_no_offset=(200, RuntimeError(detalhe)))
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        resultado = await cliente.get_playlist_info("abc")
+
+    assert _ids(resultado) == [f"faixa-{i}" for i in range(200)]
+    assert offsets == [100, 200]
+    assert any("Spotify" in r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
+    assert detalhe not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -548,6 +578,17 @@ async def test_guarda_process_next_sem_tag_em_nenhum_resultado_mantem_a_ordem():
 
 
 @pytest.mark.asyncio
+async def test_guarda_process_next_se_todos_os_resultados_tem_tag_o_primeiro_ainda_toca(sem_espera):
+    """O filtro só reordena a preferência: sem nenhum resultado sem tag, os com tag continuam valendo."""
+    primeiro = _candidata(_titulo_com_tag("remix"), "primeiro")
+    segundo = _candidata(_titulo_com_tag("edit"), "segundo")
+
+    escolhida = await _escolhida_no_process_next(_original(), [primeiro, segundo])
+
+    assert escolhida == "primeiro"
+
+
+@pytest.mark.asyncio
 async def test_guarda_process_next_nao_penaliza_a_tag_quando_o_original_ja_a_tem():
     titulo = _titulo_com_tag("remix")
     com_tag = _candidata(titulo, "com-tag")
@@ -568,6 +609,16 @@ async def test_ki21_autoqueue_prefere_o_original_ao_resultado_com_a_tag(tag):
     escolhida = await _escolhida_no_autoqueue(_original(), [com_tag, sem_tag])
 
     assert escolhida is not None and escolhida.id == "sem-tag"
+
+
+@pytest.mark.asyncio
+async def test_guarda_autoqueue_se_todos_os_resultados_tem_tag_o_primeiro_ainda_e_devolvido(sem_espera):
+    primeiro = _candidata(_titulo_com_tag("nightcore"), "primeiro")
+    segundo = _candidata(_titulo_com_tag("8d"), "segundo")
+
+    escolhida = await _escolhida_no_autoqueue(_original(), [primeiro, segundo])
+
+    assert escolhida is not None and escolhida.id == "primeiro"
 
 
 @pytest.mark.asyncio
@@ -667,6 +718,20 @@ async def test_guarda_ki22_titulo_exatamente_no_limiar_de_75_ainda_confere():
     escolhida = await _escolhida_no_process_next(original, [ruim, candidata])
 
     assert escolhida == "no-limiar"
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki22_titulo_a_menos_de_1_ponto_do_limiar_e_descartado():
+    """74,07: pega um limiar afrouxado para 74 (o vizinho de 71,4 abaixo não pega)."""
+    base, abaixo = "abcdefghijklm", "abcdefghijwxyz"
+    assert LIMIAR_TITULO - 1 < fuzz.token_set_ratio(base, abaixo) < LIMIAR_TITULO
+    original = _faixa(base, DURACAO_ORIGINAL, "id-original", "youtube", identificador="abcdefghijk")
+    quase = _candidata(abaixo, "quase")
+    referencia = _candidata(base, "referencia")
+
+    escolhida = await _escolhida_no_process_next(original, [quase, referencia])
+
+    assert escolhida == "referencia"
 
 
 @pytest.mark.asyncio
