@@ -406,13 +406,15 @@ LIMIAR_TITULO = 75
 BUSCA_FALSA = "scsearch"
 
 
-def _faixa(titulo: str, duracao: int, id_: str, fonte: str, identificador: str | None = None) -> LavalinkTrack:
+def _faixa(
+    titulo: str, duracao: int, id_: str, fonte: str, identificador: str | None = None, stream: bool = False
+) -> LavalinkTrack:
     info = {
         "title": titulo,
         "author": "Artista Falso",
         "length": duracao,
         "identifier": identificador or id_,
-        "isStream": False,
+        "isStream": stream,
         "uri": f"https://exemplo.invalid/{fonte}/{id_}",
         "sourceName": fonte,
         "position": 0,
@@ -476,17 +478,28 @@ def _jogador(original: LavalinkTrack, resultados: list[LavalinkTrack]) -> Lavali
     return jogador
 
 
-async def _escolhida_no_process_next(original: LavalinkTrack, resultados: list[LavalinkTrack]) -> str | None:
-    """Roda ``_process_next`` e devolve o id da faixa que o player mandou tocar (``temp_id``), ou None."""
-    jogador = _jogador(original, resultados)
+async def _rodar_process_next(original: LavalinkTrack, resultados_por_busca: dict[str, list[LavalinkTrack]]):
+    """Roda ``_process_next`` com os resultados de cada provedor de busca (na ordem do dict) e devolve o jogador."""
+    jogador = _jogador(original, [])
+    jogador.node.search_providers = list(resultados_por_busca)
     jogador.queue = deque([original])
-    jogador.bot.pool.partial_track_cache[f"{BUSCA_FALSA}:{original.title}"] = list(resultados)
+    for busca, resultados in resultados_por_busca.items():
+        jogador.bot.pool.partial_track_cache[f"{busca}:{original.title}"] = list(resultados)
 
     await jogador._process_next()
 
+    return jogador
+
+
+def _id_mandado_tocar(jogador: LavalinkPlayer) -> str | None:
     if not jogador.play.await_args:
         return None
     return jogador.play.await_args.kwargs.get("temp_id")
+
+
+async def _escolhida_no_process_next(original: LavalinkTrack, resultados: list[LavalinkTrack]) -> str | None:
+    """Roda ``_process_next`` e devolve o id da faixa que o player mandou tocar (``temp_id``), ou None."""
+    return _id_mandado_tocar(await _rodar_process_next(original, {BUSCA_FALSA: resultados}))
 
 
 async def _escolhida_no_autoqueue(original: LavalinkTrack, resultados: list[LavalinkTrack]) -> LavalinkTrack | None:
@@ -687,3 +700,98 @@ async def test_guarda_change_node_com_node_indisponivel_mantem_a_mensagem_de_ind
         await player.change_node("fora-do-ar")
 
     assert "fora-do-ar" in str(capturado.value)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# KI-44 — candidatas todas descartadas pelo filtro de duração/título não podem ser tocadas
+# ---------------------------------------------------------------------------------------------------------------------
+# As candidatas "ruins" erram duração E título (ou são stream): o filtro atual já as descarta, então estes testes não
+# dependem da correção do KI-22. O esperado é o mesmo caminho de "a busca não retornou nada": pular para a próxima.
+
+
+@pytest.fixture
+def sem_espera(monkeypatch):
+    """``_process_next`` dorme 3 s antes de pular a faixa; os testes não esperam."""
+    espera = AsyncMock()
+    monkeypatch.setattr(models.asyncio, "sleep", espera)
+    return espera
+
+
+def _ruim(id_: str) -> LavalinkTrack:
+    return _candidata(TITULO_DIFERENTE, id_, DURACAO_MUITO_DIFERENTE)
+
+
+def _stream(id_: str) -> LavalinkTrack:
+    return _faixa(TITULO_ORIGINAL, DURACAO_ORIGINAL, id_, "jiosaavn", stream=True)
+
+
+def _desfecho(jogador: LavalinkPlayer) -> tuple:
+    """Resumo observável: (id mandado tocar, chamadas a process_next, ids em played, native_yt)."""
+    return (
+        _id_mandado_tocar(jogador),
+        jogador.process_next.await_count,
+        [t.id for t in jogador.played],
+        jogador.native_yt,
+    )
+
+
+DESFECHO_FAIXA_PULADA = (None, 1, ["id-original"], True)
+
+CENARIOS_TODAS_DESCARTADAS = {
+    "uma-candidata": lambda: {BUSCA_FALSA: [_ruim("ruim-1")]},
+    "varias-candidatas": lambda: {BUSCA_FALSA: [_ruim("ruim-1"), _ruim("ruim-2"), _ruim("ruim-3")]},
+    "so-stream": lambda: {BUSCA_FALSA: [_stream("stream-1")]},
+    "dois-provedores-ambos-descartam": lambda: {BUSCA_FALSA: [_ruim("ruim-1")], "dzsearch": [_ruim("ruim-2")]},
+}
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki44_busca_sem_resultado_pula_a_faixa(sem_espera):
+    """Caracteriza o caminho esperado: sem resultados, nada toca, a faixa vai para ``played`` e a fila avança."""
+    jogador = await _rodar_process_next(_original(), {BUSCA_FALSA: []})
+
+    assert _desfecho(jogador) == DESFECHO_FAIXA_PULADA
+    jogador.play.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki44_sem_resultado_em_dois_provedores_pula_a_faixa(sem_espera):
+    jogador = await _rodar_process_next(_original(), {BUSCA_FALSA: [], "dzsearch": []})
+
+    assert _desfecho(jogador) == DESFECHO_FAIXA_PULADA
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki44_descartada_no_primeiro_provedor_e_ultimo_sem_resultado_pula_a_faixa(sem_espera):
+    jogador = await _rodar_process_next(_original(), {BUSCA_FALSA: [_ruim("ruim-1")], "dzsearch": []})
+
+    assert _desfecho(jogador) == DESFECHO_FAIXA_PULADA
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cenario", CENARIOS_TODAS_DESCARTADAS)
+async def test_ki44_todas_as_candidatas_descartadas_pulam_a_faixa_como_se_nao_houvesse_resultado(cenario, sem_espera):
+    """Hoje ``tracks`` fica com a lista bruta do último provedor e ``tracks[0]`` (descartada) é mandada tocar."""
+    jogador = await _rodar_process_next(_original(), CENARIOS_TODAS_DESCARTADAS[cenario]())
+
+    assert _desfecho(jogador) == DESFECHO_FAIXA_PULADA, f"tocou a faixa descartada: {_id_mandado_tocar(jogador)!r}"
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki44_com_uma_boa_entre_as_descartadas_a_boa_e_escolhida(sem_espera):
+    jogador = await _rodar_process_next(
+        _original(), {BUSCA_FALSA: [_ruim("ruim-1"), _candidata(TITULO_ORIGINAL, "boa"), _ruim("ruim-2")]}
+    )
+
+    assert _id_mandado_tocar(jogador) == "boa"
+    jogador.process_next.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki44_descartadas_no_primeiro_provedor_e_boa_no_ultimo_a_boa_e_escolhida(sem_espera):
+    resultados = {BUSCA_FALSA: [_ruim("ruim-1")], "dzsearch": [_ruim("ruim-2"), _candidata(TITULO_ORIGINAL, "boa")]}
+
+    jogador = await _rodar_process_next(_original(), resultados)
+
+    assert _id_mandado_tocar(jogador) == "boa"
+    jogador.process_next.assert_not_awaited()
