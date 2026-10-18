@@ -37,6 +37,7 @@ from empiremuse.rpc_protocol import (
     USER_OP,
     USER_TO_BOT_FIELDS,
     RateLimiter,
+    authenticates,
     get_rpc_secret,
     is_valid_id,
     is_valid_id_list,
@@ -45,7 +46,6 @@ from empiremuse.rpc_protocol import (
     parse_app_version,
     pick_fields,
     same_secret,
-    same_token,
 )
 from empiremuse.utils import branding
 
@@ -350,7 +350,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         payload = pick_fields(data, BOT_TO_USER_FIELDS)
 
         if self.server_auth:
-            if same_token(data.get("token"), target.token):
+            if authenticates(data.get("token"), target.token):
                 target.blocked = False
             elif target.blocked:
                 return

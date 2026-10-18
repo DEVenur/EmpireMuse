@@ -129,6 +129,13 @@ def same_token(provided: Any, expected: Any) -> bool:
     return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
 
 
+def authenticates(provided: Any, expected: Any) -> bool:
+    """Autenticação ligada: os dois tokens precisam ser texto não vazio e iguais."""
+    if not (isinstance(provided, str) and provided and isinstance(expected, str) and expected):
+        return False
+    return same_token(provided, expected)
+
+
 class RateLimiter:
     """Janela deslizante: no máximo ``limit`` mensagens em ``window`` segundos."""
 
