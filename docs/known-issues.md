@@ -19,7 +19,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | Banco de dados | KI-09 … KI-10 | alto |
 | Pool de bots e inicialização | KI-11 … KI-14 | médio |
 | Spotify | KI-15 … KI-20 | alto |
-| Player e busca de faixas | KI-21 … KI-22 | médio |
+| Player e busca de faixas | KI-21 … KI-22, KI-44 | médio |
 | Cliente Lavalink (`empiremuse/wavelink/`) e Lavalink local | KI-23 … KI-24 | médio |
 | Servidor web / RPC (robustez) | KI-25 … KI-26 | médio |
 | Qualidade, testes e modernização | KI-27 … KI-31 | alto |
@@ -65,24 +65,25 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
 | KI-15 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_access_token`) | [Resolvido] Em erro de token, `get_access_token` zera as credenciais e chama a si mesma, mas `token_refresh` ainda é `True`: a chamada entra no laço `while self.token_refresh` e **espera para sempre**. | Resolvido na Fase 3 (F3-1): credenciais inválidas do Spotify geram erro claro, sem travar. | alto |
-| KI-16 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | Páginas extras começam em `offset = 101`; a primeira página já traz os itens 0–99. | A 101ª faixa (índice 100) de playlists grandes é pulada. | médio |
-| KI-17 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | Condição `page_count <= playlist_extra_page_limit` (deveria ser `<`). | Carrega uma página extra além do limite configurado. | baixo |
-| KI-18 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.track_search`) | `quote(query)` é aplicado antes de passar `params=` ao aiohttp, que codifica de novo. | Buscas com espaços/acentos/símbolos são enviadas com dupla codificação e retornam resultado ruim. | médio |
-| KI-19 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_valid_access_token`, `SpotifyClient.get_access_token`) | `get_valid_access_token` lê `spotify_cache["expires_at"]` sem checar; com cache vazio dá `KeyError`. Além disso, a chave é gravada como `"tyoe"` (typo de `"type"`). | Falha na primeira requisição se o token ainda não foi obtido; chave com nome errado no cache. | médio |
-| KI-20 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | Importação de playlist usa `playlists/{id}` e `playlists/{id}/tracks`. Segundo o briefing (mudança da API do Spotify em fev/2026), playlists de terceiros podem não ser mais acessíveis com *client credentials*. **Ainda não testado com credenciais reais.** | Importação de playlists públicas pode estar quebrada. | a confirmar (pendente de teste com credenciais reais) |
+| KI-16 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | [Resolvido] Páginas extras começam em `offset = 101`; a primeira página já traz os itens 0–99. | Resolvido na Fase 3 (F3-3): a segunda página de playlist começa em offset=100, sem pular a faixa de índice 100. | médio |
+| KI-17 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | [Resolvido] Condição `page_count <= playlist_extra_page_limit` (deveria ser `<`). | Resolvido na Fase 3 (F3-3): condição ajustada com `<` para carregar exatamente o limite configurado de páginas extras. | baixo |
+| KI-18 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.track_search`) | [Resolvido] `quote(query)` é aplicado antes de passar `params=` ao aiohttp, que codifica de novo. | Resolvido na Fase 3 (F3-3): aiohttp recebe a query crua em params= sem codificação dupla, preservando acentos e símbolos. | médio |
+| KI-19 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_valid_access_token`, `SpotifyClient.get_access_token`) | [Resolvido] `get_valid_access_token` lê `spotify_cache["expires_at"]` sem checar; com cache vazio dá `KeyError`. Além disso, a chave é gravada como `"tyoe"` (typo de `"type"`). | Resolvido na Fase 3 (KeyError na F3-1; typo "tyoe" corrigido para "type" na F3-3 mantendo compatibilidade com caches antigos). | médio |
+| KI-20 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | [Parcial] Importação de playlist usa `playlists/{id}` e `playlists/{id}/tracks`. Segundo o briefing (mudança da API do Spotify em fev/2026), playlists de terceiros podem não ser mais acessíveis com *client credentials*. **Ainda não testado com credenciais reais.** | Parcialmente tratado na Fase 3 (F3-3): erros 403 e 404 da API geram mensagens claras em português, mas a confirmação com credenciais reais continua pendente com o dono. | a confirmar (pendente de teste com credenciais reais) |
 
 ## Player e busca de faixas (`empiremuse/utils/music/models.py`)
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-21 | `empiremuse/utils/music/models.py` (`LavalinkPlayer._process_next`, `LavalinkPlayer.get_autoqueue_tracks`) | `if not [i in titulo for i in exclude_tags]:` testa uma lista (sempre "verdadeira" se houver tags), então a condição nunca é satisfeita e o filtro por tags não executa. | Resultados com "remix", "edit", "mashup" etc. não são deprioritizados ao resolver faixas do Spotify/Deezer. | médio |
-| KI-22 | `empiremuse/utils/music/models.py` (`LavalinkPlayer._process_next`) | `A or not B and C` é lido como `A or ((not B) and C)`: o filtro só descarta quando a duração está fora da faixa **e** o título é diferente. | Aceita faixa com duração correta e título errado, e faixa com título parecido e duração errada. | médio |
+| KI-21 | `empiremuse/utils/music/models.py` (`LavalinkPlayer._process_next`, `LavalinkPlayer.get_autoqueue_tracks`) | [Resolvido] `if not [i in titulo for i in exclude_tags]:` testa uma lista (sempre "verdadeira" se houver tags), então a condição nunca é satisfeita e o filtro por tags não executa. | Resolvido na Fase 3 (F3-3): condição corrigida com `any()` em `_process_next` e `get_autoqueue_tracks`, mantendo candidatas sem tags indesejadas. | médio |
+| KI-22 | `empiremuse/utils/music/models.py` (`LavalinkPlayer._process_next`) | [Resolvido] `A or not B and C` é lido como `A or ((not B) and C)`: o filtro só descarta quando a duração está fora da faixa **e** o título é diferente. | Resolvido na Fase 3 (F3-3): a comparação de título passou a usar token_set_ratio, com limiar de 75 (TITLE_MATCH_THRESHOLD) e tolerância de 7 s na duração. | médio |
+| KI-44 | `empiremuse/utils/music/models.py` (`LavalinkPlayer._process_next`) | [Resolvido] Quando o filtro descartava todas as candidatas, a descartada era tocada mesmo assim. | Resolvido na Fase 3 (F3-3): quando o filtro descarta todas as candidatas, a faixa é pulada, como quando não há resultado. | médio |
 
 ## Cliente Lavalink e Lavalink local
 
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
-| KI-23 | `empiremuse/wavelink/player.py` (`Player.change_node`) | `node.is_available` é lido antes de checar `if not node`. | `AttributeError` ao trocar para um identificador de node inexistente, em vez da mensagem amigável. | médio |
+| KI-23 | `empiremuse/wavelink/player.py` (`Player.change_node`) | [Resolvido] `node.is_available` é lido antes de checar `if not node`. | Resolvido na Fase 3 (F3-3): checagem de existência do nó antes de ler atributos, exibindo mensagem amigável ao trocar para node inexistente. | médio |
 | KI-24 | `empiremuse/utils/music/local_lavalink.py` (`_find_or_install_java`) | [Resolvido] `os.environ["JAVA_HOME"] + "bin/java"` sem separador. | Resolvido na Fase 3 (F3-2): detecção de JAVA_HOME utiliza os.path.join com o separador correto. | médio |
 
 ## Servidor web e RPC (robustez)
