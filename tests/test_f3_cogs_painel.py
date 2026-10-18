@@ -45,12 +45,15 @@ from tests.helpers_modais import (
     ModalInteraction,
     adicionar_favorito,
     adicionar_integracao,
+    arquivo_com,
     exportar_integracoes,
     favs_cheios,
+    gravados,
     importar,
     integracoes_cheias,
     modal_view,
     owner_com_contexto,
+    url_de,
 )
 from tests.test_request_channel_characterization import Scenario, configured, modal_answer
 from tests.test_request_channel_permissions import exact, without
@@ -971,28 +974,6 @@ MODOS_DE_IMPORTACAO = [
     pytest.param(ViewMode.guild_fav_manager, id="servidor"),
     pytest.param(ViewMode.integrations_manager, id="integracoes"),
 ]
-
-
-def arquivo_com(modo, nome, url, **extra):
-    """O JSON de um item no formato de cada importador."""
-    if modo == ViewMode.guild_fav_manager:
-        return {nome: {"url": url, "description": "descrição", **extra}}
-    if modo == ViewMode.integrations_manager and extra:
-        return {nome: {"url": url, **extra}}
-    return {nome: url}
-
-
-def gravados(bot, modo):
-    """O último dicionário de entradas gravado no banco pelo importador do modo (``{}`` se não gravou)."""
-    if modo == ViewMode.fav_manager:
-        return bot.salvos_usuario[-1]["fav_links"] if bot.salvos_usuario else {}
-    if modo == ViewMode.integrations_manager:
-        return bot.salvos_usuario[-1]["integration_links"] if bot.salvos_usuario else {}
-    return bot.salvos_servidor[-1]["player_controller"]["fav_links"] if bot.salvos_servidor else {}
-
-
-def url_de(valor):
-    return valor["url"] if isinstance(valor, dict) else valor
 
 
 def assert_url_gravada_e_limpa(url):

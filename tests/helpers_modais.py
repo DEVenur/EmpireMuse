@@ -36,12 +36,13 @@ class ModalBot:
         fav_links=None,
         integration_links=None,
         nome_max=25,
+        url_max=200,
         retry_after=None,
     ):
         self.config = {
             "MAX_USER_FAVS": favs,
             "MAX_USER_INTEGRATIONS": integracoes,
-            "USER_FAV_MAX_URL_LENGTH": 200,
+            "USER_FAV_MAX_URL_LENGTH": url_max,
             "USER_FAV_MAX_NAME_LENGTH": nome_max,
         }
         self.dono = dono
@@ -236,3 +237,25 @@ def owner_com_contexto():
         bot=bot, guild=SimpleNamespace(id=SERVIDOR_DO_COMANDO, me=SimpleNamespace(), name="origem"), send=enviar
     )
     return legacy_cmds.Owner(bot), ctx, bot
+
+
+def arquivo_com(modo, nome, url, **extra):
+    """O JSON de um item no formato de cada importador."""
+    if modo == ViewMode.guild_fav_manager:
+        return {nome: {"url": url, "description": "descrição", **extra}}
+    if modo == ViewMode.integrations_manager and extra:
+        return {nome: {"url": url, **extra}}
+    return {nome: url}
+
+
+def gravados(bot, modo):
+    """O último dicionário de entradas gravado no banco pelo importador do modo (``{}`` se não gravou)."""
+    if modo == ViewMode.fav_manager:
+        return bot.salvos_usuario[-1]["fav_links"] if bot.salvos_usuario else {}
+    if modo == ViewMode.integrations_manager:
+        return bot.salvos_usuario[-1]["integration_links"] if bot.salvos_usuario else {}
+    return bot.salvos_servidor[-1]["player_controller"]["fav_links"] if bot.salvos_servidor else {}
+
+
+def url_de(valor):
+    return valor["url"] if isinstance(valor, dict) else valor
