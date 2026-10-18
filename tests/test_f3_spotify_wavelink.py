@@ -508,7 +508,7 @@ async def _escolhida_no_autoqueue(original: LavalinkTrack, resultados: list[Lava
 
 def _titulo_com_tag(tag: str) -> str:
     titulo = f"{TITULO_ORIGINAL} ({tag})"
-    assert fuzz.token_sort_ratio(titulo, TITULO_ORIGINAL) >= LIMIAR_TITULO, "a tag não pode derrubar o filtro de título"
+    assert fuzz.token_set_ratio(titulo, TITULO_ORIGINAL) >= LIMIAR_TITULO, "a tag não pode derrubar o filtro de título"
     return titulo
 
 
@@ -585,8 +585,8 @@ async def test_guarda_autoqueue_sem_tag_em_nenhum_resultado_mantem_a_ordem():
 
 
 def test_guarda_dados_de_ki22_titulo_diferente_fica_abaixo_do_limiar():
-    assert fuzz.token_sort_ratio(TITULO_DIFERENTE, TITULO_ORIGINAL) < LIMIAR_TITULO
-    assert fuzz.token_sort_ratio(TITULO_ORIGINAL, TITULO_ORIGINAL) >= LIMIAR_TITULO
+    assert fuzz.token_set_ratio(TITULO_DIFERENTE, TITULO_ORIGINAL) < LIMIAR_TITULO
+    assert fuzz.token_set_ratio(TITULO_ORIGINAL, TITULO_ORIGINAL) >= LIMIAR_TITULO
 
 
 @pytest.mark.asyncio
@@ -657,9 +657,9 @@ async def test_guarda_ki22_tolerancia_extremo_de_7s_e_descartado_com_titulo_erra
 
 @pytest.mark.asyncio
 async def test_guarda_ki22_titulo_exatamente_no_limiar_de_75_ainda_confere():
-    """``token_sort_ratio < 75`` descarta; exatamente 75 ainda confere. Caracteriza o limiar atual do título."""
+    """``token_set_ratio < 75`` descarta; exatamente 75 ainda confere (par de uma palavra: sem interseção de tokens)."""
     base, no_limiar = "abcd", "abce"
-    assert fuzz.token_sort_ratio(base, no_limiar) == LIMIAR_TITULO
+    assert fuzz.token_set_ratio(base, no_limiar) == LIMIAR_TITULO
     original = _faixa(base, DURACAO_ORIGINAL, "id-original", "youtube", identificador="abcdefghijk")
     ruim = _candidata(TITULO_DIFERENTE, "ruim", DURACAO_MUITO_DIFERENTE)
     candidata = _candidata(no_limiar, "no-limiar")
@@ -667,6 +667,90 @@ async def test_guarda_ki22_titulo_exatamente_no_limiar_de_75_ainda_confere():
     escolhida = await _escolhida_no_process_next(original, [ruim, candidata])
 
     assert escolhida == "no-limiar"
+
+
+@pytest.mark.asyncio
+async def test_guarda_ki22_titulo_logo_abaixo_do_limiar_de_75_e_descartado():
+    """O vizinho de baixo do limiar (71,4) com a duração certa não passa: o limiar não foi afrouxado."""
+    base, abaixo = "abcdefg", "abcdexy"
+    assert fuzz.token_set_ratio(base, abaixo) < LIMIAR_TITULO
+    original = _faixa(base, DURACAO_ORIGINAL, "id-original", "youtube", identificador="abcdefghijk")
+    abaixo_do_limiar = _candidata(abaixo, "abaixo")
+    referencia = _candidata(base, "referencia")
+
+    escolhida = await _escolhida_no_process_next(original, [abaixo_do_limiar, referencia])
+
+    assert escolhida == "referencia"
+
+
+# --- KI-22 (métrica): prefixo de artista e sufixos do SoundCloud/YouTube não podem reprovar o título. Com
+# --- ``token_sort_ratio`` estes pares medem 55-65 (< 75) e, com ``or``, a faixa certa seria PULADA (regressão do KI-44).
+
+TITULOS_QUE_CONFEREM = {
+    "prefixo-de-artista": ("Shape of You", "Ed Sheeran - Shape of You"),
+    "prefixo-e-sufixo-official-music-video": (
+        "Never Gonna Give You Up",
+        "Rick Astley - Never Gonna Give You Up (Official Music Video)",
+    ),
+    "sufixo-official-video": ("Shape of You", "Shape of You (Official Video)"),
+    "sufixo-official-audio-entre-colchetes": ("Shape of You", "Shape of You [Official Audio]"),
+    "sufixo-remastered": ("Bohemian Rhapsody", "Bohemian Rhapsody - Remastered 2011"),
+    "original-com-sufixo-e-candidata-sem": ("Bohemian Rhapsody - Remastered 2011", "Bohemian Rhapsody"),
+}
+
+TITULOS_DE_OUTRA_MUSICA = {
+    "mesmo-artista-outra-faixa": ("Shape of You", "Ed Sheeran - Perfect"),
+    "outra-faixa-com-prefixo-de-artista": ("Bohemian Rhapsody", "Queen - Another One Bites the Dust"),
+}
+
+
+def test_guarda_dados_de_ki22_titulos_que_conferem_so_passam_com_token_set_ratio():
+    for original, candidata in TITULOS_QUE_CONFEREM.values():
+        assert fuzz.token_sort_ratio(original, candidata) < LIMIAR_TITULO, (original, candidata)
+        assert fuzz.token_set_ratio(original, candidata) >= LIMIAR_TITULO, (original, candidata)
+
+
+def test_guarda_dados_de_ki22_titulos_de_outra_musica_ficam_abaixo_do_limiar():
+    for original, candidata in TITULOS_DE_OUTRA_MUSICA.values():
+        assert fuzz.token_set_ratio(original, candidata) < LIMIAR_TITULO, (original, candidata)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("caso", TITULOS_QUE_CONFEREM)
+async def test_ki22_titulo_com_prefixo_ou_sufixo_e_duracao_certa_e_aceito(caso, sem_espera):
+    """Hoje ``token_sort_ratio`` reprova o par e a faixa é pulada (``None``) em vez de a candidata certa tocar."""
+    titulo_original, titulo_candidato = TITULOS_QUE_CONFEREM[caso]
+    ruim = _candidata(TITULO_DIFERENTE, "ruim", DURACAO_MUITO_DIFERENTE)
+    certa = _candidata(titulo_candidato, "certa")
+
+    escolhida = await _escolhida_no_process_next(_original(titulo_original), [ruim, certa])
+
+    assert escolhida == "certa"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("caso", TITULOS_DE_OUTRA_MUSICA)
+async def test_guarda_ki22_titulo_de_outra_musica_com_duracao_certa_e_descartado(caso):
+    titulo_original, titulo_outra = TITULOS_DE_OUTRA_MUSICA[caso]
+    outra = _candidata(titulo_outra, "outra")
+    referencia = _candidata(titulo_original, "referencia")
+
+    escolhida = await _escolhida_no_process_next(_original(titulo_original), [outra, referencia])
+
+    assert escolhida == "referencia"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delta", [TOLERANCIA_MS, -TOLERANCIA_MS, 60_000])
+async def test_guarda_ki22_titulo_com_prefixo_e_sufixo_mas_duracao_fora_da_tolerancia_e_descartado(delta):
+    """Trocar a métrica do título não pode afrouxar a duração: as duas condições continuam obrigatórias."""
+    titulo_original, titulo_candidato = TITULOS_QUE_CONFEREM["prefixo-e-sufixo-official-music-video"]
+    fora = _candidata(titulo_candidato, "fora", DURACAO_ORIGINAL + delta)
+    referencia = _candidata(titulo_original, "referencia")
+
+    escolhida = await _escolhida_no_process_next(_original(titulo_original), [fora, referencia])
+
+    assert escolhida == "referencia"
 
 
 # ---------------------------------------------------------------------------------------------------------------------
