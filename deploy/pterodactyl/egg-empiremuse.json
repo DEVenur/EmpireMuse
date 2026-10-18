@@ -687,6 +687,33 @@
             "rules": "required|in:true,false"
         },
         {
+            "name": "Segredo de registro de bots no RPC",
+            "description": "Segredo que o bot usa para se registrar no servidor do Rich Presence. Vazio: um segredo é gerado a cada inicialização (suficiente quando o bot e o servidor rodam no mesmo processo). Defina o mesmo valor nos dois lados se o servidor RPC rodar em outra instância.",
+            "env_variable": "RPC_SERVER_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Origens de navegador permitidas no RPC",
+            "description": "Origens de navegador autorizadas a abrir o WebSocket do Rich Presence, separadas por vírgula (ex.: https://painel.exemplo.com). Vazio: só o app, o bot e a mesma origem do servidor são aceitos.",
+            "env_variable": "RPC_ALLOWED_ORIGINS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Endereço de escuta do servidor web",
+            "description": "Endereço em que o servidor web e o RPC escutam. Mantenha 0.0.0.0 no Pterodactyl, senão a porta do servidor não fica acessível.",
+            "env_variable": "WEB_BIND_ADDRESS",
+            "default_value": "0.0.0.0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
             "name": "Habilitar painel administrativo web",
             "description": "Ativa o painel de gerenciamento web com login seguro via Discord OAuth2.",
             "env_variable": "PANEL_ENABLED",
