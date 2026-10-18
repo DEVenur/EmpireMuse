@@ -133,6 +133,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Regras de Negócio Compartilhadas (Fase 3 / F3-5b, parte 1)**:
+  - Criação do pacote `empiremuse/rules/` centralizando constantes de limites (`limits`), funções de texto (`text`), validações de URLs (`urls`), cálculo de cota (`quota`) e configurações permitidas (`settings`).
+  - O pacote utiliza exclusivamente a biblioteca padrão do Python, sem dependências de frameworks (`disnake`, `tornado`, `motor`) nem de outros módulos da aplicação.
+  - Tanto o bot (`empiremuse/cogs/`, `empiremuse/utils/music/interactions.py`, `empiremuse/utils/music/converters.py`) quanto o painel web (`empiremuse/panel/services/`) passam a importar diretamente de `empiremuse/rules/`.
+  - Estabelecida a regra de isolamento de dependências: módulos do bot (`utils` e `cogs`) não importam `empiremuse.panel`, assegurado por teste estático de arquitetura (`tests/test_f3_5b_arquitetura.py`).
+  - O painel mantém reexportações transitórias dos nomes legados e não há nenhuma alteração de comportamento, limites ou mensagens nesta etapa (refatoração pura).
 - **Regras de Nome e Substituição nos Importadores (Fase 3 / F3-5a)**:
   - O limite máximo para nomes de favoritos na importação de arquivo passa a ser de 25 caracteres (alinhado aos limites do modal e do painel web).
   - Reimportar um nome já existente substitui a entrada anterior sem consumir nova vaga na cota, com comparação sem diferenciação entre maiúsculas e minúsculas.

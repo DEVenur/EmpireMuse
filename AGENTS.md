@@ -37,6 +37,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/utils/music/checks.py`: Verificações de permissão, voz, DJ e algoritmo de roteamento entre múltiplos bots.
 - `empiremuse/utils/music/local_lavalink.py`: Download e execução sob demanda de binários JDK e Lavalink local.
 - `empiremuse/utils/music/lavalink_server_list.py`: Validação da lista de servidores Lavalink baixada, com fallback para `data/lavalink_servers.ini`.
+- `empiremuse/rules/`: Regras de negócio puras compartilhadas por comandos e painel (limites, texto, URLs, cota e configurações; só biblioteca padrão).
 - `empiremuse/panel/`: Sub-aplicação web Tornado do painel de administração (OAuth2, sessões, rotas, serviços, templates e estáticos vendorizados).
 - `empiremuse/utils/music/request_channel.py`: Lógica unificada de setup e reset de canais de texto e fóruns de pedidos, compartilhada entre os cogs e o painel web.
 - `empiremuse/utils/music/audio_sources/`: Provedores de metadados para plataformas externas (Spotify e Deezer).
