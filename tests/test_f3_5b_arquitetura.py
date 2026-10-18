@@ -6,12 +6,14 @@
   bot não pode importar o painel).
 
 Conta qualquer ``import``, inclusive dentro de função e de ``if TYPE_CHECKING``, e resolve importações relativas.
-Os dois testes de regra nascem com ``xfail(strict=True)``: ``empiremuse/rules/`` ainda não existe e ``interactions.py``
-importa do painel hoje. Ficam verdes na etapa 1 (extração); aí o ``xfail`` estrito vira falha e o marcador sai.
-O detector é provado à parte, com código sintético, e esses testes passam hoje.
+São guardas desde a etapa 1 da F3-5b (extração para ``empiremuse/rules``, bot sem importar o painel). O detector é
+provado à parte, com código e pastas sintéticos. Um teste em subprocesso confere o efeito real: importar o bot não
+carrega nenhum módulo ``empiremuse.panel*``.
 """
 
 import ast
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -89,29 +91,25 @@ def violacoes_das_regras() -> list[str]:
     return achadas
 
 
-# ============================================================================ as regras da arquitetura (RED até a etapa 1)
-
-ETAPA_1 = "fica verde na etapa 1 da F3-5b (extração das regras para empiremuse/rules e fim do bot -> painel)"
+# ============================================================================ as regras da arquitetura (guardas)
 
 
-@pytest.mark.xfail(strict=True, reason=f"empiremuse/rules/ ainda não existe; {ETAPA_1}")
 def test_rules_so_importa_a_biblioteca_padrao():
     assert REGRAS.is_dir(), "empiremuse/rules/ precisa existir"
     assert arquivos(REGRAS), "empiremuse/rules/ precisa ter módulos"
     assert violacoes_das_regras() == []
 
 
-@pytest.mark.xfail(strict=True, reason=f"interactions.py ainda importa empiremuse.panel; {ETAPA_1}")
 def test_utils_nao_importa_o_painel():
     assert violacoes_do_painel(PACOTE / "utils") == []
 
 
 def test_cogs_nao_importa_o_painel():
-    """Já vale hoje (guarda): só ``utils/music/interactions.py`` importa o painel."""
+    """Guarda: nenhum cog importa o painel."""
     assert violacoes_do_painel(PACOTE / "cogs") == []
 
 
-# ============================================================================ o detector (verde hoje)
+# ============================================================================ o detector
 
 
 class TestDetectorDeImportacoes:
@@ -176,11 +174,23 @@ class TestDetectorDeImportacoes:
         achados = {nome for nome, _ in importados("from .limits import X", "empiremuse.rules", eh_pacote=True)}
         assert "empiremuse.rules.limits" in achados
 
-    def test_o_scanner_enxerga_o_estado_atual_da_main(self):
-        """Prova de que o varredor lê os arquivos de verdade: hoje o ``interactions.py`` importa o painel."""
-        achadas = violacoes_do_painel(PACOTE / "utils")
-        assert any("utils/music/interactions.py" in achada for achada in achadas)
-        assert not any("owner_panel" in achada for achada in achadas), "owner_panel não é empiremuse.panel"
+    def test_o_scanner_le_os_arquivos_de_verdade(self):
+        """O varredor enxerga o que o bot realmente importa: ``interactions.py`` usa ``empiremuse.rules``, não o painel."""
+        interactions = PACOTE / "utils" / "music" / "interactions.py"
+        achados = {
+            nome for nome, _ in importados(interactions.read_text(encoding="utf-8"), nome_do_modulo(interactions))
+        }
+        assert "empiremuse.rules.limits" in achados and "empiremuse.rules.quota" in achados
+        assert not any(importa_o_painel(nome) for nome in achados)
+        assert {arquivo.name for arquivo in arquivos(REGRAS)} >= {"limits.py", "text.py", "urls.py", "quota.py"}
+
+    def test_owner_panel_nao_e_o_painel(self):
+        """``empiremuse.utils.owner_panel`` (usado por ``legacy_cmds``) tem ``panel`` no nome, mas não é o painel web."""
+        assert not importa_o_painel("empiremuse.utils.owner_panel")
+        assert any(
+            "owner_panel" in linha
+            for linha in (PACOTE / "cogs" / "legacy_cmds.py").read_text(encoding="utf-8").splitlines()
+        )
 
 
 def importa_o_painel_em(codigo, modulo, **kwargs):
@@ -221,3 +231,70 @@ class TestVarreduraDePastas:
         )
         achadas = violacoes_do_painel(pacote / "utils")
         assert achadas and all("ruim.py" in achada for achada in achadas)
+
+
+# ============================================================================ o efeito real: sys.modules em um processo limpo
+
+RAIZ = PACOTE.parent
+SONDA = "import sys\nsys.path.insert(0, {raiz!r})\nimport {modulo}\nprint('\\n'.join(sorted(nome for nome in sys.modules if {teste})))\n"
+
+
+def modulos_carregados(modulo: str, teste: str) -> list[str]:
+    """Nomes em ``sys.modules`` que satisfazem ``teste`` depois de importar ``modulo`` num interpretador novo."""
+    ambiente = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    resultado = subprocess.run(
+        [sys.executable, "-I", "-c", SONDA.format(raiz=str(RAIZ), modulo=modulo, teste=teste)],
+        cwd=RAIZ,
+        env=ambiente,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert resultado.returncode == 0, resultado.stderr[-800:]
+    return [linha for linha in resultado.stdout.splitlines() if linha]
+
+
+# Fora da lista de propósito: ``cogs.legacy_cmds`` (e tudo que importa ``utils.client``) chega ao painel por
+# ``utils/client.py -> web_app.py -> empiremuse.panel``. É a raiz de composição (o processo do bot sobe o servidor web),
+# não uma regra de negócio; o critério da F3-5b é a camada de regras e de interações.
+MODULOS_DO_BOT = [
+    "empiremuse.utils.music.interactions",
+    "empiremuse.utils.music.converters",
+    "empiremuse.cogs.music_settings",
+]
+
+
+class TestImportarOBotNaoCarregaOPainel:
+    @pytest.mark.parametrize("modulo", MODULOS_DO_BOT)
+    def test_nenhum_modulo_do_painel_e_carregado(self, modulo):
+        carregados = modulos_carregados(modulo, "nome == 'empiremuse.panel' or nome.startswith('empiremuse.panel.')")
+        assert carregados == [], f"importar {modulo} carregou o painel: {carregados[:5]}"
+
+    def test_a_sonda_enxerga_o_painel_quando_ele_e_importado(self):
+        """Prova da sonda: importar o painel de propósito aparece (senão o teste acima passaria sempre)."""
+        carregados = modulos_carregados(
+            "empiremuse.panel.services.base", "nome == 'empiremuse.panel' or nome.startswith('empiremuse.panel.')"
+        )
+        assert "empiremuse.panel.services.base" in carregados
+
+    def test_interactions_carrega_as_regras_compartilhadas(self):
+        carregados = modulos_carregados("empiremuse.utils.music.interactions", "nome.startswith('empiremuse.rules')")
+        assert {
+            "empiremuse.rules.limits",
+            "empiremuse.rules.quota",
+            "empiremuse.rules.text",
+            "empiremuse.rules.urls",
+        } <= set(carregados)
+
+    def test_as_regras_nao_carregam_disnake_tornado_nem_motor(self):
+        carregados = modulos_carregados(
+            "empiremuse.rules.urls",
+            "nome.split('.')[0] in ('disnake', 'tornado', 'motor', 'tinymongo') or nome.startswith('empiremuse.') and not nome.startswith('empiremuse.rules')",
+        )
+        assert carregados == []
+
+    def test_todos_os_modulos_das_regras_importam_sozinhos(self):
+        for arquivo in arquivos(REGRAS):
+            modulo = nome_do_modulo(arquivo)
+            carregados = modulos_carregados(modulo, "nome.split('.')[0] in ('disnake', 'tornado', 'motor')")
+            assert carregados == [], (modulo, carregados)
