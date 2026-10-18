@@ -12,13 +12,17 @@ from typing import Any, NamedTuple, Optional
 
 from empiremuse.panel.services.account_base import AccountContext, AccountSection, Parsed, effective_limit, is_web_link
 from empiremuse.panel.services.base import Args, clean_title, first, load_json_object
-from empiremuse.utils.music.converters import URL_REG
+from empiremuse.rules.limits import (
+    FAV_NAME_MAX as FAV_NAME_MAX,
+    FAV_NAME_MIN as FAV_NAME_MIN,
+    FAV_URL_MAX,
+    FAV_URL_MIN,
+    ITG_AVATAR_MAX as ITG_AVATAR_MAX,
+    ITG_TITLE_MAX as ITG_TITLE_MAX,
+    ITG_URL_MAX as ITG_URL_MAX,
+)
+from empiremuse.rules.urls import extract_url_legacy, url_prefix_legacy
 
-FAV_NAME_MIN, FAV_NAME_MAX = 2, 25
-FAV_URL_MIN, FAV_URL_MAX = 10, 200
-ITG_TITLE_MAX = 90
-ITG_URL_MAX = 150  # valor fixo do importador do comando
-ITG_AVATAR_MAX = 250
 EXPORT_PATH = "/painel/conta/favoritos/exportar"
 
 MSG_NAME = f"O nome deve ter de {FAV_NAME_MIN} a {FAV_NAME_MAX} caracteres, sem quebras de linha."
@@ -55,16 +59,12 @@ def modal_url(raw: str) -> Optional[str]:
     text = raw.strip()
     if not FAV_URL_MIN <= len(text) <= FAV_URL_MAX:
         return None
-    found = URL_REG.findall(text)
-    return found[0] if found else None
+    return extract_url_legacy(text)
 
 
 def import_url(value: Any, max_chars: int) -> Optional[str]:
     """URL do importador: texto, até ``max_chars`` e começando com URL; grava só o trecho que casa."""
-    if not isinstance(value, str) or len(value) > max_chars:
-        return None
-    match = URL_REG.match(value)
-    return match.group(0) if match else None
+    return url_prefix_legacy(value, max_chars)
 
 
 def _unknown(echo: dict, message: str) -> Parsed:

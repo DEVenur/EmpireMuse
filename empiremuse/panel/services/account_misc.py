@@ -15,10 +15,10 @@ from typing import Any, Optional
 
 from empiremuse.panel.services.account_base import AccountContext, AccountSection, Parsed, Refusal
 from empiremuse.panel.services.base import Args, first, flag
+from empiremuse.rules.limits import PREFIX_MAX_LENGTH as PREFIX_MAX
 
 logger = logging.getLogger(__name__)
 
-PREFIX_MAX = 5
 TOKEN_LENGTH = 50
 TOKEN_ALPHABET = string.ascii_letters + string.digits
 MSG_PREFIX_LENGTH = f"O prefixo deve ter de 1 a {PREFIX_MAX} caracteres."

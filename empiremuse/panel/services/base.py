@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Mapping, NamedTuple, Optional, Sequence
 
+from empiremuse.rules.text import clean_title as clean_title  # reexportado: o painel e os testes importam daqui
 from empiremuse.utils.db import DBModel
 
 Args = Mapping[str, Sequence[str]]
@@ -37,18 +37,6 @@ def first(args: Args, name: str) -> Optional[str]:
 def flag(args: Args, name: str) -> bool:
     """Checkbox: presente = marcado; ausente = desmarcado."""
     return bool(args.get(name))
-
-
-def clean_title(raw: Any, low: int, high: int) -> Optional[str]:
-    """Nome normalizado (strip, ``low``–``high`` caracteres, sem controle/formatação) ou ``None``."""
-    if not isinstance(raw, str):
-        return None
-    name = raw.strip()
-    if not low <= len(name) <= high:
-        return None
-    if any(unicodedata.category(char) in ("Cc", "Cf") for char in name):
-        return None
-    return name
 
 
 def load_json_object(raw: str) -> Optional[dict]:

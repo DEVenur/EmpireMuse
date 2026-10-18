@@ -11,22 +11,21 @@ from typing import Any, Optional
 
 from empiremuse.panel.services.base import DBModel, Args, FormContext, ParseResult, SettingsForm, first, flag
 from empiremuse.panel.services.player import active_player
+from empiremuse.rules.limits import CUSTOM_SKIN_PREFIX as CUSTOM_PREFIX
+from empiremuse.rules.settings import allowed_names
 
 logger = logging.getLogger(__name__)
 
-CUSTOM_PREFIX = "> custom_skin: "
 MSG_SKIN = "Escolha uma skin da lista."
 
 
 def allowed_skins(bot: Any) -> tuple[str, ...]:
     """Skins do modo normal, menos as de IGNORE_SKINS (lido da config a cada requisição, como o comando)."""
-    ignored = bot.config["IGNORE_SKINS"].split()
-    return tuple(name for name in bot.player_skins if name not in ignored)
+    return allowed_names(bot.player_skins, bot.config["IGNORE_SKINS"])
 
 
 def allowed_static_skins(bot: Any) -> tuple[str, ...]:
-    ignored = bot.config["IGNORE_STATIC_SKINS"].split()
-    return tuple(name for name in bot.player_static_skins if name not in ignored)
+    return allowed_names(bot.player_static_skins, bot.config["IGNORE_STATIC_SKINS"])
 
 
 def _pick(raw: Optional[str], allowed: tuple[str, ...], stored: Optional[str]) -> bool:
