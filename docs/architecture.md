@@ -208,7 +208,7 @@ O painel web é ativado quando `PANEL_ENABLED=true` e requer `RUN_RPC_SERVER=tru
 
 | Banco/coleção | Modelo | Conteúdo |
 |---|---|---|
-| `<id do bot>` / `guilds` | `db_models[guilds]` v1.10 | Canal/mensagem do controlador, skin, `autoplay`, volume padrão, DJ roles, modo restrito. |
+| `<id do bot>` / `guilds` | `db_models[guilds]` v1.11 | Canal/mensagem do controlador, skin, `autoplay`, volume padrão, DJ roles, modo restrito. |
 | `<id do bot>` / `users` | `db_models[users]` v1.0 | Favoritos do usuário. |
 | `global` / `users` | `global_db_models[users]` v1.6 | Favoritos, integrações, `token` do RPC, prefixo próprio, últimas faixas, dados do Last.fm. |
 | `global` / `guilds` | `global_db_models[guilds]` v1.4 | Prefixo, skins globais, **skins personalizadas**, status do canal de voz, convites "ouvir junto". |
