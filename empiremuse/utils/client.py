@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 
 
 class BotPool:
+    # valores só de referência: cada instância cria os seus em __init__ (listas/dicts de classe seriam compartilhados)
     bots: List[BotCore] = []
     guild_bots: Dict[str, List[BotCore]] = {}
     killing_state = False
@@ -86,6 +87,8 @@ class BotPool:
     song_select_cooldown = commands.CooldownMapping.from_cooldown(rate=2, per=15, type=commands.BucketType.member)
 
     def __init__(self):
+        self.bots: List[BotCore] = []
+        self.guild_bots: Dict[str, List[BotCore]] = {}
         self.exit_code: int = 0
         self.user_prefix_cache = {}
         self.guild_prefix_cache = {}
@@ -158,8 +161,9 @@ class BotPool:
 
         self.load_cache()
 
-    def reset_useragent(self):
+    def reset_useragent(self) -> str:
         self.current_useragent = generate_user_agent()
+        return self.current_useragent
 
     def load_cache(self):
         playlist_cache_file = paths.RUNTIME_DIR / "local_database" / "playlist_cache.pkl"
@@ -306,7 +310,7 @@ class BotPool:
         try:
             await bot.start(bot.http.token)
         except disnake.HTTPException as error:
-            if error.status == 429 or "429 Too Many Requests" in str(e):
+            if error.status == 429 or "429 Too Many Requests" in str(error):
                 if not self.config["KILL_ON_429"]:
                     if self.killing_state == "ratelimit":
                         return
@@ -314,7 +318,7 @@ class BotPool:
                     self.killing_state = "ratelimit"
                     print("Aplicação com ratelimit do discord!")
                     await asyncio.sleep(10)
-                    raise e
+                    raise error
 
                 if self.killing_state is True:
                     return
@@ -1027,10 +1031,7 @@ class BotPool:
 
             if guild_id:
                 bot.exclusive_guild_id = int(guild_id)
-                try:
-                    self.guild_bots[guild_id].append(bot)
-                except KeyError:
-                    self.guild_bots = {guild_id: [bot]}
+                self.guild_bots.setdefault(guild_id, []).append(bot)
             else:
                 self.bots.append(bot)
 
