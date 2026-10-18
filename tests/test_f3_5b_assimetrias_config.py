@@ -3,7 +3,7 @@
 Cada teste fixa o comportamento ATUAL, dos dois lados, chamando os callbacks reais com dublês (sem Discord real, sem
 rede, sem ``.env``). Os que passam hoje e continuam passando depois da extração da etapa 1 provam que ela não mexe em
 nada. Os marcados ``# MUDA (etapa N, A#)`` são invertidos pela etapa indicada; os demais devem continuar iguais.
-Plano e decisões: ``.local/F3-5b-plano.md`` (seções 3 e 8).
+Referência: KI-42 (docs/known-issues.md); as assimetrias estão numeradas A1 a A25.
 """
 
 from types import SimpleNamespace

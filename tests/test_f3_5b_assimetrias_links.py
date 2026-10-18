@@ -2,7 +2,7 @@
 
 Fixa o comportamento ATUAL dos importadores e modais do bot (``FavModalImport``/``FavModalAdd``) e dos formulários do
 painel (``FavoritesSection``, ``IntegrationsSection``, ``LinksForm``). ``# MUDA (etapa N, A#)`` marca o que a etapa
-indicada inverte; o resto é guarda e deve continuar igual depois da extração. Plano: ``.local/F3-5b-plano.md``.
+indicada inverte; o resto é guarda e deve continuar igual depois da extração. Referência: KI-42 (docs/known-issues.md); as assimetrias estão numeradas A1 a A25.
 """
 
 import pytest
