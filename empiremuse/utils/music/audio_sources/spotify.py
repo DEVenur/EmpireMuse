@@ -8,7 +8,6 @@ import logging
 import os.path
 import re
 import time
-import traceback
 from tempfile import gettempdir
 from typing import Optional, TYPE_CHECKING, Union
 from urllib.parse import quote
@@ -32,6 +31,8 @@ spotify_regex_w_user = re.compile("https://open.spotify.com?.+(album|playlist|ar
 spotify_cache_file = os.path.join(gettempdir(), ".spotify_cache.json")
 
 logger = logging.getLogger(__name__)
+
+PLAYLIST_PAGE_SIZE = 100
 
 
 class SpotifyClient:
@@ -72,10 +73,15 @@ class SpotifyClient:
                 elif response.status == 401:
                     await self.get_access_token()
                     return await self.request(path=path, params=params)
+                elif response.status == 403:
+                    raise GenericError(
+                        "**O Spotify não permitiu o acesso a este conteúdo (ele pode ser privado, restrito ou "
+                        "indisponível para bots).**"
+                    )
                 elif response.status == 404:
                     raise GenericError(
-                        "**Não houve resultado para o link informado (confira se o link está correto ou se o conteúdo dele está privado ou se foi deletado).**\n\n"
-                        f"{str(response.url).replace('api.', 'open.').replace('/v1/', '/').replace('s/', '/')}"
+                        "**Não houve resultado para o link informado (confira se o link está correto ou se o "
+                        "conteúdo dele está privado ou se foi deletado).**"
                     )
                 elif response.status == 429:
                     self.disabled = True
@@ -96,23 +102,22 @@ class SpotifyClient:
     async def get_playlist_info(self, playlist_id: str):
         result = await self.request(path=f"playlists/{playlist_id}")
 
-        if len(result["tracks"]["items"]) == 100 and self.playlist_extra_page_limit > 0:
-            offset = 101
-            page_count = 0
+        if len(result["tracks"]["items"]) == PLAYLIST_PAGE_SIZE and self.playlist_extra_page_limit > 0:
+            offset = PLAYLIST_PAGE_SIZE
 
-            while True:
+            for _ in range(self.playlist_extra_page_limit):
                 try:
-                    result_extra = await self.request(path=f"playlists/{playlist_id}/tracks?offset={offset}&limit=100")
-                except:
-                    traceback.print_exc()
+                    result_extra = await self.request(
+                        path=f"playlists/{playlist_id}/tracks?offset={offset}&limit={PLAYLIST_PAGE_SIZE}"
+                    )
+                except Exception as e:
+                    logger.warning("Spotify: falha ao carregar página extra da playlist (%s).", type(e).__name__)
                     break
-                else:
-                    result["tracks"]["items"].extend(result_extra["items"])
-                    if result_extra["next"] and page_count <= self.playlist_extra_page_limit:
-                        offset += 100
-                        page_count += 1
-                        continue
+
+                result["tracks"]["items"].extend(result_extra["items"])
+                if not result_extra["next"]:
                     break
+                offset += PLAYLIST_PAGE_SIZE
 
         return result
 
@@ -131,7 +136,7 @@ class SpotifyClient:
         return await self.request(path="recommendations", params={"seed_tracks": track_ids, "limit": limit})
 
     async def track_search(self, query: str):
-        return await self.request(path="search", params={"q": quote(query), "type": "track", "limit": 10})
+        return await self.request(path="search", params={"q": query, "type": "track", "limit": 10})
 
     async def get_access_token(self):
         if self.token_refresh:
@@ -166,7 +171,7 @@ class SpotifyClient:
 
                 self.type = "api"
 
-                self.spotify_cache["tyoe"] = "api"
+                self.spotify_cache["type"] = "api"
 
                 self.spotify_cache["expires_at"] = time.time() + self.spotify_cache["expires_in"]
 
