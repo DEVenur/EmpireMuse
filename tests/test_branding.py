@@ -755,6 +755,68 @@ class TestListagemSemGit:
         assert not any(p.startswith((".git/", ".venv/")) for p in arquivos)
 
 
+class TestRegrasDoGitignoreEmDetalhe:
+    """Cada regra do ``.gitignore`` isolada, com um arquivo que prova o que ela NÃO ignora."""
+
+    @staticmethod
+    def listar(pasta, gitignore, arquivos):
+        _criar(pasta, {".gitignore": gitignore, **dict.fromkeys(arquivos, "x")})
+        return set(_walk_files(pasta)) - {".gitignore"}
+
+    def test_regra_so_de_diretorio_nao_ignora_arquivo_de_mesmo_nome(self, tmp_path):
+        assert self.listar(tmp_path, "build/\n", ["build", "sub/build", "x/build/y.py"]) == {"build", "sub/build"}
+
+    def test_asterisco_nao_atravessa_a_barra(self, tmp_path):
+        assert self.listar(tmp_path, "a*b\n", ["axb", "a/x/b", "ab"]) == {"a/x/b"}
+
+    def test_interrogacao_nao_casa_a_barra(self, tmp_path):
+        assert self.listar(tmp_path, "a?b\n", ["a/b", "a1b"]) == {"a/b"}
+
+    def test_duplo_asterisco_no_fim_ignora_o_conteudo_em_qualquer_profundidade(self, tmp_path):
+        arquivos = ["dados/c.txt", "dados/a/b.txt", "dadosx/c.txt", "dados2/a/b.txt"]
+        assert self.listar(tmp_path, "dados/**\n", arquivos) == {"dadosx/c.txt", "dados2/a/b.txt"}
+
+    def test_classe_com_negacao_ignora_so_o_que_nao_esta_na_lista(self, tmp_path):
+        assert self.listar(tmp_path, "[!a]x\n", ["ax", "bx"]) == {"ax"}
+
+    def test_barra_invertida_escapa_o_primeiro_caractere(self, tmp_path):
+        """``\\#nota`` é o nome literal ``#nota`` (não é comentário) e ``\\!x`` o nome literal ``!x`` (não é negação)."""
+        assert self.listar(tmp_path, "\\#nota\n\\!x\n", ["#nota", "!x", "outro"]) == {"outro"}
+
+    def test_espacos_no_fim_da_linha_sao_ignorados(self, tmp_path):
+        assert self.listar(tmp_path, "foo   \n", ["foo", "foo2"]) == {"foo2"}
+
+    def test_linha_de_comentario_nao_vira_regra(self, tmp_path):
+        assert self.listar(tmp_path, "# nota\n", ["# nota", "outro"]) == {"# nota", "outro"}
+
+
+class TestFiltrosDaListagem:
+    def test_arquivo_rastreado_que_nao_existe_mais_nao_e_listado(self, raiz_falsa, monkeypatch):
+        """``git ls-files`` ainda lista o arquivo apagado e não commitado; ler o que não existe quebraria as varreduras."""
+        import sys
+
+        (raiz_falsa / ".git").mkdir()
+        _criar(raiz_falsa, {"existe.py": "x"})
+
+        def do_git(*args):
+            return [] if "--others" in args else ["existe.py", "apagado.py"]
+
+        monkeypatch.setattr(sys.modules[__name__], "_git_lines", do_git)
+        assert _repo_files() == ["existe.py"]
+
+    @pytest.mark.parametrize(
+        ("caminho", "padroes", "esperado"),
+        [
+            ("pasta/Dockerfile", ("Dockerfile",), True),
+            ("pasta/sub/x.py", ("*.py",), True),
+            ("Dockerfile.bak/x", ("Dockerfile",), False),
+            ("pasta/x.txt", ("*.py",), False),
+        ],
+    )
+    def test_o_padrao_vale_para_o_nome_do_arquivo_em_qualquer_pasta(self, caminho, padroes, esperado):
+        assert _matches(caminho, padroes) is esperado
+
+
 class TestCorrespondenciaPrecisa:
     """Os termos proibidos são casados por palavra/host inteiros, sem diferenciar a caixa."""
 
