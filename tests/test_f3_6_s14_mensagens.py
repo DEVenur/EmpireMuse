@@ -57,7 +57,7 @@ class TestHelpers:
             ("This video is unavailable", "This video is unavailable"),
             ("com `crase` e ```bloco```", "com 'crase' e '''bloco'''"),
             ("linha 1\nlinha 2\r\n   linha 3", "linha 1 linha 2 linha 3"),
-            ("a\x00b‮c​d", "abcd"),
+            ("a\x00b\u202ec\u200bd", "abcd"),
             (None, ""),
             (123, "123"),
             ("  espaços nas pontas  ", "espaços nas pontas"),
@@ -1006,3 +1006,245 @@ class TestCanalDeVozNoRelatorio:
         embed = self.embed(None, self.canal(2, "b"), usuario_em_voz=False)
 
         assert self.campo(embed, "Canal de voz (bot):") == [] and self.campo(embed, "Canal de voz (user):") == []
+
+
+# ============================================================================ lacunas apontadas pela mutação
+
+
+class TestLacunasDaMutacao:
+    def test_log_unexpected_error_registra_o_traceback_da_causa_original(self, monkeypatch, caplog):
+        """``commands.CommandInvokeError`` e afins embrulham o erro real em ``original``: o log leva o de dentro."""
+        from empiremuse.utils.music.errors import log_unexpected_error
+
+        fixar_codigo(monkeypatch)
+
+        class Embrulho(Exception):
+            original = ValueError(SEGREDO)
+
+        with caplog.at_level(logging.ERROR, logger="teste.s14"):
+            log_unexpected_error(logging.getLogger("teste.s14"), Embrulho("casca"), "origem")
+        [registro] = registros(caplog, "teste.s14", logging.ERROR)
+        assert registro.exc_info[0] is ValueError
+
+    @pytest.mark.asyncio
+    async def test_o_log_do_servidor_leva_a_mensagem_do_lavalink_e_o_controlador_leva_o_codigo(
+        self, monkeypatch, caplog
+    ):
+        fixar_codigo(monkeypatch)
+        track = faixa()
+        p = jogador(monkeypatch, current=track, last_track=track, locked=True)
+        enfileirar_e_encerrar(p, monkeypatch, evento_de_falha("m" * 500))
+
+        async def encerrar(*args, **kwargs):
+            p.is_closing = True
+
+        p.report_error = AsyncMock(side_effect=encerrar)
+
+        with caplog.at_level(logging.WARNING, logger="empiremuse.utils.music.models"):
+            await p.hook_events()
+
+        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.utils.music.models"))
+        assert "m" * 100 in log and CODIGO in log, "o log do servidor leva a mensagem e o código"
+        textos = [c.kwargs.get("text", c.args[0] if c.args else "") for c in p.set_command_log.call_args_list]
+        assert any(CODIGO in t and "m" * 50 + "…" in t and "m" * 51 not in t for t in textos), textos
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "erro",
+        [GenericError("**Sem permissão no canal.**"), RuntimeError(SEGREDO)],
+        ids=["esperado", "inesperado"],
+    )
+    async def test_wait_for_new_node_sempre_encerra_o_player_quando_nao_pode_conectar(self, monkeypatch, erro):
+        from empiremuse.utils.music import models
+
+        fixar_codigo(monkeypatch)
+        no = SimpleNamespace(identifier="no-2", players={9: object()})
+        p = jogador(monkeypatch)
+        p.node = SimpleNamespace(identifier="no-1", players={9: object()}, is_available=False)
+        p._voice_state = None
+        p.change_node = AsyncMock()
+        p.destroy = AsyncMock()
+        p.connect = AsyncMock()
+        p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
+        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=erro))
+
+        await p._wait_for_new_node()
+
+        p.destroy.assert_awaited_once()
+        p.connect.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_new_node_erro_de_pool_tem_o_texto_proprio(self, monkeypatch):
+        from empiremuse.utils.music import models
+        from empiremuse.utils.music.errors import PoolException
+
+        no = SimpleNamespace(identifier="no-2", players={9: object()})
+        p = jogador(monkeypatch)
+        p.node = SimpleNamespace(identifier="no-1", players={9: object()}, is_available=False)
+        p._voice_state = None
+        p.change_node = AsyncMock()
+        p.destroy = AsyncMock()
+        p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
+        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=PoolException("nenhum bot livre")))
+
+        await p._wait_for_new_node()
+
+        textos = [c.args[0] if c.args else c.kwargs.get("text", "") for c in p.set_command_log.call_args_list]
+        assert any("nenhum bot livre" in t and "ERR-" not in t for t in textos)
+
+    @pytest.mark.asyncio
+    async def test_resposta_do_lavalink_local_o_token_e_mascarado_e_o_corpo_vira_uma_linha_curta_no_log(
+        self, monkeypatch, tmp_path, caplog
+    ):
+        (tmp_path / "application.yml").write_text(
+            "plugins:\n  youtube:\n    oauth:\n      enabled: false\n", encoding="utf-8"
+        )
+        node = SimpleNamespace(
+            info={"plugins": ["youtube-plugin"]},
+            rest_uri="http://127.0.0.1:2333",
+            _websocket=SimpleNamespace(headers={}),
+        )
+        corpo = "linha1\nlinha2 eco do token refresh-falso " + "x" * 600
+        post = AsyncMock(return_value=Resposta(500, texto=corpo))
+        cog, ctx, mensagem = montar_oauth(monkeypatch, tmp_path, node=node, post=post)
+
+        with caplog.at_level(logging.WARNING, logger="empiremuse.cogs.ll_yt_oauth"):
+            await cog.oauth_command(ctx)
+
+        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.cogs.ll_yt_oauth"))
+        assert "refresh-falso" not in log and "linha1 linha2 eco do token ***" in log
+        assert "x" * 501 not in log and "…" in log
+        assert "HTTP 500" in texto_final(mensagem)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("status", "aplicado"), [(204, True), (200, False), (500, False)])
+    async def test_so_o_204_vale_como_refresh_token_aplicado_no_lavalink_local(
+        self, monkeypatch, tmp_path, status, aplicado
+    ):
+        (tmp_path / "application.yml").write_text(
+            "plugins:\n  youtube:\n    oauth:\n      enabled: false\n", encoding="utf-8"
+        )
+        node = SimpleNamespace(
+            info={"plugins": ["youtube-plugin"]},
+            rest_uri="http://127.0.0.1:2333",
+            _websocket=SimpleNamespace(headers={}),
+        )
+        cog, ctx, mensagem = montar_oauth(
+            monkeypatch, tmp_path, node=node, post=AsyncMock(return_value=Resposta(status))
+        )
+
+        await cog.oauth_command(ctx)
+
+        texto = texto_final(mensagem)
+        assert ("configurado automaticamente no servidor lavalink LOCAL" in texto) is aplicado
+        assert (f"HTTP {status}" in texto) is not aplicado
+
+    @pytest.mark.asyncio
+    async def test_erro_inesperado_do_dono_nao_imprime_o_traceback_no_terminal(self, monkeypatch, capsys):
+        fixar_codigo(monkeypatch)
+        view, interacao, editar = painel_com_interacao()
+
+        await view.on_error(RuntimeError(SEGREDO), None, interacao)
+
+        saida = capsys.readouterr()
+        assert SEGREDO not in saida.out + saida.err, "o detalhe vai para o logger, não para o terminal"
+
+    @pytest.mark.asyncio
+    async def test_song_request_erro_inesperado_nao_imprime_o_traceback_no_terminal(self, monkeypatch, capsys):
+        fixar_codigo(monkeypatch)
+        classe, self_, ctx, mensagem, envios, _ = montar_pedido(monkeypatch, RuntimeError(SEGREDO))
+
+        await classe.song_requests(self_, ctx, mensagem)
+
+        saida = capsys.readouterr()
+        assert SEGREDO not in saida.out + saida.err
+
+    @pytest.mark.asyncio
+    async def test_song_request_erro_esperado_aparece_sem_bloco_de_codigo(self, monkeypatch):
+        classe, self_, ctx, mensagem, envios, _ = montar_pedido(monkeypatch, GenericError("**Sem permissão aqui.**"))
+
+        await classe.song_requests(self_, ctx, mensagem)
+
+        [(args, _)] = envios
+        assert "```" not in args[0]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("gera", [True, False], ids=["com_codigo", "sem_codigo"])
+    async def test_song_request_webhook_nome_do_anexo_e_token_mascarado(self, monkeypatch, gera):
+        if gera:
+            fixar_codigo(monkeypatch)
+        else:
+
+            def quebra(nbytes=None):
+                raise RuntimeError("sem entropia (simulado)")
+
+            monkeypatch.setattr(secrets, "token_hex", quebra)
+        classe, self_, ctx, mensagem, envios, cog = montar_pedido(
+            monkeypatch, RuntimeError(f"falha com {TOKEN_FALSO}"), webhook=True
+        )
+        anexos = []
+        monkeypatch.setattr("empiremuse.cogs.music.string_to_file", lambda texto, nome: anexos.append((texto, nome)))
+
+        await classe.song_requests(self_, ctx, mensagem)
+
+        [(texto, nome)] = anexos
+        assert nome == (f"error_traceback_songrequest_{CODIGO}.txt" if gera else "error_traceback_songrequest.txt")
+        assert TOKEN_FALSO not in texto and "mytoken" in texto
+
+
+class TestGuardaAstEmModels:
+    """Os dois métodos de centenas de linhas sem dublê: nenhuma exceção entra numa mensagem fora das formas aprovadas
+    (qualquer sintaxe: ``{e}``, ``{str(e)}``, ``{e!r}``, ``{exception.cause}``…) e o erro inesperado vai para o log."""
+
+    FUNCOES = ("get_autoqueue_tracks", "invoke_np")
+    NOMES_DE_EXCECAO = {"e", "exception", "error", "exc", "err"}
+    APROVADAS = {"lavalink_text(exception.message)", "exception.severity"}
+
+    @pytest.fixture
+    def funcoes(self):
+        import ast
+
+        import empiremuse.utils.music.models as models
+
+        arvore = ast.parse(Path(models.__file__).read_text(encoding="utf-8"))
+        achadas = {
+            no.name: no
+            for no in ast.walk(arvore)
+            if isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)) and no.name in self.FUNCOES
+        }
+        assert set(achadas) == set(self.FUNCOES)
+        return achadas
+
+    @pytest.mark.parametrize("nome", FUNCOES)
+    def test_nenhuma_excecao_na_mensagem_fora_das_formas_aprovadas(self, funcoes, nome):
+        import ast
+
+        dentro_de_print = {
+            id(no)
+            for chamada in ast.walk(funcoes[nome])
+            if isinstance(chamada, ast.Call) and isinstance(chamada.func, ast.Name) and chamada.func.id == "print"
+            for no in ast.walk(chamada)
+        }
+        achados = []
+        for texto in ast.walk(funcoes[nome]):
+            if not isinstance(texto, ast.JoinedStr) or id(texto) in dentro_de_print:
+                continue
+            for parte in texto.values:
+                if not isinstance(parte, ast.FormattedValue):
+                    continue
+                usa = {n.id for n in ast.walk(parte.value) if isinstance(n, ast.Name)} & self.NOMES_DE_EXCECAO
+                if usa and ast.unparse(parte.value) not in self.APROVADAS:
+                    achados.append((texto.lineno, ast.unparse(parte.value)))
+        assert not achados, f"exceção interpolada em mensagem de {nome}: {achados}"
+
+    def test_o_erro_inesperado_e_registrado_com_codigo(self, funcoes):
+        import ast
+
+        chamadas = {
+            nome: {
+                n.func.id for n in ast.walk(funcoes[nome]) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+            }
+            for nome in self.FUNCOES
+        }
+        assert "log_unexpected_error" in chamadas["invoke_np"]
+        assert {"log_unexpected_error", "log_lavalink_failure", "lavalink_text"} <= chamadas["get_autoqueue_tracks"]
