@@ -10,6 +10,7 @@ import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import disnake
 import pytest
 from disnake.ext import commands
 
@@ -49,7 +50,7 @@ def handler(monkeypatch) -> ErrorHandler:
     h.components = []
     h.webhook_max_concurrency = SimpleNamespace(acquire=AsyncMock(), release=AsyncMock())
     h.send_webhook = AsyncMock()
-    h.build_report_embed = MagicMock(return_value="embed")
+    h.build_report_embed = MagicMock(side_effect=lambda ctx: disnake.Embed(title="Ocorreu um erro em um servidor:"))
     monkeypatch.setattr(error_handler.asyncio, "sleep", AsyncMock())
     return h
 
