@@ -285,7 +285,7 @@ def load_config():
         "PANEL_SESSION_TTL_HOURS",
         "PANEL_SESSION_IDLE_MINUTES",
     ]:
-        if not CONFIG[i]:
+        if CONFIG[i] in ("", None):  # só o ausente e o vazio usam o padrão; o 0 inteiro do config.json vale
             CONFIG[i] = DEFAULT_CONFIG[i]
             continue
 
