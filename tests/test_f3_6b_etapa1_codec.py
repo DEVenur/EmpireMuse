@@ -147,6 +147,10 @@ class TestLoadsBoundedHostil:
         assert falha(ler, "[" + "-" + "9" * 5000 + "]").code == NUMBER
         assert falha(ler, '{"a":' + "1" * 100_000 + "}").code == NUMBER
 
+    def test_o_limite_de_digitos_e_o_do_python_4300(self):
+        assert ler("1" * 4300) == int("1" * 4300)
+        assert falha(ler, "1" * 4301).code == NUMBER
+
     def test_inteiro_grande_mas_aceito_pelo_python_passa(self):
         assert ler("9" * 100) == int("9" * 100)
 
@@ -340,6 +344,10 @@ class TestDumps:
         documento = {"v": 1, "letras": letras_sincronizadas(50), "n": [1, 2.5, None, True], "t": "Música 😀"}
         assert ler(codec.dumps(documento), version=1) == documento
 
+    def test_documento_de_12_niveis_e_gravado_e_lido_de_volta(self):
+        documento = {"a": aninhado(11)}
+        assert ler(codec.dumps(documento)) == documento
+
     def test_float_e_inteiro_grande(self):
         assert codec.dumps([1.5, 2**64, -0.0]) == b"[1.5,18446744073709551616,-0.0]"
 
@@ -452,6 +460,11 @@ class TestPackUnpack:
     )
     def test_base64_invalido_e_envelope(self, texto):
         assert falha(desempacotar, texto).code == ENVELOPE
+
+    def test_o_erro_do_envelope_nao_encadeia_a_excecao_original(self):
+        for texto in ("!!!!", b64encode(b"nao e zlib").decode(), b64encode(zlib.compress(b"x")[:-2]).decode()):
+            erro = falha(desempacotar, texto)
+            assert erro.__cause__ is None and (erro.__context__ is None or erro.__suppress_context__)
 
     def test_zlib_truncado_ou_corrompido_e_envelope(self):
         valido = zlib.compress(b'{"v":1,"t":"' + b"x" * 500 + b'"}')

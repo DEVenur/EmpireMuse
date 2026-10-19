@@ -406,6 +406,10 @@ class TestExtra:
         entrada = {**sessao_valida(), "extra": valor}
         assert falha(validar, esquema_de_sessao(extra="keep"), entrada).code == codigo
 
+    def test_keep_recusa_nome_de_campo_desconhecido_com_surrogate(self):
+        entrada = {**sessao_valida(), "a\ud800": 1}
+        assert falha(validar, esquema_de_sessao(extra="keep"), entrada).code == SURROGATE
+
     def test_error_recusa_campo_desconhecido_sem_dizer_o_nome(self):
         entrada = {**sessao_valida(), SEGREDO: 1}
         erro = falha(validar, esquema_de_sessao(extra="error"), entrada)
