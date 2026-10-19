@@ -30,7 +30,10 @@ from empiremuse.rules.limits import (
     GUILD_LINK_URL_MIN as URL_MIN,
     MAX_GUILD_LINKS as MAX_LINKS,
 )
-from empiremuse.rules.quota import has_room, import_has_room
+from empiremuse.rules.entries import check_name, merge_import, save_entry
+from empiremuse.rules.errors import NAME_TAKEN, RuleError
+from empiremuse.rules.quota import has_room
+from empiremuse.rules.text import clean_import_name
 from empiremuse.rules.urls import URL_REG, extract_url_legacy
 
 logger = logging.getLogger(__name__)
@@ -151,11 +154,9 @@ class LinksForm(SettingsForm):
         return handler[action](ctx, current["fav_links"], echo)
 
     def _add(self, ctx: FormContext, links: dict, echo: dict) -> ParseResult:
-        name = clean_name(echo["nome"])
-        if name is None:
-            return _error("nome", MSG_NAME, echo)
-        if name in links:
-            return _error("nome", MSG_NAME_TAKEN, echo)
+        name = check_name(links, None, echo["nome"], name_min=NAME_MIN, name_max=NAME_MAX)
+        if isinstance(name, RuleError):
+            return _error("nome", MSG_NAME_TAKEN if name.code == NAME_TAKEN else MSG_NAME, echo)
         if not has_room(links, name, MAX_LINKS):
             return _error("nome", MSG_FULL, echo)
         url, errors = _valid_fields(echo["url"], echo["descricao"])
@@ -171,9 +172,8 @@ class LinksForm(SettingsForm):
         if errors:
             return ParseResult({}, errors, echo)
         entry = {"url": url, "description": echo["descricao"]}
-        return ParseResult(
-            {"fav_links": {key: (entry if key == name else value) for key, value in links.items()}}, {}, echo
-        )
+        saved = save_entry(links, name, name, entry, name_min=NAME_MIN, name_max=NAME_MAX, limit=0)
+        return ParseResult({"fav_links": saved}, {}, echo)
 
     def _remove(self, ctx: FormContext, links: dict, echo: dict) -> ParseResult:
         name = echo["nome"]
@@ -185,10 +185,10 @@ class LinksForm(SettingsForm):
         items, message = self._parse_import(ctx, echo["dados"])
         if message:
             return _error("dados", message, echo)
-        kept = {key: value for key, value in links.items() if key not in items}
-        if not import_has_room(len(kept), len(items), MAX_LINKS):
+        merged = merge_import(links, items, MAX_LINKS)
+        if isinstance(merged, RuleError):
             return _error("dados", MSG_IMPORT_SPACE, echo)
-        return ParseResult({"fav_links": {**kept, **items}}, {}, echo)
+        return ParseResult({"fav_links": merged}, {}, echo)
 
     @staticmethod
     def _parse_import(ctx: FormContext, raw: str) -> tuple[dict, str]:
@@ -203,9 +203,9 @@ class LinksForm(SettingsForm):
         max_url = ctx.bot.config["USER_FAV_MAX_URL_LENGTH"]
         items: dict[str, dict[str, str]] = {}
         for raw_name, item in data.items():
-            name = clean_name(raw_name)
+            name = clean_import_name(raw_name, NAME_MIN, NAME_MAX, items)  # colisão após o strip/caixa é recusada
             clean = _clean_import_item(item, max_url)
-            if name is None or clean is None or name in items:  # nomes que colidem após o strip também são recusados
+            if name is None or clean is None:
                 return {}, MSG_IMPORT_ITEM
             items[name] = clean
         return items, ""

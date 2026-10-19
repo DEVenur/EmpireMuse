@@ -25,7 +25,8 @@ from yt_dlp import YoutubeDL
 
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
-from empiremuse.rules.quota import has_room
+from empiremuse.rules.errors import RuleError
+from empiremuse.rules.favorites import save_track
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -69,7 +70,7 @@ from empiremuse.utils.music.errors import (
     DiffVoiceChannel,
     NoPlayer,
 )
-from empiremuse.utils.music.user_limits import quota_for
+from empiremuse.utils.music.user_limits import quota_for, track_fav_error_text
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
     QueueInteraction,
@@ -6226,18 +6227,16 @@ class Music(commands.Cog):
 
             user_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.users)
 
-            fav_name = embed.author.name[1:]
-
             limit = await quota_for(self.bot, interaction.author, "MAX_USER_FAVS")
 
-            if not has_room(user_data["fav_links"], fav_name, limit):
-                await interaction.edit_original_message(
-                    "Você não possui espaço suficiente para adicionar este favorito (remova algum e tente novamente).\n"
-                    f"Limite atual: {limit}"
-                )
+            saved = save_track(user_data["fav_links"], embed.author.name[1:], embed.author.url, limit=limit)
+
+            if isinstance(saved, RuleError):
+                await interaction.edit_original_message(track_fav_error_text(saved))
                 return
 
-            user_data["fav_links"][fav_name] = embed.author.url
+            fav_name = saved.name
+            user_data["fav_links"] = saved.entries
 
             await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 
@@ -6576,23 +6575,20 @@ class Music(commands.Cog):
 
                 user_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.users)
 
-                fav_name = fix_characters(info["name"], self.bot.config["USER_FAV_MAX_URL_LENGTH"])
-
                 limit = await quota_for(self.bot, interaction.author, "MAX_USER_FAVS")
 
-                if not has_room(user_data["fav_links"], fav_name, limit):
+                saved = save_track(user_data["fav_links"], info["name"], info["url"], limit=limit)
+
+                if isinstance(saved, RuleError):
                     await interaction.edit_original_message(
                         embed=disnake.Embed(
-                            color=self.bot.get_color(interaction.guild.me),
-                            description="Você não possui espaço suficiente para adicionar este favorito "
-                            "(remova algum e tente novamente).\n"
-                            f"Limite atual: {limit}",
+                            color=self.bot.get_color(interaction.guild.me), description=track_fav_error_text(saved)
                         ),
                         view=None,
                     )
                     return
 
-                user_data["fav_links"][fav_name] = info["url"]
+                user_data["fav_links"] = saved.entries
 
                 await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 

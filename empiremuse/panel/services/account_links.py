@@ -11,7 +11,10 @@ from __future__ import annotations
 from typing import Any, NamedTuple, Optional
 
 from empiremuse.panel.services.account_base import AccountContext, AccountSection, Parsed, effective_limit, is_web_link
-from empiremuse.panel.services.base import Args, clean_title, first, load_json_object
+from empiremuse.panel.services.base import Args, first, load_json_object
+from empiremuse.rules.entries import check_name, merge_import, save_entry
+from empiremuse.rules.errors import NAME_TAKEN, RuleError
+from empiremuse.rules.favorites import check_import_name, name_limit
 from empiremuse.rules.limits import (
     FAV_NAME_MAX as FAV_NAME_MAX,
     FAV_NAME_MIN as FAV_NAME_MIN,
@@ -21,7 +24,8 @@ from empiremuse.rules.limits import (
     ITG_TITLE_MAX as ITG_TITLE_MAX,
     ITG_URL_MAX as ITG_URL_MAX,
 )
-from empiremuse.rules.quota import has_room, import_has_room
+from empiremuse.rules.quota import has_room
+from empiremuse.rules.text import clean_import_name
 from empiremuse.rules.urls import extract_url_legacy, url_prefix_legacy
 
 EXPORT_PATH = "/painel/conta/favoritos/exportar"
@@ -66,6 +70,11 @@ def modal_url(raw: str) -> Optional[str]:
 def import_url(value: Any, max_chars: int) -> Optional[str]:
     """URL do importador: texto, até ``max_chars`` e começando com URL; grava só o trecho que casa."""
     return url_prefix_legacy(value, max_chars)
+
+
+def _msg_name(name_max: int) -> str:
+    """Mensagem do nome inválido; com o teto da configuração abaixo de 25 o limite citado é o dela."""
+    return MSG_NAME if name_max == FAV_NAME_MAX else MSG_NAME.replace(str(FAV_NAME_MAX), str(name_max))
 
 
 def _unknown(echo: dict, message: str) -> Parsed:
@@ -119,11 +128,10 @@ class FavoritesSection(AccountSection):
 
     async def _add(self, ctx: AccountContext, favs: dict, echo: dict) -> Parsed:
         errors: dict[str, str] = {}
-        name = clean_title(echo["nome"], FAV_NAME_MIN, FAV_NAME_MAX)
-        if name is None:
-            errors["nome"] = MSG_NAME
-        elif name in favs:
-            errors["nome"] = MSG_NAME_TAKEN
+        name_max = name_limit(ctx.bot.config["USER_FAV_MAX_NAME_LENGTH"])
+        name = check_name(favs, None, echo["nome"], name_min=FAV_NAME_MIN, name_max=name_max)
+        if isinstance(name, RuleError):
+            errors["nome"] = MSG_NAME_TAKEN if name.code == NAME_TAKEN else _msg_name(name_max)
         url = modal_url(echo["url"])
         if url is None:
             errors["url"] = MSG_URL
@@ -141,7 +149,11 @@ class FavoritesSection(AccountSection):
         url = modal_url(echo["url"])
         if url is None:
             return Parsed({}, {"url": MSG_URL}, echo)
-        return Parsed({"fav_links": {key: (url if key == name else value) for key, value in favs.items()}}, {}, echo)
+        return Parsed(
+            {"fav_links": save_entry(favs, name, name, url, name_min=FAV_NAME_MIN, name_max=FAV_NAME_MAX, limit=0)},
+            {},
+            echo,
+        )
 
     @staticmethod
     def _remove(favs: dict, name: str, echo: dict) -> Parsed:
@@ -161,19 +173,19 @@ class FavoritesSection(AccountSection):
         )
         if items is None:
             return Parsed({}, {"dados": MSG_FAV_ITEM}, echo)
-        kept = {key: value for key, value in favs.items() if key not in items}  # sobrescrever não ocupa vaga
         limit = await effective_limit(ctx, "MAX_USER_FAVS")
-        if not import_has_room(len(kept), len(items), limit):
+        merged = merge_import(favs, items, limit)  # sobrescrever (sem diferenciar a caixa) não ocupa vaga
+        if isinstance(merged, RuleError):
             return Parsed({}, {"dados": MSG_FAV_SPACE}, echo)
-        return Parsed({"fav_links": {**kept, **items}}, {}, echo)
+        return Parsed({"fav_links": merged}, {}, echo)
 
     @staticmethod
     def _import_items(data: dict, max_name: int, max_url: int) -> Optional[dict[str, str]]:
         items: dict[str, str] = {}
         for raw_name, raw_url in data.items():
-            name = clean_title(raw_name, FAV_NAME_MIN, max_name)
+            name = check_import_name(raw_name, items, max_name)  # nomes que colidem após o strip/caixa são recusados
             url = import_url(raw_url, max_url)
-            if name is None or url is None or name in items:  # nomes que colidem após o strip também são recusados
+            if isinstance(name, RuleError) or url is None:
                 return None
             items[name] = url
         return items
@@ -236,20 +248,20 @@ class IntegrationsSection(AccountSection):
         items = self._import_items(data)
         if items is None:
             return Parsed({}, {"dados": MSG_ITG_ITEM}, echo)
-        kept = {key: value for key, value in links.items() if key not in items}
         limit = await effective_limit(ctx, "MAX_USER_INTEGRATIONS")
-        if not import_has_room(len(kept), len(items), limit):
+        merged = merge_import(links, items, limit)
+        if isinstance(merged, RuleError):
             return Parsed({}, {"dados": MSG_ITG_SPACE}, echo)
-        return Parsed({"integration_links": {**kept, **items}}, {}, echo)
+        return Parsed({"integration_links": merged}, {}, echo)
 
     @staticmethod
     def _import_items(data: dict) -> Optional[dict[str, dict[str, str]]]:
         """Aceita texto-URL (formato do importador do comando) e ``{url, avatar?}`` (formato do próprio export)."""
         items: dict[str, dict[str, str]] = {}
         for raw_title, raw_value in data.items():
-            title = clean_title(raw_title, 1, ITG_TITLE_MAX)
+            title = clean_import_name(raw_title, 1, ITG_TITLE_MAX, items)
             entry = IntegrationsSection._entry(raw_value)
-            if title is None or entry is None or title in items:
+            if title is None or entry is None:
                 return None
             items[title] = entry
         return items
