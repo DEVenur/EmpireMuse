@@ -32,120 +32,119 @@ flowchart LR
 
 ## 2. Processo e inicialização
 
-1. `python -m empiremuse` instancia `BotPool()` e chama `pool.setup()` via `empiremuse/__main__.py:7-14`.
-   Na raiz, `main.py` atua como atalho direto chamando `empiremuse.__main__.main()` (`main.py:1-4`).
+1. `python -m empiremuse` instancia `BotPool()` e chama `pool.setup()` via `main` em `empiremuse/__main__.py`.
+   Na raiz, `main.py` atua como atalho direto chamando `empiremuse.__main__.main()` (`main.py`).
 2. A resolução de diretórios é centralizada em `empiremuse/paths.py`:
    - `PROJECT_DIR`: raiz do repositório, onde residem os diretórios de dados estáticos `data/` (servidores Lavalink) e `assets/` (imagens e marca).
    - `PACKAGE_DIR`: raiz do pacote `empiremuse/`, contendo código-fonte e templates compartilhados (`empiremuse/templates/status.html`).
    - `RUNTIME_DIR`: diretório para dados de execução (`local_database/`, `Lavalink.jar`, `application.yml`, `.logs/`, `lavalink.ini` etc.), determinado por `get_runtime_dir()` a partir da variável `EMPIREMUSE_HOME` (com fallback padrão para `Path.cwd().resolve()`).
-3. `BotPool.__init__` (`empiremuse/utils/client.py:87`) carrega a configuração (`load_cfg` → `empiremuse.config_loader.load_config`),
-   cria caches TTL, clientes Deezer/yt-dlp e restaura caches em pickle de `local_database/` sob `RUNTIME_DIR` (`empiremuse/utils/client.py:159-195`) com guardas defensivas contra dados corrompidos ou classes obsoletas.
-4. `BotPool.setup` (`empiremuse/utils/client.py:597`) executa, em ordem:
-   - carrega as skins (`load_skins`, `empiremuse/utils/client.py:516`);
+3. `BotPool.__init__` em `empiremuse/utils/client.py` carrega a configuração (`load_cfg` → `empiremuse.config_loader.load_config`),
+   cria caches TTL, clientes Deezer/yt-dlp e restaura caches em pickle de `local_database/` sob `RUNTIME_DIR` (`BotPool.load_cache` em `empiremuse/utils/client.py`) com guardas defensivas contra dados corrompidos ou classes obsoletas.
+4. `BotPool.setup` em `empiremuse/utils/client.py` executa, em ordem:
+   - carrega as skins (`BotPool.load_skins` em `empiremuse/utils/client.py`);
    - monta a lista de nodes Lavalink: lista remota (`AUTO_DOWNLOAD_LAVALINK_SERVERLIST`), variáveis
-     `LAVALINK_NODE_*` (JSON) e `lavalink.ini` em `RUNTIME_DIR` (`empiremuse/utils/client.py:611-665`);
-   - decide se inicia o Lavalink local: `RUN_LOCAL_LAVALINK` ou nenhum node configurado (`empiremuse/utils/client.py:666`);
-   - define as intents a partir das chaves `*_INTENT` (`empiremuse/utils/client.py:671-676`);
-   - escolhe o banco: `MONGO` preenchido → `MongoDatabase`; caso contrário `LocalDatabase` (`empiremuse/utils/client.py:677-695`)
+     `LAVALINK_NODE_*` (JSON) e `lavalink.ini` em `RUNTIME_DIR` (`BotPool.setup` em `empiremuse/utils/client.py`);
+   - decide se inicia o Lavalink local: `RUN_LOCAL_LAVALINK` ou nenhum node configurado (`BotPool.setup` em `empiremuse/utils/client.py`);
+   - define as intents a partir das chaves `*_INTENT` (`BotPool.setup` em `empiremuse/utils/client.py`);
+   - escolhe o banco: `MONGO` preenchido → `MongoDatabase`; caso contrário `LocalDatabase` (`BotPool.setup` em `empiremuse/utils/client.py`)
      — o `LocalDatabase` é sempre instanciado em `RUNTIME_DIR / "local_database"`;
-   - cria `SpotifyClient` (se houver credenciais) e `LastFM` (`empiremuse/utils/client.py:726-740`);
+   - cria `SpotifyClient` (se houver credenciais) e `LastFM` (`BotPool.setup` em `empiremuse/utils/client.py`);
    - varre **todas** as variáveis de ambiente/config atrás de strings com formato de token do Discord
-     (`token_regex`, `empiremuse/utils/others.py:23`), de modo que qualquer chave pode conter um token (`empiremuse/utils/client.py:743-764`);
-   - cria um `BotCore` por token via `load_bot` (`empiremuse/utils/client.py:766-950`) e, opcionalmente, bots exclusivos de
-     servidor a partir de `guild_bots.json` em `RUNTIME_DIR` (`empiremuse/utils/client.py:965-976`);
-   - sobe o servidor web com `web_app.start` (se `RUN_RPC_SERVER`) ou roda `run_bots` no loop (`empiremuse/utils/client.py:1009-1036`).
-5. Cada `BotCore` (`empiremuse/utils/client.py:1039`, herda `commands.AutoShardedBot`) executa `initial_setup` depois do
+     (`token_regex` em `empiremuse/utils/others.py`), de modo que qualquer chave pode conter um token (`BotPool.setup` em `empiremuse/utils/client.py`);
+   - cria um `BotCore` por token via `load_bot` em `BotPool.setup` (`empiremuse/utils/client.py`) e, opcionalmente, bots exclusivos de
+     servidor a partir de `guild_bots.json` em `RUNTIME_DIR` (`BotPool.setup` em `empiremuse/utils/client.py`);
+   - sobe o servidor web com `web_app.start` (se `RUN_RPC_SERVER`) ou roda `run_bots` no loop (`BotPool.setup` em `empiremuse/utils/client.py`).
+5. Cada `BotCore` (`empiremuse/utils/client.py`, herda `commands.AutoShardedBot`) executa `initial_setup` depois do
    `on_ready`: carrega os cogs de `empiremuse.cogs`, sincroniza cooldowns e comandos de aplicação, registra `PanelView`
-   (`empiremuse/utils/client.py:911-939`).
+   (`initial_setup` em `BotPool.setup`, `empiremuse/utils/client.py`).
 6. Ponto de extensão opcional: se existir o pacote `dev.pool_dev`, `PoolDev(self).run()` é executado
-   (`empiremuse/utils/client.py:587-596`). Ele não existe no repositório.
+   (`BotPool.setup_pool_extras` em `empiremuse/utils/client.py`). Ele não existe no repositório.
 
 ### Estado compartilhado do pool
 
-`BotPool` guarda o que é comum a todos os bots: `bots` e `guild_bots` (`empiremuse/utils/client.py:52-53`), a configuração,
-os bancos (`database` escolhe Mongo ou local, `empiremuse/utils/client.py:218-224`), caches (`playlist_cache`,
+`BotPool` guarda o que é comum a todos os bots: `bots` e `guild_bots` (`BotPool` em `empiremuse/utils/client.py`), a configuração,
+os bancos (`BotPool.database` escolhe Mongo ou local em `empiremuse/utils/client.py`), caches (`playlist_cache`,
 `partial_track_cache`, `lyric_data_cache`), as skins e os clientes de integração. `BotCore` expõe esses
-objetos por *properties* (`empiremuse/utils/client.py:1078-1108`).
+objetos por *properties* (`BotCore` em `empiremuse/utils/client.py`).
 
 ## 3. Carregamento de módulos (cogs)
 
-`BotCore.load_modules` (`empiremuse/utils/client.py:1449`) percorre recursivamente `empiremuse/cogs/` e `cogs_dev/` com `os.walk`,
+`BotCore.load_modules` em `empiremuse/utils/client.py` percorre recursivamente `empiremuse/cogs/` e `cogs_dev/` com `os.walk`,
 e para cada `*.py` faz `unload_extension` + `load_extension` sob o prefixo `empiremuse.cogs` (recarrega se já estava carregado). Pontos
 relevantes:
 
 - `cogs_dev/` **não existe** no repositório; a pasta é lida se for criada (útil para módulos locais sem
   versionar). Como `os.walk` em pasta inexistente não gera itens, nenhum erro ocorre.
-- Antes do bot ficar pronto, falha ao carregar um cog **interrompe** a inicialização (`raise e`,
-  `empiremuse/utils/client.py:1488` e `1494`); depois, apenas registra a falha.
-- Se `ENABLE_DISCORD_URLS_PLAYBACK` for falso, o comando `play_music_file` é removido (`empiremuse/utils/client.py:1498`).
-- Descrições de slash commands acima de 100 caracteres derrubam o carregamento (`empiremuse/utils/client.py:1501-1504`).
+- Antes do bot ficar pronto, falha ao carregar um cog **interrompe** a inicialização (`raise e` em
+  `BotCore.load_modules`, `empiremuse/utils/client.py`); depois, apenas registra a falha.
+- Se `ENABLE_DISCORD_URLS_PLAYBACK` for falso, o comando `play_music_file` é removido (`BotCore.load_modules` em `empiremuse/utils/client.py`).
+- Descrições de slash commands acima de 100 caracteres derrubam o carregamento (`BotCore.load_modules` em `empiremuse/utils/client.py`).
 
 ## 4. Roteamento entre bots do pool
 
 Com vários bots no mesmo servidor, **apenas um** deve responder a cada comando. A decisão fica em
-`check_pool_bots` (`empiremuse/utils/music/checks.py:104`):
+`check_pool_bots` em `empiremuse/utils/music/checks.py`:
 
-- Comando de barra: o check global (`empiremuse/utils/client.py:821-892`) lê as `extras` do comando (`only_voiced`,
+- Comando de barra: o check global (`BotPool.setup` em `empiremuse/utils/client.py`) lê as `extras` do comando (`only_voiced`,
   `check_player`, `return_first`, `allow_private`) e chama `check_pool_bots`.
-- Comando com prefixo: `PoolCommand` (`empiremuse/utils/others.py:138`, decorador `pool_command`, `empiremuse/utils/others.py:250`) guarda as
-  mesmas opções; `BotCore.on_message` chama `check_pool_bots` antes de `invoke` (`empiremuse/utils/client.py:1335-1350`).
-- Algoritmo: com menos de 2 bots no servidor, o próprio bot atende (`empiremuse/utils/music/checks.py:121`); se um bot já está na
-  call do autor, ele é o escolhido (`empiremuse/utils/music/checks.py:127-131`, `241-254`); senão escolhe o primeiro bot "livre"
-  (sem player e com permissão de enviar mensagem) em ordem de `identifier` (laço em `empiremuse/utils/music/checks.py:208-286`,
-  escolha em `295-309`).
+- Comando com prefixo: `PoolCommand` (`empiremuse/utils/others.py`, decorador `pool_command` em `empiremuse/utils/others.py`) guarda as
+  mesmas opções; `BotCore.on_message` chama `check_pool_bots` antes de `invoke` (`empiremuse/utils/client.py`).
+- Algoritmo: com menos de 2 bots no servidor, o próprio bot atende (`check_pool_bots` em `empiremuse/utils/music/checks.py`); se um bot já está na
+  call do autor, ele é o escolhido (`check_pool_bots` em `empiremuse/utils/music/checks.py`); senão escolhe o primeiro bot "livre"
+  (sem player e com permissão de enviar mensagem) em ordem de `identifier` (laço e
+  escolha em `check_pool_bots`, `empiremuse/utils/music/checks.py`).
 - Para comandos com prefixo, todos os bots recebem a mensagem. A coordenação usa os eventos
   `pool_dispatch` e `pool_payload_ready` e `PoolException` para que os bots não escolhidos descartem o
-  comando (`empiremuse/utils/music/checks.py:144-169`, `248-254`, `295-306`); `message_ids` (TTL 30 s) deduplica (`empiremuse/utils/client.py:106`).
+  comando (`check_pool_bots` em `empiremuse/utils/music/checks.py`); `message_ids` (TTL 30 s) deduplica (`BotPool.__init__` em `empiremuse/utils/client.py`).
 - Erros de usuário (`NoVoice`, `NoPlayer`, `GenericError`) vêm de `empiremuse/utils/music/errors.py`.
 
 ## 5. Player
 
-`LavalinkPlayer` (`empiremuse/utils/music/models.py:500`, herda `wavelink.Player`) concentra fila, loop, autoplay,
+`LavalinkPlayer` (`empiremuse/utils/music/models.py`, herda `wavelink.Player`) concentra fila, loop, autoplay,
 filtros, controlador (mensagem com botões), integração com skins e o RPC. O arquivo tem 4.018 linhas.
-Outras classes: `LavalinkTrack` (`empiremuse/utils/music/models.py:335`), `PartialTrack` (`empiremuse/utils/music/models.py:101`, faixa de outra
-plataforma resolvida só ao tocar) e `LavalinkPlaylist` (`empiremuse/utils/music/models.py:276`). `music_mode(bot)` apenas devolve
-`wavelink.Client(bot=bot)` (`empiremuse/utils/music/models.py:4017`).
+Outras classes: `LavalinkTrack` (`empiremuse/utils/music/models.py`), `PartialTrack` (`empiremuse/utils/music/models.py`, faixa de outra
+plataforma resolvida só ao tocar) e `LavalinkPlaylist` (`empiremuse/utils/music/models.py`). `music_mode(bot)` apenas devolve
+`wavelink.Client(bot=bot)` (`music_mode` em `empiremuse/utils/music/models.py`).
 
 - **Faixas parciais** (Spotify/Deezer): o player busca equivalentes nas `partial_providers` do node
-  (`ytsearch`, `scsearch`, `dzsearch`, …) e filtra por duração/título (`empiremuse/utils/music/models.py:2098-2135`).
+  (`ytsearch`, `scsearch`, `dzsearch`, …) e filtra por duração/título (`LavalinkPlayer._process_next` e `LavalinkPlayer.resolve_track` em `empiremuse/utils/music/models.py`).
 - **Skins** são módulos com função `load()`: 10 em `empiremuse/utils/music/skins/normal_player/` e 5 em
-  `static_player/` (15 no total), carregados dinamicamente por `load_skins` (`empiremuse/utils/client.py:516-559`). Skins
+  `static_player/` (15 no total), carregados dinamicamente por `BotPool.load_skins` em `empiremuse/utils/client.py`. Skins
   personalizadas por servidor são guardadas no banco (ver seção 8).
 - **UI**: views, botões e modais em `empiremuse/utils/music/interactions.py` (3.534 linhas). Os identificadores do
-  controlador estão em `PlayerControls` (`empiremuse/utils/others.py:157`, prefixo `musicplayer_`).
-- **Rich Presence**: `process_rpc` monta o payload e `_send_rpc_data` o envia por `ws_client`
-  (`empiremuse/utils/music/models.py:3610-3740`).
+  controlador estão em `PlayerControls` (`empiremuse/utils/others.py`, prefixo `musicplayer_`).
+- **Rich Presence**: `LavalinkPlayer.process_rpc` monta o payload e `LavalinkPlayer._send_rpc_data` o envia por `ws_client`
+  (`empiremuse/utils/music/models.py`).
 
 ## 6. Cliente Lavalink embutido (`empiremuse/wavelink/`)
 
-Pacote local derivado do wavelink 0.9.x (`empiremuse/wavelink/__init__.py:5`, versão `0.9.15`; autor original EvieePy,
+Pacote local derivado do wavelink 0.9.x (`__version__` em `empiremuse/wavelink/__init__.py`, versão `0.9.15`; autor original EvieePy,
 licença MIT — mantenha o cabeçalho). Foi estendido para o Lavalink **v4** e o NodeLink.
 
 - **v3 × v4**: `Node.version` é detectado consultando `GET {rest_uri}/v4/info`: 200 → v4; 404 → v3
-  (`empiremuse/wavelink/node.py:192-225`; também em `empiremuse/utils/client.py:336-386` e `empiremuse/cogs/music.py:7715-7785`). O WebSocket usa
-  URL e cabeçalhos diferentes por versão (`empiremuse/wavelink/websocket.py:65-110`).
-- **Resume**: v3 envia `Resume-Key` (`empiremuse/wavelink/websocket.py:73-74`); v4 envia `Session-Id` e `Session-Resumed`
-  (`empiremuse/wavelink/websocket.py:76-82`). O `sessionId` vem do `op: ready` (`empiremuse/wavelink/websocket.py:178-184`). `Node.is_available` exige
-  `session_id` na v4 (`empiremuse/wavelink/node.py:156-164`).
-- **DAVE (Lavalink ≥ 4.2)**: o `channelId` é enviado na atualização de voz (`empiremuse/wavelink/player.py:318`).
+  (`Node.connect` em `empiremuse/wavelink/node.py`; também em `BotPool.check_node` em `empiremuse/utils/client.py` e `Music.node_reconnect` em `empiremuse/cogs/music.py`). O WebSocket usa
+  URL e cabeçalhos diferentes por versão (`WebSocket.headers` e `WebSocket._connect` em `empiremuse/wavelink/websocket.py`).
+- **Resume**: v3 envia `Resume-Key` (`WebSocket.headers` em `empiremuse/wavelink/websocket.py`); v4 envia `Session-Id` e `Session-Resumed`
+  (`WebSocket.headers` em `empiremuse/wavelink/websocket.py`). O `sessionId` vem do `op: ready` (`WebSocket.process_data` em `empiremuse/wavelink/websocket.py`). `Node.is_available` exige
+  `session_id` na v4 (`empiremuse/wavelink/node.py`).
+- **DAVE (Lavalink ≥ 4.2)**: o `channelId` é enviado na atualização de voz (`Player._dispatch_voice_update` em `empiremuse/wavelink/player.py`).
 - **Reconexão**: `wavelink_node_connection_closed` dispara `node_reconnect` com backoff
-  (`empiremuse/cogs/music.py:7705-7785`), limitada por `LAVALINK_RECONNECT_RETRIES`.
+  (`Music.node_connection_closed` e `Music.node_reconnect` em `empiremuse/cogs/music.py`), limitada por `LAVALINK_RECONNECT_RETRIES`.
 - **Migração de players entre nodes**: ao perder o node, cada player aguarda outro via `_wait_for_new_node`
-  (agendado em `empiremuse/cogs/music.py:7743`; definido em `empiremuse/utils/music/models.py:3527`); `Player.change_node`
-  troca o node manualmente (`empiremuse/wavelink/player.py:613`) e o comando `change_node` expõe isso
-  (`empiremuse/cogs/music.py:5265`).
-- **Seleção de node**: `get_best_node`, `get_node_by_region`, `get_node_by_shard` (`empiremuse/wavelink/client.py:192`,
-  `206`, `226`).
+  (agendado em `Music.node_reconnect` em `empiremuse/cogs/music.py`; definido em `LavalinkPlayer._wait_for_new_node` em `empiremuse/utils/music/models.py`); `Player.change_node`
+  troca o node manualmente (`empiremuse/wavelink/player.py`) e o comando `Music.change_node` expõe isso
+  (`empiremuse/cogs/music.py`).
+- **Seleção de node**: `Client.get_best_node`, `Client.get_node_by_region`, `Client.get_node_by_shard` em `empiremuse/wavelink/client.py`.
 - **Conexão dos nodes**: `BotPool.node_check` verifica cada node e agenda `connect_node` em todos os bots
-  (`empiremuse/utils/client.py:336-433`); `Music.connect_node` cria o `Node` e monta `search_providers`/`partial_providers`
-  (`empiremuse/cogs/music.py:7880-7940`).
+  (`BotPool.check_node` e `BotPool.node_check` em `empiremuse/utils/client.py`); `Music.connect_node` cria o `Node` e monta `search_providers`/`partial_providers`
+  (`empiremuse/cogs/music.py`).
 
 ### Lavalink local
 
-`empiremuse/utils/music/local_lavalink.py` valida Java ≥ 17 (`empiremuse/utils/music/local_lavalink.py:115`), baixa JDK/`Lavalink.jar`/`application.yml`/plugins se
+`empiremuse/utils/music/local_lavalink.py` valida Java ≥ 17 (`validate_java` em `empiremuse/utils/music/local_lavalink.py`), baixa JDK/`Lavalink.jar`/`application.yml`/plugins se
 necessário (o jar, o yml e os plugins vêm do espelho `DiscordEmpireHub/EmpireMuse-LL-binaries` `0.0.3`, veja `empiremuse/utils/branding.py`, com validação de integridade por SHA-256; a 0.0.3 traz o cliente TV no `application.yml`, OAuth desligado por padrão e log do `YoutubeOauth2Handler` em WARN; pacotes do JDK baixados sob demanda têm SHA-256 fixo em `branding.JDK_DOWNLOADS` com extração atômica e segura no Linux).
 
-O processo é iniciado com `subprocess.Popen` em executor para não bloquear o loop (`empiremuse/utils/client.py:234-248`), repassando explicitamente `cwd=RUNTIME_DIR` (resolvido centralmente por `empiremuse.paths`), garantindo que os binários, arquivos de configuração e diretório `plugins/` fiquem isolados sob o diretório de dados em execução. Em vez de herdar o ambiente completo do bot (`os.environ`), o Lavalink local recebe um ambiente estritamente isolado via `lavalink_child_env` (`empiremuse/utils/music/local_lavalink.py`), repassando somente variáveis essenciais do sistema (*allowlist*: `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `TEMP`, `TMP`, `JAVA_HOME`, `SERVER_PORT` e variáveis essenciais no Windows). As variáveis `PLUGINS_YOUTUBE_OAUTH_*` só são inseridas se houver um `YOUTUBE_OAUTH_REFRESH_TOKEN` não vazio. Tokens do bot, bancos de dados e opções de JVM do ambiente (`JAVA_TOOL_OPTIONS`/`_JAVA_OPTIONS`) não chegam ao subprocesso. O node local usa identificador `LOCAL`, host `127.0.0.1` e porta `SERVER_PORT` ou `8090` (`empiremuse/utils/client.py:416-430`).
+O processo é iniciado com `subprocess.Popen` em executor para não bloquear o loop (`BotPool.start_lavalink` em `empiremuse/utils/client.py`), repassando explicitamente `cwd=RUNTIME_DIR` (resolvido centralmente por `empiremuse.paths`), garantindo que os binários, arquivos de configuração e diretório `plugins/` fiquem isolados sob o diretório de dados em execução. Em vez de herdar o ambiente completo do bot (`os.environ`), o Lavalink local recebe um ambiente estritamente isolado via `lavalink_child_env` (`empiremuse/utils/music/local_lavalink.py`), repassando somente variáveis essenciais do sistema (*allowlist*: `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `TEMP`, `TMP`, `JAVA_HOME`, `SERVER_PORT` e variáveis essenciais no Windows). As variáveis `PLUGINS_YOUTUBE_OAUTH_*` só são inseridas se houver um `YOUTUBE_OAUTH_REFRESH_TOKEN` não vazio. Tokens do bot, bancos de dados e opções de JVM do ambiente (`JAVA_TOOL_OPTIONS`/`_JAVA_OPTIONS`) não chegam ao subprocesso. O node local usa identificador `LOCAL`, host `127.0.0.1` e porta `SERVER_PORT` ou `8090` (`BotPool.node_check` em `empiremuse/utils/client.py`).
 
 No modo contêiner (ou em ambientes com Lavalink pré-instalado), o bot opera em modo estritamente offline configurável via `LAVALINK_OFFLINE=true`, apontando para o runtime Java em `LAVALINK_JAVA_PATH` e os binários em `LAVALINK_HOME`, dispensando downloads de JDK e validando os artefatos existentes exclusivamente por SHA-256 antes da execução. A inicialização força a vinculação em `127.0.0.1` (`SERVER_ADDRESS=127.0.0.1`) e suprime requisições externas ao repositório Maven na partida gerando dinamicamente um arquivo de override em runtime. O ciclo de vida do processo Java é supervisionado continuamente pela função vigia `watch_lavalink_process` em thread daemon; caso o processo termine inesperadamente, o encerramento ordenado do bot é acionado com código de erro, delegando a recuperação ao supervisor de contêineres (Docker). Já reinicializações controladas ou comandos de suporte utilizam `BotPool.stop_lavalink`, que finaliza a instância de áudio de forma esperada sem derrubar o bot.
 
@@ -215,13 +214,13 @@ O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhad
 
 ## 8. Persistência
 
-**Backends** (`empiremuse/utils/db.py`): `MongoDatabase` (motor, `empiremuse/utils/db.py:223`) ou `LocalDatabase` (TinyMongo em
-`RUNTIME_DIR / "local_database"`, `empiremuse/utils/db.py:156`), ambos com cache TTL (`DBCACHE_SIZE`/`DBCACHE_TTL`). O acesso passa por
-`BotCore.get_data/update_data` (coleção = id do bot) e `get_global_data/update_global_data` (coleção
-`global`) — `empiremuse/utils/client.py:1110-1132`.
+**Backends** (`empiremuse/utils/db.py`): `MongoDatabase` (motor, `empiremuse/utils/db.py`) ou `LocalDatabase` (TinyMongo em
+`RUNTIME_DIR / "local_database"`, `empiremuse/utils/db.py`), ambos com cache TTL (`DBCACHE_SIZE`/`DBCACHE_TTL`). O acesso passa por
+`BotCore.get_data/update_data` (coleção = id do bot) e `BotCore.get_global_data/update_global_data` (coleção
+`global`) em `empiremuse/utils/client.py`.
 
-**Modelos e versionamento** (`empiremuse/utils/db.py:31-90`): cada documento tem `ver`; se a versão difere do modelo,
-`update_values` mescla o padrão com os dados salvos (`empiremuse/utils/db.py:184-188`, `290-293`, `321-327`).
+**Modelos e versionamento** (`db_models` e `global_db_models` em `empiremuse/utils/db.py`): cada documento tem `ver`; se a versão difere do modelo,
+`update_values` mescla o padrão com os dados salvos (`LocalDatabase.get_data`, `MongoDatabase.get_data` e `update_values` em `empiremuse/utils/db.py`).
 
 | Banco/coleção | Modelo | Conteúdo |
 |---|---|---|
@@ -230,13 +229,13 @@ O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhad
 | `global` / `users` | `global_db_models[users]` v1.6 | Favoritos, integrações, `token` do RPC, prefixo próprio, últimas faixas, dados do Last.fm. |
 | `global` / `guilds` | `global_db_models[guilds]` v1.4 | Prefixo, skins globais, **skins personalizadas**, status do canal de voz, convites "ouvir junto". |
 | `global` / `default` | `global_db_models[default]` v1.0 | Tokens extras. |
-| `global` / `global` (id `youtube_data`) | sem modelo | `refresh_tokens` do OAuth do YouTube (`empiremuse/utils/client.py:391`). |
-| `player_sessions` / `<id do bot>` | sem modelo | Sessões de players para retomada (`empiremuse/cogs/player_resume.py:759-765`). |
+| `global` / `global` (id `youtube_data`) | sem modelo | `refresh_tokens` do OAuth do YouTube (`BotPool.check_node` em `empiremuse/utils/client.py`). |
+| `player_sessions` / `<id do bot>` | sem modelo | Sessões de players para retomada (`PlayerSession.save_session_mongo` em `empiremuse/cogs/player_resume.py`). |
 
 **Serialização binária legada e guardas de cache:** sessões de player, skins personalizadas e filas salvas utilizam tipos primitivos padrão e dicionários serializados em binário, sem referenciar classes internas dos módulos do bot (`b"empiremuse"`, `b"utils."` ou `b"modules."`). Em `BotPool.load_cache`, o carregamento de caches em pickle (`playlist_cache.pkl`, `partial_track_cache.pkl`, `.lyric_cache_data`) possui guardas defensivas com tratamento de `(ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError)`, descartando automaticamente caches incompatíveis ou corrompidos com aviso defensivo no logger (`logger.warning`), garantindo que o bot inicialize com segurança sem interrupções.
 
 Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos já sincronizados,
-`empiremuse/utils/client.py:1141-1176`), `guild_bots.json`, `auto_lavalink.ini` em `RUNTIME_DIR` e o cache de token do Spotify em
+`BotCore.sync_app_commands` em `empiremuse/utils/client.py`), `guild_bots.json`, `auto_lavalink.ini` em `RUNTIME_DIR` e o cache de token do Spotify em
 `RUNTIME_DIR / ".spotify_cache.json"` (respeitando `EMPIREMUSE_HOME`, com permissão restrita `0600` e gravação atômica; `spotify_cache_path()` em `empiremuse/utils/music/audio_sources/spotify.py`).
 
 ## 9. Integrações externas
@@ -248,8 +247,8 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 | **Spotify** | `empiremuse/utils/music/audio_sources/spotify.py` | API oficial por *client credentials* (`SPOTIFY_CLIENT_ID/SECRET`); só metadados, o áudio vem de outra fonte. Veja `known-issues.md`. |
 | **Deezer** | `empiremuse/utils/music/audio_sources/deezer.py` | API pública sem credenciais; metadados. |
 | **Last.fm** | `empiremuse/utils/music/lastfm_tools.py`, `empiremuse/cogs/lastfm.py` | Scrobble e perfil; exige `LASTFM_KEY/SECRET`. |
-| **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models.py:4012`), `empiremuse/utils/client.py:124-152`, `empiremuse/utils/music/ytdl_tools.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
-| **YouTube OAuth / PoToken** | `empiremuse/cogs/ll_yt_oauth.py`, `empiremuse/wavelink/node.py:261`, `empiremuse/utils/music/youtube_trusted_session_generator.py` | Autenticação do plugin `youtube-plugin` do Lavalink e geração de `poToken` (`nodriver`). |
+| **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models.py`), `BotPool.__init__` em `empiremuse/utils/client.py`, `empiremuse/utils/music/ytdl_tools.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
+| **YouTube OAuth / PoToken** | `empiremuse/cogs/ll_yt_oauth.py`, `Node.refresh_potoken` em `empiremuse/wavelink/node.py`, `empiremuse/utils/music/youtube_trusted_session_generator.py` | Autenticação do plugin `youtube-plugin` do Lavalink e geração de `poToken` (`nodriver`). |
 | **Discord** | `disnake` (commit git fixado, `requirements.txt:1`) | Slash/prefix/menus de contexto; `AutoShardedBot`. |
 
 ## 10. Módulos → responsabilidade → tamanho

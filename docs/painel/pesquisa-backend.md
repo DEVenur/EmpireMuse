@@ -27,14 +27,14 @@
 
 ## 1. Como as configurações são guardadas (base para tudo)
 
-### 1.1 Camadas de dados (`utils/client.py:1069-1091`, `utils/db.py`)
+### 1.1 Camadas de dados (`BotCore.get_data`/`BotCore.update_data` e `BotCore.get_global_data`/`BotCore.update_global_data` em `empiremuse/utils/client.py`, `empiremuse/utils/db.py`)
 
 | Camada | API no bot | Coleção no DB | Escopo real | Modelo (`utils/db.py`) |
 |---|---|---|---|---|
 | **Por bot × servidor** | `bot.get_data/update_data(id, db_name=DBModel.guilds)` | `str(bot.user.id)` | cada bot do pool tem a **sua** cópia | `db_models[guilds]` `ver 1.11` |
 | **Por bot × usuário** | `bot.get_data(…, DBModel.users)` | `str(bot.user.id)` | idem | `db_models[users]` `ver 1.0` (só `fav_links`, legado) |
-| **Global × servidor** | `bot.get_global_data/update_global_data(id, DBModel.guilds)` | `"global"` | **compartilhado por todos os bots** | `global_db_models[guilds]` `ver 1.4` (l.75-85) |
-| **Global × usuário** | `bot.get_global_data(…, DBModel.users)` | `"global"` | compartilhado | `global_db_models[users]` `ver 1.6` (l.61-74) |
+| **Global × servidor** | `bot.get_global_data/update_global_data(id, DBModel.guilds)` | `"global"` | **compartilhado por todos os bots** | `global_db_models[guilds]` `ver 1.4` |
+| **Global × usuário** | `bot.get_global_data(…, DBModel.users)` | `"global"` | compartilhado | `global_db_models[users]` `ver 1.6` |
 
 Consequência para o painel: uma tela de servidor mistura campos **por bot** (volume, DJ, skin, canal do player…) e campos
 **globais** (prefixo, status do canal de voz, skin global, convites "ouvir junto"). Quando há vários bots no mesmo servidor,
@@ -49,7 +49,7 @@ o painel precisa de um **seletor de bot** para os campos por bot (hoje o bot faz
 - **Atualização de documento inteiro** (`$set` do dict todo): duas escritas concorrentes (comando no Discord × painel) podem
   sobrescrever uma à outra (*lost update*). Mitigação: ler-modificar-gravar **sem `await` no meio** quando o dado vem do
   cache, ou um `asyncio.Lock` por `(coleção, id)` no serviço do painel; alterar **só o campo** do formulário.
-- **KI-09** (`utils/db.py:321-327`): `update_values` descarta listas ao migrar `ver`. O painel **não deve subir `ver`**;
+- **KI-09** (`update_values` em `empiremuse/utils/db.py`): `update_values` descarta listas ao migrar `ver`. O painel **não deve subir `ver`**;
   um teste de caracterização deve acompanhar qualquer mudança de modelo (`djroles`, `last_tracks` são listas).
 - **`MongoDatabase.get_data` não grava** o documento padrão quando inexistente (devolve cópia do modelo) e o
   `LocalDatabase.get_data` **grava** (insert). O painel não deve depender dessa diferença; use sempre `update_data`.
@@ -63,13 +63,13 @@ Gravar no banco não basta. Hoje cada comando também atualiza estado em memóri
 
 | Mudança | Efeito em memória a reproduzir |
 |---|---|
-| Prefixo do servidor | `bot.pool.guild_prefix_cache[guild_id] = prefix` (`legacy_cmds.py:597, 624`) |
-| Prefixo do usuário | `bot.pool.user_prefix_cache[user_id] = prefix` (`legacy_cmds.py:652, 675`) |
-| Configurações do player (G-01…G-04) | `player.process_save_queue()` se houver player ativo (`music_settings.py:271-276`) |
-| Status do canal de voz (G-13) | atualizar o modelo e o status nos players ativos (`interactions.py:2238-2250`) |
-| Convite "ouvir junto" (G-15) | `p.listen_along_invite = url; p.process_rpc(); p.process_save_queue()` (`music_settings.py:1486-1495`) |
-| Skin (G-08…G-11) | recarregar skin do player ativo (`music_settings.py:1320-1350`) |
-| Canal do player (G-06) | criar/mover mensagem, thread, `player.static`, etc. (`music_settings.py:380-900`) |
+| Prefixo do servidor | `bot.pool.guild_prefix_cache[guild_id] = prefix` (`Owner.setprefix` e `Owner.resetprefix` em `empiremuse/cogs/legacy_cmds.py`) |
+| Prefixo do usuário | `bot.pool.user_prefix_cache[user_id] = prefix` (`Owner.setuserprefix` e `Owner.resetuserprefix` em `empiremuse/cogs/legacy_cmds.py`) |
+| Configurações do player (G-01…G-04) | `player.process_save_queue()` se houver player ativo (`PlayerSettings.save_data` em `empiremuse/cogs/music_settings.py`) |
+| Status do canal de voz (G-13) | atualizar o modelo e o status nos players ativos (`SetStageTitle` em `empiremuse/utils/music/interactions.py`) |
+| Convite "ouvir junto" (G-15) | `p.listen_along_invite = url; p.process_rpc(); p.process_save_queue()` (`MusicSettings.listen_along_modal` em `empiremuse/cogs/music_settings.py`) |
+| Skin (G-08…G-11) | recarregar skin do player ativo (`MusicSettings.change_skin` em `empiremuse/cogs/music_settings.py`) |
+| Canal do player (G-06) | criar/mover mensagem, thread, `player.static`, etc. (`MusicSettings.setup` em `empiremuse/cogs/music_settings.py` e `empiremuse/utils/music/request_channel.py`) |
 
 Recomendação: criar uma **camada de serviço** (`panel/services/*.py`) que extrai a regra de cada comando para funções
 testáveis (a regra de projeto já pede isso), chamada pelo comando **e** pelo painel — evita duas implementações divergentes.
@@ -83,43 +83,43 @@ Convenções: **Escopo** = Servidor (S), Usuário (U), Dono do bot (D). **Camada
 
 ### 2.1 Servidor (S) — 18 opções
 
-| ID | Opção | Origem (arquivo:linha) | Campo no banco | Tipo / valores válidos | Camada | Perm. hoje | Notas para o painel |
+| ID | Opção | Origem (símbolo e arquivo) | Campo no banco | Tipo / valores válidos | Camada | Perm. hoje | Notas para o painel |
 |---|---|---|---|---|---|---|---|
-| G-01 | Volume padrão do player | `music_settings.py:171-237` (`PlayerSettings`, `/player_settings` l.316, legado `playersettings` l.307) | `default_player_volume` | int; `5…100` passo 5 e `110…150` passo 10 (>100 degrada o áudio) | b | `manage_guild` | validar contra o conjunto exato; aplicar em `process_save_queue` |
+| G-01 | Volume padrão do player | `PlayerSettings`, `MusicSettings.player_settings` e `MusicSettings.player_settings_legacy` em `empiremuse/cogs/music_settings.py` | `default_player_volume` | int; `5…100` passo 5 e `110…150` passo 10 (>100 degrada o áudio) | b | `manage_guild` | validar contra o conjunto exato; aplicar em `process_save_queue` |
 | G-02 | Autoplay | idem | `autoplay` | bool | b | `manage_guild` | idem |
-| G-03 | Não conectar com bots incompatíveis | idem | `check_other_bots_in_vc` | bool | b | `manage_guild` | lido em `music.py:876, 2066, 6730` |
-| G-04 | Modo restrito | idem | `enable_restrict_mode` | bool | b | `manage_guild` | lido em `music.py:6680` |
-| G-05 | Cargos de DJ | `music_settings.py:1063-1134` (`/add_dj_role`, `/remove_dj_role`, legados) | `djroles` | lista de `str(role_id)`; proibido `@everyone` (`default_role`); sem duplicata | b | `manage_guild` | validar que o cargo existe no servidor; sem limite de quantidade no código atual (definir um) |
-| G-06 | Canal de pedir música (song request) — **setup** | `music_settings.py:375-905` (`/setup`, legado `setup`) | `player_controller.channel`, `player_controller.message_id` | `str(channel_id)` de TextChannel/VoiceChannel/ForumChannel/StageChannel; opção "limpar mensagens" (yes/no); fórum pede título 4-30 caracteres | b | `manage_guild` | **Ação:** cria canal/mensagem/thread, permissões do bot, conecta player. Exige o bot no servidor com `manage_channels`, `manage_messages`, etc. |
-| G-07 | Resetar canal do player — **reset** | `music_settings.py:932-1010` (`/reset`) | `player_controller.channel/message_id` → `None` | opção `deletar_canal` sim/não | b | `manage_guild` (bot precisa de `manage_threads`) | **Ação destrutiva** (pode apagar canal/post). Confirmação dupla |
-| G-08 | Skin do player (modo normal) | `music_settings.py:1148-1280` (`/change_skin`) | `player_controller.skin` | nome de skin existente em `bot.player_skins` (menos `IGNORE_SKINS`) **ou** `> custom_skin: <nome>` | b | `manage_guild` | custom skin só se G-14 for liberado |
+| G-03 | Não conectar com bots incompatíveis | idem | `check_other_bots_in_vc` | bool | b | `manage_guild` | lido em `Music.play` e `Music.player_controller` em `empiremuse/cogs/music.py` |
+| G-04 | Modo restrito | idem | `enable_restrict_mode` | bool | b | `manage_guild` | lido em `Music.player_controller` em `empiremuse/cogs/music.py` |
+| G-05 | Cargos de DJ | `MusicSettings.add_dj_role` e `MusicSettings.remove_dj_role` (e legados) em `empiremuse/cogs/music_settings.py` | `djroles` | lista de `str(role_id)`; proibido `@everyone` (`default_role`); sem duplicata | b | `manage_guild` | validar que o cargo existe no servidor; sem limite de quantidade no código atual (definir um) |
+| G-06 | Canal de pedir música (song request) — **setup** | `MusicSettings.setup` e `MusicSettings.setup_legacy` em `empiremuse/cogs/music_settings.py` | `player_controller.channel`, `player_controller.message_id` | `str(channel_id)` de TextChannel/VoiceChannel/ForumChannel/StageChannel; opção "limpar mensagens" (yes/no); fórum pede título 4-30 caracteres | b | `manage_guild` | **Ação:** cria canal/mensagem/thread, permissões do bot, conecta player. Exige o bot no servidor com `manage_channels`, `manage_messages`, etc. |
+| G-07 | Resetar canal do player — **reset** | `MusicSettings.reset` em `empiremuse/cogs/music_settings.py` | `player_controller.channel/message_id` → `None` | opção `deletar_canal` sim/não | b | `manage_guild` (bot precisa de `manage_threads`) | **Ação destrutiva** (pode apagar canal/post). Confirmação dupla |
+| G-08 | Skin do player (modo normal) | `MusicSettings.change_skin` em `empiremuse/cogs/music_settings.py` | `player_controller.skin` | nome de skin existente em `bot.player_skins` (menos `IGNORE_SKINS`) **ou** `> custom_skin: <nome>` | b | `manage_guild` | custom skin só se G-14 for liberado |
 | G-09 | Skin do player (modo song-request) | idem | `player_controller.static_skin` | `bot.player_static_skins` (menos `IGNORE_STATIC_SKINS`) | b | `manage_guild` | idem |
 | G-10 | Skin global ligada | idem | `global_skin` (g) | bool | g | `manage_guild` | quando `true`, vale `player_skin`/`player_skin_static` para **todos** os bots |
 | G-11 | Skin global (normal / song-request) | idem | `player_skin`, `player_skin_static` (g) | nomes de skin; `None` = padrão do pool | g | `manage_guild` | idem |
-| G-12 | Prefixo do servidor | `legacy_cmds.py:581-632` (`setprefix`, `resetprefix`); dono: `setguildprefix` l.686 | `prefix` (g) | str, sem espaços, 1-5 caracteres; vazio = `DEFAULT_PREFIX` | g | `manage_guild` | atualizar `guild_prefix_cache`; **bug existente**: `setguildprefix` grava o cache com `ctx.guild.id` em vez de `server_id` (`legacy_cmds.py:714`) — não replicar |
-| G-13 | Status automático do canal de voz | `music.py:127-172` (`/set_voice_status`), `interactions.py:2085-2260` (`SetStageTitle`) | `voice_channel_status` (g) | str com placeholders (`{track.title}` etc.); vazio = desligado; variante "temporária" não persiste | g | `manage_guild` (ou dono) | validar tamanho (limite do status de canal do Discord — **a confirmar na doc oficial**) e placeholders permitidos |
-| G-14 | Skins personalizadas (editor) | `music_settings.py:1656-1680` (`/custom_skin`), `interactions.py:2345-3170` (`SkinEditorMenu`) | `custom_skins`, `custom_skins_static` (g) | dict `{nome: <formato legado>}` | g | **`administrator`** | **FORA DA v1** (formato de armazenamento legado inseguro; rastreado em privado, S-04). Reabrir só após migrar para JSON validado (tarefa própria, regra `security.md` §2) |
-| G-15 | Convites "ouvir junto" (RPC) | `music_settings.py:1363-1500` (`listenalong`, modal `listen_along_modal`) | `listen_along_invites` (g) | dict `{str(voice_channel_id): invite_url}`; máx. **5**; convite sem limite de usos e não restrito a um usuário; canal de voz | g | `manage_channels` + estar em voz | painel pode **listar/remover**; **adicionar** exige `fetch_invite` (chamada externa) e checagens. Cooldown de 45 s por servidor |
-| G-16 | Links fixos do servidor (favoritos do servidor) | `interactions.py:669-1130, 1328-1760` (`FavMenuView` modo `guild_fav_manager`); `/fav_manager` `music.py:4890` | `player_controller.fav_links` | dict `{nome: {"url": str, "description": str}}`; máx. **25**; só com canal de player configurado; URL via `URL_REG`; nome ≤ `USER_FAV_MAX_NAME_LENGTH` | b | `manage_guild` (ou dono) | importação/exportação JSON existe no bot (`FavModalImport`); no painel, CRUD + import com os mesmos limites |
+| G-12 | Prefixo do servidor | `Owner.setprefix` e `Owner.resetprefix` (dono: `Owner.setguildprefix`) em `empiremuse/cogs/legacy_cmds.py` | `prefix` (g) | str, sem espaços, 1-5 caracteres; vazio = `DEFAULT_PREFIX` | g | `manage_guild` | atualizar `guild_prefix_cache`; **bug existente**: `setguildprefix` grava o cache com `ctx.guild.id` em vez de `server_id` (`Owner.setguildprefix` em `empiremuse/cogs/legacy_cmds.py`) — não replicar |
+| G-13 | Status automático do canal de voz | `Music.set_voice_status` em `empiremuse/cogs/music.py`, `SetStageTitle` em `empiremuse/utils/music/interactions.py` | `voice_channel_status` (g) | str com placeholders (`{track.title}` etc.); vazio = desligado; variante "temporária" não persiste | g | `manage_guild` (ou dono) | validar tamanho (limite do status de canal do Discord — **a confirmar na doc oficial**) e placeholders permitidos |
+| G-14 | Skins personalizadas (editor) | `MusicSettings.custom_skin` em `empiremuse/cogs/music_settings.py`, `SkinEditorMenu` em `empiremuse/utils/music/interactions.py` | `custom_skins`, `custom_skins_static` (g) | dict `{nome: <formato legado>}` | g | **`administrator`** | **FORA DA v1** (formato de armazenamento legado inseguro; rastreado em privado, S-04). Reabrir só após migrar para JSON validado (tarefa própria, regra `security.md` §2) |
+| G-15 | Convites "ouvir junto" (RPC) | `MusicSettings.listenalong` e `MusicSettings.listen_along_modal` em `empiremuse/cogs/music_settings.py` | `listen_along_invites` (g) | dict `{str(voice_channel_id): invite_url}`; máx. **5**; convite sem limite de usos e não restrito a um usuário; canal de voz | g | `manage_channels` + estar em voz | painel pode **listar/remover**; **adicionar** exige `fetch_invite` (chamada externa) e checagens. Cooldown de 45 s por servidor |
+| G-16 | Links fixos do servidor (favoritos do servidor) | `FavMenuView` (modo `guild_fav_manager`) em `empiremuse/utils/music/interactions.py`; `Music.fav_manager` em `empiremuse/cogs/music.py` | `player_controller.fav_links` | dict `{nome: {"url": str, "description": str}}`; máx. **25**; só com canal de player configurado; URL via `URL_REG`; nome ≤ `USER_FAV_MAX_NAME_LENGTH` | b | `manage_guild` (ou dono) | importação/exportação JSON existe no bot (`FavModalImport`); no painel, CRUD + import com os mesmos limites |
 | G-17 | *(Removido)* | `empiremuse/utils/db.py` (`db_models`) | — | — | b | — | **campo removido**: antigo campo órfão de prefixo excluído na versão 1.11 (KI-43). Sem tela. |
-| G-18 | Escolha do bot (multi-bot) | `utils/others.py` `select_bot_pool`; `music_settings.py:323, 400, 944, 1153` | — | id de um bot do `pool.get_guild_bots(guild_id)` | — | — | afeta G-01…G-11 e G-16. Contrato: parâmetro `bot_id` |
-| G-19 | Adicionar mais bots ao servidor | botão `bot_invite` (`music.py`, `music_settings.py`) e `misc.py:780-880` (`/invite`) | — | link de convite por bot | — | qualquer um | tela "adicionar bot"; usa `INVITE_PERMISSIONS` (config). Gerar o link a partir do `client_id` de cada bot do pool |
+| G-18 | Escolha do bot (multi-bot) | `select_bot_pool` em `empiremuse/utils/others.py`; `MusicSettings.player_settings`, `MusicSettings.setup`, `MusicSettings.reset` e `MusicSettings.change_skin` em `empiremuse/cogs/music_settings.py` | — | id de um bot do `pool.get_guild_bots(guild_id)` | — | — | afeta G-01…G-11 e G-16. Contrato: parâmetro `bot_id` |
+| G-19 | Adicionar mais bots ao servidor | botão `bot_invite` (`music.py`, `music_settings.py`) e `Misc.invite` / `Misc.invite_button` em `empiremuse/cogs/misc.py` | — | link de convite por bot | — | qualquer um | tela "adicionar bot"; usa `INVITE_PERMISSIONS` (config). Gerar o link a partir do `client_id` de cada bot do pool |
 
 ### 2.2 Usuário (U) — 6 opções
 
 | ID | Opção | Origem | Campo | Tipo / limites | Camada | Perm. | Notas |
 |---|---|---|---|---|---|---|---|
-| U-01 | Prefixo pessoal | `legacy_cmds.py:637-684` (`setuserprefix`, `resetuserprefix`) | `custom_prefix` (g, users) | str 1-5 caracteres, sem espaços | g | qualquer usuário | atualizar `user_prefix_cache` |
-| U-02 | Favoritos pessoais | `interactions.py:669-1070`, `FavMenuView` (modo `fav_manager`); `music.py:4878-4935` (`/fav_manager`, legados `favs…`) | `fav_links` (g, users) | dict `{nome: url}`; máx. `MAX_USER_FAVS` (padrão 10; 0 = ilimitado; dono isento); nome ≤ `USER_FAV_MAX_NAME_LENGTH` (35); URL ≤ `USER_FAV_MAX_URL_LENGTH` (90) e `URL_REG` | g | qualquer usuário | os limites são **config do dono**: o painel deve lê-los de `bot.config` |
-| U-03 | Integrações (canais/perfis para playlists) | `interactions.py:900-1330`, `FavModalAdd` modo `integrations_manager`; `music.py:4878` | `integration_links` (g, users) | dict `{título[:90]: {"url": str, "avatar"?: str}}`; máx. `MAX_USER_INTEGRATIONS` (10) | g | qualquer usuário | **adicionar** faz requisição externa (SSRF/abuso): manter a validação existente; no painel v1 só **listar/remover/importar JSON** |
-| U-04 | Scrobble Last.fm (liga/desliga) | `lastfm.py:98-110` (botão), `lastfm.py:149-330` (`/lastfm`) | `lastfm.scrobble` (g, users) | bool; cooldown no botão | g | qualquer usuário | exige conta vinculada (`lastfm.username`, `sessionkey` = **segredo**). Painel: mostrar status + toggle; **vincular** conta continua no Discord |
-| U-05 | Token do app de RPC | `music_settings.py:1500-1522` (modal `rpc_token_create`), `1825-1990` (`/rich_presence`) | `token` (g, users) | str (segredo de pareamento) | g | `ENABLE_RPC_COMMAND` ou dono | **segredo**: nunca devolver o valor ao navegador; painel pode "gerar novo" e mostrar **uma vez**. Decidir com o dono (D-4) |
-| U-06 | Histórico de faixas | `utils/db.py:68` | `last_tracks` | lista | g | — | **somente leitura** (se alguma tela precisar); lista sofre KI-09 |
+| U-01 | Prefixo pessoal | `Owner.setuserprefix` e `Owner.resetuserprefix` em `empiremuse/cogs/legacy_cmds.py` | `custom_prefix` (g, users) | str 1-5 caracteres, sem espaços | g | qualquer usuário | atualizar `user_prefix_cache` |
+| U-02 | Favoritos pessoais | `FavMenuView` (modo `fav_manager`) em `empiremuse/utils/music/interactions.py`; `Music.fav_manager` (e legados `favs…`) em `empiremuse/cogs/music.py` | `fav_links` (g, users) | dict `{nome: url}`; máx. `MAX_USER_FAVS` (padrão 10; 0 = ilimitado; dono isento); nome ≤ `USER_FAV_MAX_NAME_LENGTH` (35); URL ≤ `USER_FAV_MAX_URL_LENGTH` (90) e `URL_REG` | g | qualquer usuário | os limites são **config do dono**: o painel deve lê-los de `bot.config` |
+| U-03 | Integrações (canais/perfis para playlists) | `FavModalImport` e `FavModalAdd` (modo `integrations_manager`) em `empiremuse/utils/music/interactions.py`; `Music.fav_manager` em `empiremuse/cogs/music.py` | `integration_links` (g, users) | dict `{título[:90]: {"url": str, "avatar"?: str}}`; máx. `MAX_USER_INTEGRATIONS` (10) | g | qualquer usuário | **adicionar** faz requisição externa (SSRF/abuso): manter a validação existente; no painel v1 só **listar/remover/importar JSON** |
+| U-04 | Scrobble Last.fm (liga/desliga) | `LastFMView.scrobble_enable` (botão) e `LastFmCog.lastfm` (`/lastfm`) em `empiremuse/cogs/lastfm.py` | `lastfm.scrobble` (g, users) | bool; cooldown no botão | g | qualquer usuário | exige conta vinculada (`lastfm.username`, `sessionkey` = **segredo**). Painel: mostrar status + toggle; **vincular** conta continua no Discord |
+| U-05 | Token do app de RPC | `MusicSettings.rpc_create_modal` (modal `rpc_token_create`) e `RPCCog.rich_presence` (`/rich_presence`) em `empiremuse/cogs/music_settings.py` | `token` (g, users) | str (segredo de pareamento) | g | `ENABLE_RPC_COMMAND` ou dono | **segredo**: nunca devolver o valor ao navegador; painel pode "gerar novo" e mostrar **uma vez**. Decidir com o dono (D-4) |
+| U-06 | Histórico de faixas | `global_db_models` em `empiremuse/utils/db.py` | `last_tracks` | lista | g | — | **somente leitura** (se alguma tela precisar); lista sofre KI-09 |
 
-### 2.3 Dono do bot (D) — configuração de ambiente (`config_loader.py`, `DEFAULT_CONFIG` l.16-159)
+### 2.3 Dono do bot (D) — configuração de ambiente (`DEFAULT_CONFIG` em `empiremuse/config_loader.py`)
 
 São **101 chaves** (contagem feita importando `config_loader.DEFAULT_CONFIG`) lidas de `os.environ`/`.env`/`config.json`
-**uma vez** na inicialização (`load_config`, l.162) e só mudam com reinício ou `reloadconfig` (`legacy_cmds.py:203`).
+**uma vez** na inicialização (`load_config` em `empiremuse/config_loader.py`) e só mudam com reinício ou `Owner.reloadconfig` em `empiremuse/cogs/legacy_cmds.py`.
 **Não são persistidas pelo DB**; editá-las exigiria escrever em `.env`. Além delas, `load_config` aceita chaves dinâmicas
 `TOKEN`, `TOKEN_BOT_*`, `TEST_GUILDS_*` e `LAVALINK_NODE_*` (não contadas).
 Recomendação v1: **somente leitura** (diagnóstico), com **máscara** nos segredos. Agrupamento:
@@ -141,12 +141,12 @@ Recomendação v1: **somente leitura** (diagnóstico), com **máscara** nos segr
 
 | ID | Ação | Origem | Perm. | Risco | Painel v1 |
 |---|---|---|---|---|---|
-| O-1 | Recarregar configs | `legacy_cmds.py:203` (`reloadconfig`) | dono | baixo | **sim** (botão) |
-| O-2 | Recarregar skins | `legacy_cmds.py:218` (`reloadskins`) | dono | baixo | **sim** |
-| O-3 | Recarregar módulos | `legacy_cmds.py:240` (`reload`) | dono | médio | opcional (lista fechada de módulos) |
-| O-4 | Atualizar bot via git | `legacy_cmds.py:307` (`update`) | dono | **alto** (executa git/pip, reinicia) | **não** |
-| O-5 | Exportar source | `legacy_cmds.py:717` (`exportsource`) | dono | **alto** (inclui `.env`) | **não** |
-| O-6 | `shell`, `cleardm`, `setbanner`, `setavatar`, `getlavaservers`, `restartlavalink`, `updatelavalink`, `setguildprefix` | `legacy_cmds.py:105-214, 686, 856-1110` | dono | alto/médio | **não** na v1 (shell/eval nunca na web); `setguildprefix` coberto por G-12 com perfil dono |
+| O-1 | Recarregar configs | `Owner.reloadconfig` em `empiremuse/cogs/legacy_cmds.py` | dono | baixo | **sim** (botão) |
+| O-2 | Recarregar skins | `Owner.reloadskins` em `empiremuse/cogs/legacy_cmds.py` | dono | baixo | **sim** |
+| O-3 | Recarregar módulos | `Owner.reload` em `empiremuse/cogs/legacy_cmds.py` | dono | médio | opcional (lista fechada de módulos) |
+| O-4 | Atualizar bot via git | `Owner.update` em `empiremuse/cogs/legacy_cmds.py` | dono | **alto** (executa git/pip, reinicia) | **não** |
+| O-5 | Exportar source | `Owner.exportsource` em `empiremuse/cogs/legacy_cmds.py` | dono | **alto** (inclui `.env`) | **não** |
+| O-6 | `shell`, `cleardm`, `setbanner`, `setavatar`, `getlavaservers`, `restartlavalink`, `updatelavalink`, `setguildprefix` | `Owner` em `empiremuse/cogs/legacy_cmds.py` | dono | alto/médio | **não** na v1 (shell/eval nunca na web); `setguildprefix` coberto por G-12 com perfil dono |
 | O-7 | Lista de servidores / gestão de servidores | `modules/server_manager.py` (`ServerManagerView`) | dono | médio | candidata a v2 (somente leitura) |
 
 ### 2.4 Contagem
@@ -163,8 +163,8 @@ Recomendação v1: **somente leitura** (diagnóstico), com **máscara** nos segr
 
 ### 3.1 Situação atual
 
-`web_app.py:423-436` (`run_app`) cria um `tornado.web.Application` com duas rotas (`/` e `/ws`) e chama `app.listen(PORT)`.
-O `start()` roda no **mesmo loop asyncio dos bots** (`utils/client.py:975-981`, `pool.loop`), então handlers Tornado podem
+`run_app` em `empiremuse/web_app.py` cria um `tornado.web.Application` com duas rotas (`/` e `/ws`) e chama `app.listen(PORT)`.
+O `start()` roda no **mesmo loop asyncio dos bots** (`BotPool.setup` em `empiremuse/utils/client.py`, `pool.loop`), então handlers Tornado podem
 `await` diretamente funções do bot. O endurecimento do `/ws` está rastreado em privado (S-02) e fora do escopo; **o painel fica isolado dele**
 (sub-aplicação própria, sem compartilhar cookies nem configurações com `/ws`).
 `requirements.txt` já tem `tornado>=6.4.2`; `aiohttp` vem junto com o disnake.
@@ -279,8 +279,8 @@ A lista `guilds` do OAuth traz `owner` e `permissions`, mas é **dado do momento
 1. A sessão é válida e `gid` é um *snowflake* inteiro (17-20 dígitos).
 2. Existe ao menos um bot do pool no servidor: `bots = pool.get_guild_bots(gid)` filtrado por `bot.get_guild(gid)`.
    Sem bot → `404` (não revelar existência).
-3. Obter o membro **com dados do bot**. O bot força `intents.members = True` (`utils/client.py:643`, depois de montar os
-   intents pela config, então `MEMBERS_INTENT` de `config_loader.py:147` é ignorado ali), portanto o cache de membros é
+3. Obter o membro **com dados do bot**. O bot força `intents.members = True` (`BotPool.setup` em `empiremuse/utils/client.py`, depois de montar os
+   intents pela config, então `MEMBERS_INTENT` de `DEFAULT_CONFIG` em `empiremuse/config_loader.py` é ignorado ali), portanto o cache de membros é
    mantido por eventos do gateway. Estratégia: `guild.get_member(uid)` primeiro (cache, sem custo); se vier `None` (membro
    fora do cache, guilda ainda não carregada), cair em `await guild.fetch_member(uid)` (REST) com cache curto de 30-60 s por
    `(gid, uid)` e *rate limit*. Se ambos falharem, negar (`403`). O cache pode estar incompleto em servidores grandes ou
@@ -289,7 +289,7 @@ A lista `guilds` do OAuth traz `owner` e `permissions`, mas é **dado do momento
    gateway recusa a conexão (comportamento atual do projeto, não do painel).
 4. Aceitar quando: `guild.owner_id == uid` **ou** `administrator` **ou** `manage_guild` — a mesma barra dos comandos
    (`default_member_permissions=Permissions(manage_guild=True)`; G-14 exige `administrator`; G-15 `manage_channels`). Dono do bot
-   (`await bot.is_owner(user)`, `OWNER_IDS`) passa em tudo (como hoje, `interactions.py:1375`).
+   (`await bot.is_owner(user)`, `OWNER_IDS`) passa em tudo (como hoje, `FavMenuView.interaction_check` em `empiremuse/utils/music/interactions.py`).
 5. Re-verificar a cada requisição de escrita (cache curto) — revogação de cargo vale em ≤ 1 min.
 6. Registrar auditoria (quem, servidor, campo, valor anterior/novo **sem segredos**, horário) em log.
 7. Áreas de **dono** (`/api/v1/dono/*`) só quando `await bot.is_owner(user)`; CSRF + reconfirmação de sessão recente (< 15 min).

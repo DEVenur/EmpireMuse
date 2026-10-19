@@ -57,7 +57,7 @@ formulários HTML; o contrato JSON do Backend mudou isso.)*
 
 Prós
 - **Mesmo processo e mesma porta** do `web_app.py`: basta registrar rotas `/painel/...` no `tornado.web.Application`
-  existente (`run_app`, `web_app.py:423`). Zero processo extra, zero build, zero Node em produção.
+  existente (`run_app` em `empiremuse/web_app.py`). Zero processo extra, zero build, zero Node em produção.
 - Segurança mais simples de auditar: autorização e validação **no servidor**; cookie assinado
   (`set_secure_cookie`), `xsrf_cookies=True` + `{% module xsrf_form_html() %}` nativos do Tornado; autoescape ligado.
 - Funciona em todas as hospedagens suportadas (Replit, Render, SquareCloud, Docker, local): só adiciona arquivos
