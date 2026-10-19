@@ -483,13 +483,13 @@ class ErrorHandler(commands.Cog):
                     embed.add_field(
                         name="Canal de voz (bot):",
                         inline=False,
-                        value=f"{disnake.utils.escape_markdown(vc.channel.name)}"
+                        value=f"```\n{disnake.utils.escape_markdown(vcbot.channel.name)}"
                         + (
-                            f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})"
-                            if vc.channel.user_limit
+                            f" ({len(vcbot.channel.voice_states)}/{vcbot.channel.user_limit})"
+                            if vcbot.channel.user_limit
                             else ""
                         )
-                        + f"\nID: {vc.channel.id}```",
+                        + f"\nID: {vcbot.channel.id}```",
                     )
             if ctx.guild.icon:
                 embed.set_thumbnail(url=ctx.guild.icon.with_static_format("png").url)
