@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from empiremuse.panel.services import account_links, links
+from empiremuse.rules import limits
 from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import ViewMode
 from tests.helpers_f3_5b import (
@@ -286,7 +286,7 @@ class TestA3LimiteDoNomeDoFavorito:
 
     def test_o_modal_do_discord_limita_o_nome_em_25(self):
         campos = campos_do_modal(FAVORITOS)
-        assert account_links.FAV_NAME_MAX == 25
+        assert limits.FAV_NAME_MAX == 25
         assert (campos["user_fav_name"].min_length, campos["user_fav_name"].max_length) == (2, 25)
 
     @pytest.mark.asyncio
@@ -640,7 +640,7 @@ class TestA12LimiteDeUrlDasIntegracoes:
 
     @pytest.mark.asyncio
     async def test_titulo_ate_90_nos_dois_e_o_modal_cria_ate_80(self):
-        assert account_links.ITG_TITLE_MAX == 90
+        assert limits.ITG_TITLE_MAX == 90
         for tamanho, aceito in ((90, True), (91, False)):
             item = {"t" * tamanho: URL}
             no_painel, _ = await importar_no_painel(INTEGRACOES, item)
@@ -663,7 +663,7 @@ class TestA12TituloCriadoPeloModal:
         await adicionar_integracao(bot)
         titulo = next(iter(bot.salvos_usuario[-1]["integration_links"]))
         assert len(titulo) == 83 and titulo.endswith("..."), "80 caracteres e reticências"
-        assert account_links.ITG_TITLE_MAX == 90
+        assert limits.ITG_TITLE_MAX == 90
 
 
 # ============================================================================ A13, A14, A15, A16 — links fixos do servidor
@@ -906,10 +906,18 @@ class TestLimitesDoPainelSaoLiteraisAquiEConstantesLa:
     """As constantes do painel são conferidas contra os números deste arquivo, que não mudam com elas."""
 
     def test_constantes(self):
-        assert (account_links.FAV_NAME_MIN, account_links.FAV_NAME_MAX) == (2, 25)
-        assert (account_links.ITG_TITLE_MAX, account_links.ITG_URL_MAX, account_links.ITG_AVATAR_MAX) == (90, 200, 250)
-        assert links.MAX_LINKS == TETO_DE_LINKS and (links.URL_MIN, links.URL_MAX) == (10, LIMITE_DA_URL_DO_LINK)
-        assert (links.NAME_MIN, links.NAME_MAX, links.DESCRIPTION_MIN, links.DESCRIPTION_MAX) == (2, 25, 3, 50)
+        assert (limits.FAV_NAME_MIN, limits.FAV_NAME_MAX) == (2, 25)
+        assert (limits.ITG_TITLE_MAX, limits.ITG_URL_MAX, limits.ITG_AVATAR_MAX) == (90, 200, 250)
+        assert limits.MAX_GUILD_LINKS == TETO_DE_LINKS and (limits.GUILD_LINK_URL_MIN, limits.GUILD_LINK_URL_MAX) == (
+            10,
+            LIMITE_DA_URL_DO_LINK,
+        )
+        assert (
+            limits.GUILD_LINK_NAME_MIN,
+            limits.GUILD_LINK_NAME_MAX,
+            limits.GUILD_LINK_DESCRIPTION_MIN,
+            limits.GUILD_LINK_DESCRIPTION_MAX,
+        ) == (2, 25, 3, 50)
 
     def test_o_painel_aceita_url_de_link_com_250_e_recusa_251_ao_adicionar(self):
         for tamanho, aceito in ((LIMITE_DA_URL_DO_LINK, True), (LIMITE_DA_URL_DO_LINK + 1, False)):

@@ -18,7 +18,7 @@ import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.utils.db import DBModel, LocalDatabase, db_models
 from empiremuse.utils.music import interactions, request_channel
 from empiremuse.utils.music.converters import perms_translations, time_format
-from empiremuse.panel.services.account_links import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
+from empiremuse.rules.limits import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import CustomContext
 from empiremuse.utils.music.interactions import FavMenuView, FavModalAdd, FavModalImport, ViewMode

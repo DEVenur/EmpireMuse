@@ -17,14 +17,17 @@ from empiremuse.panel.services.account_base import AccountContext
 from empiremuse.panel.services.account_misc import PrefixSection
 from empiremuse.panel.services.appearance import allowed_skins, allowed_static_skins
 from empiremuse.panel.services.base import FormContext
-from empiremuse.panel.services.channel import FORUM_TITLE_MAX, FORUM_TITLE_MIN, MSG_TITLE
-from empiremuse.panel.services.general import (
+from empiremuse.panel.services.channel import MSG_TITLE
+from empiremuse.panel.services.general import PrefixForm, VoiceStatusForm
+from empiremuse.panel.services.player import DjForm, PlayerForm
+from empiremuse.rules.limits import (
+    FORUM_TITLE_MAX,
+    FORUM_TITLE_MIN,
+    MAX_DJ_ROLES,
     VOICE_PLACEHOLDERS,
     VOICE_STATUS_MAX_LENGTH,
-    PrefixForm,
-    VoiceStatusForm,
+    VOLUMES,
 )
-from empiremuse.panel.services.player import MAX_DJ_ROLES, VOLUMES, DjForm, PlayerForm
 from tests.helpers_modais import SERVIDOR_DO_COMANDO
 from tests.test_request_channel_characterization import Scenario, click, modal_answer
 from tests.helpers_f3_5b import (
