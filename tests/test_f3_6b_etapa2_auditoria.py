@@ -5,7 +5,7 @@ Cada caso hostil tem limite de tempo e de memória e roda em SUBPROCESSO: se a c
 borda mostram o maior valor aceito e o primeiro recusado.
 
 * teto de profundidade de tuplas encadeadas (sem ``MARK``), usadas como chave de dicionário, item de ``set`` ou valor;
-* chave de dicionário que não é texto é recusada na pré-varredura, e há um teto de pares por dicionário;
+* chave de dicionário que não é texto é recusada na pré-varredura (dicionários grandes de chaves de texto continuam valendo);
 * texto grande revisitado pelo memo é verificado uma vez só (o custo não cresce com o número de referências);
 * ``PROTO`` só vale como primeiro opcode.
 """
@@ -37,7 +37,6 @@ LIMITE_DE_TEMPO = 30  # segundos que o filho pode levar (os casos recusados leva
 LIMITE_DE_MEMORIA = 3 * 1024**3
 DEPTH = "depth"
 KEY_NOT_TEXT = "key_not_text"
-DICT_LIMIT = "dict_limit"
 MIB = 1024 * 1024
 
 SCRIPT = """
@@ -161,10 +160,7 @@ def setitem_avulso_com_chave_de_texto(pares: int) -> bytes:
     return pickle_de(pickle.EMPTY_DICT, corpo)
 
 
-class TestParesDeDicionario:
-    def test_o_teto_e_o_declarado(self):
-        assert legacy_pickle.MAX_DICT_PAIRS == 2000
-
+class TestChavesDeDicionario:
     @pytest.mark.parametrize("pares", [1, 20_000, 400_000])
     def test_chave_inteira_em_setitem_avulso_e_recusada_na_pre_varredura(self, pares):
         recusa_rapida(setitem_avulso_com_chave_inteira(pares), KEY_NOT_TEXT)
@@ -179,37 +175,26 @@ class TestParesDeDicionario:
     def test_chave_que_nao_e_texto_de_outros_tipos_tambem(self, chave):
         recusa_rapida(pickle_de(pickle.EMPTY_DICT, chave, pickle.NONE, pickle.SETITEM), KEY_NOT_TEXT)
 
+    def test_chave_nao_hashavel_continua_sendo_corrupcao(self):
+        recusa_rapida(pickle_de(pickle.EMPTY_DICT, pickle.EMPTY_LIST, pickle.NONE, pickle.SETITEM), "corrupt")
+
+    def test_a_corrupcao_vem_antes_da_chave_que_nao_e_texto(self):
+        dados = pickle_de(pickle.EMPTY_DICT, pickle.NONE, pickle.NONE, pickle.NONE, pickle.SETITEM, pickle.SETITEM)
+        recusa_rapida(dados, "corrupt")
+
     def test_chave_de_texto_vinda_do_memo_vale(self):
         corpo = texto("a") + pickle.MEMOIZE + pickle.NONE + pickle.SETITEM + pickle.BINGET + b"\x00" + pickle.NONE
         assert em_subprocesso(pickle_de(pickle.EMPTY_DICT, corpo, pickle.SETITEM))[0] == "ok"
 
-    def test_ate_o_teto_de_pares_passa(self):
-        assert em_subprocesso(setitem_avulso_com_chave_de_texto(legacy_pickle.MAX_DICT_PAIRS))[0] == "ok"
+    def test_dicionario_grande_de_chaves_de_texto_e_lido(self):
+        """Sem chave que não seja texto não há como montar colisões: dicionários grandes de verdade continuam valendo."""
+        for pares in (3000, 20_000):
+            achado, segundos = em_subprocesso(setitem_avulso_com_chave_de_texto(pares))
+            assert achado == "ok" and segundos < 5.0, f"{pares} pares: {achado}, {segundos:.1f} s"
 
-    def test_acima_do_teto_de_pares_e_recusado(self):
-        recusa_rapida(setitem_avulso_com_chave_de_texto(legacy_pickle.MAX_DICT_PAIRS + 1), DICT_LIMIT)
-
-    def test_o_teto_vale_por_dicionario_e_nao_pelo_documento(self):
-        """Quatro dicionários de 1 500 pares (como as faixas de uma fila) somam mais que o teto e passam."""
-        faixas = [dicionario(*((texto(f"k{k}"), pickle.NONE) for k in range(1500))) for _ in range(4)]
-        corpo = pickle.EMPTY_LIST + pickle.MARK + b"".join(faixas) + pickle.APPENDS
-        assert em_subprocesso(na_raiz("queue", corpo))[0] == "ok"
-
-    def test_dicionario_compartilhado_pelo_memo_conta_os_pares_uma_vez_so(self):
-        compartilhado = dicionario(*((texto(f"k{k}"), pickle.NONE) for k in range(1500))) + pickle.MEMOIZE
-        corpo = pickle.EMPTY_LIST + pickle.MARK + compartilhado + (pickle.BINGET + b"\x00") * 3 + pickle.APPENDS
-        assert em_subprocesso(na_raiz("a", corpo))[0] == "ok"
-
-    def test_pares_acrescentados_ao_mesmo_dicionario_por_lotes_somam(self):
-        def lote(prefixo: str) -> bytes:
-            return pickle.MARK + pares_de_texto(prefixo, 1500) + pickle.SETITEMS
-
-        recusa_rapida(pickle_de(pickle.EMPTY_DICT, lote("k"), lote("j")), DICT_LIMIT)
-
-    def test_setitem_avulso_e_lote_somam_no_mesmo_dicionario(self):
-        avulsos = b"".join(texto(f"a{k}") + pickle.NONE + pickle.SETITEM for k in range(1000))
-        lote = pickle.MARK + pares_de_texto("b", 1001) + pickle.SETITEMS
-        recusa_rapida(pickle_de(pickle.EMPTY_DICT, avulsos, lote), DICT_LIMIT)
+    def test_dicionario_em_lote_de_chaves_de_texto_e_lido(self):
+        lote = pickle.MARK + pares_de_texto("k", 20_000) + pickle.SETITEMS
+        assert em_subprocesso(pickle_de(pickle.EMPTY_DICT, lote))[0] == "ok"
 
 
 # ============================================================================ H-3: texto grande revisitado
