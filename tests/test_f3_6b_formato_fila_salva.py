@@ -5,13 +5,15 @@ Roda o ``Music.save_queue`` REAL (o callback do comando, com faixas das classes 
 antes e depois; aqui as dependências de Discord são dublês e o ``check_player_queue`` com as faixas lidas é o ponto de
 parada (guarda o que recebeu e interrompe).
 
-* o que continua valendo depois da migração para JSON: o mínimo de 3 faixas, o caminho por usuário, o conteúdo
-  (``tracks``, ``created_at`` em UTC, ``guild_id``) e as faixas que voltam como as classes reais;
-* o que muda de propósito na etapa 4 (``TestFormatoGravadoHoje``, ``TestLegadoEmVariosProtocolos``): extensão ``.pkl``,
-  envelope ``zlib``, protocolo, opcodes e o leitor que aceita qualquer protocolo e dispensa o ``zlib``.
+* vale antes e depois da migração para JSON: o mínimo de 3 faixas, o caminho por usuário, o conteúdo (``tracks``,
+  ``created_at`` em UTC, ``guild_id``) e as faixas que voltam como as classes reais;
+* a etapa 4 trocou o formato gravado (``TestFormatoGravado``: JSON em ``saved_queues_json/``, sem envelope); o ``.pkl`` antigo
+  só é LIDO (``TestLegadoEmVariosProtocolos``, pelo ``load_legacy``) e migrado; os testes do JSON estão em
+  ``tests/test_f3_6b_etapa4_fila.py``.
 """
 
 import copy
+import json
 import pickle
 import zlib
 from types import SimpleNamespace
@@ -33,22 +35,13 @@ from tests.helpers_f3_6b import (
     faixa_deezer,
     faixa_parcial,
     faixa_youtube,
-    globais_do_pickle,
     letras_sincronizadas,
-    opcodes_do_pickle,
-    protocolo_do_pickle,
 )
 
 CONSULTA = ">> [💾 Fila Salva 💾] <<"
-OPCODES_DA_FILA = frozenset(
-    "PROTO FRAME STOP MARK NONE NEWTRUE NEWFALSE BININT BININT1 BININT2 LONG1 BINFLOAT SHORT_BINUNICODE BINUNICODE "
-    "SHORT_BINBYTES BINBYTES EMPTY_LIST EMPTY_DICT EMPTY_TUPLE APPEND APPENDS SETITEM SETITEMS TUPLE1 TUPLE2 TUPLE3 "
-    "MEMOIZE BINGET LONG_BINGET STACK_GLOBAL REDUCE".split()
-)
 PADROES_DO_PLAY = dict(
     position=0, force_play="no", mix=False, manual_selection=False, options=False, server=None, manual_bot_choice="no"
 )
-GLOBAIS_DA_FILA = {("datetime", "datetime"), ("datetime", "timezone"), ("datetime", "timedelta")}
 
 
 class Parou(Exception):
@@ -65,7 +58,12 @@ def _ambiente(tmp_path, monkeypatch):
 
 
 def caminho_da_fila(tmp_path, usuario=DONO):
+    """O ``.pkl`` LEGADO (só lido e migrado desde a etapa 4)."""
     return tmp_path / "local_database" / "saved_queues_v1" / "users" / f"{usuario}.pkl"
+
+
+def caminho_json_da_fila(tmp_path, usuario=DONO):
+    return tmp_path / "local_database" / "saved_queues_json" / "users" / f"{usuario}.json"
 
 
 class Resposta:
@@ -196,8 +194,8 @@ class TestSalvarAFila:
     async def test_grava_a_faixa_atual_e_a_fila_por_usuario(self, tmp_path):
         atual, fila = faixa_youtube(0), [faixa_deezer(1), faixa_parcial(2), faixa_com_playlist(3)]
         await salvar(fila, atual=atual)
-        assert caminho_da_fila(tmp_path).is_file()
-        assert not caminho_da_fila(tmp_path, DONO + 1).exists()
+        assert caminho_json_da_fila(tmp_path).is_file()
+        assert not caminho_json_da_fila(tmp_path, DONO + 1).exists()
 
     @pytest.mark.asyncio
     async def test_responde_com_o_numero_de_musicas_salvas(self, tmp_path):
@@ -208,12 +206,12 @@ class TestSalvarAFila:
     async def test_menos_de_3_faixas_recusa_e_nao_grava(self, tmp_path):
         with pytest.raises(GenericError, match="mínimo 3"):
             await salvar([faixa_deezer(1)], atual=faixa_youtube(0))
-        assert not caminho_da_fila(tmp_path).exists()
+        assert not caminho_json_da_fila(tmp_path).exists()
 
     @pytest.mark.asyncio
     async def test_exatamente_3_faixas_vale_e_sem_faixa_atual_conta_so_a_fila(self, tmp_path):
         await salvar([faixa_youtube(1), faixa_youtube(2), faixa_youtube(3)])
-        assert caminho_da_fila(tmp_path).is_file()
+        assert caminho_json_da_fila(tmp_path).is_file()
         with pytest.raises(GenericError):
             await salvar([faixa_youtube(1), faixa_youtube(2)])
 
@@ -244,35 +242,26 @@ class TestLerAFilaSalva:
             await executar()
 
 
-# ============================================================================ o que o formato de hoje tem e a etapa 4 muda
+# ============================================================================ o formato gravado desde a etapa 4
 
 
-class TestFormatoGravadoHoje:
-    """Deixa de valer na etapa 4 (JSON), quando estes testes são reescritos."""
-
+class TestFormatoGravado:
     @pytest_asyncio.fixture
     async def bytes_do_disco(self, tmp_path):
         faixas = tres_faixas()
         await salvar(faixas[1:], atual=faixas[0])
-        return caminho_da_fila(tmp_path).read_bytes()
+        return caminho_json_da_fila(tmp_path).read_bytes()
 
     @pytest.mark.asyncio
-    async def test_o_arquivo_e_pickle_comprimido_com_zlib(self, bytes_do_disco):
-        assert bytes_do_disco[:1] == b"x"
-        assert protocolo_do_pickle(zlib.decompress(bytes_do_disco)) in {4, 5}
+    async def test_o_arquivo_e_json_em_utf8_sem_envelope(self, bytes_do_disco):
+        assert bytes_do_disco[:1] == b"{" and json.loads(bytes_do_disco)["v"] == 1
 
     @pytest.mark.asyncio
-    async def test_os_opcodes_cabem_na_lista_fechada_e_as_classes_sao_so_de_data(self, bytes_do_disco):
-        dados = zlib.decompress(bytes_do_disco)
-        assert set(opcodes_do_pickle(dados)) <= OPCODES_DA_FILA
-        assert globais_do_pickle(dados) == GLOBAIS_DA_FILA
-
-    @pytest.mark.asyncio
-    async def test_o_conteudo_tem_tracks_created_at_em_utc_e_guild_id(self, bytes_do_disco):
-        """O JSON novo terá ``v``, ``tracks``, ``created_at`` em ISO e ``guild_id``."""
-        gravado = pickle.loads(zlib.decompress(bytes_do_disco))  # lê o que o próprio código gravou
-        assert set(gravado) == {"tracks", "created_at", "guild_id"}
-        assert gravado["created_at"] == INSTANTE and gravado["guild_id"] == SERVIDOR and len(gravado["tracks"]) == 3
+    async def test_o_conteudo_tem_versao_tracks_created_at_em_utc_e_guild_id(self, bytes_do_disco):
+        gravado = json.loads(bytes_do_disco)
+        assert set(gravado) == {"v", "tracks", "created_at", "guild_id"}
+        assert gravado["created_at"] == INSTANTE.isoformat() and gravado["guild_id"] == SERVIDOR
+        assert len(gravado["tracks"]) == 3
 
 
 class TestLegadoEmVariosProtocolos:

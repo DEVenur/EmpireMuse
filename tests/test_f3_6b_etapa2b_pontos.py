@@ -188,13 +188,22 @@ class TestIdaEVoltaPelosPontosReais:
 
     @pytest.mark.asyncio
     async def test_fila_salva(self, tmp_path, monkeypatch):
+        """Desde a etapa 4 o gravador escreve JSON; o ponto de leitura legado é o ``.pkl`` antigo (migrado ao ser lido)."""
+        from tests.helpers_f3_6b import INSTANTE
+        from tests.test_f3_6b_formato_fila_salva import infos
+
         faixas = tres_faixas()
-        await salvar(faixas[1:], atual=faixas[0])
+        for faixa in faixas:
+            faixa.info["id"] = faixa.id
+        antigo = caminho_da_fila(tmp_path)
+        antigo.parent.mkdir(parents=True)
+        conteudo = {"tracks": infos(faixas), "created_at": INSTANTE, "guild_id": SERVIDOR}
+        antigo.write_bytes(zlib.compress(pickle.dumps(conteudo, protocol=4)))
         chamadas = espionar_load_legacy(monkeypatch)
         lidas = await montar_leitura(monkeypatch, None)()
         assert chamadas == [("queue", "bytes")]
         assert [f.info["title"] for f in lidas] == [f.info["title"] for f in faixas]
-        assert caminho_da_fila(tmp_path).is_file()
+        assert not antigo.exists()
 
     @pytest.mark.asyncio
     async def test_skin_gravada_pelo_editor_nos_quatro_pontos(self, editor_sem_tela, monkeypatch):

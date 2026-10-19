@@ -45,7 +45,6 @@ LEITURAS: list = []
 GRAVACOES = [
     ("cogs/player_resume.py", "PlayerSession.save_session_mongo", "dumps", 1, "sessao", 1, "5"),
     ("cogs/player_resume.py", "PlayerSession.save_session_local", "dumps", 1, "sessao", 1, "5"),
-    ("cogs/music.py", "Music.save_queue", "dumps", 1, "fila", 1, "4"),
     ("utils/music/interactions.py", "SkinEditorMenu.modal_handler", "dumps", 1, "skin", 1, "3"),
     ("utils/client.py", "BotPool.cache_updater", "dumps", 1, "cache", 1, "6"),
     ("utils/music/lastfm_tools.py", "LastFM.scrobble_save_cache", "dump", 1, "cache", 1, "6"),
@@ -54,7 +53,6 @@ GRAVACOES = [
 OUTRAS_REFERENCIAS: list = []  # antes da 2b: o ``pickle.UnpicklingError`` dos ``except`` dos caches (4 referências)
 # Arquivos que fazem ``import pickle`` depois da 2b (só para gravar; ``music_settings.py`` só lia e deixa de importar).
 IMPORTADORES = [
-    "cogs/music.py",
     "cogs/player_resume.py",
     "utils/client.py",
     "utils/music/interactions.py",
@@ -217,10 +215,10 @@ class TestNumerosDoInventario:
     def test_depois_da_2b_nao_ha_leitura_nem_referencia_solta_ao_pickle(self):
         assert LEITURAS == [] and OUTRAS_REFERENCIAS == []
 
-    def test_gravacoes_sao_6_e_saem_nas_etapas_3_a_6(self):
-        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 6
-        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 6
-        assert {etapa for *_, etapa in GRAVACOES} == {"3", "4", "5", "6"}
+    def test_gravacoes_sao_5_depois_da_etapa_4_e_saem_nas_etapas_3_5_e_6(self):
+        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 5
+        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 5
+        assert {etapa for *_, etapa in GRAVACOES} == {"3", "5", "6"}
 
     def test_as_tabelas_nao_repetem_chaves(self):
         for tabela in (LEITURAS_ANTES_DA_2B, GRAVACOES):

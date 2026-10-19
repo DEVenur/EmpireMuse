@@ -145,7 +145,7 @@ class TestArtefatosSemModulosDoProjeto:
         monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
         faixas = tres_faixas()
         await salvar_fila(faixas[1:], atual=faixas[0])
-        arquivos = list((tmp_path / "local_database" / "saved_queues_v1" / "users").iterdir())
+        arquivos = list((tmp_path / "local_database" / "saved_queues_json" / "users").iterdir())
         assert len(arquivos) == 1
         self.sem_modulos_do_projeto(arquivos[0].read_bytes(), "fila salva")
 
