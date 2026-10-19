@@ -311,8 +311,16 @@ class TestA7NomeSemSanitizacaoNoModal:
 
 class TestA8CotaDaIntegracaoAntesDeSaberSeOTituloExiste:
     @pytest.mark.asyncio
-    async def test_modal_recusa_reeditar_integracao_existente_com_a_lista_cheia(self):  # MUDA (etapa 2, A8)
+    async def test_modal_salva_reeditar_integracao_existente_com_a_lista_cheia(self):
+        """Etapa 2 (A8): a cota só vale para título NOVO; reeditar um existente não ocupa vaga."""
         bot = ModalBot(integracoes=1, integration_links={"【DZ】: Ana": {"url": f"{URL_BASE}/antiga"}})
+        await adicionar_integracao(bot)
+        salvo = bot.salvos_usuario[-1]["integration_links"]
+        assert list(salvo) == ["【DZ】: Ana"] and salvo["【DZ】: Ana"]["url"].endswith("/profile/123456")
+
+    @pytest.mark.asyncio
+    async def test_guarda_modal_com_a_lista_cheia_e_titulo_novo_continua_recusado(self):
+        bot = ModalBot(integracoes=1, integration_links={"Outro": {"url": f"{URL_BASE}/antiga"}})
         inter = await adicionar_integracao(bot)
         assert bot.salvos_usuario == [] and "Não há espaço disponível" in inter.texto
 

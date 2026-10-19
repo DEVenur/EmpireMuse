@@ -31,13 +31,19 @@ class TestA4BotaoDoEmbed:
         assert bot.ultimo_global["fav_links"]["Minha musica"] == URL
 
     @pytest.mark.asyncio
-    async def test_a_cota_soma_a_quantidade_com_ela_mesma_e_trava_com_6_favoritos(self):  # MUDA (etapa 2, A4): até 10
-        com_cinco = BotDoPlayer(favs=10, favoritos={f"f{i}": URL for i in range(5)})
-        await favoritar_pelo_embed(com_cinco, "Sexto")
-        assert "Sexto" in com_cinco.ultimo_global["fav_links"]
-        com_seis = BotDoPlayer(favs=10, favoritos={f"f{i}": URL for i in range(6)})
-        inter = await favoritar_pelo_embed(com_seis, "Setimo")
-        assert not gravou(com_seis) and "espaço suficiente" in inter.texto
+    async def test_a_cota_e_exata_e_vai_ate_o_decimo_favorito(self):
+        """Etapa 2 (A4): a cota conta os favoritos UMA vez (antes somava a quantidade com ela mesma e travava em 6)."""
+        for existentes in (5, 6, 9):
+            bot = BotDoPlayer(favs=10, favoritos={f"f{i}": URL for i in range(existentes)})
+            await favoritar_pelo_embed(bot, "Novo")
+            assert "Novo" in bot.ultimo_global["fav_links"], f"com {existentes} favoritos e limite 10 deveria salvar"
+            assert len(bot.ultimo_global["fav_links"]) == existentes + 1
+
+    @pytest.mark.asyncio
+    async def test_guarda_com_10_favoritos_e_limite_10_um_nome_novo_e_recusado(self):
+        bot = BotDoPlayer(favs=10, favoritos={f"f{i}": URL for i in range(10)})
+        inter = await favoritar_pelo_embed(bot, "Novo")
+        assert not gravou(bot) and "espaço suficiente" in inter.texto
 
     @pytest.mark.asyncio
     async def test_o_nome_nao_e_validado_nem_truncado(self):  # MUDA (etapa 3, A4/D3): trunca em 25 e limpa
@@ -54,10 +60,13 @@ class TestA4BotaoDoEmbed:
         assert bot.ultimo_global["fav_links"]["Longa"] == url
 
     @pytest.mark.asyncio
-    async def test_sobrescrever_um_nome_existente_tambem_soma_na_cota(self):  # MUDA (etapa 2, A4)
-        bot = BotDoPlayer(favs=10, favoritos={f"f{i}": URL for i in range(6)})
-        inter = await favoritar_pelo_embed(bot, "f0", "https://exemplo.invalid/outra")
-        assert not gravou(bot) and "espaço suficiente" in inter.texto
+    @pytest.mark.parametrize("existentes", [6, 10], ids=["lista_com_folga", "lista_cheia"])
+    async def test_sobrescrever_um_nome_existente_nao_ocupa_vaga(self, existentes):
+        """Etapa 2 (A4): trocar a URL de um favorito que já existe funciona mesmo com a lista cheia."""
+        bot = BotDoPlayer(favs=10, favoritos={f"f{i}": URL for i in range(existentes)})
+        await favoritar_pelo_embed(bot, "f0", "https://exemplo.invalid/outra")
+        salvos = bot.ultimo_global["fav_links"]
+        assert salvos["f0"] == "https://exemplo.invalid/outra" and len(salvos) == existentes
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("favs", "dono"), [(0, False), (3, True)], ids=["sem_limite", "dono_isento"])
@@ -95,10 +104,15 @@ class TestA4SeletorDoPlayer:
         assert list(bot.ultimo_global["fav_links"]) == ["t" * 40 + "..."]
 
     @pytest.mark.asyncio
-    async def test_sobrescrever_um_nome_existente_com_a_lista_cheia_e_recusado(self):  # MUDA (etapa 2, A4)
+    async def test_sobrescrever_um_nome_existente_com_a_lista_cheia_salva(self):
+        """Etapa 2 (A4): sobrescrever não ocupa vaga (antes o seletor recusava com a lista cheia)."""
         bot = BotDoPlayer(favs=3, favoritos={"f0": URL, "f1": URL, "f2": URL})
-        inter = await favoritar_pelo_seletor(bot, "f0", "https://exemplo.invalid/outra")
-        assert not gravou(bot) and "espaço suficiente" in inter.texto
+        await favoritar_pelo_seletor(bot, "f0", "https://exemplo.invalid/outra")
+        assert bot.ultimo_global["fav_links"] == {
+            "f0": "https://exemplo.invalid/outra",
+            "f1": URL,
+            "f2": URL,
+        }
 
     @pytest.mark.asyncio
     async def test_guarda_a_cota_do_seletor_e_exata_ao_contrario_do_botao_do_embed(self):
