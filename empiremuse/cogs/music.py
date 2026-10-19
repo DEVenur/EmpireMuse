@@ -9,7 +9,6 @@ import pprint
 import re
 import traceback
 import zlib
-from base64 import b64decode
 from copy import deepcopy
 from io import BytesIO
 from random import shuffle
@@ -74,6 +73,7 @@ from empiremuse.utils.music.errors import (
     log_unexpected_error,
 )
 from empiremuse.utils.music.user_limits import quota_for, track_fav_error_text
+from empiremuse.utils.music.legacy_reader import convert_custom_skins, read_legacy_queue
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
     QueueInteraction,
@@ -1704,13 +1704,10 @@ class Music(commands.Cog):
             try:
                 async with aiofiles.open(_user_saved_queue_path(inter.author.id), "rb") as f:
                     f_content = await f.read()
-                    try:
-                        f_content = zlib.decompress(f_content)
-                    except zlib.error:
-                        pass
-                    data = pickle.loads(f_content)
             except FileNotFoundError:
                 raise GenericError("**A sua fila salva já foi excluída...**")
+
+            data = await read_legacy_queue(f_content, inter.guild_id)
 
             tracks = await self.check_player_queue(
                 inter.author, bot, guild.id, self.bot.pool.process_track_cls(data["tracks"])[0]
@@ -7304,18 +7301,13 @@ class Music(commands.Cog):
                 )
                 await self.bot.update_global_data(inter.guild_id, global_data, db_name=DBModel.guilds)
 
-        for n, s in global_data["custom_skins"].items():
-            if isinstance(s, str):
-                global_data["custom_skins"][n] = pickle.loads(b64decode(s))
-
-        for n, s in global_data["custom_skins_static"].items():
-            if isinstance(s, str):
-                global_data["custom_skins_static"][n] = pickle.loads(b64decode(s))
-
         try:
             guild_id = inter.guild.id
         except AttributeError:
             guild_id = inter.guild_id
+
+        custom_skins, _ = convert_custom_skins(global_data["custom_skins"], guild_id)
+        custom_skins_static, _ = convert_custom_skins(global_data["custom_skins_static"], guild_id)
 
         static_channel = None
 
@@ -7383,8 +7375,8 @@ class Music(commands.Cog):
             static=bool(static_channel),
             skin=bot.pool.check_skin(skin),
             skin_static=bot.pool.check_static_skin(static_skin),
-            custom_skin_data=global_data["custom_skins"],
-            custom_skin_static_data=global_data["custom_skins_static"],
+            custom_skin_data=custom_skins,
+            custom_skin_static_data=custom_skins_static,
             extra_hints=self.extra_hints,
             restrict_mode=guild_data["enable_restrict_mode"],
             listen_along_invite=invite,

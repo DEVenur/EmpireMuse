@@ -216,12 +216,6 @@ CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT = {
 ESCAPAM = (ValueError, TypeError, UnicodeDecodeError)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=ESCAPAM,
-    reason="achado de produção: o except de hoje não cobre ValueError, TypeError nem UnicodeDecodeError; "
-    "passa quando a etapa 2b parar de ler os caches antigos",
-)
 class TestCacheIlegivelQueEscapaDoExcept:
     @pytest.mark.parametrize(
         "conteudo", list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT.values()), ids=list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT)

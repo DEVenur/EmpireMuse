@@ -8,6 +8,7 @@ from aiohttp import ClientSession
 from cachetools import TTLCache
 
 from empiremuse import paths
+from empiremuse.utils.music.legacy_reader import discard_legacy_cache
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +27,7 @@ class LastFM:
 
     def scrobble_load_cache(self):
         cache = TTLCache(maxsize=10000, ttl=600)
-        target = paths.RUNTIME_DIR / ".lastfm_cache"
-
-        if target.is_file():
-            try:
-                with open(target, "rb") as f:
-                    cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning("Cache do Last.fm corrompido ou incompatível descartado (%s): %s", target, e)
-
+        discard_legacy_cache(paths.RUNTIME_DIR / ".lastfm_cache")  # nunca lido: o cache recomeça vazio
         return cache
 
     def scrobble_save_cache(self):

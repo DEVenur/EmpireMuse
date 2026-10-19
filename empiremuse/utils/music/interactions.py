@@ -7,7 +7,7 @@ import logging
 import pickle
 import re
 import traceback
-from base64 import b64decode, b64encode
+from base64 import b64encode
 from copy import deepcopy
 from io import BytesIO
 from itertools import islice
@@ -57,6 +57,7 @@ from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
 from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.converters import time_format, fix_characters
 from empiremuse.utils.music.errors import GenericError, error_code_text, log_unexpected_error
+from empiremuse.utils.music.legacy_reader import convert_custom_skins
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.music.user_limits import quota_for
@@ -2696,23 +2697,29 @@ class SkinEditorMenu(disnake.ui.View):
 
     async def load_skin(self, inter: disnake.MessageInteraction):
         self.ctx = inter
-        self.skin_selected = inter.values[0]
-        self.mode = "editor"
+        selected = inter.values[0]
 
-        if self.skin_selected.startswith("> cs: "):
-            skin_data = self.global_data["custom_skins"][self.skin_selected[6:]]
-        elif self.skin_selected.startswith("> css: "):
-            skin_data = self.global_data["custom_skins_static"][self.skin_selected[7:]]
+        if selected.startswith("> cs: "):
+            skin_data = self.global_data["custom_skins"][selected[6:]]
+        elif selected.startswith("> css: "):
+            skin_data = self.global_data["custom_skins_static"][selected[7:]]
         else:
             skin_data = None
 
-        if isinstance(skin_data, str):
-            self.message_data = pickle.loads(b64decode(skin_data))
-        elif not skin_data:
-            self.message_data = deepcopy(base_skin)
+        if not skin_data:
+            message_data = deepcopy(base_skin)
+        elif isinstance(skin_data, str):
+            readable, rejected = convert_custom_skins({"skin": skin_data}, self.guild.id)
+            if rejected:
+                await inter.send("**Esta skin está em um formato incompatível e não pôde ser aberta.**", ephemeral=True)
+                return
+            message_data = readable["skin"]
         else:
-            self.message_data = skin_data
+            message_data = skin_data
 
+        self.skin_selected = selected
+        self.mode = "editor"
+        self.message_data = message_data
         self.update_components()
         await self.update_message(inter)
 
@@ -3519,18 +3526,11 @@ class SkinEditorMenu(disnake.ui.View):
                 except KeyError:
                     continue
 
-                global_data = self.global_data.copy()
+                custom_skins, _ = convert_custom_skins(self.global_data["custom_skins"], inter.guild_id)
+                custom_skins_static, _ = convert_custom_skins(self.global_data["custom_skins_static"], inter.guild_id)
 
-                for n, s in global_data["custom_skins"].items():
-                    if isinstance(s, str):
-                        global_data["custom_skins"][n] = pickle.loads(b64decode(s))
-
-                for n, s in global_data["custom_skins_static"].items():
-                    if isinstance(s, str):
-                        global_data["custom_skins_static"][n] = pickle.loads(b64decode(s))
-
-                player.custom_skin_data = global_data["custom_skins"]
-                player.custom_skin_static_data = global_data["custom_skins_static"]
+                player.custom_skin_data = custom_skins
+                player.custom_skin_static_data = custom_skins_static
                 player.setup_features()
                 player.setup_hints()
                 player.process_hint()

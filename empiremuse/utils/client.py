@@ -40,6 +40,7 @@ from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
 from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.lastfm_tools import LastFM
+from empiremuse.utils.music.legacy_reader import discard_legacy_cache
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
 from empiremuse.utils.music.models import (
@@ -164,31 +165,9 @@ class BotPool:
         return self.current_useragent
 
     def load_cache(self):
-        playlist_cache_file = paths.RUNTIME_DIR / "local_database" / "playlist_cache.pkl"
-        if playlist_cache_file.exists():
-            try:
-                with open(playlist_cache_file, "rb") as f:
-                    self.playlist_cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning(f"Cache de playlists incompatível ou corrompido descartado ({playlist_cache_file}): {e}")
-
-        partial_cache_file = paths.RUNTIME_DIR / "local_database" / "partial_track_cache.pkl"
-        if partial_cache_file.exists():
-            try:
-                with open(partial_cache_file, "rb") as f:
-                    self.partial_track_cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning(
-                    f"Cache de faixas parciais incompatível ou corrompido descartado ({partial_cache_file}): {e}"
-                )
-
-        lyric_cache_file = paths.RUNTIME_DIR / "local_database" / ".lyric_cache_data"
-        if lyric_cache_file.exists():
-            try:
-                with open(lyric_cache_file, "rb") as f:
-                    self.lyric_data_cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning(f"Cache de letras incompatível ou corrompido descartado ({lyric_cache_file}): {e}")
+        """Os caches em ``pickle`` não são mais lidos: o arquivo antigo é apagado sem ser aberto e o cache recomeça vazio."""
+        for name in ("playlist_cache.pkl", "partial_track_cache.pkl", ".lyric_cache_data"):
+            discard_legacy_cache(paths.RUNTIME_DIR / "local_database" / name)
 
     async def cache_updater(self):
         while True:

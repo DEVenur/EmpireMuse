@@ -7,7 +7,7 @@ import pickle
 import shutil
 import traceback
 import zlib
-from base64 import b64decode, b64encode
+from base64 import b64encode
 from contextlib import suppress
 from pathlib import Path
 from typing import Union
@@ -22,6 +22,7 @@ from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import can_connect, can_send_message
 from empiremuse.utils.music.errors import PoolException
 from empiremuse.utils.music.filters import AudioFilter
+from empiremuse.utils.music.legacy_reader import read_legacy_session
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import send_idle_embed, CustomContext
 
@@ -715,12 +716,9 @@ class PlayerSession(commands.Cog):
             except KeyError:
                 await self.delete_data(int(d["_id"]))
                 continue
-            data = b64decode(data)
-            try:
-                data = zlib.decompress(data)
-            except zlib.error:
-                pass
-            guild_data.append(pickle.loads(data))
+            session = await read_legacy_session(data, d["_id"])
+            if session is not None:
+                guild_data.append(session)
 
         return guild_data
 
@@ -744,11 +742,8 @@ class PlayerSession(commands.Cog):
 
             async with aiofiles.open(sessions_dir / f"{guild_id}.pkl", "rb") as f:
                 file_content = await f.read()
-                try:
-                    file_content = zlib.decompress(file_content)
-                except zlib.error:
-                    pass
-                data = pickle.loads(file_content)
+
+            data = await read_legacy_session(file_content, guild_id)
 
             if data:
                 guild_data.append(data)
