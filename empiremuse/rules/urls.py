@@ -1,8 +1,4 @@
-"""Regras de URL: a URL pura (``check_url``/``clean_url``) vale para modais, importadores, painel e botões de favoritar.
-
-``extract_url_legacy`` e ``url_prefix_legacy`` são as regras antigas (primeiro trecho do texto e só o prefixo); não são mais
-usadas e saem junto com os testes que as fixam.
-"""
+"""Regras de URL: a URL pura (``check_url``/``clean_url``) vale para modais, importadores, painel e botões de favoritar."""
 
 from __future__ import annotations
 
@@ -14,27 +10,21 @@ from empiremuse.rules.limits import ITG_AVATAR_MAX
 
 URL_REG = re.compile("http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|%[0-9a-fA-F][0-9a-fA-F])+")
 _MASS_MENTION_REG = re.compile(r"@(?:everyone|here)", re.IGNORECASE)
+_UNSAFE_CHARS = frozenset("[]<>)\\")
 
 
-def extract_url_legacy(text: str) -> Optional[str]:
-    """Primeiro trecho de ``text`` que casa com ``URL_REG`` (em qualquer posição), como o modal manual; ou ``None``."""
-    found = URL_REG.findall(text)
-    return found[0] if found else None
-
-
-def url_prefix_legacy(value: Any, max_chars: int) -> Optional[str]:
-    """URL do importador do painel: texto, até ``max_chars`` e começando com URL; devolve só o trecho que casa."""
-    if not isinstance(value, str) or len(value) > max_chars:
-        return None
-    match = URL_REG.match(value)
-    return match.group(0) if match else None
+def _has_userinfo(url: str) -> bool:
+    """Tem ``usuário[:senha]@`` na autoridade (entre ``://`` e a 1ª ``/`` ou ``?``)? O ``@`` do caminho e da consulta vale."""
+    authority = re.split(r"[/?]", url.split("://", 1)[-1], maxsplit=1)[0]
+    return "@" in authority
 
 
 def is_clean_url(url: str) -> bool:
-    """A URL INTEIRA (não só o prefixo) casa com ``URL_REG``, sem colchetes (markdown) nem menções em massa."""
-    if not URL_REG.fullmatch(url) or "[" in url or "]" in url:
+    """A URL INTEIRA casa com ``URL_REG`` e não tem colchetes (markdown), ``<``, ``>``, ``)`` nem ``\\`` (que fecham ou
+    abrem link e menção na mensagem), menções em massa nem credencial (``usuário:senha@host``)."""
+    if not URL_REG.fullmatch(url) or any(char in url for char in _UNSAFE_CHARS):
         return False
-    return not _MASS_MENTION_REG.search(url)
+    return not (_MASS_MENTION_REG.search(url) or _has_userinfo(url))
 
 
 def _unwrap(raw: str) -> str:

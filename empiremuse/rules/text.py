@@ -6,6 +6,11 @@ import unicodedata
 from typing import Any, Mapping, Optional
 
 
+def has_control_or_format(text: str) -> bool:
+    """O texto tem caractere de controle (``Cc``) ou de formatação (``Cf``, como U+202E e U+200B)?"""
+    return any(unicodedata.category(char) in ("Cc", "Cf") for char in text)
+
+
 def clean_title(raw: Any, low: int, high: int) -> Optional[str]:
     """Nome normalizado (strip, ``low``–``high`` caracteres, sem controle/formatação) ou ``None``."""
     if not isinstance(raw, str):
@@ -13,7 +18,7 @@ def clean_title(raw: Any, low: int, high: int) -> Optional[str]:
     name = raw.strip()
     if not low <= len(name) <= high:
         return None
-    if any(unicodedata.category(char) in ("Cc", "Cf") for char in name):
+    if has_control_or_format(name):
         return None
     return name
 

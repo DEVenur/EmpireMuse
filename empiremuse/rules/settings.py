@@ -13,6 +13,7 @@ from empiremuse.rules.errors import (
     ROLE_DUPLICATE,
     ROLE_INVALID,
     ROLE_LIMIT,
+    STATUS_CHARS,
     STATUS_NO_PLACEHOLDER,
     STATUS_TOO_LONG,
     RuleError,
@@ -24,7 +25,7 @@ from empiremuse.rules.limits import (
     VOICE_STATUS_MAX_LENGTH,
     VOLUMES,
 )
-from empiremuse.rules.text import normalize_status
+from empiremuse.rules.text import has_control_or_format, normalize_status
 
 _VOLUME = re.compile(r"[0-9]{1,3}", re.ASCII)
 _ROLE_ID = re.compile(r"[0-9]{1,20}", re.ASCII)
@@ -49,11 +50,13 @@ def validate_prefix(raw: Any) -> str | RuleError:
 
 
 def validate_voice_status(raw: str) -> str | RuleError:
-    """Status automático do canal de voz: quebras de linha viram espaço, até 496 caracteres e, se não for vazio,
-    com pelo menos um placeholder válido. Vazio desativa o status."""
+    """Status automático do canal de voz: quebras de linha viram espaço, até 496 caracteres, sem controle/formatação
+    (``Cc``/``Cf``) e, se não for vazio, com pelo menos um placeholder válido. Vazio desativa o status."""
     text = normalize_status(raw)
     if len(text) > VOICE_STATUS_MAX_LENGTH:
         return RuleError(STATUS_TOO_LONG, limit=VOICE_STATUS_MAX_LENGTH)
+    if has_control_or_format(text):
+        return RuleError(STATUS_CHARS)
     if text and not any(placeholder in text for placeholder in VOICE_PLACEHOLDERS):
         return RuleError(STATUS_NO_PLACEHOLDER)
     return text
