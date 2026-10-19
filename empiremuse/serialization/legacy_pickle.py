@@ -205,6 +205,7 @@ class _Simulation:
     def check_keys(self, keys: list) -> None:
         """Chave de dicionário só pode ser texto (é o que o documento aceita). Recusa já na pré-varredura, sem deixar
         o ``Unpickler`` montar chaves de outros tipos; o erro sai no fim, para não mascarar corrupção anterior."""
+        # Depende do hash aleatório de str por processo; não fixe PYTHONHASHSEED no ambiente.
         for key in keys:
             if key is _MUTABLE:
                 raise _error(CORRUPT)  # não hashável: o ``Unpickler`` real também falharia
