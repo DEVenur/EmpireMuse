@@ -51,6 +51,7 @@ STRUCTURE_MAX_NODES = 2_000_000
 _SURROGATE = re.compile("[\ud800-\udfff]")
 _CONTROL_CATEGORIES = frozenset({"Cc", "Cf"})
 _LINE_CONTROLS = frozenset("\n\r\t")
+_LONG_TEXT = 256  # acima disso o texto é verificado uma vez só por objeto durante a varredura
 
 _PLAIN = frozenset({type(None), bool, int})
 _JSON_CONTAINERS = frozenset({list, dict})
@@ -74,20 +75,29 @@ class SchemaError(ValueError):
 # ============================================================================ varredura iterativa
 
 
-def _check_keys(mapping: dict, path: str) -> None:
+def _check_text(text: str, path: str, seen: set) -> None:
+    """Sem surrogate solto. Texto longo é verificado uma vez só por objeto (a mesma referência pode aparecer muitas vezes)."""
+    if len(text) > _LONG_TEXT:
+        identity = id(text)
+        if identity in seen:
+            return
+        seen.add(identity)
+    if _SURROGATE.search(text):
+        raise SchemaError(path, SURROGATE)
+
+
+def _check_keys(mapping: dict, path: str, seen: set) -> None:
     for key in mapping:
         if type(key) is not str:
             raise SchemaError(path, KEY_NOT_TEXT)
-        if _SURROGATE.search(key):
-            raise SchemaError(path, SURROGATE)
+        _check_text(key, path, seen)
 
 
-def _check_scalar(value: Any, kind: type, plain: frozenset, path: str) -> None:
+def _check_scalar(value: Any, kind: type, plain: frozenset, path: str, seen: set) -> None:
     if kind in plain:
         return
     if kind is str:
-        if _SURROGATE.search(value):
-            raise SchemaError(path, SURROGATE)
+        _check_text(value, path, seen)
     elif kind is float:
         if not math.isfinite(value):
             raise SchemaError(path, NOT_FINITE)
@@ -113,6 +123,7 @@ def scan(root: Any, path: str, max_depth: int, max_nodes: int, legacy: bool) -> 
     containers = _LEGACY_CONTAINERS if legacy else _JSON_CONTAINERS
     plain = _LEGACY_PLAIN if legacy else _PLAIN
     visits = 1
+    seen: set = set()
     stack: list = []
     value = root
     while value is not _END:
@@ -124,12 +135,12 @@ def scan(root: Any, path: str, max_depth: int, max_nodes: int, legacy: bool) -> 
             if visits > max_nodes:
                 raise SchemaError(path, NODES)
             if kind is dict:
-                _check_keys(value, path)
+                _check_keys(value, path, seen)
                 stack.append(iter(value.values()))
             else:
                 stack.append(iter(value))
         else:
-            _check_scalar(value, kind, plain, path)
+            _check_scalar(value, kind, plain, path, seen)
         value = _next_value(stack)
 
 

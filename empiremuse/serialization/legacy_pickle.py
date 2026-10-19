@@ -25,7 +25,7 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, NamedTuple
 
-from .schema import ENVELOPE, TOO_BIG, TYPE, SchemaError, check_structure
+from .schema import DEPTH, ENVELOPE, KEY_NOT_TEXT, TOO_BIG, TYPE, SchemaError, check_structure
 
 PROTOCOL = "protocol"
 OPCODE = "opcode"
@@ -39,7 +39,8 @@ MIB = 1024 * 1024
 MAX_RAW = {"session": 8 * MIB, "queue": 4 * MIB, "skin": 100 * 1024}  # bruto e descomprimido, em bytes
 MAX_OPCODES = {"session": 1_500_000, "queue": 600_000, "skin": 50_000}
 MAX_MARK_DEPTH = 64
-MAX_SET_ITEMS = 1000  # soma de todos os ``ADDITEMS`` do documento (conjunto de hash colidente é quadrático)
+MAX_SET_ITEMS = 1000  # teto de itens de ``set``, somando todos os ``ADDITEMS`` do documento
+MAX_TUPLE_DEPTH = 8  # tuplas dentro de tuplas (o gravador real tem até 3 níveis)
 MAX_DEQUES = 2  # a sessão real tem um (``command_log_list``); ``deque(iteravel)`` copia o argumento a cada chamada
 PROTOCOLS = (4, 5)
 
@@ -127,13 +128,25 @@ class _Global(NamedTuple):
     name: str
 
 
+class _Tuple:
+    """Tupla da pilha simulada: só carrega a profundidade de tuplas encadeadas."""
+
+    __slots__ = ("depth",)
+
+    def __init__(self, depth: int):
+        self.depth = depth
+
+
+_MUTABLE = object()  # lista, dicionário ou conjunto na pilha simulada: não serve de chave nem de item de conjunto
+
+
 class _Simulation:
     """Espelha a pilha do ``Unpickler`` só no que importa: textos (para ``STACK_GLOBAL``), marcas e memo.
 
     Cada operação respeita a *fence* (a última ``MARK``): quem desce abaixo dela é corrupção, como no ``Unpickler`` real.
     """
 
-    __slots__ = ("allowed", "stack", "marks", "memo", "set_items", "deques")
+    __slots__ = ("allowed", "stack", "marks", "memo", "set_items", "deques", "bad_key")
 
     def __init__(self, allowed: frozenset):
         self.allowed = allowed
@@ -142,6 +155,7 @@ class _Simulation:
         self.memo: list = []
         self.set_items = 0
         self.deques = 0
+        self.bad_key = False
 
     def need(self, count: int) -> None:
         """Há ``count`` itens acima da última marca?"""
@@ -155,6 +169,9 @@ class _Simulation:
 
     def push_opaque(self, _arg: Any) -> None:
         self.stack.append(None)
+
+    def push_mutable(self, _arg: Any) -> None:
+        self.stack.append(_MUTABLE)
 
     def push_text(self, arg: str) -> None:
         self.stack.append(arg)
@@ -181,34 +198,52 @@ class _Simulation:
         self.drop(1)
 
     def drop_two(self, _arg: Any) -> None:
-        self.need(3)  # o contêiner, a chave e o valor
+        self.need(3)  # o dicionário, a chave e o valor
+        self.check_keys([self.stack[-2]])
         self.drop(2)
 
-    def close_mark(self, name: str) -> None:
+    def check_keys(self, keys: list) -> None:
+        """Chave de dicionário só pode ser texto (é o que o documento aceita). Recusa já na pré-varredura, sem deixar
+        o ``Unpickler`` montar chaves de outros tipos; o erro sai no fim, para não mascarar corrupção anterior."""
+        for key in keys:
+            if key is _MUTABLE:
+                raise _error(CORRUPT)  # não hashável: o ``Unpickler`` real também falharia
+            if type(key) is not str:
+                self.bad_key = True
+
+    def close_mark(self) -> int:
+        """Fecha a última marca e devolve a base; exige o contêiner logo abaixo dela."""
         if not self.marks:
             raise _error(CORRUPT)
         base = self.marks.pop()
         if base <= (self.marks[-1] if self.marks else 0):
-            raise _error(CORRUPT)  # falta o contêiner logo abaixo da marca
-        if name == "ADDITEMS":
-            self.set_items += len(self.stack) - base
-            if self.set_items > MAX_SET_ITEMS:
-                raise _error(SET_LIMIT)
-        del self.stack[base:]
+            raise _error(CORRUPT)
+        return base
 
     def appends(self, _arg: Any) -> None:
-        self.close_mark("APPENDS")
+        del self.stack[self.close_mark() :]
 
     def setitems(self, _arg: Any) -> None:
-        self.close_mark("SETITEMS")
+        base = self.close_mark()
+        self.check_keys(self.stack[base::2])
+        del self.stack[base:]
 
     def additems(self, _arg: Any) -> None:
-        self.close_mark("ADDITEMS")
+        base = self.close_mark()
+        self.set_items += len(self.stack) - base
+        if self.set_items > MAX_SET_ITEMS:
+            raise _error(SET_LIMIT)
+        del self.stack[base:]
 
     def tuple_of(self, count: int) -> Callable[[Any], None]:
         def build(_arg: Any) -> None:
-            self.drop(count)
-            self.stack.append(None)
+            self.need(count)
+            items = self.stack[-count:]
+            depth = 1 + max((item.depth for item in items if type(item) is _Tuple), default=0)
+            if depth > MAX_TUPLE_DEPTH:
+                raise _error(DEPTH)
+            del self.stack[-count:]
+            self.stack.append(_Tuple(depth))
 
         return build
 
@@ -234,10 +269,10 @@ class _Simulation:
 
     def handlers(self) -> dict[str, Callable[[Any], None]]:
         table = dict.fromkeys(
-            "NONE NEWTRUE NEWFALSE BININT BININT1 BININT2 LONG1 BINFLOAT BINBYTES SHORT_BINBYTES EMPTY_LIST EMPTY_DICT "
-            "EMPTY_TUPLE EMPTY_SET".split(),
+            "NONE NEWTRUE NEWFALSE BININT BININT1 BININT2 LONG1 BINFLOAT BINBYTES SHORT_BINBYTES EMPTY_TUPLE".split(),
             self.push_opaque,
         )
+        table.update(dict.fromkeys(("EMPTY_LIST", "EMPTY_DICT", "EMPTY_SET"), self.push_mutable))
         table.update(dict.fromkeys(("SHORT_BINUNICODE", "BINUNICODE"), self.push_text))
         table.update(dict.fromkeys(("PROTO", "FRAME"), self.nothing))
         table.update(dict.fromkeys(("BINGET", "LONG_BINGET"), self.memo_get))
@@ -269,8 +304,11 @@ def _prescan(data: bytes, kind: str) -> None:
     try:
         for opcode, arg, position in pickletools.genops(data):
             name = opcode.name
-            if count == 0 and (name != "PROTO" or arg not in PROTOCOLS):
-                raise _error(PROTOCOL)
+            if count == 0:
+                if name != "PROTO" or arg not in PROTOCOLS:
+                    raise _error(PROTOCOL)
+            elif name == "PROTO":
+                raise _error(PROTOCOL)  # a versão só vale no primeiro opcode
             count += 1
             if count > limit:
                 raise _error(OPCODE_LIMIT)
@@ -287,6 +325,8 @@ def _prescan(data: bytes, kind: str) -> None:
         raise _error(CORRUPT) from None
     if end != len(data):
         raise _error(CORRUPT)
+    if simulation.bad_key:
+        raise _error(KEY_NOT_TEXT)
 
 
 # ============================================================================ 3. Unpickler restrito
