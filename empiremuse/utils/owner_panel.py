@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import disnake
 from disnake.ext import commands
 
-from empiremuse.utils.music.errors import parse_error
+from empiremuse.utils.music.errors import error_code_text, log_unexpected_error, parse_error
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
+
+logger = logging.getLogger(__name__)
 
 
 def panel_command(*args, **kwargs) -> PanelCommand:
@@ -63,10 +66,13 @@ class PanelView(disnake.ui.View):
         return True
 
     async def on_error(self, error: Exception, item: disnake.ui.Item, interaction: disnake.MessageInteraction):
-        interaction.message.embeds[0].description = (
-            parse_error(interaction, error)[0]
-            or f"**Ocorreu um erro:**\n```py\n{repr(error)[:2020].replace(self.bot.http.token, 'mytoken')}```"
-        )
+        error_text = parse_error(interaction, error, no_log=True)[0]
+
+        if not error_text:
+            code = log_unexpected_error(logger, error, "painel do dono")
+            error_text = f"**Ocorreu um erro inesperado.**{error_code_text(code)}"
+
+        interaction.message.embeds[0].description = error_text
 
         if not interaction.response.is_done():
             edit = interaction.response.edit_message

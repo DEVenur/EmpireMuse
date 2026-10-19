@@ -12,7 +12,7 @@ from disnake.ext import commands
 
 from empiremuse.rules.error_code import safe_error_code
 from empiremuse.utils.music.converters import URL_REG
-from empiremuse.utils.music.errors import parse_error, PoolException
+from empiremuse.utils.music.errors import parse_error, PoolException, error_code_text
 from empiremuse.utils.others import send_message, CustomContext, string_to_file, paginator, check_cmd
 
 if TYPE_CHECKING:
@@ -23,11 +23,6 @@ logger = logging.getLogger(__name__)
 # Erro inesperado: o usuário nunca vê repr, traceback, caminho de arquivo nem configuração interna; o detalhe completo
 # vai para o log do servidor e para o webhook de erro.
 UNEXPECTED_ERROR_TEXT = "Ocorreu um erro inesperado ao executar o comando. Tente novamente em instantes."
-
-
-def error_code_text(code: str) -> str:
-    """Linha com o código do erro para o usuário (vazia se não houve código)."""
-    return f"\n\nCódigo do erro: `{code}` (informe ao suporte se precisar de ajuda)." if code else ""
 
 
 class ErrorHandler(commands.Cog):

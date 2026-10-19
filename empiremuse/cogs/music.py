@@ -2,6 +2,7 @@
 import asyncio
 import datetime
 import itertools
+import logging
 import os.path
 import pickle
 import pprint
@@ -67,6 +68,8 @@ from empiremuse.utils.music.errors import (
     EmptyFavIntegration,
     DiffVoiceChannel,
     NoPlayer,
+    error_code_text,
+    log_unexpected_error,
 )
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
@@ -105,6 +108,8 @@ from empiremuse.utils.others import (
     get_source_emoji_cfg,
     music_source_emoji,
 )
+
+logger = logging.getLogger(__name__)
 
 sc_recommended = re.compile(r"https://soundcloud\.com/.*/recommended$")
 sc_profile_regex = re.compile(r"<?https://soundcloud\.com/[a-zA-Z0-9_-]+>?$")
@@ -6960,6 +6965,7 @@ class Music(commands.Cog):
 
         msg = None
         error = None
+        error_code = ""
         has_exception = None
 
         try:
@@ -7060,15 +7066,19 @@ class Music(commands.Cog):
                 return
 
             try:
-                error_msg, full_error_msg, kill_process, components, mention_author = parse_error(ctx, e)
-            except:
-                has_exception = e
+                error_msg = parse_error(ctx, e, no_log=True)[0]
+            except Exception:
+                error_msg = None
+
+            if error_msg:
+                error = f"{message.author.mention}. {error_msg}"
             else:
-                if not error_msg:
-                    has_exception = e
-                    error = f"{message.author.mention} **ocorreu um erro ao tentar obter resultados para sua busca:** ```py\n{error_msg}```"
-                else:
-                    error = f"{message.author.mention}. {error_msg}"
+                has_exception = e
+                error_code = log_unexpected_error(logger, e, "pedido de música (song-request)")
+                error = (
+                    f"{message.author.mention} **ocorreu um erro ao tentar obter resultados para sua busca.**"
+                    f"{error_code_text(error_code)}"
+                )
 
         if error:
             await self.delete_message(message)
@@ -7094,17 +7104,14 @@ class Music(commands.Cog):
             await max_concurrency.acquire(message)
 
             try:
-                try:
-                    error_msg, full_error_msg, kill_process, components, mention_author = parse_error(
-                        message, has_exception
-                    )
-                except:
-                    full_error_msg = has_exception
+                full_error_msg = cog.mask_token(
+                    "".join(traceback.format_exception(type(has_exception), has_exception, has_exception.__traceback__))
+                )
 
                 embed = disnake.Embed(
                     title="Ocorreu um erro em um servidor (song-request):",
                     timestamp=disnake.utils.utcnow(),
-                    description=f"```py\n{repr(has_exception)[:2030].replace(self.bot.http.token, 'mytoken')}```",
+                    description=f"Erro inesperado no pedido de música.{error_code_text(error_code)}",
                 )
 
                 embed.set_footer(
@@ -7157,7 +7164,13 @@ class Music(commands.Cog):
                     embed.set_thumbnail(url=ctx.guild.icon.with_static_format("png").url)
 
                 await cog.send_webhook(
-                    embed=embed, file=string_to_file(full_error_msg, "error_traceback_songrequest.txt")
+                    embed=embed,
+                    file=string_to_file(
+                        full_error_msg,
+                        f"error_traceback_songrequest_{error_code}.txt"
+                        if error_code
+                        else "error_traceback_songrequest.txt",
+                    ),
                 )
 
             except:

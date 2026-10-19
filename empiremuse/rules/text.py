@@ -1,4 +1,4 @@
-"""Regras de texto: nomes normalizados, nomes iguais sem diferenciar a caixa e status de voz."""
+"""Regras de texto: nomes normalizados, nomes iguais sem diferenciar a caixa, status de voz e trechos de texto externo."""
 
 from __future__ import annotations
 
@@ -37,3 +37,16 @@ def normalize_status(text: str) -> str:
     """Quebras de linha viram espaço e as pontas são aparadas, como o modal do comando."""
     flat = text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
     return flat.strip()
+
+
+def plain_snippet(value: Any, limit: int) -> str:
+    """Texto externo (por exemplo, a mensagem de erro do Lavalink) seguro para mostrar numa linha de mensagem.
+
+    Uma linha só, sem caracteres de controle/formatação e sem crase (não quebra o markdown nem abre bloco de código);
+    mais longo que ``limit`` é cortado com reticências.
+    """
+    text = "" if value is None else str(value)
+    text = "".join(" " if char.isspace() else char for char in text)
+    text = "".join(char for char in text if unicodedata.category(char) not in ("Cc", "Cf"))
+    text = " ".join(text.replace("`", "'").split())
+    return text if len(text) <= limit else text[:limit] + "…"

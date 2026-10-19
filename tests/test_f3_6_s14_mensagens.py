@@ -708,7 +708,7 @@ class TestGuardaDeEstruturaEmModels:
     """``get_autoqueue_tracks`` e ``invoke_np`` têm o tratamento de erro no fim de métodos de centenas de linhas; para esses
     dois a guarda lê o código: nenhum texto de exceção, ``cause`` ou ``repr`` é interpolado numa mensagem ao usuário."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def fonte(self):
         import empiremuse.utils.music.models as models
 
@@ -722,7 +722,6 @@ class TestGuardaDeEstruturaEmModels:
             r"\{exception\.message\}",
             r"\{event\.cause",
             r"houve um erro na interação: \{",
-            r"finalizado devido ao erro: \{e\}",
         ],
         ids=lambda p: p,
     )

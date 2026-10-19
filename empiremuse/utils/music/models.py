@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import itertools
+import logging
 import pprint
 import random
 import re
@@ -21,10 +22,18 @@ from rapidfuzz import fuzz
 from yt_dlp import YoutubeDL
 
 import empiremuse.wavelink as wavelink
+from empiremuse.rules.error_code import safe_error_code
+from empiremuse.rules.text import plain_snippet
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import can_connect
 from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style
-from empiremuse.utils.music.errors import GenericError, PoolException
+from empiremuse.utils.music.errors import (
+    GenericError,
+    PoolException,
+    code_suffix,
+    error_code_text,
+    log_unexpected_error,
+)
 from empiremuse.utils.music.filters import AudioFilter
 from empiremuse.utils.music.lastfm_tools import LastFmException
 from empiremuse.utils.music.skin_utils import skin_converter
@@ -41,6 +50,33 @@ exclude_tags_2 = ["extend", "compilation", "mashup", "nightcore", "8d", "mixed"]
 TITLE_MATCH_THRESHOLD = 75
 
 emoji_pattern = re.compile(r"<a?:.+?:\d+?>")
+
+logger = logging.getLogger(__name__)
+
+# A mensagem do Lavalink (por exemplo, "This video is unavailable") pode ser mostrada a quem usa o bot; a causa e a pilha não.
+LAVALINK_MESSAGE_LIMIT = 200
+LAVALINK_LOG_LIMIT = 1000
+
+
+def lavalink_text(message) -> str:
+    """Mensagem de falha do Lavalink para mostrar: uma linha, truncada, sem bloco de código nem markdown ativo."""
+    return disnake.utils.escape_markdown(plain_snippet(message, LAVALINK_MESSAGE_LIMIT))
+
+
+def log_lavalink_failure(what: str, *, message, cause, severity, node) -> str:
+    """Registra a falha do Lavalink com a causa (só no log do servidor) e devolve o código curto dela."""
+    code = safe_error_code()
+    logger.warning(
+        "%s%s: servidor=%s, severidade=%s, mensagem=%s, causa=%s",
+        what,
+        f" [{code}]" if code else "",
+        node,
+        severity,
+        plain_snippet(message, LAVALINK_LOG_LIMIT),
+        plain_snippet(cause, LAVALINK_LOG_LIMIT),
+    )
+    return code
+
 
 thread_archive_time = {
     60: 30,
@@ -841,8 +877,10 @@ class LavalinkPlayer(wavelink.Player):
                     )
                     self.update = True
                 except Exception as e:
+                    code = log_unexpected_error(logger, e, "reconexão do player no canal de voz")
                     self.set_command_log(
-                        f"Ocorreu uma falha ao reconectar o player no canal de voz: {repr(e)}.", controller=True
+                        f"Ocorreu uma falha ao reconectar o player no canal de voz{code_suffix(code)}.",
+                        controller=True,
                     )
                     self.update = True
                 else:
@@ -1055,11 +1093,18 @@ class LavalinkPlayer(wavelink.Player):
                         if event.node.identifier == self.node.identifier
                         else f"`{self.node.identifier} | {event.node.identifier}`"
                     )
+                    error_code = log_lavalink_failure(
+                        "Falha ao reproduzir a música",
+                        message=event.message,
+                        cause=event.cause,
+                        severity=event.severity,
+                        node=event.node.identifier,
+                    )
                     embed = disnake.Embed(
-                        description=f"**Falha ao reproduzir música{' (parcial)' if isinstance(track, PartialTrack) else ''}:\n[{track.title}]({track.uri or track.search_uri})** ```java\n{event.message}```\n"
-                        f"**Causa:** ```java\n{event.cause[:200]}```\n"
+                        description=f"**Falha ao reproduzir música{' (parcial)' if isinstance(track, PartialTrack) else ''}:\n[{track.title}]({track.uri or track.search_uri})**\n"
+                        f"**Motivo:** {lavalink_text(event.message)}\n"
                         f"**Nível:** `{event.severity}`\n"
-                        f"**Servidor de música:** {node_info}",
+                        f"**Servidor de música:** {node_info}{code_suffix(error_code)}",
                         color=disnake.Colour.red(),
                     )
 
@@ -1080,7 +1125,7 @@ class LavalinkPlayer(wavelink.Player):
 
                     if self.locked:
                         self.set_command_log(
-                            text=f"A reprodução da música falhou (tentando tocar novamente): [`{fix_characters(track.title, 15)}`](<{track.uri or track.search_uri}>). **Causa:** `{event.cause[:50]}`",
+                            text=f"A reprodução da música falhou (tentando tocar novamente): [`{fix_characters(track.title, 15)}`](<{track.uri or track.search_uri}>). **Motivo:** `{plain_snippet(event.message, 50)}`{code_suffix(error_code)}",
                             controller=True,
                         )
                         self.update = True
@@ -1850,14 +1895,21 @@ class LavalinkPlayer(wavelink.Player):
 
                 if exception:
                     if isinstance(exception, wavelink.TrackLoadError):
+                        error_code = log_lavalink_failure(
+                            "Falha ao obter dados do autoplay",
+                            message=exception.message,
+                            cause=exception.cause,
+                            severity=exception.severity,
+                            node=self.node.identifier,
+                        )
                         error_msg = (
-                            f"**Causa:** ```java\n{exception.cause}```\n"
-                            f"**Mensagem:** `\n{exception.message}`\n"
+                            f"**Mensagem:** {lavalink_text(exception.message)}\n"
                             f"**Nível:** `{exception.severity}`\n"
-                            f"**Servidor de música:** `{self.node.identifier}`"
+                            f"**Servidor de música:** `{self.node.identifier}`{code_suffix(error_code)}"
                         )
                     else:
-                        error_msg = f"**Detalhes:** ```py\n{repr(exception)}```"
+                        error_code = log_unexpected_error(logger, exception, "autoplay")
+                        error_msg = f"**Ocorreu um erro inesperado.**{code_suffix(error_code)}"
                 else:
                     error_msg = "Não houve resultados relacionados as músicas tocadas..."
 
@@ -2037,11 +2089,12 @@ class LavalinkPlayer(wavelink.Player):
                         try:
                             await self.resolve_track(track)
                         except Exception as e:
+                            error_code = log_unexpected_error(logger, e, f"resolução da faixa parcial {track.uri}")
                             try:
                                 await self.text_channel.send(
                                     embed=disnake.Embed(
-                                        description=f"Houve um problema ao tentar processar a música [{track.title}]({track.uri})... "
-                                        f"```py\n{repr(e)}```",
+                                        description=f"Houve um problema ao tentar processar a música [{track.title}]({track.uri})..."
+                                        f"{error_code_text(error_code)}",
                                         color=self.bot.get_color(),
                                     )
                                 )
@@ -2259,14 +2312,14 @@ class LavalinkPlayer(wavelink.Player):
                     rpc_update=True,
                 )
         except Exception as e:
-            print(traceback.format_exc())
+            error_code = log_unexpected_error(logger, e, "reprodução da música")
 
             embed = disnake.Embed(description="**Ocorreu um erro ao reproduzir a música:**")
 
             if self.current:
                 embed.description += f" [`{self.current.title}`]({self.current.uri})"
 
-            embed.description += f" ```py\n{repr(e)}```"
+            embed.description += error_code_text(error_code)
 
             if self.text_channel:
                 try:
@@ -2991,10 +3044,10 @@ class LavalinkPlayer(wavelink.Player):
                         return
                     except Exception as e:
                         self.updating = False
-                        print(traceback.format_exc())
+                        error_code = log_unexpected_error(logger, e, "atualização da mensagem do player")
                         if self.static or self.has_thread:
                             self.set_command_log(
-                                f"{(interaction.author.mention + ' ') if interaction else ''}houve um erro na interação: {repr(e)}",
+                                f"{(interaction.author.mention + ' ') if interaction else ''}houve um erro na interação{code_suffix(error_code)}.",
                                 "⚠️",
                                 controller=True,
                             )
@@ -3510,9 +3563,12 @@ class LavalinkPlayer(wavelink.Player):
                 track.info["artworkUrl"] = selected_track.thumb
 
         except Exception as e:
-            traceback.print_exc()
+            error_code = log_unexpected_error(
+                logger, e, f"obtenção de informação da PartialTrack {track.uri or track.search_uri}"
+            )
             embed = disnake.Embed(
-                description=f"**Falha ao obter informação de PartialTrack:\n[{track.title}]({track.uri or track.search_uri})** ```py\n{repr(e)}```\n"
+                description=f"**Falha ao obter informação de PartialTrack:\n[{track.title}]({track.uri or track.search_uri})**"
+                f"{error_code_text(error_code)}\n"
                 f"**Servidor de música:** `{self.node.identifier}`",
                 color=disnake.Colour.red(),
             )
@@ -3566,9 +3622,16 @@ class LavalinkPlayer(wavelink.Player):
                 if not self.guild.me.voice:
                     try:
                         can_connect(self.last_channel, self.guild, bot=self.bot)
-                    except Exception as e:
-                        print(traceback.format_exc())
+                    except (GenericError, PoolException) as e:
                         self.set_command_log(f"O player foi finalizado devido ao erro: {e}", controller=True)
+                        await self.destroy()
+                        return
+                    except Exception as e:
+                        error_code = log_unexpected_error(logger, e, "conexão do player ao novo servidor de música")
+                        self.set_command_log(
+                            f"O player foi finalizado devido a um erro inesperado{code_suffix(error_code)}.",
+                            controller=True,
+                        )
                         await self.destroy()
                         return
                     await self.connect(self.last_channel.id)

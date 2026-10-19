@@ -38,7 +38,7 @@ from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBMode
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
 from empiremuse.utils.music.checks import check_pool_bots
-from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
@@ -375,8 +375,8 @@ class BotPool:
                 )
 
             else:
-                traceback.print_tb(e.__traceback__)
-                e = repr(e)
+                code = log_unexpected_error(logger, e, f"inicialização do bot {bot.identifier}")
+                e = f"Falha ao iniciar o bot (veja o log do servidor{code_suffix(code)})."
             self.failed_bots[bot.identifier] = e
             try:
                 self.bots.remove(bot)

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import os
 import traceback
 from typing import Union, Optional
@@ -7,8 +8,35 @@ import disnake
 from disnake.ext import commands
 from disnake.utils import escape_mentions
 
+from empiremuse.rules.error_code import safe_error_code
 from empiremuse.utils.music.converters import time_format, perms_translations
 from empiremuse.wavelink import WavelinkException, TrackNotFound, MissingSessionID
+
+
+def error_code_text(code: str) -> str:
+    """Linha com o código do erro para o usuário (vazia se não houve código)."""
+    return f"\n\nCódigo do erro: `{code}` (informe ao suporte se precisar de ajuda)." if code else ""
+
+
+def code_suffix(code: str) -> str:
+    """Código do erro numa frase curta, para mensagens de uma linha (vazio se não houve código)."""
+    return f" (código do erro: `{code}`)" if code else ""
+
+
+def log_unexpected_error(log: logging.Logger, error: BaseException, what: str) -> str:
+    """Registra o erro inesperado com o traceback completo (só no log do servidor) e devolve o código dele.
+
+    O código (``ERR-…``) vai na mensagem do log e na mensagem mostrada a quem usou; ``""`` se não foi possível gerar.
+    """
+    code = safe_error_code()
+    error = getattr(error, "original", error)
+    log.error(
+        "Erro inesperado em %s%s",
+        what,
+        f" [{code}]" if code else "",
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return code
 
 
 class PoolException(commands.CheckFailure):
