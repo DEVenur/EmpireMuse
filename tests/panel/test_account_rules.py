@@ -178,8 +178,8 @@ class TestFavoritesRules:
 class TestIntegrationsRules:
     @pytest.mark.asyncio
     async def test_import_rules(self):
-        # URL: no máximo 150 caracteres e URL inteira, independentemente da configuração dos favoritos
-        for tamanho, aceito in ((150, True), (151, False)):
+        # URL: no máximo 200 caracteres (Etapa 5, D4) e URL inteira, independentemente da configuração dos favoritos
+        for tamanho, aceito in ((200, True), (201, False)):
             bot = ModalBot(url_max=90)
             await importar(bot, INTEGRACOES, {"Canal": url_com_tamanho(tamanho)})
             assert bool(bot.salvos_usuario) is aceito, tamanho

@@ -5,6 +5,8 @@ painel (``FavoritesSection``, ``IntegrationsSection``, ``LinksForm``). ``# MUDA 
 indicada inverte; o resto é guarda e deve continuar igual depois da extração. Referência: KI-42 (docs/known-issues.md); as assimetrias estão numeradas A1 a A25.
 """
 
+import json
+
 import pytest
 
 from empiremuse.panel.services import account_links, links
@@ -26,7 +28,9 @@ from tests.helpers_modais import (
     adicionar_favorito,
     adicionar_integracao,
     arquivo_com,
+    exportar,
     exportar_integracoes,
+    importar,
     url_de,
 )
 
@@ -319,12 +323,52 @@ class TestA5NomesQueSoDiferemNaCaixa:
         assert list(guardado) == ["rock"]
 
     @pytest.mark.asyncio
-    async def test_importador_de_links_do_servidor_so_substitui_o_nome_exato(self):  # MUDA (etapa 5, A5/A15)
+    async def test_importador_de_links_do_servidor_substitui_sem_diferenciar_a_caixa(self):
+        """Etapa 5 (A5/A15): antes o importador do servidor só substituía o nome EXATO e deixava ``Rock`` e ``rock``."""
         antigas = self.existentes(SERVIDOR_MODO, f"{URL_BASE}/antiga")
         guardado, _ = await importar_no_bot(
             SERVIDOR_MODO, arquivo_do_modo(SERVIDOR_MODO, "rock", URL), existentes=antigas
         )
-        assert sorted(guardado) == ["Rock", "rock"]
+        assert list(guardado) == ["rock"]
+
+    @pytest.mark.asyncio
+    async def test_painel_substitui_o_link_do_servidor_que_so_difere_na_caixa(self):
+        antigas = self.existentes(SERVIDOR_MODO, f"{URL_BASE}/antiga")
+        guardado, erros = await importar_no_painel(
+            SERVIDOR_MODO, arquivo_do_modo(SERVIDOR_MODO, "rock", URL), existentes=antigas
+        )
+        assert erros == {} and list(guardado) == ["rock"]
+
+    @pytest.mark.asyncio
+    async def test_painel_recusa_arquivo_do_servidor_com_o_mesmo_nome_em_caixas_diferentes(self):
+        arquivo = {**arquivo_do_modo(SERVIDOR_MODO, "Rock", URL), **arquivo_do_modo(SERVIDOR_MODO, "rock", URL)}
+        guardado, erros = await importar_no_painel(SERVIDOR_MODO, arquivo)
+        assert guardado is None and erros
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("onde", ["bot", "painel"])
+    async def test_substituir_pela_caixa_nao_ocupa_vaga_com_25_links(self, onde):
+        existentes = {f"item{i}": {"url": URL, "description": "ddd"} for i in range(TETO_DE_LINKS)}
+        existentes["Rock"] = existentes.pop("item0")
+        item = {"rock": {"url": f"{URL_BASE}/nova", "description": "nova"}}
+        if onde == "bot":
+            guardado, texto = await importar_no_bot(SERVIDOR_MODO, item, existentes=existentes)
+        else:
+            guardado, texto = await importar_no_painel(SERVIDOR_MODO, item, existentes=existentes)
+        assert guardado is not None, texto
+        assert len(guardado) == TETO_DE_LINKS and "rock" in guardado and "Rock" not in guardado
+
+    @pytest.mark.asyncio
+    async def test_modal_do_servidor_recusa_adicionar_nome_que_so_difere_na_caixa(self):
+        bot = ModalBot()
+        bot.guild_data["player_controller"]["fav_links"] = {"Rock": {"url": URL, "description": "antiga"}}
+        inter = await adicionar_link_do_servidor(bot, "rock", f"{URL_BASE}/b", "nova")
+        assert bot.salvos_servidor == [] and "já" in inter.texto.lower()
+
+    def test_painel_recusa_adicionar_link_do_servidor_que_so_difere_na_caixa(self):
+        existentes = {"Rock": {"url": URL, "description": ""}}
+        resultado = painel_links(BotDoPainel(), "adicionar", existentes, nome="rock", url=URL, descricao="")
+        assert resultado.new == {} and resultado.errors.get("nome")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("modo", [FAVORITOS, INTEGRACOES], ids=["favoritos", "integracoes"])
@@ -361,7 +405,7 @@ class TestA5NomesQueSoDiferemNaCaixa:
         """Etapa 3 (A5): adicionar à mão recusa o nome que colide (sem diferenciar a caixa) com OUTRA entrada."""
         bot = ModalBot(fav_links={"Rock": URL})
         inter = await adicionar_favorito(bot, nome="rock")
-        assert bot.salvos_usuario == [] and "já" in inter.texto and "nome" in inter.texto
+        assert bot.salvos_usuario == [] and "já" in inter.texto.lower() and "nome" in inter.texto
 
     @pytest.mark.asyncio
     async def test_painel_recusa_adicionar_nome_que_so_difere_na_caixa(self):
@@ -379,7 +423,7 @@ class TestA5NomesQueSoDiferemNaCaixa:
     async def test_modal_do_bot_recusa_editar_para_o_nome_de_outra_entrada_em_outra_caixa(self):
         bot = ModalBot(fav_links={"antigo": URL, "Pop": URL})
         inter = await adicionar_favorito(bot, nome="pop", url=f"{URL_BASE}/b", editando="antigo")
-        assert bot.salvos_usuario == [] and "já" in inter.texto
+        assert bot.salvos_usuario == [] and "já" in inter.texto.lower()
 
     @pytest.mark.asyncio
     async def test_guarda_editar_sem_renomear_funciona_mesmo_com_um_par_antigo_rock_e_rock(self):
@@ -398,7 +442,7 @@ class TestA6RenomearSobrescreveEmSilencio:
         bot = ModalBot(fav_links={"antigo": f"{URL_BASE}/1", "outro": f"{URL_BASE}/2"})
         inter = await adicionar_favorito(bot, nome="outro", url=f"{URL_BASE}/novo", editando="antigo")
         assert bot.salvos_usuario == [], "nada pode ser gravado quando a renomeação colide"
-        assert "já" in inter.texto and "nome" in inter.texto
+        assert "já" in inter.texto.lower() and "nome" in inter.texto
         assert bot.user_data["fav_links"] == {"antigo": f"{URL_BASE}/1", "outro": f"{URL_BASE}/2"}
 
     @pytest.mark.asyncio
@@ -411,7 +455,7 @@ class TestA6RenomearSobrescreveEmSilencio:
     async def test_modal_do_bot_recusa_adicionar_nome_exato_que_ja_existe(self):
         bot = ModalBot(fav_links={"outro": f"{URL_BASE}/2"})
         inter = await adicionar_favorito(bot, nome="outro", url=f"{URL_BASE}/novo")
-        assert bot.salvos_usuario == [] and "já" in inter.texto
+        assert bot.salvos_usuario == [] and "já" in inter.texto.lower()
 
     @pytest.mark.asyncio
     async def test_painel_recusa_adicionar_nome_existente(self):
@@ -478,7 +522,7 @@ class TestA8CotaDaIntegracaoAntesDeSaberSeOTituloExiste:
     async def test_importador_do_bot_sobrescreve_com_a_lista_cheia(self):
         bot = ModalBot(integracoes=1, integration_links={"Canal": {"url": f"{URL_BASE}/antiga"}})
         guardado, _ = await importar_no_bot(INTEGRACOES, {"Canal": URL}, bot=bot)
-        assert guardado == {"Canal": URL}
+        assert guardado == {"Canal": {"url": URL}}  # Etapa 5 (A10): o texto-URL é gravado como objeto
 
     @pytest.mark.asyncio
     async def test_importador_do_painel_sobrescreve_com_a_lista_cheia(self):
@@ -516,9 +560,10 @@ class TestA9CodigoMortoDoImportador:
 
 class TestA10FormaGravadaDasIntegracoes:
     @pytest.mark.asyncio
-    async def test_importador_do_bot_guarda_texto_se_o_item_veio_em_texto(self):  # MUDA (etapa 5, A10): sempre objeto
-        guardado, _ = await importar_no_bot(INTEGRACOES, {"Canal": URL})
-        assert guardado == {"Canal": URL}
+    async def test_importador_do_bot_guarda_sempre_um_objeto(self):
+        """Etapa 5 (A10): o texto-URL do formato antigo vira ``{"url": ...}`` (antes era gravado como texto puro)."""
+        guardado, _ = await importar_no_bot(INTEGRACOES, {"Canal": URL, "Outro": {"url": f"{URL_BASE}/b"}})
+        assert guardado == {"Canal": {"url": URL}, "Outro": {"url": f"{URL_BASE}/b"}}
 
     @pytest.mark.asyncio
     async def test_importador_do_bot_guarda_objeto_se_o_item_veio_em_objeto(self):
@@ -582,13 +627,13 @@ class TestA11AvatarDaIntegracao:
 
 class TestA12LimiteDeUrlDasIntegracoes:
     @pytest.mark.asyncio
-    async def test_150_aceita_e_151_recusa_nos_dois_sem_depender_da_configuracao(self):  # MUDA (etapa 5, D4): 200
-        assert account_links.ITG_URL_MAX == 150
-        for tamanho, aceito in ((150, True), (151, False)):
+    async def test_200_aceita_e_201_recusa_nos_dois_sem_depender_da_configuracao(self):
+        """Etapa 5 (A12/D4): o importador aceita até 200, o mesmo teto do modal (antes 150)."""
+        for tamanho, aceito in ((150, True), (151, True), (200, True), (201, False)):
             item = {"Canal": url_com_tamanho(tamanho)}
             no_painel, _ = await importar_no_painel(INTEGRACOES, item, bot=BotDoPainel(url_max=90))
             no_bot, _ = await importar_no_bot(INTEGRACOES, item, bot=ModalBot(url_max=90))
-            assert (no_painel is not None, no_bot is not None) == (aceito, aceito)
+            assert (no_painel is not None, no_bot is not None) == (aceito, aceito), tamanho
 
     def test_o_modal_manual_aceita_ate_200(self):
         assert campos_do_modal(INTEGRACOES)["user_integration_url"].max_length == 200
@@ -625,53 +670,66 @@ class TestA12TituloCriadoPeloModal:
 
 
 class TestA13LimiteDeUrlDosLinksDoServidor:
-    """O importador (bot e painel) usa ``USER_FAV_MAX_URL_LENGTH`` (config dos favoritos pessoais, 90 por padrão),
-    mas o modal aceita até 250: um link de 120 caracteres criado no modal não reimporta."""
+    """Etapa 5 (A13/D5): os links do servidor têm limite PRÓPRIO de 250 (o mesmo do modal) e deixam de usar
+    ``USER_FAV_MAX_URL_LENGTH``, que continua valendo só para os favoritos pessoais."""
 
     @pytest.mark.asyncio
-    async def test_importador_usa_a_configuracao_dos_favoritos_pessoais(self):  # MUDA (etapa 5, A13/D5): 250 próprio
-        for tamanho, aceito in ((90, True), (91, False)):
+    @pytest.mark.parametrize("url_max", [40, 90, 200])
+    async def test_importador_aceita_ate_250_e_recusa_251_qualquer_que_seja_a_configuracao(self, url_max):
+        for tamanho, aceito in ((90, True), (120, True), (250, True), (251, False)):
             item = arquivo_do_modo(SERVIDOR_MODO, "Link", url_com_tamanho(tamanho))
-            no_painel, _ = await importar_no_painel(SERVIDOR_MODO, item, bot=BotDoPainel(url_max=90))
-            no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item, bot=ModalBot(url_max=90))
-            assert (no_painel is not None, no_bot is not None) == (aceito, aceito)
-
-    @pytest.mark.asyncio
-    async def test_mudar_a_configuracao_muda_o_limite_dos_links_do_servidor(self):  # MUDA (etapa 5, A13/D5)
-        item = arquivo_do_modo(SERVIDOR_MODO, "Link", url_com_tamanho(120))
-        no_painel, _ = await importar_no_painel(SERVIDOR_MODO, item, bot=BotDoPainel(url_max=200))
-        no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item, bot=ModalBot(url_max=200))
-        assert no_painel is not None and no_bot is not None
+            no_painel, _ = await importar_no_painel(SERVIDOR_MODO, item, bot=BotDoPainel(url_max=url_max))
+            no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item, bot=ModalBot(url_max=url_max))
+            assert (no_painel is not None, no_bot is not None) == (aceito, aceito), (url_max, tamanho)
 
     def test_o_modal_do_bot_aceita_ate_250(self):
         assert campos_do_modal(SERVIDOR_MODO)["guild_fav_url"].max_length == 250
 
     @pytest.mark.asyncio
-    async def test_link_de_120_criado_no_modal_e_no_painel_nao_reimporta_com_a_configuracao_padrao(self):
-        # MUDA (etapa 5, A13/D5)
+    async def test_link_de_120_criado_no_modal_e_no_painel_reimporta_com_a_configuracao_padrao(self):
         longa = url_com_tamanho(120)
         bot = ModalBot(nome_max=35, url_max=90)
         await adicionar_link_do_servidor(bot, "Longo", longa)
         guardado = bot.salvos_servidor[-1]["player_controller"]["fav_links"]
         assert guardado["Longo"]["url"] == longa
         de_volta, texto = await importar_no_bot(SERVIDOR_MODO, guardado, bot=ModalBot(nome_max=35, url_max=90))
-        assert de_volta is None and "ultrapassa" in texto
+        assert de_volta is not None, texto
         criado = painel_links(BotDoPainel(), "adicionar", {}, nome="Longo", url=longa, descricao="")
         assert criado.errors == {}
         no_painel, erros = await importar_no_painel(SERVIDOR_MODO, criado.new["fav_links"])
-        assert no_painel is None and erros
+        assert erros == {} and no_painel["Longo"]["url"] == longa
+
+    @pytest.mark.asyncio
+    async def test_guarda_favoritos_pessoais_seguem_a_configuracao_de_url(self):
+        for tamanho, aceito in ((90, True), (91, False)):
+            item = {"Musica": url_com_tamanho(tamanho)}
+            no_painel, _ = await importar_no_painel(FAVORITOS, item, bot=BotDoPainel(url_max=90))
+            no_bot, _ = await importar_no_bot(FAVORITOS, item, bot=ModalBot(url_max=90))
+            assert (no_painel is not None, no_bot is not None) == (aceito, aceito)
 
 
 class TestA14DescricaoDoLinkDoServidor:
     """O importador (bot e painel) só confere ``<= 50``; o modal e a adição do painel exigem vazia ou 3–50."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("descricao", ["a", "ab"])
-    async def test_importadores_aceitam_descricao_de_1_ou_2_caracteres(self, descricao):  # MUDA (etapa 5, A14)
+    @pytest.mark.parametrize("descricao", ["a", "ab", "  ab  "])
+    async def test_importadores_recusam_descricao_de_1_ou_2_caracteres(self, descricao):
+        """Etapa 5 (A14): a descrição é vazia ou tem 3 a 50 caracteres também na importação (antes aceitava 1 a 2)."""
+        item = {"Link": {"url": URL, "description": descricao}}
+        no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item)
+        no_bot, texto = await importar_no_bot(SERVIDOR_MODO, item)
+        assert no_painel is None and erros
+        assert no_bot is None and texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("descricao", "esperada"), [("", ""), ("abc", "abc"), ("d" * 50, "d" * 50), ("  abc  ", "abc")]
+    )
+    async def test_importadores_aceitam_descricao_vazia_ou_de_3_a_50_e_apara_as_pontas(self, descricao, esperada):
         item = {"Link": {"url": URL, "description": descricao}}
         no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item)
         no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item)
-        assert erros == {} and no_painel["Link"]["description"] == no_bot["Link"]["description"] == descricao
+        assert erros == {} and no_painel["Link"]["description"] == no_bot["Link"]["description"] == esperada
 
     @pytest.mark.asyncio
     async def test_guarda_importadores_recusam_mais_de_50(self):
@@ -692,11 +750,32 @@ class TestA14DescricaoDoLinkDoServidor:
 
 class TestA15SobrescritaNosLinksDoServidor:
     @pytest.mark.asyncio
-    async def test_modal_do_bot_sobrescreve_nome_existente_sem_avisar(self):  # MUDA (etapa 5, A15): recusa
+    async def test_modal_do_bot_recusa_adicionar_nome_existente_e_nao_sobrescreve(self):
+        """Etapa 5 (A15): adicionar um nome que já existe é recusado (antes sobrescrevia sem avisar)."""
         bot = ModalBot()
-        bot.guild_data["player_controller"]["fav_links"] = {"Link": {"url": f"{URL_BASE}/1", "description": "antiga"}}
-        await adicionar_link_do_servidor(bot, "Link", URL, "nova")
-        assert bot.salvos_servidor[-1]["player_controller"]["fav_links"]["Link"] == {"url": URL, "description": "nova"}
+        original = {"Link": {"url": f"{URL_BASE}/1", "description": "antiga"}}
+        bot.guild_data["player_controller"]["fav_links"] = dict(original)
+        inter = await adicionar_link_do_servidor(bot, "Link", URL, "nova")
+        assert bot.salvos_servidor == [] and "já" in inter.texto.lower()
+        assert bot.guild_data["player_controller"]["fav_links"] == original
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_recusa_renomear_sobre_outra_entrada(self):
+        bot = ModalBot()
+        bot.guild_data["player_controller"]["fav_links"] = {
+            "a1": {"url": f"{URL_BASE}/1", "description": ""},
+            "b2": {"url": f"{URL_BASE}/2", "description": ""},
+        }
+        inter = await adicionar_link_do_servidor(bot, "b2", URL, "nova", editando="a1")
+        assert bot.salvos_servidor == [] and "já" in inter.texto.lower()
+        assert set(bot.guild_data["player_controller"]["fav_links"]) == {"a1", "b2"}
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_editar_a_propria_entrada_funciona(self):
+        bot = ModalBot()
+        bot.guild_data["player_controller"]["fav_links"] = {"a1": {"url": f"{URL_BASE}/1", "description": ""}}
+        await adicionar_link_do_servidor(bot, "a1", URL, "nova", editando="a1")
+        assert bot.salvos_servidor[-1]["player_controller"]["fav_links"] == {"a1": {"url": URL, "description": "nova"}}
 
     def test_painel_recusa_nome_existente(self):
         existentes = {"Link": {"url": URL, "description": ""}}
@@ -704,17 +783,21 @@ class TestA15SobrescritaNosLinksDoServidor:
         assert resultado.new == {} and resultado.errors.get("nome")
 
     @pytest.mark.asyncio
-    async def test_modal_do_bot_com_25_itens_recusa_ate_a_sobrescrita(self):  # MUDA (etapa 5, A15)
+    async def test_modal_do_bot_com_25_itens_edita_a_propria_entrada_e_recusa_a_nova(self):
+        """Guarda (A15): com 25 itens, editar uma entrada existente salva (não ocupa vaga); um nome novo é recusado."""
         bot = ModalBot()
         bot.guild_data["player_controller"]["fav_links"] = {
             f"item{i}": {"url": URL, "description": ""} for i in range(TETO_DE_LINKS)
         }
-        inter = await adicionar_link_do_servidor(bot, "item3", URL, "nova")
+        await adicionar_link_do_servidor(bot, "item3", URL, "nova", editando="item3")
+        assert bot.salvos_servidor[-1]["player_controller"]["fav_links"]["item3"]["description"] == "nova"
+        bot.salvos_servidor.clear()
+        inter = await adicionar_link_do_servidor(bot, "novo", URL, "nova")
         assert bot.salvos_servidor == [] and "Não há espaço disponível" in inter.texto
 
     @pytest.mark.asyncio
     async def test_guarda_importadores_sobrescrever_nao_ocupa_vaga_com_25_itens(self):
-        existentes = {f"item{i}": {"url": URL, "description": "d"} for i in range(TETO_DE_LINKS)}
+        existentes = {f"item{i}": {"url": URL, "description": "ddd"} for i in range(TETO_DE_LINKS)}
         item = {"item3": {"url": f"{URL_BASE}/nova", "description": "nova"}}
         no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item, existentes=existentes)
         no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item, existentes=existentes)
@@ -751,7 +834,7 @@ class TestA16TetoDeVinteECincoLinks:
     @pytest.mark.asyncio
     async def test_importadores_aceitam_25_itens_e_recusam_26(self):
         def arquivo(quantidade):
-            return {f"item{i}": {"url": URL, "description": "d"} for i in range(quantidade)}
+            return {f"item{i}": {"url": URL, "description": "ddd"} for i in range(quantidade)}
 
         for quantidade, aceito in ((TETO_DE_LINKS, True), (TETO_DE_LINKS + 1, False)):
             no_bot, _ = await importar_no_bot(SERVIDOR_MODO, arquivo(quantidade))
@@ -806,15 +889,15 @@ class TestA16MensagensDoTetoNoImportadorDoBot:
 
     @pytest.mark.asyncio
     async def test_arquivo_com_26_itens_diz_que_excede_o_maximo(self):
-        arquivo = {f"item{i}": {"url": URL, "description": "d"} for i in range(TETO_DE_LINKS + 1)}
+        arquivo = {f"item{i}": {"url": URL, "description": "ddd"} for i in range(TETO_DE_LINKS + 1)}
         guardado, texto = await importar_no_bot(SERVIDOR_MODO, arquivo)
         assert guardado is None and "excede a quantidade máxima permitida (25)" in texto
 
     @pytest.mark.asyncio
     async def test_arquivo_pequeno_mais_o_que_ja_existe_diz_que_nao_ha_espaco(self):
-        existentes = {f"item{i}": {"url": URL, "description": "d"} for i in range(TETO_DE_LINKS)}
+        existentes = {f"item{i}": {"url": URL, "description": "ddd"} for i in range(TETO_DE_LINKS)}
         guardado, texto = await importar_no_bot(
-            SERVIDOR_MODO, {"novo": {"url": URL, "description": "d"}}, existentes=existentes
+            SERVIDOR_MODO, {"novo": {"url": URL, "description": "ddd"}}, existentes=existentes
         )
         assert guardado is None and "não possui espaço suficiente" in texto and "Limite atual: 25" in texto
 
@@ -824,7 +907,7 @@ class TestLimitesDoPainelSaoLiteraisAquiEConstantesLa:
 
     def test_constantes(self):
         assert (account_links.FAV_NAME_MIN, account_links.FAV_NAME_MAX) == (2, 25)
-        assert (account_links.ITG_TITLE_MAX, account_links.ITG_URL_MAX, account_links.ITG_AVATAR_MAX) == (90, 150, 250)
+        assert (account_links.ITG_TITLE_MAX, account_links.ITG_URL_MAX, account_links.ITG_AVATAR_MAX) == (90, 200, 250)
         assert links.MAX_LINKS == TETO_DE_LINKS and (links.URL_MIN, links.URL_MAX) == (10, LIMITE_DA_URL_DO_LINK)
         assert (links.NAME_MIN, links.NAME_MAX, links.DESCRIPTION_MIN, links.DESCRIPTION_MAX) == (2, 25, 3, 50)
 
@@ -856,3 +939,55 @@ class TestLimitesDoPainelSaoLiteraisAquiEConstantesLa:
         itg_painel, _ = await importar_no_painel(INTEGRACOES, {" Canal ": URL})
         itg_bot, _ = await importar_no_bot(INTEGRACOES, {" Canal ": URL})
         assert list(itg_painel) == list(itg_bot) == ["Canal"]
+
+
+class TestIdaEVoltaExportarImportar:
+    """Etapa 5 (D4/D5): tudo que o modal salva, o importador (bot e painel) aceita de volta depois de exportar."""
+
+    @pytest.mark.asyncio
+    async def test_link_do_servidor_longo_criado_no_modal(self):
+        bot = ModalBot(nome_max=35, url_max=90)
+        longa = url_com_tamanho(200)
+        await adicionar_link_do_servidor(bot, "Longo", longa, "uma descrição")
+        bot.guild_data["player_controller"]["fav_links"].update(
+            bot.salvos_servidor[-1]["player_controller"]["fav_links"]
+        )
+        _, arquivo = await exportar(bot, SERVIDOR_MODO)
+        conteudo = json.loads(arquivo)
+        assert conteudo == {"Longo": {"url": longa, "description": "uma descrição"}}
+        no_bot, texto = await importar_no_bot(SERVIDOR_MODO, conteudo, bot=ModalBot(nome_max=35, url_max=90))
+        no_painel, erros = await importar_no_painel(SERVIDOR_MODO, conteudo)
+        assert no_bot == no_painel == conteudo, (texto, erros)
+
+    @pytest.mark.asyncio
+    async def test_integracao_com_url_longa_criada_no_modal(self):
+        longa = "https://www.deezer.com/br/profile/123456?" + "x" * 150
+
+        async def perfil(user_id):
+            return {"name": "Ana", "link": longa, "picture": f"{URL_BASE}/ana.png"}
+
+        bot = ModalBot(url_max=90)
+        bot.deezer.get_user_info = perfil
+        await adicionar_integracao(bot)
+        bot.user_data["integration_links"].update(bot.salvos_usuario[-1]["integration_links"])
+        conteudo = json.loads(await exportar_integracoes(bot))
+        assert conteudo == {"【DZ】: Ana": {"url": longa, "avatar": f"{URL_BASE}/ana.png"}}
+        no_bot, texto = await importar_no_bot(INTEGRACOES, conteudo, bot=ModalBot(url_max=90))
+        no_painel, erros = await importar_no_painel(INTEGRACOES, conteudo, bot=BotDoPainel(url_max=90))
+        assert no_bot == no_painel == conteudo, (texto, erros)
+
+    @pytest.mark.asyncio
+    async def test_integracao_importada_em_texto_volta_como_objeto(self):
+        bot = ModalBot()
+        await importar(bot, INTEGRACOES, {"Canal": URL})
+        bot.user_data["integration_links"].update(bot.salvos_usuario[-1]["integration_links"])
+        assert json.loads(await exportar_integracoes(bot)) == {"Canal": {"url": URL}}
+
+    @pytest.mark.asyncio
+    async def test_guarda_favoritos_ida_e_volta(self):
+        bot = ModalBot(fav_links={"Rock": URL, "Pop": f"{URL_BASE}/b"})
+        _, arquivo = await exportar(bot, FAVORITOS)
+        conteudo = json.loads(arquivo)
+        no_bot, _ = await importar_no_bot(FAVORITOS, conteudo)
+        no_painel, erros = await importar_no_painel(FAVORITOS, conteudo)
+        assert no_bot == no_painel == conteudo and erros == {}

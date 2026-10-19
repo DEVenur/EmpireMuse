@@ -20,7 +20,7 @@ class TestLimites:
     def test_valores_atuais(self):
         assert (limits.FAV_NAME_MIN, limits.FAV_NAME_MAX) == (2, 25)
         assert (limits.FAV_URL_MIN, limits.FAV_URL_MAX) == (10, 200)
-        assert (limits.ITG_TITLE_MAX, limits.ITG_URL_MAX, limits.ITG_AVATAR_MAX) == (90, 150, 250)
+        assert (limits.ITG_TITLE_MAX, limits.ITG_URL_MAX, limits.ITG_AVATAR_MAX) == (90, 200, 250)
         assert limits.MAX_GUILD_LINKS == 25
         assert (limits.GUILD_LINK_NAME_MIN, limits.GUILD_LINK_NAME_MAX) == (2, 25)
         assert (limits.GUILD_LINK_URL_MIN, limits.GUILD_LINK_URL_MAX) == (10, 250)

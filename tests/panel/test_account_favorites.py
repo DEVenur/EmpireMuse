@@ -413,7 +413,7 @@ class IntegrationsTest(FavoritesBase):
             "vazio": {},
             "url inválida": {"Aa": "ftp://x.example/a"},
             "url javascript": {"Aa": "javascript:alert(1)"},
-            "url > 150": {"Aa": BASE + "a" * 140},
+            "url > 200": {"Aa": BASE + "a" * 190},
             "título > 90": {"t" * 91: BASE + "a"},
             "título vazio": {"   ": BASE + "a"},
             "valor sem url": {"Aa": {"avatar": BASE + "a.png"}},
