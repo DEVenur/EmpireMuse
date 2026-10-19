@@ -5,18 +5,20 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import os
 import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, Union
+from typing import Callable, Optional, TYPE_CHECKING, Union
 from urllib.parse import quote
 
 from aiohttp import ClientSession
 from rapidfuzz import fuzz
 
 from empiremuse import paths
+from empiremuse.rules.ratelimit import retry_after_seconds
 from empiremuse.utils.music.converters import fix_characters, URL_REG
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, LavalinkPlaylist
@@ -88,16 +90,35 @@ class SpotifyClient:
         self.client_secret = client_secret
         self.base_url = "https://api.spotify.com/v1"
         self.spotify_cache = {}
-        self.disabled = False
+        self.clock: Callable[[], float] = time.monotonic  # injetável nos testes
+        self._paused_until = 0.0
         self.type = "api"
         self.token_refresh = False
         self.playlist_extra_page_limit = playlist_extra_page_limit
 
         self.spotify_cache = _read_cache_file(spotify_cache_path())
 
+    @property
+    def disabled(self) -> bool:
+        """Em pausa por limite de requisições (429)? A pausa acaba sozinha; falta de credencial é outro caso (sem cliente)."""
+        return self.clock() < self._paused_until
+
+    def _paused_error(self) -> GenericError:
+        remaining = max(1, math.ceil(self._paused_until - self.clock()))
+        return GenericError(
+            "**O Spotify limitou as requisições do bot: o suporte interno ao Spotify está em pausa e volta sozinho "
+            f"em cerca de {remaining} s.**"
+        )
+
+    def _pause(self, retry_after: Optional[str]) -> None:
+        """Pausa as requisições pelo ``Retry-After`` (1 s a 1 h; 60 s sem valor válido); uma pausa nunca encurta outra."""
+        seconds = retry_after_seconds(retry_after)
+        self._paused_until = max(self._paused_until, self.clock() + seconds)
+        logger.warning("Spotify: limite de requisições (429); suporte interno em pausa por %s s.", seconds)
+
     async def request(self, path: str, params: dict = None, _renovado: bool = False):
         if self.disabled:
-            return
+            raise self._paused_error()
 
         headers = {"Authorization": f"Bearer {await self.get_valid_access_token()}"}
 
@@ -124,9 +145,8 @@ class SpotifyClient:
                         "conteúdo dele está privado ou se foi deletado).**"
                     )
                 elif response.status == 429:
-                    self.disabled = True
-                    print(f"⚠️ - Spotify: Suporte interno desativado devido a ratelimit (429).")
-                    return
+                    self._pause(response.headers.get("Retry-After"))
+                    raise self._paused_error()
                 else:
                     response.raise_for_status()
 
