@@ -26,13 +26,14 @@ from empiremuse.rules.errors import (
     NAME_TAKEN,
     NAME_TOO_LONG,
     QUOTA_FULL,
+    STATUS_CHARS,
     STATUS_TOO_LONG,
     URL_TOO_LONG,
     RuleError,
 )
 from empiremuse.rules.favorites import check_import_name, name_limit
 from empiremuse.rules.guild_links import check_description, import_entry as guild_link_entry
-from empiremuse.rules.integrations import import_entry as integration_entry
+from empiremuse.rules.integrations import import_entry as integration_entry, save_external
 from empiremuse.rules.limits import (
     FAV_NAME_MAX,
     FAV_NAME_MIN,
@@ -747,8 +748,8 @@ def _guild_link_error_text(name, error: RuleError) -> str:
         )
     if error.code == DESCRIPTION_INVALID:
         return (
-            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 50 caracteres:** "
-            f"{_echo(error.value)}"
+            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 50 caracteres, "
+            f"sem caracteres de controle:** {_echo(error.value)}"
         )
     return _url_error_text(error, with_label=True)
 
@@ -798,6 +799,54 @@ def _import_quota_text(error: RuleError, kind: str) -> str:
         return too_large.format(limit=error.limit)
     kept, incoming = error.value
     return f"{no_space}\nLimite atual: {error.limit}\n{saved}: {kept}\nVocê precisa de: {kept + incoming - error.limit}"
+
+
+_NO_ROOM_INTEGRATION_TEXT = (
+    "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
+)
+
+
+def _wait_text(retry_after: float) -> str:
+    """Mensagem do cooldown por membro do importador e do modal de integração."""
+    return "**Você deve aguardar {} para importar.**".format(
+        time_format(int(max(retry_after, 1)) * 1000, use_names=True)
+    )
+
+
+def _profile_source(url: str) -> Optional[str]:
+    """De onde vem o perfil do link (``spotify``, ``deezer``, ``youtube`` ou ``soundcloud``), ou ``None`` se não é suportado."""
+    if spotify_regex_w_user.match(url):
+        return "spotify"
+    if deezer_regex.match(url):
+        return "deezer"
+    if youtube_regex.search(url):
+        return "youtube"
+    if soundcloud_regex.search(url):
+        return "soundcloud"
+    return None
+
+
+def _profile_key(url) -> Optional[tuple]:
+    """Identifica o perfil de um link (fonte e id), para saber se duas URLs diferentes são do mesmo perfil."""
+    if not isinstance(url, str):
+        return None
+    if match := spotify_regex_w_user.match(url):
+        return "spotify", match.groups()[-1]
+    if match := deezer_regex.match(url):
+        return "deezer", match.groups()[-1]
+    if match := youtube_regex.search(url):
+        return "youtube", match.group(0).lower()
+    if match := soundcloud_regex.search(url):
+        return "soundcloud", match.group(1).lower()
+    return None
+
+
+def _profile_saved(entries: dict, url: str) -> bool:
+    """Alguma integração já salva é do mesmo perfil do link (gravar de novo sobrescreve, não ocupa vaga)?"""
+    key = _profile_key(url)
+    return key is not None and any(
+        _profile_key(entry.get("url") if isinstance(entry, dict) else entry) == key for entry in entries.values()
+    )
 
 
 class FavModalImport(disnake.ui.Modal):
@@ -852,12 +901,7 @@ class FavModalImport(disnake.ui.Modal):
         raise GenericError(f"Modo atual ainda não implementado: {self.view.mode} | {type(self.view.mode)}")
 
     async def _reject_rate_limited(self, inter: disnake.ModalInteraction, retry_after: float) -> None:
-        await inter.send(
-            "**Você deve aguardar {} para importar.**".format(
-                time_format(int(max(retry_after, 1)) * 1000, use_names=True)
-            ),
-            ephemeral=True,
-        )
+        await inter.send(_wait_text(retry_after), ephemeral=True)
 
     async def callback(self, inter: disnake.ModalInteraction, /) -> None:
         try:
@@ -1185,7 +1229,7 @@ class FavModalAdd(disnake.ui.Modal):
 
             if isinstance(description, RuleError):
                 await inter.send(
-                    "**A descrição deve ficar vazia ou ter de 3 a 50 caracteres.**",
+                    "**A descrição deve ficar vazia ou ter de 3 a 50 caracteres, sem caracteres de controle.**",
                     ephemeral=True,
                 )
                 return
@@ -1237,193 +1281,217 @@ class FavModalAdd(disnake.ui.Modal):
             await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
 
         elif self.view.mode == ViewMode.integrations_manager:
-            try:
-                await inter.response.defer(ephemeral=True, with_message=True)
-            except:
-                pass
-
-            self.view.data = await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users)
-
-            typed_url = inter.text_values["user_integration_url"].strip()
-
-            if (url := clean_url(typed_url, ITG_URL_MAX)) is None:
-                await inter.edit_original_message(
-                    embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {_echo(typed_url)}",
-                        color=disnake.Color.red(),
-                    )
-                )
+            if not await self._add_integration(inter):
                 return
-
-            if matches := spotify_regex_w_user.match(url):
-                if not self.view.bot.spotify:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description="**O suporte ao spotify não está disponível no momento...**",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                url_type, user_id = matches.groups()
-
-                if url_type != "user":
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**Você deve usar link de um perfil de usuário do spotify.** {url}",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                try:
-                    result = await self.view.bot.spotify.get_user_info(user_id)
-                except Exception:
-                    logger.exception("Integração: erro ao consultar o perfil (%s)", "spotify")
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
-                            color=self.view.bot.get_color(),
-                        )
-                    )
-                    return
-
-                if not result:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description="**O usuário do link informado não possui playlists públicas...**",
-                            color=self.view.bot.get_color(),
-                        )
-                    )
-                    return
-
-                data = {
-                    "title": f"[SP]: {result['display_name'][:90]}",
-                    "url": result["external_urls"]["spotify"],
-                    "avatar": result["images"][-1]["url"],
-                }
-
-            elif matches := deezer_regex.match(url):
-                url_type, url_id = matches.groups()[-2:]
-
-                if url_type != "profile":
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**Você deve usar link de um perfil de usuário do deezer.** {url}",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                try:
-                    result = await self.view.bot.deezer.get_user_info(int(url_id))
-                except Exception:
-                    logger.exception("Integração: erro ao consultar o perfil (%s)", "deezer")
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
-                            color=self.view.bot.get_color(),
-                        )
-                    )
-                    return
-
-                data = {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
-
-            else:
-                match = youtube_regex.search(url)
-
-                if match:
-                    base_url = f"{match.group(0)}/playlists"
-                    source = "[YT]:"
-                else:
-                    match = soundcloud_regex.search(url)
-                    if match:
-                        group = match.group(1)
-                        base_url = f"https://soundcloud.com/{group}/sets"
-                    else:
-                        await inter.edit_original_message(
-                            embed=disnake.Embed(
-                                description=f"**Link informado não é suportado:** {url}", color=disnake.Color.red()
-                            )
-                        )
-                        return
-
-                    source = "[SC]:"
-
-                loop = self.view.bot.loop or asyncio.get_event_loop()
-
-                try:
-                    info = await loop.run_in_executor(
-                        None, lambda: self.view.bot.pool.ytdl.extract_info(base_url, download=False)
-                    )
-                except Exception:
-                    logger.exception("Integração: erro ao ler a URL com o yt-dlp")
-                    await inter.edit_original_message(
-                        "**Ocorreu um erro ao obter informação da url. Tente novamente mais tarde.**"
-                    )
-                    return
-
-                if not info:
-                    msg = f"**O usuário/canal do link informado não existe:**\n{url}"
-
-                    if source == "[YT]:":
-                        msg += f"\n\n`Nota: Confira se no link contém usuário com @, ex: @ytchannel`"
-
-                    await inter.edit_original_message(embed=disnake.Embed(description=msg, color=disnake.Color.red()))
-                    return
-
-                if not info["entries"]:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**O usuário/canal do link informado não possui playlists públicas...**",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                data = {"title": f"{source} {info['title']}", "url": info["original_url"]}
-
-            title = fix_characters(data["title"], 80)
-
-            limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
-            if not has_room(self.view.data["integration_links"], title, limit):
-                await inter.edit_original_message(
-                    "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
-                )
-                return
-
-            self.view.data["integration_links"][title] = {"url": data["url"]}
-
-            try:
-                self.view.data["integration_links"][title]["avatar"] = data["avatar"]
-            except KeyError:
-                pass
-
-            await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
-
-            try:
-                me = (inter.guild or self.view.bot.get_guild(inter.guild_id)).me
-            except AttributeError:
-                me = None
-
-            await inter.edit_original_message(
-                embed=disnake.Embed(
-                    description=f"**Integração adicionada/editada com sucesso:** [`{title}`]({data['url']})\n"
-                    "**Ela vai aparecer nas seguintes ocasições:** ```\n"
-                    "- Ao usar o comando /play (selecionando a integração no preenchimento automático da busca)\n"
-                    "- Ao clicar no botão de tocar favorito do player.\n"
-                    "- Ao usar o comando play (prefixed) sem nome ou link.```",
-                    color=self.view.bot.get_color(me),
-                ),
-                view=None,
-            )
-
-            self.view.log = f"[`{data['title']}`](<{data['url']}>) foi adicionado nas suas integrações."
 
         if not isinstance(self.view.ctx, CustomContext):
             await self.view.ctx.edit_original_message(content=self.view.build_txt(), view=self.view)
         elif self.view.message:
             await self.view.message.edit(content=self.view.build_txt(), view=self.view)
+
+    async def _add_integration(self, inter: disnake.ModalInteraction) -> bool:
+        """Adiciona/edita uma integração a partir do link de um perfil; ``False`` se nada foi gravado."""
+        try:
+            await inter.response.defer(ephemeral=True, with_message=True)
+        except (disnake.HTTPException, disnake.InteractionResponded):
+            pass
+
+        work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+
+        typed_url = inter.text_values["user_integration_url"].strip()
+
+        if (url := clean_url(typed_url, ITG_URL_MAX)) is None:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Nenhum link válido encontrado:** {_echo(typed_url)}", color=disnake.Color.red()
+                )
+            )
+            return False
+
+        if (source := _profile_source(url)) is None:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Link informado não é suportado:** {_echo(url)}", color=disnake.Color.red()
+                )
+            )
+            return False
+
+        # antes de qualquer consulta externa: o cooldown por membro e a lista cheia com um perfil que ainda não está salvo
+        if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
+            await inter.edit_original_message(_wait_text(retry_after))
+            return False
+
+        limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
+
+        if limit and len(work["integration_links"]) >= limit and not _profile_saved(work["integration_links"], url):
+            await inter.edit_original_message(_NO_ROOM_INTEGRATION_TEXT)
+            return False
+
+        if (data := await self._lookup_profile(inter, url, source)) is None:
+            return False
+
+        saved = save_external(
+            work["integration_links"],
+            fix_characters(data["title"], 80),
+            data.get("url"),
+            data.get("avatar"),
+            limit=limit,
+        )
+
+        if isinstance(saved, RuleError):
+            await inter.edit_original_message(
+                _NO_ROOM_INTEGRATION_TEXT
+                if saved.code == QUOTA_FULL
+                else "**Não foi possível usar os dados devolvidos pelo serviço. Tente novamente mais tarde.**"
+            )
+            return False
+
+        work["integration_links"] = saved.entries
+        self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
+
+        await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
+
+        try:
+            me = (inter.guild or self.view.bot.get_guild(inter.guild_id)).me
+        except AttributeError:
+            me = None
+
+        await inter.edit_original_message(
+            embed=disnake.Embed(
+                description=f"**Integração adicionada/editada com sucesso:** [`{saved.name}`]({saved.url})\n"
+                "**Ela vai aparecer nas seguintes ocasições:** ```\n"
+                "- Ao usar o comando /play (selecionando a integração no preenchimento automático da busca)\n"
+                "- Ao clicar no botão de tocar favorito do player.\n"
+                "- Ao usar o comando play (prefixed) sem nome ou link.```",
+                color=self.view.bot.get_color(me),
+            ),
+            view=None,
+        )
+
+        self.view.log = f"[`{saved.name}`](<{saved.url}>) foi adicionado nas suas integrações."
+
+        return True
+
+    async def _lookup_profile(self, inter: disnake.ModalInteraction, url: str, source: str) -> Optional[dict]:
+        """Consulta o perfil no Spotify, Deezer ou yt-dlp (``source``); ``None`` (com a mensagem já enviada) se falhar."""
+        if source == "spotify":
+            return await self._lookup_spotify(inter, url)
+
+        if source == "deezer":
+            return await self._lookup_deezer(inter, url)
+
+        return await self._lookup_ytdl(inter, url, source)
+
+    async def _lookup_spotify(self, inter: disnake.ModalInteraction, url: str) -> Optional[dict]:
+        if not self.view.bot.spotify:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description="**O suporte ao spotify não está disponível no momento...**",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        url_type, user_id = spotify_regex_w_user.match(url).groups()
+
+        if url_type != "user":
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Você deve usar link de um perfil de usuário do spotify.** {_echo(url)}",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        try:
+            result = await self.view.bot.spotify.get_user_info(user_id)
+        except Exception:
+            logger.exception("Integração: erro ao consultar o perfil (%s)", "spotify")
+            await self._profile_error(inter)
+            return None
+
+        if not result:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description="**O usuário do link informado não possui playlists públicas...**",
+                    color=self.view.bot.get_color(),
+                )
+            )
+            return None
+
+        return {
+            "title": f"[SP]: {result['display_name'][:90]}",
+            "url": result["external_urls"]["spotify"],
+            "avatar": result["images"][-1]["url"],
+        }
+
+    async def _lookup_deezer(self, inter: disnake.ModalInteraction, url: str) -> Optional[dict]:
+        url_type, url_id = deezer_regex.match(url).groups()[-2:]
+
+        if url_type != "profile":
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Você deve usar link de um perfil de usuário do deezer.** {_echo(url)}",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        try:
+            result = await self.view.bot.deezer.get_user_info(int(url_id))
+        except Exception:
+            logger.exception("Integração: erro ao consultar o perfil (%s)", "deezer")
+            await self._profile_error(inter)
+            return None
+
+        return {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
+
+    async def _lookup_ytdl(self, inter: disnake.ModalInteraction, url: str, source: str) -> Optional[dict]:
+        if source == "youtube":
+            base_url, label = f"{youtube_regex.search(url).group(0)}/playlists", "[YT]:"
+        else:
+            base_url, label = f"https://soundcloud.com/{soundcloud_regex.search(url).group(1)}/sets", "[SC]:"
+
+        loop = self.view.bot.loop or asyncio.get_event_loop()
+
+        try:
+            info = await loop.run_in_executor(
+                None, lambda: self.view.bot.pool.ytdl.extract_info(base_url, download=False)
+            )
+        except Exception:
+            logger.exception("Integração: erro ao ler a URL com o yt-dlp")
+            await inter.edit_original_message(
+                "**Ocorreu um erro ao obter informação da url. Tente novamente mais tarde.**"
+            )
+            return None
+
+        if not info:
+            msg = f"**O usuário/canal do link informado não existe:**\n{_echo(url)}"
+
+            if label == "[YT]:":
+                msg += "\n\n`Nota: Confira se no link contém usuário com @, ex: @ytchannel`"
+
+            await inter.edit_original_message(embed=disnake.Embed(description=msg, color=disnake.Color.red()))
+            return None
+
+        if not info["entries"]:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description="**O usuário/canal do link informado não possui playlists públicas...**",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        return {"title": f"{label} {info['title']}", "url": info["original_url"]}
+
+    async def _profile_error(self, inter: disnake.ModalInteraction) -> None:
+        await inter.edit_original_message(
+            embed=disnake.Embed(
+                description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
+                color=self.view.bot.get_color(),
+            )
+        )
 
 
 class FavMenuView(disnake.ui.View):
@@ -2418,6 +2486,8 @@ class SetStageTitle(disnake.ui.View):
                 await inter.send(
                     f"**O status pode ter no máximo {VOICE_STATUS_MAX_LENGTH} caracteres.**", ephemeral=True
                 )
+            elif status.code == STATUS_CHARS:
+                await inter.send("**O status não pode ter caracteres de controle nem de formatação.**", ephemeral=True)
             else:
                 await inter.send("**Você deve usar pelo menos um placeholder válido...**", ephemeral=True)
             return
