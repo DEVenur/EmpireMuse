@@ -336,8 +336,15 @@ class PrefixTest(HttpBase):
         def check(bad):
             assert self.save(browser, 100, "geral", "prefix", prefix=bad).code == 422
 
-        Each.run(["a b", "a\tb", "a\nb", "a\r", "a\x00"], check)
+        Each.run(["a b", "a\tb", "a\nb", "a\x00"], check)  # Etapa 6a (A17): "a\r" agora é aparado
         assert self.db.doc("global", 100) == before and len(self.db.writes) == writes
+
+    def test_leading_and_trailing_whitespace_is_stripped_like_the_command_does(self):
+        """Etapa 6a (F3-5b, A17): regra única de prefixo; o painel apara as pontas (``" ab"`` e ``"a\\r"`` valem)."""
+        browser = self.logged_in()
+        for sent, stored in ((" ab", "ab"), ("a\r", "a"), ("  >>  ", ">>")):
+            assert self.save(browser, 100, "geral", "prefix", prefix=sent).code == 200, sent
+            assert self.db.doc("global", 100)["prefix"] == stored and self.pool.guild_prefix_cache[100] == stored
 
     def test_rejected_prefix_leaves_the_cache_alone(self):
         browser = self.logged_in()

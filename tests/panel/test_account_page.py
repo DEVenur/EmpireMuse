@@ -205,10 +205,17 @@ class UserPrefixTest(AccountCase):
             response = self.act(browser, "prefixo", custom_prefix=bad)
             assert response.code == 422 and 'aria-invalid="true"' in response.body.decode()
 
-        Each.run(["a b", "a\tb", "a\nb", "a\r", "a\x00", "​"], check)
+        Each.run(["a b", "a\tb", "a\nb", "a\x00", "​"], check)  # Etapa 6a (A17): "a\r" agora é aparado
         assert (
             self.world.doc() == before and len(self.db.writes) == writes and self.pool.user_prefix_cache == {UID: "!"}
         )
+
+    def test_leading_and_trailing_whitespace_is_stripped_like_the_command_does(self):
+        """Etapa 6a (F3-5b, A17): regra única de prefixo; o painel apara as pontas (``" ab"`` e ``"a\\r"`` valem)."""
+        browser = self.logged_in()
+        for sent, stored in ((" ab", "ab"), ("a\r", "a"), ("  >>  ", ">>")):
+            assert self.act(browser, "prefixo", custom_prefix=sent).code == 200, sent
+            assert self.world.doc()["custom_prefix"] == stored and self.pool.user_prefix_cache[UID] == stored
 
     def test_prefix_is_escaped_in_the_attribute(self):
         browser = self.logged_in()
