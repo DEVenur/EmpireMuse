@@ -7,6 +7,7 @@
   <p class="erro-codigo" aria-hidden="true">{{ codigo }}</p>
   <h1 id="titulo-erro">{{ titulo }}</h1>
   <p class="lead">{{ mensagem }}</p>
+  {% if referencia %}<p class="erro-referencia">Código do erro: <code>{{ referencia }}</code></p>{% end %}
   <p><a role="button" href="/painel/">Voltar ao início</a></p>
 </section>
 {% end %}
