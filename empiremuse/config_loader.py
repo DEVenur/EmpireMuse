@@ -370,6 +370,12 @@ def load_config():
     if CONFIG["PLAYER_INFO_BACKUP_INTERVAL_MONGO"] < 120:
         CONFIG["PLAYER_INFO_BACKUP_INTERVAL_MONGO"] = 120
 
+    # 0 ou negativo não tem significado válido nestas chaves: 0 no voteskip faria o primeiro voto pular, 0 nos caches
+    # levanta ValueError na primeira gravação, 0 nas dicas quebra o player e 0 no mongo é conexão sem timeout
+    for i in ["VOTE_SKIP_AMOUNT", "HINT_RATE", "DBCACHE_SIZE", "PLAYLIST_CACHE_SIZE", "MONGO_TIMEOUT"]:
+        if CONFIG[i] < 1:
+            CONFIG[i] = 1
+
     if CONFIG["LAVALINK_RECONNECT_RETRIES"] < 0:
         raise Exception(
             "Você usou uma configuração inválida! LAVALINK_RECONNECT_RETRIES: "
