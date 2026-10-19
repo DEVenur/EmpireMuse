@@ -13,7 +13,7 @@ import re
 import unicodedata
 from urllib.parse import urlsplit
 
-_FETCH_LINE = re.compile(r"^(?P<name>\S+)\s+(?P<url>\S.*?)\s+\(fetch\)\s*$")
+_FETCH_SUFFIX = "(fetch)"
 _SCP_LIKE = re.compile(r"^(?:[^@/\s]+@)?(?P<host>[A-Za-z0-9.\-]+):(?!//)(?P<path>.+)$")
 _WEB_SCHEMES = ("http", "https")
 _REMOTE_SCHEMES = ("ssh", "git", "git+ssh", "ssh+git")
@@ -65,12 +65,29 @@ def _web_url(raw: str) -> str:
     return url if len(url) <= MAX_URL_LENGTH else ""
 
 
+def _fetch_remote(line: str) -> tuple[str, str] | None:
+    """``(nome, url)`` de uma linha ``nome<espaço>url<espaço>(fetch)``; ``None`` para qualquer outra.
+
+    Cortes de texto em vez de regex com ``.*?`` entre ``\\s+``: aquela forma era quadrática (50 000 espaços levavam ~4 s).
+    """
+    line = line.strip()
+    if not line.endswith(_FETCH_SUFFIX):
+        return None
+    head = line[: -len(_FETCH_SUFFIX)]
+    if not head[-1:].isspace():
+        return None
+    parts = head.split(None, 1)
+    if len(parts) != 2:
+        return None
+    return parts[0], parts[1].strip()
+
+
 def parse_remote_web_url(output: str) -> str:
     """URL web do repositório a partir do texto de ``git remote -v``; ``""`` se não houver um remote remoto útil."""
     remotes: list[tuple[str, str]] = []
     for line in output.splitlines():
-        match = _FETCH_LINE.match(line.strip())
-        if match:
-            remotes.append((match["name"], match["url"]))
+        remote = _fetch_remote(line)
+        if remote:
+            remotes.append(remote)
     candidates = [url for name, url in remotes if name == "origin"] or [url for _, url in remotes]
     return _web_url(candidates[0]) if candidates else ""

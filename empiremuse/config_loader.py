@@ -291,7 +291,7 @@ def load_config():
 
         try:
             CONFIG[i] = int(CONFIG[i])
-        except ValueError as e:
+        except (ValueError, TypeError, OverflowError) as e:  # texto, lista/objeto do config.json e Infinity
             raise Exception(f"Você usou uma configuração inválida! {i}: {CONFIG[i]}\n{repr(e)}")
 
     # converter strings que requer valor bool/nulo.
