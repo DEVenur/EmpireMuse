@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from empiremuse.utils.music import interactions
+from empiremuse.utils.music.converters import fix_characters
 from empiremuse.utils.music.interactions import FavModalAdd, SkinEditorMenu, ViewMode
 from tests.helpers_f3_5b import InteracaoFalsa
 from tests.helpers_modais import ModalBot, ModalInteraction, adicionar_integracao, importar, modal_view
@@ -210,8 +211,8 @@ class TestPerfilDoSpotifyIncompleto:
         inter = await adicionar_integracao(bot, url=URL_SPOTIFY)
         assert len(bot.salvos_usuario) == 1, inter.texto
         [(nome, dados)] = bot.salvos_usuario[0]["integration_links"].items()
-        assert nome == "[SP]: abc123"
-        assert not dados.get("avatar")
+        assert nome == fix_characters("[SP]: abc123", 80), "o título é salvo com os colchetes trocados, como sempre"
+        assert dados["url"] == URL_PERFIL and not dados.get("avatar")
 
     @pytest.mark.asyncio
     async def test_guarda_perfil_completo_continua_igual(self):
