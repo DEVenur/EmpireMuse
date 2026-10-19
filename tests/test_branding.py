@@ -7,7 +7,9 @@ upstream são preservados (ver CREDITS.md e utils/branding.py).
 
 import configparser
 import fnmatch
+import functools
 import hashlib
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -83,7 +85,8 @@ UPSTREAM_RESOURCE_PATTERNS = (
 # Exceção explícita: fork do jishaku de zRitsu (TODO saneamento/DevOps).
 JISHAKU_EXCEPTION_FILE = "requirements.txt"
 
-OLD_NAME_RE = re.compile(r"muse[ _-]?heart", re.IGNORECASE)
+# "MuseHeart", "muse heart", "Muse_Heart", "muse-heart"; não casa "amuse heart" (palavra diferente).
+OLD_NAME_RE = re.compile(r"(?<![A-Za-z])muse[ _-]?heart", re.IGNORECASE)
 ASSET_URL_LITERAL_RE = re.compile(r"""asset_url\(\s*(["'])(?P<name>[^"']+)\1\s*\)""")
 
 
@@ -95,10 +98,118 @@ def _git_lines(*args: str) -> list[str]:
     return [line for line in out.split("\0") if line]
 
 
+def _gitignore_rules(text: str) -> list[tuple[re.Pattern, bool, bool]]:
+    """Regras de um ``.gitignore`` como ``(regex, negada, só_diretório)``; cobre ``*``, ``**``, ``?``, ``[...]``, ``!``,
+    ``/`` inicial (âncora na raiz), ``/`` no meio (também ancorada) e ``/`` final (só diretório)."""
+    rules = []
+    for raw in text.splitlines():
+        line = raw.rstrip("\r")
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        line = line.rstrip(" ") if not line.endswith("\\ ") else line
+        negated = line.startswith("!")
+        if negated:
+            line = line[1:]
+        only_dir = line.endswith("/")
+        line = line.rstrip("/")
+        anchored = "/" in line
+        line = line.lstrip("/")
+        regex, i = "", 0
+        while i < len(line):
+            char = line[i]
+            if line.startswith("**/", i):
+                regex += "(?:.*/)?"
+                i += 3
+                continue
+            if line.startswith("/**", i) and i + 3 == len(line):
+                regex += "/.*"
+                i += 3
+                continue
+            if char == "*":
+                regex += "[^/]*"
+            elif char == "?":
+                regex += "[^/]"
+            elif char == "[":
+                end = line.find("]", i + 2)
+                if end == -1:
+                    regex += re.escape(char)
+                else:
+                    regex += (
+                        "["
+                        + line[i + 1 : end].replace("\\", "\\\\").replace("!", "^", 1 if line[i + 1] == "!" else 0)
+                        + "]"
+                    )
+                    i = end
+            elif char == "\\" and i + 1 < len(line):
+                i += 1
+                regex += re.escape(line[i])
+            else:
+                regex += re.escape(char)
+            i += 1
+        prefix = "" if anchored else "(?:.*/)?"
+        rules.append((re.compile(f"^{prefix}{regex}$"), negated, only_dir))
+    return rules
+
+
+def _is_ignored(rel: str, is_dir: bool, rules) -> bool:
+    """Como o git: um diretório ignorado esconde tudo dentro dele; senão vale a ÚLTIMA regra que casa."""
+    parts = rel.split("/")
+    for depth in range(1, len(parts)):
+        if _decide("/".join(parts[:depth]), True, rules):
+            return True
+    return _decide(rel, is_dir, rules)
+
+
+def _decide(rel: str, is_dir: bool, rules) -> bool:
+    ignored = False
+    for regex, negated, only_dir in rules:
+        if only_dir and not is_dir:
+            continue
+        if regex.match(rel):
+            ignored = not negated
+    return ignored
+
+
+def _walk_files(root: Path) -> list[str]:
+    """Sem ``.git`` (tarball, ``pip download``, contêiner): todos os arquivos que o ``.gitignore`` raiz não ignora."""
+    gitignore = root / ".gitignore"
+    rules = _gitignore_rules(gitignore.read_text(encoding="utf-8", errors="replace")) if gitignore.is_file() else []
+    found = []
+    for folder, dirs, files in os.walk(root):
+        rel_folder = Path(folder).relative_to(root).as_posix()
+        rel_folder = "" if rel_folder == "." else rel_folder
+        dirs[:] = sorted(
+            d for d in dirs if d != ".git" and not _is_ignored(f"{rel_folder}/{d}".lstrip("/"), True, rules)
+        )
+        for name in files:
+            rel = f"{rel_folder}/{name}".lstrip("/")
+            if name != ".git" and not _is_ignored(rel, False, rules):
+                found.append(rel)
+    return found
+
+
+@functools.lru_cache(maxsize=1)
+def _repo_files_cached() -> tuple[str, ...]:
+    return tuple(_list_repo_files())
+
+
 def _repo_files() -> list[str]:
-    """Arquivos rastreados + novos não rastreados (respeitando .gitignore) que existem em disco."""
-    tracked = _git_lines("ls-files", "-z")
-    untracked = _git_lines("ls-files", "-z", "--others", "--exclude-standard")
+    return list(_repo_files_cached())
+
+
+def _list_repo_files() -> list[str]:
+    """Arquivos rastreados + novos não rastreados (respeitando .gitignore) que existem em disco.
+
+    Num clone usa o próprio git; sem ``.git`` (ou sem o executável) varre o diretório aplicando o ``.gitignore``.
+    """
+    if (ROOT / ".git").exists():
+        try:
+            tracked = _git_lines("ls-files", "-z")
+            untracked = _git_lines("ls-files", "-z", "--others", "--exclude-standard")
+        except (OSError, subprocess.CalledProcessError):
+            tracked, untracked = [], _walk_files(ROOT)
+    else:
+        tracked, untracked = [], _walk_files(ROOT)
     return sorted(p for p in {*tracked, *untracked} if (ROOT / p).is_file())
 
 
@@ -111,22 +222,59 @@ def _is_deploy(path: str) -> bool:
     return _matches(path, DEPLOY_PATTERNS)
 
 
+@functools.lru_cache(maxsize=None)
 def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8", errors="replace")
 
 
-def _scan(paths, needles, *, ignore_line=None, case_insensitive=False) -> list[str]:
+_TOKEN_CHARS = r"A-Za-z0-9_"
+_HOST_CHARS = r"A-Za-z0-9-"
+
+
+@functools.lru_cache(maxsize=None)
+def _needle_regex(needle: str) -> re.Pattern:
+    """Regex de um termo proibido, sem falso positivo por vizinhança e sem falso negativo por caixa.
+
+    * nome ou número (``zRitsu``, ``911370624507707483``): palavra inteira, sem diferenciar maiúsculas;
+    * host (``imgur.com``, ``i.ibb.co``): começa num limite de host (``i.imgur.com`` e ``www.imgur.com`` casam,
+      ``notimgur.com`` não) e não continua em outro rótulo (``ibb.com`` e ``ibb.co.uk`` não casam ``ibb.co``);
+    * host com caminho (``cdn.discordapp.com/attachments/``): mesmo começo, e o caminho casa literalmente.
+    """
+    body = re.escape(needle)
+    if "." not in needle and "/" not in needle:
+        return re.compile(rf"(?<![{_TOKEN_CHARS}]){body}(?![{_TOKEN_CHARS}])", re.IGNORECASE)
+    start = rf"(?<![{_HOST_CHARS}])"
+    end = "" if needle.endswith("/") else rf"(?![{_HOST_CHARS}]|\.[A-Za-z])"
+    return re.compile(f"{start}{body}{end}", re.IGNORECASE)
+
+
+def _contains(text: str, needle: str) -> bool:
+    return _needle_regex(needle).search(text) is not None
+
+
+def _scan(paths, needles, *, ignore_line=None) -> list[str]:
     """Retorna violações no formato 'arquivo:linha: needle'."""
+    regexes = [(needle, _needle_regex(needle)) for needle in needles]
     violations = []
     for path in paths:
         for lineno, line in enumerate(_read(path).splitlines(), start=1):
             if ignore_line and ignore_line(path, line):
                 continue
-            haystack = line.lower() if case_insensitive else line
-            for needle in needles:
-                probe = needle.lower() if case_insensitive else needle
-                if probe in haystack:
+            for needle, regex in regexes:
+                if regex.search(line):
                     violations.append(f"{path}:{lineno}: {needle!r}")
+    return violations
+
+
+UPSTREAM_LL_REPO_RE = re.compile(r"zRitsu/LL-binaries(?![A-Za-z0-9_-])", re.IGNORECASE)
+
+
+def _scan_regex(paths, regex: re.Pattern) -> list[str]:
+    violations = []
+    for path in paths:
+        for lineno, line in enumerate(_read(path).splitlines(), start=1):
+            if regex.search(line):
+                violations.append(f"{path}:{lineno}: {regex.pattern!r}")
     return violations
 
 
@@ -241,13 +389,15 @@ def test_local_lavalink_does_not_use_upstream_binaries():
         if (ROOT / "empiremuse/utils/music/local_lavalink.py").is_file()
         else "utils/music/local_lavalink.py"
     )
-    violations = _scan([path], ["zRitsu/LL-binaries"])
+    violations = _scan_regex([path], UPSTREAM_LL_REPO_RE)
     _fail_with("local_lavalink.py ainda aponta para zRitsu/LL-binaries", violations)
 
 
 RENAMED_LL_REPO = (
     "DiscordEmpireHub/LL-binaries"  # renomeado para DiscordEmpireHub/EmpireMuse-LL-binaries (301 no GitHub)
 )
+# O nome antigo termina o nome do repositório (``LL-binaries``, ``LL-binaries.git``, ``LL-binaries/``), nunca outro nome.
+OLD_LL_REPO_RE = re.compile(r"(?:DiscordEmpireHub|zRitsu)/LL-binaries(?![A-Za-z0-9_-])", re.IGNORECASE)
 
 
 def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
@@ -267,7 +417,7 @@ def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
     others = [p for p in paths if p not in ("utils/branding.py", "empiremuse/utils/branding.py")]
     _fail_with(
         "nome antigo do repositório de binários (use EmpireMuse-LL-binaries)",
-        _scan(others, [RENAMED_LL_REPO, "zRitsu/LL-binaries"]) + _scan([branding_path], ["zRitsu/LL-binaries"]),
+        _scan_regex(others, OLD_LL_REPO_RE) + _scan_regex([branding_path], UPSTREAM_LL_REPO_RE),
     )
 
 
@@ -281,7 +431,7 @@ def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror(
 
 
 def _jishaku_exception(path: str, line: str) -> bool:
-    return path == JISHAKU_EXCEPTION_FILE and "jishaku" in line.lower()
+    return path == JISHAKU_EXCEPTION_FILE and re.search(r"jishaku", line, re.IGNORECASE) is not None
 
 
 PANEL_CREDIT_FILE = (
@@ -300,9 +450,9 @@ def _gpl_credit_exception(path: str, line: str) -> bool:
     if path != PANEL_CREDIT_FILE:
         return False
     remainder = line.replace(UPSTREAM_REPO_URL, "")
-    if any(pattern in remainder for pattern in OTHER_UPSTREAM_PATTERNS):
+    if any(_contains(remainder, pattern) for pattern in OTHER_UPSTREAM_PATTERNS):
         return False
-    return "zRitsu/" not in remainder
+    return not re.search(r"zritsu/", remainder, re.IGNORECASE)
 
 
 def _line_exception(path: str, line: str) -> bool:
@@ -405,7 +555,9 @@ def test_credits_file_preserves_upstream_attribution():
     assert path.is_file(), "CREDITS.md não existe na raiz"
     content = path.read_text(encoding="utf-8")
     required = ["zRitsu", "MuseHeart-MusicBot", EXPECTED_CONSTANTS["UPSTREAM_URL"], "GPL"]
-    missing = [item for item in required if item not in content]
+    missing = [
+        item for item in required if not re.search(rf"(?<![A-Za-z0-9_]){re.escape(item)}(?![A-Za-z0-9_])", content)
+    ]
     assert not missing, f"CREDITS.md sem: {missing}"
 
 
@@ -419,7 +571,7 @@ def test_about_command_links_repo_and_upstream():
     content = _read(misc_path)
     for label, const in (("REPO_URL", "REPO_URL"), ("UPSTREAM_URL", "UPSTREAM_URL")):
         literal = EXPECTED_CONSTANTS[const]
-        assert f"branding.{label}" in content or literal in content, (
+        assert re.search(rf"\bbranding\.{label}\b", content) or literal in content, (
             f"modules/misc.py deve referenciar {label} (via branding.{label} ou literal)"
         )
 
@@ -467,14 +619,224 @@ def test_branding_constant_has_contract_value(branding, const, expected):
 def test_client_bot_token_message_has_no_replit_reference():
     """Garante que a mensagem de erro de token em utils/client.py não contém referências à Replit (C-15/C-16)."""
     client_py = (ROOT / "empiremuse" / "utils" / "client.py").read_text(encoding="utf-8")
-    assert "REPL_SLUG" not in client_py, "utils/client.py ainda contém ramificação específica para REPL_SLUG"
-    assert "replit-token.md" not in client_py, "utils/client.py ainda referencia replit-token.md"
-    assert "secrets da replit" not in client_py, "utils/client.py ainda contém mensagem legada da Replit"
+    assert not re.search(r"\bREPL_SLUG\b", client_py), (
+        "utils/client.py ainda contém ramificação específica para REPL_SLUG"
+    )
+    assert not re.search(r"replit-token\.md", client_py, re.IGNORECASE), (
+        "utils/client.py ainda referencia replit-token.md"
+    )
+    assert not re.search(r"secrets\s+da\s+replit", client_py, re.IGNORECASE), (
+        "utils/client.py ainda contém mensagem legada da Replit"
+    )
 
 
 def test_readme_conforms_to_empirehub_scope():
     """Garante que o README não possui seções legadas de auto-hospedagem de terceiros."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "Hospede o seu próprio bot com essa source" not in readme
-    assert "source_setup.sh" not in readme
-    assert "replit.com/@xRitsu" not in readme
+    assert not re.search(r"hospede\s+o\s+seu\s+próprio\s+bot\s+com\s+essa\s+source", readme, re.IGNORECASE)
+    assert not re.search(r"source_setup\.sh", readme, re.IGNORECASE)
+    assert not re.search(r"replit\.com/@xRitsu", readme, re.IGNORECASE)
+
+
+# --------------------------------------------------------------------------- Robustez da varredura (KI-34)
+
+
+@pytest.fixture
+def raiz_falsa(monkeypatch, tmp_path):
+    """Troca ``ROOT`` por uma pasta temporária (sem ``.git``) e limpa os caches de listagem e leitura."""
+    import sys
+
+    modulo = sys.modules[__name__]
+    monkeypatch.setattr(modulo, "ROOT", tmp_path)
+    _repo_files_cached.cache_clear()
+    _read.cache_clear()
+    yield tmp_path
+    _repo_files_cached.cache_clear()
+    _read.cache_clear()
+
+
+def _criar(raiz: Path, arquivos: dict[str, str]) -> None:
+    for nome, texto in arquivos.items():
+        destino = raiz / nome
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(texto, encoding="utf-8")
+
+
+class TestListagemSemGit:
+    GITIGNORE = "\n".join(
+        [
+            "# comentário",
+            "__pycache__/",
+            "*.py[cod]",
+            "*.log",
+            "/build/",
+            "docs/rascunho/",
+            "!importante.log",
+            ".env",
+            "segredo?.txt",
+            "**/gerado/",
+            "dados/**/*.tmp",
+            "*.bak # não é comentário: faz parte do padrão",
+        ]
+    )
+
+    ARQUIVOS = {
+        ".gitignore": GITIGNORE,
+        "a.py": "x",
+        "pkg/b.py": "x",
+        "pkg/b.pyc": "x",
+        "pkg/__pycache__/c.py": "x",
+        "erro.log": "x",
+        "importante.log": "x",
+        "build/x.py": "x",
+        "pkg/build/y.py": "x",
+        "docs/rascunho/z.md": "x",
+        "docs/guia.md": "x",
+        ".env": "x",
+        "segredo1.txt": "x",
+        "segredo12.txt": "x",
+        "a/gerado/g.py": "x",
+        "gerado/h.py": "x",
+        "dados/d1/d2/lixo.tmp": "x",
+        "dados/d1/bom.txt": "x",
+        ".git": "gitdir: /em/outro/lugar",
+    }
+
+    def test_aplica_as_regras_do_gitignore_como_o_git(self, tmp_path):
+        _criar(tmp_path, self.ARQUIVOS)
+        encontrados = set(_walk_files(tmp_path))
+        assert encontrados == {
+            ".gitignore",
+            "a.py",
+            "pkg/b.py",
+            "importante.log",
+            "pkg/build/y.py",
+            "docs/guia.md",
+            "segredo12.txt",
+            "dados/d1/bom.txt",
+        }
+
+    def test_sem_gitignore_lista_tudo_menos_o_git(self, tmp_path):
+        _criar(tmp_path, {"x.py": "1", "sub/y.md": "2", ".git": "g"})
+        assert set(_walk_files(tmp_path)) == {"x.py", "sub/y.md"}
+
+    def test_um_diretorio_ignorado_esconde_o_que_foi_reincluido_dentro_dele(self, tmp_path):
+        _criar(tmp_path, {".gitignore": "pasta/\n!pasta/ok.txt\n", "pasta/ok.txt": "1", "fora.txt": "2"})
+        assert set(_walk_files(tmp_path)) == {".gitignore", "fora.txt"}
+
+    def test_repo_files_sem_dot_git_varre_o_diretorio(self, raiz_falsa):
+        _criar(raiz_falsa, {".gitignore": "*.log\n", "a.py": "x", "b.log": "x"})
+        assert _repo_files() == [".gitignore", "a.py"]
+
+    def test_repo_files_com_git_ausente_do_sistema_cai_na_varredura(self, raiz_falsa, monkeypatch):
+        (raiz_falsa / ".git").mkdir()
+        _criar(raiz_falsa, {".gitignore": "*.log\n", "a.py": "x", "b.log": "x"})
+
+        def sem_git(*args, **kwargs):
+            raise FileNotFoundError("git")
+
+        monkeypatch.setattr(subprocess, "run", sem_git)
+        assert _repo_files() == [".gitignore", "a.py"]
+
+    def test_varredura_do_repositorio_real_e_igual_a_listagem_do_git(self):
+        """Prova de equivalência: onde há git, a varredura devolve os mesmos arquivos que ``git ls-files``."""
+        if not (ROOT / ".git").exists():
+            pytest.skip("sem .git: não há listagem do git para comparar")
+        try:
+            do_git = {*_git_lines("ls-files", "-z"), *_git_lines("ls-files", "-z", "--others", "--exclude-standard")}
+        except (OSError, subprocess.CalledProcessError):
+            pytest.skip("git indisponível neste ambiente")
+        do_git = {p for p in do_git if (ROOT / p).is_file()}
+        assert set(_walk_files(ROOT)) == do_git
+
+    def test_o_conjunto_varrido_inclui_os_arquivos_que_as_varreduras_precisam(self):
+        arquivos = set(_repo_files())
+        assert {"empiremuse/utils/branding.py", "README.md", ".example.env", "assets/SHA256SUMS"} <= arquivos
+        assert not any(p.startswith((".git/", ".venv/")) for p in arquivos)
+
+
+class TestCorrespondenciaPrecisa:
+    """Os termos proibidos são casados por palavra/host inteiros, sem diferenciar a caixa."""
+
+    @pytest.mark.parametrize(
+        ("termo", "texto"),
+        [
+            ("imgur.com", "https://i.imgur.com/abc.png"),
+            ("imgur.com", "https://IMGUR.COM/x"),
+            ("imgur.com", "veja imgur.com."),
+            ("i.imgur.com/", "src='https://i.imgur.com/a.png'"),
+            ("ibb.co", "http://ibb.co/x e outra"),
+            ("i.ibb.co", "https://i.ibb.co/ab/c.png"),
+            ("iili.io", "![x](https://iili.io/a.png)"),
+            ("cdn.discordapp.com/attachments/", "https://cdn.discordapp.com/attachments/1/2/a.png"),
+            ("cdn.discordapp.com/attachments/", "HTTPS://CDN.DISCORDAPP.COM/ATTACHMENTS/1"),
+            ("zRitsu", "autor: zRitsu"),
+            ("zRitsu", "github.com/zritsu/repo"),
+            ("zRitsu", "(zRitsu)"),
+            ("911370624507707483", "id=911370624507707483&x=1"),
+            ("iconfinder.com/", "https://www.iconfinder.com/icons/1"),
+        ],
+    )
+    def test_acha(self, termo, texto):
+        assert _contains(texto, termo), f"{termo!r} deveria ser encontrado em {texto!r}"
+
+    @pytest.mark.parametrize(
+        ("termo", "texto"),
+        [
+            ("imgur.com", "https://notimgur.com/x"),
+            ("imgur.com", "https://imgur.company.invalid/x"),
+            ("imgur.com", "https://imgur.com.br/x"),
+            ("ibb.co", "https://ibb.com/x"),
+            ("ibb.co", "https://ibb.co.uk/x"),
+            ("ibb.co", "https://fibb.co/x"),
+            ("i.ibb.co", "https://xi.ibb.co.invalid/x"),
+            ("iili.io", "https://iili.iot/x"),
+            ("cdn.discordapp.com/attachments/", "https://mycdn.discordapp.com/attachments/1"),
+            ("cdn.discordapp.com/attachments/", "https://cdn.discordapp.com/emojis/1.png"),
+            ("zRitsu", "zRitsuX e xzRitsu e z_Ritsu"),
+            ("zRitsu", "zRitsu_bot"),
+            ("911370624507707483", "9113706245077074830 e 1911370624507707483"),
+            ("iconfinder.com/", "https://iconfinder.com.invalid/x"),
+        ],
+    )
+    def test_nao_acha_parecidos(self, termo, texto):
+        assert not _contains(texto, termo), f"{termo!r} NÃO deveria ser encontrado em {texto!r}"
+
+    @pytest.mark.parametrize(
+        "texto", ["MuseHeart", "museheart", "MUSE-HEART", "Muse_Heart", "muse heart bot", "x MuseHeart-MusicBot"]
+    )
+    def test_nome_antigo_achado(self, texto):
+        assert OLD_NAME_RE.search(texto)
+
+    @pytest.mark.parametrize("texto", ["amuse heart", "Amuse-Heart", "confuse_heart", "music heart", "museum heart"])
+    def test_palavras_parecidas_nao_sao_o_nome_antigo(self, texto):
+        assert not OLD_NAME_RE.search(texto)
+
+    def test_o_nome_antigo_seguido_de_letras_continua_sendo_o_nome_antigo(self):
+        assert OLD_NAME_RE.search("muse hearty")
+
+    @pytest.mark.parametrize(
+        ("regex", "texto", "achou"),
+        [
+            (OLD_LL_REPO_RE, "DiscordEmpireHub/LL-binaries", True),
+            (OLD_LL_REPO_RE, "https://github.com/DiscordEmpireHub/LL-binaries.git", True),
+            (OLD_LL_REPO_RE, "discordempirehub/ll-binaries/releases", True),
+            (OLD_LL_REPO_RE, "DiscordEmpireHub/EmpireMuse-LL-binaries", False),
+            (OLD_LL_REPO_RE, "DiscordEmpireHub/LL-binaries-extra", False),
+            (UPSTREAM_LL_REPO_RE, "zRitsu/LL-binaries", True),
+            (UPSTREAM_LL_REPO_RE, "zRitsu/LL-binariesX", False),
+        ],
+    )
+    def test_nome_antigo_do_repositorio_de_binarios(self, regex, texto, achou):
+        assert bool(regex.search(texto)) is achou
+
+    def test_scan_acusa_o_arquivo_a_linha_e_o_termo(self, raiz_falsa):
+        _criar(raiz_falsa, {"a.txt": "limpo\nveja https://i.imgur.com/x.png\n", "b.txt": "https://notimgur.com/x\n"})
+        assert _scan(["a.txt", "b.txt"], ["imgur.com", "zRitsu"]) == ["a.txt:2: 'imgur.com'"]
+
+    def test_o_crédito_gpl_do_painel_continua_aceito_e_outros_recursos_na_mesma_linha_nao(self):
+        base = PANEL_CREDIT_FILE
+        assert _gpl_credit_exception(base, f"por zRitsu, {UPSTREAM_REPO_URL}")
+        assert not _gpl_credit_exception(base, f"zRitsu {UPSTREAM_REPO_URL} https://i.imgur.com/a.png")
+        assert not _gpl_credit_exception(base, "github.com/zRitsu/outro")
+        assert not _gpl_credit_exception("outro/arquivo.html", "zRitsu")
