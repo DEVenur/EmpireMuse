@@ -46,13 +46,6 @@ class TestA4BotaoDoEmbed:
         assert not gravou(bot) and "espaço suficiente" in inter.texto
 
     @pytest.mark.asyncio
-    async def test_a_url_nao_e_validada(self):  # MUDA (etapa 4, A4): usa a regra de URL
-        bot = BotDoPlayer()
-        url = "https://exemplo.invalid/" + "x" * 300
-        await favoritar_pelo_embed(bot, "Longa", url)
-        assert bot.ultimo_global["fav_links"]["Longa"] == url
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("existentes", [6, 10], ids=["lista_com_folga", "lista_cheia"])
     async def test_sobrescrever_um_nome_existente_nao_ocupa_vaga(self, existentes):
         """Etapa 2 (A4): trocar a URL de um favorito que já existe funciona mesmo com a lista cheia."""
@@ -173,3 +166,40 @@ class TestA4NomeVindoDaFaixa:
         bot = BotDoPlayer(favs=1, favoritos={"t" * 25: URL})
         await favoritar(bot, "t" * 60, "https://exemplo.invalid/outra")
         assert bot.ultimo_global["fav_links"] == {"t" * 25: "https://exemplo.invalid/outra"}
+
+
+def url_com_tamanho(tamanho):
+    base = "https://exemplo.invalid/"
+    return base + "x" * (tamanho - len(base))
+
+
+class TestA4UrlVindaDaFaixa:
+    """Etapa 4 (A4): a URL da faixa passa pela regra de URL dos favoritos (URL inteira limpa, até 200 caracteres) em vez
+    de ser gravada sem validação."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("favoritar", BOTOES)
+    @pytest.mark.parametrize(
+        "url",
+        [
+            url_com_tamanho(201),
+            "https://exemplo.invalid/" + "x" * 300,
+            "https://exemplo.invalid/a]b",
+            "https://exemplo.invalid/@everyone",
+            "https://exemplo.invalid/a texto",
+            "https://exemplo.invalid/a\ntexto",
+        ],
+        ids=["201", "300", "colchete", "everyone", "espaco", "quebra_de_linha"],
+    )
+    async def test_url_invalida_ou_longa_demais_e_recusada(self, favoritar, url):
+        bot = BotDoPlayer()
+        inter = await favoritar(bot, "Faixa", url)
+        assert not gravou(bot) and inter.texto, "recusa com uma mensagem ao usuário"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("favoritar", BOTOES)
+    async def test_url_valida_ate_200_e_gravada(self, favoritar):
+        bot = BotDoPlayer()
+        url = url_com_tamanho(200)
+        await favoritar(bot, "Faixa", url)
+        assert bot.ultimo_global["fav_links"] == {"Faixa": url}

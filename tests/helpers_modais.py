@@ -27,6 +27,8 @@ class FakeMusicCog:
 class ModalBot:
     """Só o que os modais de ``interactions.py`` pedem ao bot; os dados são o MESMO dict (como no BaseDB)."""
 
+    loop = None  # o modal de integração usa ``bot.loop or asyncio.get_event_loop()`` para o yt-dlp
+
     def __init__(
         self,
         *,

@@ -172,16 +172,26 @@ class LinksAddTest(LinksBase):
         assert self.add(self.logged_in(), "Sem desc", "https://example.com/s").code == 200
         assert self.stored()["Sem desc"] == link("https://example.com/s", "")
 
-    def test_url_is_extracted_like_the_command_does(self):
+    def test_url_must_be_a_pure_url_like_the_modal_now_requires(self):
+        """Etapa 4 (F3-5b, A2/D1): URL pura (apara as pontas e desembrulha ``<…>``); texto ao redor é recusado."""
         browser = self.logged_in()
-        cases = {
+        accepted = {
             "A1": ("  https://example.com/a  ", "https://example.com/a"),
-            "B2": ("veja https://example.com/b agora", "https://example.com/b"),
-            "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c"),
+            "B2": ("<https://example.com/b>", "https://example.com/b"),
         }
-        for name, (sent, expected) in cases.items():
+        for name, (sent, expected) in accepted.items():
             assert self.add(browser, name, sent).code == 200, name
             assert self.stored()[name]["url"] == expected
+        writes = len(self.db.writes)
+        refused = {
+            "C3": "javascript:alert(1)//https://example.com/c",
+            "D4": "veja https://example.com/d agora",
+            "E5": "https://example.com/e]",
+            "F6": "https://example.com/@everyone",
+        }
+        for name, sent in refused.items():
+            assert self.add(browser, name, sent).code == 422, name
+        assert len(self.db.writes) == writes
 
     def test_boundaries_follow_the_modal_not_the_user_favs_config(self):
         browser = self.logged_in()
@@ -659,13 +669,18 @@ class LinksImportNormalizationTest(LinksBase):
     def do_import(self, browser, payload):
         return self.act(browser, 100, "importar", dados=json.dumps(payload))
 
-    def test_import_stores_only_the_url_reg_match_not_the_trailing_text(self):
+    def test_import_requires_the_whole_url_not_only_its_prefix(self):
+        """Etapa 4 (F3-5b, A1): o painel recusa o arquivo em vez de guardar só o prefixo da URL."""
         browser = self.logged_in()
+        writes = len(self.db.writes)
         payload = {
             "Lixo": link("https://example.com/ <img src=x onerror=alert(1)>", "d"),
             "Dois": link("https://example.com/b?x=1 texto depois", "e"),
         }
-        assert self.do_import(browser, payload).code == 200
+        assert self.do_import(browser, payload).code == 422
+        assert len(self.db.writes) == writes
+        clean = {"Lixo": link("https://example.com/", "d"), "Dois": link("  https://example.com/b?x=1  ", "e")}
+        assert self.do_import(browser, clean).code == 200
         assert self.stored()["Lixo"]["url"] == "https://example.com/"
         assert self.stored()["Dois"]["url"] == "https://example.com/b?x=1"
 

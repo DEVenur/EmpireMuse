@@ -64,30 +64,39 @@ def arquivo_do_modo(modo, nome, url, **extra):
 
 
 class TestA1UrlDoImportador:
-    """O painel guarda só o PREFIXO que casa com ``URL_REG`` (corta o resto, aceita ``]`` e ``@everyone``); o bot exige
-    a URL inteira limpa e recusa o arquivo."""
+    """Etapa 4 (A1): o painel exige a URL INTEIRA limpa, como o bot, e recusa o arquivo em vez de guardar só o
+    prefixo (antes cortava ``texto extra`` e aceitava ``]`` e ``@everyone``)."""
 
     SUJAS = {
-        "texto_depois": (f"{URL} texto extra", URL),
-        "colchete": (f"{URL}]b", f"{URL}]b"),
-        "arroba_everyone": (f"{URL_BASE}/@everyone", f"{URL_BASE}/@everyone"),
+        "texto_depois": f"{URL} texto extra",
+        "http_com_lixo": "http://a.com lixo",
+        "colchete": f"{URL}]b",
+        "arroba_everyone": f"{URL_BASE}/@everyone",
+        "arroba_here": f"{URL_BASE}/@here",
+        "quebra_de_linha": f"{URL}\ntexto",
+        "markdown": f"{URL})[x](https://evil.invalid/p)",
     }
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("modo", MODOS)
     @pytest.mark.parametrize("caso", list(SUJAS))
-    async def test_painel_grava_o_prefixo_sem_recusar(self, modo, caso):  # MUDA (etapa 4, A1): o painel recusa
-        entrada, esperado = self.SUJAS[caso]
-        guardado, erros = await importar_no_painel(modo, arquivo_do_modo(modo, "Musica", entrada))
-        assert erros == {} and url_de(guardado["Musica"]) == esperado
+    async def test_painel_recusa_o_arquivo_inteiro(self, modo, caso):
+        guardado, erros = await importar_no_painel(modo, arquivo_do_modo(modo, "Musica", self.SUJAS[caso]))
+        assert guardado is None and erros, f"{self.SUJAS[caso]!r} deveria ser recusada"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("modo", MODOS)
     @pytest.mark.parametrize("caso", list(SUJAS))
     async def test_bot_recusa_o_arquivo_inteiro(self, modo, caso):
-        entrada, _ = self.SUJAS[caso]
-        guardado, texto = await importar_no_bot(modo, arquivo_do_modo(modo, "Musica", entrada))
+        guardado, texto = await importar_no_bot(modo, arquivo_do_modo(modo, "Musica", self.SUJAS[caso]))
         assert guardado is None and "link inválido" in texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", MODOS)
+    async def test_painel_apara_as_pontas_da_url_como_o_bot(self, modo):
+        no_painel, erros = await importar_no_painel(modo, arquivo_do_modo(modo, "Musica", f"  {URL}  "))
+        no_bot, _ = await importar_no_bot(modo, arquivo_do_modo(modo, "Musica", f"  {URL}  "))
+        assert erros == {} and url_de(no_painel["Musica"]) == url_de(no_bot["Musica"]) == URL
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("modo", MODOS)
@@ -96,54 +105,126 @@ class TestA1UrlDoImportador:
         no_bot, _ = await importar_no_bot(modo, arquivo_do_modo(modo, "Musica", URL))
         assert erros == {} and url_de(no_painel["Musica"]) == url_de(no_bot["Musica"]) == URL
 
+    @pytest.mark.asyncio
+    async def test_recusa_de_um_item_no_painel_nao_grava_os_outros(self):
+        guardado, erros = await importar_no_painel(FAVORITOS, {"Boa": URL, "Ruim": f"{URL} lixo"})
+        assert guardado is None and erros
+
 
 # ============================================================================ A2 — URL do modal manual
 
 
 class TestA2UrlDoModal:
-    """O modal manual usa ``URL_REG.findall(texto)[0]``: aceita texto ao redor e deixa o ``>`` de ``<url>`` colado."""
+    """Etapa 4 (A2/D1): o modal manual exige URL pura: apara as pontas, desembrulha ``<…>`` e valida a URL inteira
+    limpa. Texto ao redor, colchetes e menções em massa são recusados com a mensagem que já existe."""
 
-    # MUDA (etapa 4, A2/D1): URL pura (strip e desembrulho de <…>); texto ao redor passa a ser recusado
-    CASOS = {
-        "texto_ao_redor": (f"veja {URL} agora", URL),
-        "entre_sinais": (f"<{URL}>", f"{URL}>"),
-        "colchete_no_fim": (f"{URL}]", f"{URL}]"),
+    ACEITAS = {
+        "pura": (URL, URL),
+        "com_espacos": (f"  {URL}  ", URL),
+        "entre_sinais": (f"<{URL}>", URL),
+        "entre_sinais_com_espacos": (f"  <{URL}>  ", URL),
+    }
+    RECUSADAS = {
+        "texto_ao_redor": f"veja {URL} agora",
+        "texto_depois": f"{URL} agora",
+        "texto_antes": f"veja {URL}",
+        "colchete_no_fim": f"{URL}]",
+        "markdown": f"[x]({URL})",
+        "everyone": f"{URL_BASE}/@everyone",
+        "so_o_sinal_de_abrir": f"<{URL}",
+        "duas_urls": f"{URL} {URL}",
     }
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("caso", list(CASOS))
-    async def test_modal_de_favorito(self, caso):
-        entrada, esperado = self.CASOS[caso]
+    @pytest.mark.parametrize("caso", list(ACEITAS))
+    async def test_modal_de_favorito_aceita(self, caso):
+        entrada, esperado = self.ACEITAS[caso]
         bot = ModalBot()
         await adicionar_favorito(bot, url=entrada)
         assert bot.salvos_usuario[-1]["fav_links"]["novo"] == esperado
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("caso", list(CASOS))
-    async def test_modal_de_link_do_servidor(self, caso):
-        entrada, esperado = self.CASOS[caso]
+    @pytest.mark.parametrize("caso", list(RECUSADAS))
+    async def test_modal_de_favorito_recusa(self, caso):
+        bot = ModalBot()
+        inter = await adicionar_favorito(bot, url=self.RECUSADAS[caso])
+        assert bot.salvos_usuario == [] and "Nenhum link válido" in inter.texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("caso", list(ACEITAS))
+    async def test_modal_de_link_do_servidor_aceita(self, caso):
+        entrada, esperado = self.ACEITAS[caso]
         bot = ModalBot()
         await adicionar_link_do_servidor(bot, "Link", entrada)
         assert bot.salvos_servidor[-1]["player_controller"]["fav_links"]["Link"]["url"] == esperado
 
     @pytest.mark.asyncio
-    async def test_modal_de_integracao_aceita_texto_ao_redor_do_perfil(self):
+    @pytest.mark.parametrize("caso", list(RECUSADAS))
+    async def test_modal_de_link_do_servidor_recusa(self, caso):
         bot = ModalBot()
-        await adicionar_integracao(bot, url="veja https://www.deezer.com/br/profile/123456 agora")
+        inter = await adicionar_link_do_servidor(bot, "Link", self.RECUSADAS[caso])
+        assert bot.salvos_servidor == [] and "Nenhum link válido" in inter.texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "entrada", ["https://www.deezer.com/br/profile/123456", " <https://www.deezer.com/br/profile/123456> "]
+    )
+    async def test_modal_de_integracao_aceita_a_url_pura_e_desembrulha(self, entrada):
+        bot = ModalBot()
+        await adicionar_integracao(bot, url=entrada)
         assert bot.salvos_usuario[-1]["integration_links"]["【DZ】: Ana"]["url"].endswith("/profile/123456")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("caso", list(CASOS))
-    async def test_painel_adicionar_favorito(self, caso):
-        entrada, esperado = self.CASOS[caso]
+    @pytest.mark.parametrize(
+        "entrada",
+        ["veja https://www.deezer.com/br/profile/123456 agora", "https://www.deezer.com/br/profile/123456]"],
+        ids=["texto_ao_redor", "colchete"],
+    )
+    async def test_modal_de_integracao_recusa_texto_ao_redor(self, entrada):
+        bot = ModalBot()
+        inter = await adicionar_integracao(bot, url=entrada)
+        assert bot.salvos_usuario == [] and "Nenhum link válido" in inter.texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("caso", list(ACEITAS))
+    async def test_painel_adicionar_favorito_aceita(self, caso):
+        entrada, esperado = self.ACEITAS[caso]
         resultado = await painel_favoritos(BotDoPainel(), "favorito_adicionar", {}, nome="novo", url=entrada)
         assert resultado.errors == {} and resultado.new["fav_links"]["novo"] == esperado
 
-    @pytest.mark.parametrize("caso", list(CASOS))
-    def test_painel_adicionar_link_do_servidor(self, caso):
-        entrada, esperado = self.CASOS[caso]
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("caso", list(RECUSADAS))
+    async def test_painel_adicionar_favorito_recusa(self, caso):
+        resultado = await painel_favoritos(
+            BotDoPainel(), "favorito_adicionar", {}, nome="novo", url=self.RECUSADAS[caso]
+        )
+        assert resultado.new == {} and resultado.errors.get("url")
+
+    @pytest.mark.asyncio
+    async def test_painel_editar_favorito_usa_a_mesma_regra(self):
+        favoritos = {"antigo": URL}
+        aceito = await painel_favoritos(BotDoPainel(), "favorito_editar", favoritos, nome="antigo", url=f"<{URL}b>")
+        assert aceito.errors == {} and aceito.new["fav_links"]["antigo"] == f"{URL}b"
+        recusado = await painel_favoritos(BotDoPainel(), "favorito_editar", favoritos, nome="antigo", url=f"veja {URL}")
+        assert recusado.new == {} and recusado.errors.get("url")
+
+    @pytest.mark.parametrize("caso", list(ACEITAS))
+    def test_painel_adicionar_link_do_servidor_aceita(self, caso):
+        entrada, esperado = self.ACEITAS[caso]
         resultado = painel_links(BotDoPainel(), "adicionar", {}, nome="Link", url=entrada, descricao="")
         assert resultado.errors == {} and resultado.new["fav_links"]["Link"]["url"] == esperado
+
+    @pytest.mark.parametrize("caso", list(RECUSADAS))
+    def test_painel_adicionar_link_do_servidor_recusa(self, caso):
+        resultado = painel_links(BotDoPainel(), "adicionar", {}, nome="Link", url=self.RECUSADAS[caso], descricao="")
+        assert resultado.new == {} and resultado.errors.get("url")
+
+    def test_painel_editar_link_do_servidor_usa_a_mesma_regra(self):
+        links = {"Link": {"url": URL, "description": ""}}
+        aceito = painel_links(BotDoPainel(), "editar", links, nome="Link", url=f"<{URL}b>", descricao="")
+        assert aceito.errors == {} and aceito.new["fav_links"]["Link"]["url"] == f"{URL}b"
+        recusado = painel_links(BotDoPainel(), "editar", links, nome="Link", url=f"veja {URL}", descricao="")
+        assert recusado.new == {} and recusado.errors.get("url")
 
     @pytest.mark.asyncio
     async def test_guarda_sem_link_nenhum_os_dois_lados_recusam(self):
@@ -466,13 +547,18 @@ class TestA11AvatarDaIntegracao:
     AVATAR = f"{URL_BASE}/a.png"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("avatar", "esperado"),
-        [(f"{AVATAR} lixo", AVATAR), (f"{AVATAR}]x", f"{AVATAR}]x")],
-    )
-    async def test_painel_grava_o_prefixo_do_avatar(self, avatar, esperado):  # MUDA (etapa 4, A11): recusa
+    @pytest.mark.parametrize("avatar", [f"{AVATAR} lixo", f"{AVATAR}]x", f"{URL_BASE}/@everyone", f"{AVATAR}\nx"])
+    async def test_painel_recusa_o_avatar_sujo(self, avatar):
+        """Etapa 4 (A11): como a URL, o avatar do painel é a URL inteira limpa (antes guardava só o prefixo)."""
         guardado, erros = await importar_no_painel(INTEGRACOES, {"Canal": {"url": URL, "avatar": avatar}})
-        assert erros == {} and guardado["Canal"]["avatar"] == esperado
+        assert guardado is None and erros
+
+    @pytest.mark.asyncio
+    async def test_painel_apara_as_pontas_do_avatar_como_o_bot(self):
+        item = {"Canal": {"url": URL, "avatar": f"  {self.AVATAR}  "}}
+        no_painel, erros = await importar_no_painel(INTEGRACOES, item)
+        no_bot, _ = await importar_no_bot(INTEGRACOES, item)
+        assert erros == {} and no_painel["Canal"]["avatar"] == no_bot["Canal"]["avatar"] == self.AVATAR
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("avatar", [f"{AVATAR} lixo", f"{AVATAR}]x"])
