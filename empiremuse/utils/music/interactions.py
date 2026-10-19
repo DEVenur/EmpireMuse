@@ -17,8 +17,21 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.rules.entries import merge_import, save_entry
-from empiremuse.rules.errors import FILE_TOO_LARGE, NAME_TAKEN, NAME_TOO_LONG, QUOTA_FULL, URL_TOO_LONG, RuleError
+from empiremuse.rules.errors import (
+    AVATAR_INVALID,
+    DESCRIPTION_INVALID,
+    DESCRIPTION_TOO_LONG,
+    FILE_TOO_LARGE,
+    ITEM_FORMAT,
+    NAME_TAKEN,
+    NAME_TOO_LONG,
+    QUOTA_FULL,
+    URL_TOO_LONG,
+    RuleError,
+)
 from empiremuse.rules.favorites import check_import_name, name_limit
+from empiremuse.rules.guild_links import check_description, import_entry as guild_link_entry
+from empiremuse.rules.integrations import import_entry as integration_entry
 from empiremuse.rules.limits import (
     FAV_NAME_MAX,
     FAV_NAME_MIN,
@@ -27,11 +40,12 @@ from empiremuse.rules.limits import (
     GUILD_LINK_NAME_MAX,
     GUILD_LINK_NAME_MIN,
     ITG_TITLE_MAX,
+    ITG_URL_MAX,
     MAX_GUILD_LINKS,
 )
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
-from empiremuse.rules.urls import check_url, clean_avatar, clean_url
+from empiremuse.rules.urls import check_url, clean_url
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
@@ -680,11 +694,6 @@ class ViewMode:
     integrations_manager = "2"
 
 
-def _integration_url(entry) -> Optional[str]:
-    """URL de uma integração importada: texto simples (formato antigo) ou ``{"url": ..., "avatar": ...}`` (exportador)."""
-    return entry.get("url") if isinstance(entry, dict) else entry
-
-
 IMPORT_ECHO_LIMIT = 100
 
 
@@ -705,13 +714,6 @@ def _invalid_name_text(name, low: int, high: int) -> str:
     )
 
 
-def _integration_entry(value, url: str, avatar: str):
-    """O que é gravado: o texto da URL (formato antigo) ou ``{"url"}`` e, se houver, ``"avatar"`` (nada além disso)."""
-    if not isinstance(value, dict):
-        return url
-    return {"url": url, "avatar": avatar} if avatar else {"url": url}
-
-
 def _url_error_text(error: RuleError, *, with_label: bool = False) -> str:
     """Mensagem de uma URL de arquivo recusada: longa demais (cita o limite) ou inválida."""
     if error.code == URL_TOO_LONG:
@@ -725,6 +727,26 @@ def _url_error_text(error: RuleError, *, with_label: bool = False) -> str:
             f"permitido:{error.limit}**"
         )
     return _invalid_link_text(error.value)
+
+
+def _guild_link_error_text(name, error: RuleError) -> str:
+    """Mensagem de um item de link do servidor recusado: formato, URL ou descrição."""
+    if error.code == ITEM_FORMAT:
+        return (
+            f"**O item `{_echo(name, 25)}` do seu arquivo está mal formatado:** cada item precisa ser um "
+            'objeto com os campos "url" e "description" em texto.'
+        )
+    if error.code == DESCRIPTION_TOO_LONG:
+        return (
+            f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{error.limit}\n"
+            f"Descrição:** {_echo(error.value)}"
+        )
+    if error.code == DESCRIPTION_INVALID:
+        return (
+            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 50 caracteres:** "
+            f"{_echo(error.value)}"
+        )
+    return _url_error_text(error, with_label=True)
 
 
 def _name_error_text(error: RuleError, low: int, high: int) -> str:
@@ -922,34 +944,17 @@ class FavModalImport(disnake.ui.Modal):
         clean_data = {}
 
         for name, data in json_data.items():
-            if not (
-                isinstance(data, dict) and isinstance(data.get("url"), str) and isinstance(data.get("description"), str)
-            ):
-                await inter.send(
-                    f"**O item `{_echo(name, 25)}` do seu arquivo está mal formatado:** cada item precisa ser um "
-                    'objeto com os campos "url" e "description" em texto.',
-                    ephemeral=True,
-                )
-                return False
+            entry = guild_link_entry(data)
 
-            url = check_url(data["url"], self.view.bot.config["USER_FAV_MAX_URL_LENGTH"])
-
-            if isinstance(url, RuleError):
-                await inter.send(_url_error_text(url, with_label=True), ephemeral=True)
-                return False
-
-            if len(data["description"]) > (max_description_chars := 50):
-                await inter.send(
-                    f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_description_chars}\nDescrição:** {_echo(data['description'])}",
-                    ephemeral=True,
-                )
+            if isinstance(entry, RuleError):
+                await inter.send(_guild_link_error_text(name, entry), ephemeral=True)
                 return False
 
             if (clean_name := clean_import_name(name, FAV_NAME_MIN, FAV_NAME_MAX, clean_data)) is None:
                 await inter.send(_invalid_name_text(name, FAV_NAME_MIN, FAV_NAME_MAX), ephemeral=True)
                 return False
 
-            clean_data[clean_name] = {"url": url, "description": data["description"]}
+            clean_data[clean_name] = entry
 
         await inter.response.defer(ephemeral=True)
 
@@ -990,23 +995,18 @@ class FavModalImport(disnake.ui.Modal):
         clean_data = {}
 
         for name, value in json_data.items():
-            url = check_url(value.get("url") if isinstance(value, dict) else value, 150)
+            entry = integration_entry(value)
 
-            if isinstance(url, RuleError):
-                await inter.send(_url_error_text(url), ephemeral=True)
-                return False
-
-            avatar = clean_avatar(value.get("avatar")) if isinstance(value, dict) else ""
-
-            if avatar is None:
-                await inter.send(_invalid_link_text(value["avatar"]), ephemeral=True)
+            if isinstance(entry, RuleError):
+                text = _invalid_link_text(entry.value) if entry.code == AVATAR_INVALID else _url_error_text(entry)
+                await inter.send(text, ephemeral=True)
                 return False
 
             if (clean_name := clean_import_name(name, 1, ITG_TITLE_MAX, clean_data)) is None:
                 await inter.send(_invalid_name_text(name, 1, ITG_TITLE_MAX), ephemeral=True)
                 return False
 
-            clean_data[clean_name] = _integration_entry(value, url, avatar)
+            clean_data[clean_name] = entry
 
         await inter.response.defer(ephemeral=True)
 
@@ -1031,7 +1031,7 @@ class FavModalImport(disnake.ui.Modal):
             self.view.log = f"{s} integrações foram importadas com sucesso."
         else:
             name = next(iter(clean_data))
-            self.view.log = f"A integração [`{name}`]({_integration_url(clean_data[name])}) foi importada com sucesso."
+            self.view.log = f"A integração [`{name}`]({clean_data[name]['url']}) foi importada com sucesso."
 
         return True
 
@@ -1177,6 +1177,15 @@ class FavModalAdd(disnake.ui.Modal):
                 )
                 return
 
+            description = check_description(inter.text_values["guild_fav_description"])
+
+            if isinstance(description, RuleError):
+                await inter.send(
+                    "**A descrição deve ficar vazia ou ter de 3 a 50 caracteres.**",
+                    ephemeral=True,
+                )
+                return
+
             await inter.response.defer(ephemeral=True)
 
             work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
@@ -1191,7 +1200,7 @@ class FavModalAdd(disnake.ui.Modal):
                 work["player_controller"]["fav_links"],
                 self.name,
                 inter.text_values["guild_fav_name"],
-                {"url": valid_url, "description": inter.text_values["guild_fav_description"].strip()},
+                {"url": valid_url, "description": description},
                 name_min=GUILD_LINK_NAME_MIN,
                 name_max=GUILD_LINK_NAME_MAX,
                 limit=MAX_GUILD_LINKS,
@@ -1233,7 +1242,7 @@ class FavModalAdd(disnake.ui.Modal):
 
             typed_url = inter.text_values["user_integration_url"].strip()
 
-            if (url := clean_url(typed_url, FAV_URL_MAX)) is None:
+            if (url := clean_url(typed_url, ITG_URL_MAX)) is None:
                 await inter.edit_original_message(
                     embed=disnake.Embed(
                         description=f"**Nenhum link válido encontrado:** {_echo(typed_url)}",

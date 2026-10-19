@@ -26,6 +26,7 @@ from empiremuse.rules.limits import (
 )
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
+from empiremuse.rules.integrations import import_entry as integration_entry
 from empiremuse.rules.urls import clean_url
 
 EXPORT_PATH = "/painel/conta/favoritos/exportar"
@@ -268,16 +269,8 @@ class IntegrationsSection(AccountSection):
 
     @staticmethod
     def _entry(value: Any) -> Optional[dict[str, str]]:
-        if isinstance(value, dict):
-            url, avatar = import_url(value.get("url"), ITG_URL_MAX), value.get("avatar")
-        else:
-            url, avatar = import_url(value, ITG_URL_MAX), None
-        if url is None:
-            return None
-        if avatar in (None, ""):
-            return {"url": url}
-        avatar_url = import_url(avatar, ITG_AVATAR_MAX)
-        return {"url": url, "avatar": avatar_url} if avatar_url else None
+        entry = integration_entry(value)
+        return None if isinstance(entry, RuleError) else entry
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
         doc["integration_links"] = new["integration_links"]

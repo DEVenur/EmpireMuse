@@ -32,6 +32,7 @@ from empiremuse.rules.limits import (
 )
 from empiremuse.rules.entries import check_name, merge_import, save_entry
 from empiremuse.rules.errors import NAME_TAKEN, RuleError
+from empiremuse.rules.guild_links import check_description, import_entry
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
 from empiremuse.rules.urls import clean_url
@@ -81,7 +82,7 @@ def _valid_fields(url_raw: str, description: str, stored: str = "") -> tuple[Opt
         url = clean_url(url_raw)
     if url is None:
         errors["url"] = MSG_URL
-    if description and description != stored and not DESCRIPTION_MIN <= len(description) <= DESCRIPTION_MAX:
+    if isinstance(check_description(description, stored), RuleError):
         errors["descricao"] = MSG_DESCRIPTION
     return url, errors
 
@@ -200,12 +201,11 @@ class LinksForm(SettingsForm):
             return {}, MSG_IMPORT_EMPTY
         if len(data) > MAX_LINKS:
             return {}, MSG_IMPORT_COUNT
-        max_url = ctx.bot.config["USER_FAV_MAX_URL_LENGTH"]
         items: dict[str, dict[str, str]] = {}
         for raw_name, item in data.items():
             name = clean_import_name(raw_name, NAME_MIN, NAME_MAX, items)  # colisão após o strip/caixa é recusada
-            clean = _clean_import_item(item, max_url)
-            if name is None or clean is None:
+            clean = import_entry(item)
+            if name is None or isinstance(clean, RuleError):
                 return {}, MSG_IMPORT_ITEM
             items[name] = clean
         return items, ""
@@ -216,15 +216,3 @@ class LinksForm(SettingsForm):
 
         guild_data = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
         await interactions.process_idle_embed(ctx.bot, ctx.guild, guild_data)
-
-
-def _clean_import_item(item: Any, max_url: int) -> Optional[dict[str, str]]:
-    if not isinstance(item, dict):
-        return None
-    url, description = item.get("url"), item.get("description")
-    if not isinstance(url, str) or not isinstance(description, str):
-        return None
-    clean = clean_url(url, max_url)
-    if clean is None or len(description) > DESCRIPTION_MAX:
-        return None
-    return {"url": clean, "description": description}
