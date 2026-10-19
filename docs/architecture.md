@@ -204,13 +204,20 @@ O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhad
 - **`limits.py`**: limites numéricos e constantes de tamanho (nomes, URLs, descrições, prefixos, canais e volumes);
 - **`text.py`**: sanitização e formatação de texto (`clean_title`, `clean_import_name`, `drop_same_names`, `normalize_status`);
 - **`urls.py`**: validações e expressões regulares de endereços (`URL_REG`, `is_clean_url`, `clean_avatar` e variantes legadas de extração e prefixo);
-- **`quota.py`**: cálculo e checagem de cotas (`quota_limit`);
-- **`settings.py`**: opções e coleções permitidas (`allowed_names`).
+- **`quota.py`**: cálculo e checagem de cotas (`quota_limit`, `has_room`, `import_has_room`, `file_exceeds`);
+- **`settings.py`**: validação de prefixo, status de voz, volume do player, cargos de DJ e skins permitidas (`allowed_names`);
+- **`errors.py`**: códigos e exceções padronizadas de validação de regras de negócio (`RuleError`);
+- **`entries.py`**: validação de pares nome/valor e sanitização de entradas estruturadas;
+- **`favorites.py`**: validações de nomes de favoritos pessoais, importação e favoritar faixas (`check_import_name`, `save_track`, `name_limit`);
+- **`guild_links.py`**: validação de links fixos do servidor e descrições (`check_description`, `import_entry`);
+- **`integrations.py`**: validação de canais/perfis de integração, importação e dados externos (`import_entry`, `save_external`).
+
+Auxiliar em `empiremuse/utils/music/user_limits.py`: cálculo de cota do usuário no bot (`quota_for`) integrando configurações do pool (`MAX_USER_FAVS`, `MAX_USER_INTEGRATIONS`), isenção do dono e texto padronizado de erro para o botão de favoritar (`track_fav_error_text`).
 
 **Direção de dependências e isolamento arquitetural**:
 1. O pacote `empiremuse/rules/` utiliza **exclusivamente a biblioteca padrão** do Python (sem dependência de `disnake`, `tornado`, `motor` ou outros módulos da aplicação);
 2. Tanto o código do bot (`cogs` e `utils`) quanto o painel web (`panel/services`) importam diretamente de `empiremuse/rules/`;
-3. **O código do bot (`utils` e `cogs`) não importa `empiremuse.panel`**: o bot opera de forma totalmente independente do painel web (assegurado por teste estático de AST e inspeção de módulos carregados em `tests/test_f3_5b_arquitetura.py`). Durante a transição da Fase 3 (F3-5b), `empiremuse/panel/services/` mantém reexportações transitórias dos nomes legados.
+3. **O código de regras e os módulos do bot (`utils` e `cogs`) não importam `empiremuse.panel`**: o processo do bot inicializa o servidor web e o painel (`empiremuse/web_app.py`), mas a lógica de comandos, regras e componentes de interface do bot não dependem do painel (garantido por testes de AST e ausência de módulos do painel em `sys.modules` ao importar o bot, validados em `tests/test_f3_5b_arquitetura.py`). Com a unificação completa das regras no PR 2, todas as reexportações transitórias em `empiremuse/panel/services/` foram eliminadas.
 
 ## 8. Persistência
 
@@ -264,7 +271,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/rpc_protocol.py` | Protocolo do relé RPC: validações, limites, sanitização e rate limit | 156 |
 | `empiremuse/web_app.py` | Status HTTP, relé WebSocket do RPC, roteador do painel web | 651 |
 | `empiremuse/panel/` | Sub-aplicação web Tornado: OAuth2, sessões, handlers, serviços puros, templates e estáticos | 4.306 |
-| `empiremuse/rules/` | Regras de negócio puras (limites, texto, URLs, cota, configurações); só biblioteca padrão | 157 |
+| `empiremuse/rules/` | Regras de negócio puras (limites, texto, URLs, cota, configurações, erros, favoritos, links, integrações); só biblioteca padrão | 542 |
 | `empiremuse/utils/music/request_channel.py` | Lógica unificada de setup e reset de canal de pedidos compartilhada entre cogs e painel | 497 |
 | `empiremuse/utils/client.py` | `BotPool` (setup, nodes, tokens) e `BotCore` (prefixo, sync, módulos) | 1.511 |
 | `empiremuse/utils/db.py` | Modelos, `MongoDatabase`, `LocalDatabase`, prefixos | 330 |
