@@ -23,6 +23,7 @@ from empiremuse.utils.client import BotPool
 
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"  # só o formato; não é um token real
 SHA = "0123456789abcdef0123456789abcdef01234567"
+FALLBACK = "https://exemplo.invalid/fallback/Repo"  # SOURCE_REPO do teste: nunca igual ao repositório dos casos
 
 
 @pytest.fixture
@@ -35,6 +36,7 @@ def pool(monkeypatch, tmp_path):
     monkeypatch.chdir(cwd)
     monkeypatch.setenv("RUN_LOCAL_LAVALINK", "false")
     monkeypatch.setenv("RUN_RPC_SERVER", "false")
+    monkeypatch.setenv("SOURCE_REPO", FALLBACK + ".git")  # diferente do repositório dos casos: o oráculo do fallback
     monkeypatch.setenv("TOKEN", TOKEN_FALSO)
     pool = BotPool()
 
@@ -181,6 +183,24 @@ class TestFormatosDeUrl:
             == "https://git.exemplo.invalid:8443/equipe/projeto"
         )
 
+    @pytest.mark.parametrize(
+        ("url", "esperado"),
+        [
+            ("http://git.exemplo.invalid/equipe/projeto.git", "http://git.exemplo.invalid/equipe/projeto"),
+            ("https://[::1]:8443/equipe/projeto.git", "https://[::1]:8443/equipe/projeto"),
+            ("ssh://git@[2001:db8::1]/equipe/projeto.git", "https://[2001:db8::1]/equipe/projeto"),
+            ("github.com:DiscordEmpireHub/EmpireMuse.git", WEB),
+            ("git+ssh://git@github.com/DiscordEmpireHub/EmpireMuse.git", WEB),
+        ],
+        ids=["http_mantido", "ipv6_http_com_porta", "ipv6_ssh", "scp_sem_usuario", "git_mais_ssh"],
+    )
+    def test_outras_formas_de_endereco(self, monkeypatch, pool, url, esperado):
+        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == esperado
+
+    @pytest.mark.parametrize("saida", [f"  origin\t{WEB}.git (fetch)\n", f"origin\t{WEB}.git (fetch)\r\n"], ids=repr)
+    def test_espacos_e_quebra_de_linha_do_windows_nas_pontas_da_linha(self, monkeypatch, pool, saida):
+        assert com_saida_do_git(monkeypatch, pool, saida) == WEB
+
 
 class TestSaidaSemRemoteUtil:
     """Vazia, ilegível, remote local ou falha do git: cai em ``SOURCE_REPO`` sem levantar erro."""
@@ -199,6 +219,11 @@ class TestSaidaSemRemoteUtil:
             "origin\t/srv/git/projeto.git (fetch)\n",
             "origin\t../projeto (fetch)\n",
             "origin\tfile:///srv/git/projeto.git (fetch)\n",
+            "origin\thttps://exemplo.invalid (fetch)\n",
+            "origin\thttps://exemplo.invalid/ (fetch)\n",
+            "origin\tgit@github.com: (fetch)\n",
+            "origin\thttps://[::1/projeto (fetch)\n",
+            "origin\tftp://exemplo.invalid/org/projeto.git (fetch)\n",
         ],
         ids=lambda saida: repr(saida)[:40],
     )
