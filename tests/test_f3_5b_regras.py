@@ -110,10 +110,9 @@ class TestUrls:
             "http://exemplo.invalid/a",
             "https://exemplo.invalid/a",
             "https://exemplo.invalid/a%20b",
-            "https://exemplo.invalid/a(b)!*,",
+            "https://exemplo.invalid/a(b!*,",
             "https://exemplo.invalid/a?x=1&y=2+3",
             "https://exemplo.invalid/a%2",
-            "https://exemplo.invalid/a<b>",  # `<` e `>` fazem parte da classe: é o resíduo do A2
             "https://exemplo.invalid/@user",
             "https://exemplo.invalid/a_b-c.d",
         ],
@@ -133,6 +132,10 @@ class TestUrls:
             "https://exemplo.invalid/a]b",
             "https://exemplo.invalid/@everyone",
             "https://exemplo.invalid/@HERE",
+            "https://exemplo.invalid/a)b",  # endurecimento: `)`, `<`, `>` e `\\` dentro da URL
+            "https://exemplo.invalid/a<b>",
+            "https://exemplo.invalid/a\\b",
+            "https://usuario:senha@exemplo.invalid/a",  # credencial na autoridade
             "https://exemplo.invalid/a#z",
             "https://exemplo.invalid/a~",
             "https://exemplo.invalid/a{b}",
