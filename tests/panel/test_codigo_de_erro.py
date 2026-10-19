@@ -101,3 +101,12 @@ class PanelErrorCodeTest(PanelTestBase):
             with self.assertNoLogs(LOGGER, "ERROR"):
                 response = self.get_page("/painel/")
         assert response.code == 403 and "ERR-" not in response.body.decode("utf-8")
+
+    def test_o_corpo_de_emergencia_escapa_o_codigo(self):
+        """O código é aleatório e só tem hexadecimal; mesmo assim vai escapado para dentro do HTML."""
+        with mock.patch.object(IndexHandler, "get", explode), fixa_codigo("<b>"):
+            with mock.patch.object(tornado.web.RequestHandler, "render", explode):
+                with self.assertLogs(LOGGER, "ERROR"):
+                    response = self.get_page("/painel/")
+        body = response.body.decode("utf-8")
+        assert "&lt;B&gt;" in body and "<B>" not in body

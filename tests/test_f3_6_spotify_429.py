@@ -173,6 +173,29 @@ class TestPausaPeloRetryAfter:
         cliente.clock.avancar(0.5)
         assert cliente.disabled is False, f"deveria voltar aos {segundos} s"
 
+    @pytest.mark.asyncio
+    async def test_a_mensagem_explica_a_pausa_e_arredonda_o_que_falta_para_cima(self, api):
+        cliente = api
+        await provocar_429(cliente, "30")
+        cliente.clock.avancar(0.5)
+        with pytest.raises(GenericError) as erro:
+            await cliente.get_user_info("abc")
+        assert "limitou" in erro.value.text and "pausa" in erro.value.text and "30 s" in erro.value.text
+        cliente.clock.avancar(29.4)  # falta 0,1 s: ainda diz 1 s, nunca 0
+        with pytest.raises(GenericError) as erro:
+            await cliente.get_user_info("abc")
+        assert "1 s" in erro.value.text and "0 s" not in erro.value.text
+
+    def test_uma_pausa_nunca_encurta_outra_que_ainda_vale(self, api):
+        """Duas respostas 429 em voo ao mesmo tempo: a do ``Retry-After`` menor não derruba a pausa da maior."""
+        cliente = api
+        cliente._pause("100")
+        cliente._pause("5")
+        cliente.clock.avancar(50)
+        assert cliente.disabled is True
+        cliente.clock.avancar(50)
+        assert cliente.disabled is False
+
 
 class TestLogDaPausa:
     @pytest.mark.asyncio
@@ -183,6 +206,7 @@ class TestLogDaPausa:
         registros = [r.getMessage() for r in caplog.records if "pausa" in r.getMessage().lower()]
         assert registros and "30" in registros[0]
         assert TOKEN not in caplog.text and "api.spotify.com" not in caplog.text and "users/abc" not in caplog.text
+        assert "segredo-de-teste" not in caplog.text and "id-de-teste" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_a_requisicao_recusada_na_pausa_nao_enche_o_log(self, api, caplog):
@@ -203,6 +227,24 @@ class TestRetryAfterPuro:
         ids=repr,
     )
     def test_retry_after_seconds(self, bruto, esperado):
+        from empiremuse.rules.ratelimit import retry_after_seconds
+
+        assert retry_after_seconds(bruto) == esperado
+
+    @pytest.mark.parametrize(
+        ("bruto", "esperado"),
+        [
+            (True, 60),
+            (False, 60),
+            ("٣٠", 60),  # dígitos arábico-índicos: isdigit() é verdadeiro, mas não é um inteiro de cabeçalho HTTP
+            ("1000", 1000),
+            ("9" * 13, 3600),
+            ("9" * 4000, 3600),
+            (" 7\t", 7),
+        ],
+        ids=repr,
+    )
+    def test_retry_after_seconds_casos_de_borda(self, bruto, esperado):
         from empiremuse.rules.ratelimit import retry_after_seconds
 
         assert retry_after_seconds(bruto) == esperado

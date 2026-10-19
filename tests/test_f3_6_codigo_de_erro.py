@@ -341,3 +341,50 @@ class TestPrefixo:
 
         assert "Ocorreu um erro" in texto_do_prefixo(ctx) and "ERR-" not in texto_do_prefixo(ctx)
         assert registros_de_erro(caplog)
+
+
+class TestFalhaAoGerarOCodigo:
+    def test_safe_error_code_devolve_vazio_e_registra_so_o_tipo_do_erro(self, monkeypatch, caplog):
+        from empiremuse.rules.error_code import safe_error_code
+
+        falhar_ao_gerar(monkeypatch)
+        with caplog.at_level(logging.WARNING, logger="empiremuse.rules.error_code"):
+            codigo = safe_error_code()
+        assert codigo == ""
+        assert "RuntimeError" in caplog.text and "sem entropia" not in caplog.text
+
+    def test_safe_error_code_so_engole_excecoes_de_verdade(self, monkeypatch):
+        from empiremuse.rules.error_code import safe_error_code
+
+        def interrompe(nbytes=None):
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(secrets, "token_hex", interrompe)
+        with pytest.raises(KeyboardInterrupt):
+            safe_error_code()
+
+
+class TestSemCodigoNoWebhook:
+    """Se não deu para gerar o código, o webhook não ganha campo de código e o anexo mantém o nome simples."""
+
+    @pytest.mark.asyncio
+    async def test_interacao(self, handler, enviado, anexos, monkeypatch):
+        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
+        falhar_ao_gerar(monkeypatch)
+
+        await handler.process_interaction_error(interacao(), erro_de_disco())
+
+        embed = handler.send_webhook.await_args.kwargs["embed"]
+        assert "Código do erro" not in valores_dos_campos(embed)
+        assert [nome for _, nome in anexos] == ["error_traceback_interaction.txt"]
+
+    @pytest.mark.asyncio
+    async def test_prefixo(self, handler, anexos, monkeypatch):
+        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
+        falhar_ao_gerar(monkeypatch)
+
+        await handler.on_legacy_command_error(Contexto(True), erro_de_disco())
+
+        embed = handler.send_webhook.await_args.kwargs["embed"]
+        assert "Código do erro" not in valores_dos_campos(embed)
+        assert [nome for _, nome in anexos] == ["error_traceback_prefixed.txt"]
