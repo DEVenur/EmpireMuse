@@ -84,7 +84,7 @@ class TestSaveExternal:
 
     def test_titulo_de_um_caractere_vale_e_vazio_nao(self):
         assert save_external({}, "A", URL, None, limit=0).name == "A"
-        for vazio in ("", "   ", "​", None):
+        for vazio in ("", "   ", "\u200b", None):
             erro = save_external({}, vazio, URL, None, limit=0)
             assert isinstance(erro, RuleError) and erro.code == NAME_INVALID
 
