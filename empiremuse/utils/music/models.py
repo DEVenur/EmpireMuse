@@ -59,8 +59,13 @@ LAVALINK_LOG_LIMIT = 1000
 
 
 def lavalink_text(message) -> str:
-    """Mensagem de falha do Lavalink para mostrar: uma linha, truncada, sem bloco de código nem markdown ativo."""
-    return disnake.utils.escape_markdown(plain_snippet(message, LAVALINK_MESSAGE_LIMIT))
+    """Mensagem de falha do Lavalink para mostrar: uma linha, truncada e dentro de um code span.
+
+    O nó pode ser de terceiros: no code span a URL solta não vira link e ``<@id>``/``<#id>``/``@everyone`` não são
+    renderizados. ``plain_snippet`` já troca a crase por apóstrofo, então o texto não fecha o span. Vazio não gera span.
+    """
+    text = plain_snippet(message, LAVALINK_MESSAGE_LIMIT)
+    return f"`{text}`" if text else ""
 
 
 def log_lavalink_failure(what: str, *, message, cause, severity, node) -> str:

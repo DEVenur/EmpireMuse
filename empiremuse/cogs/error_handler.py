@@ -483,7 +483,7 @@ class ErrorHandler(commands.Cog):
                     embed.add_field(
                         name="Canal de voz (bot):",
                         inline=False,
-                        value=f"{vc.channel.name}"
+                        value=f"{disnake.utils.escape_markdown(vc.channel.name)}"
                         + (
                             f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})"
                             if vc.channel.user_limit

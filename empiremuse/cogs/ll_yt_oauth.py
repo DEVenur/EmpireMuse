@@ -265,7 +265,7 @@ class YtOauthLL(commands.Cog):
                     )
 
                     if resp.status != 204:
-                        body = plain_snippet(await resp.text(), RESPONSE_LOG_LIMIT).replace(refresh_token, "***")
+                        body = plain_snippet((await resp.text()).replace(refresh_token, "***"), RESPONSE_LOG_LIMIT)
                         logger.warning(
                             "Falha ao aplicar o refreshToken no lavalink LOCAL: HTTP %s, resposta: %s",
                             resp.status,

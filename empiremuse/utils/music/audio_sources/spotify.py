@@ -223,8 +223,7 @@ class SpotifyClient:
                     motivo = data.get("error_description") or data["error"]
                     logger.warning("Spotify: o servidor recusou as credenciais ao obter o token (%s).", motivo)
                     raise GenericError(
-                        "**Não foi possível autenticar no Spotify: confira SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET "
-                        f"(motivo informado pelo Spotify: {motivo}).**"
+                        "**Não foi possível autenticar no Spotify no momento. Avise o responsável pelo bot.**"
                     )
 
                 self.spotify_cache = data
