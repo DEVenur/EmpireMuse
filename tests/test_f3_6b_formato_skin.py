@@ -225,6 +225,23 @@ class TestEditorSalvaESegue:
         assert jogador.chamadas == ["setup_features", "setup_hints", "process_hint"]
 
 
+class TestEditorConverteTambemAsSkinsDoSongRequest:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("protocolo", [3, 4, 5])
+    async def test_o_player_ativo_recebe_as_skins_legadas_do_song_request_como_dicionarios(
+        self, editor_sem_tela, protocolo
+    ):
+        fixa = skin_realista(content="fixa legada")
+        dados = dados_globais(estaticas={"Fixa": texto_legado(fixa, protocolo)})
+        jogador = Jogador()
+        menu, _, _ = editor_sem_tela(dados, [jogador])
+        menu.message_data = skin_realista(content="nova")
+        BotaoDeModo.modo = "custom_skins"
+        await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
+        assert jogador.custom_skin_static_data == {"Fixa": fixa}
+        assert list(jogador.custom_skin_data) == ["Nova"]
+
+
 # ============================================================================ os leitores
 
 
