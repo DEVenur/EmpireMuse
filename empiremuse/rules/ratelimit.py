@@ -20,6 +20,8 @@ def retry_after_seconds(
     """Segundos de espera: o ``Retry-After`` em inteiro, limitado entre ``minimum`` e ``maximum``; ``default`` se ausente
     ou inválido (vazio, negativo, decimal, data HTTP ou qualquer outra coisa que não seja um inteiro sem sinal)."""
     if isinstance(raw, int) and not isinstance(raw, bool):
+        if raw < 0:
+            return default
         seconds = raw
     elif isinstance(raw, str) and (text := raw.strip()).isascii() and text.isdigit():
         seconds = maximum if len(text) > _MAX_DIGITS else int(text)
