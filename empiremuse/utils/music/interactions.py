@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import pickle
 import re
 import traceback
@@ -16,11 +17,13 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.rules.entries import merge_import, save_entry
-from empiremuse.rules.errors import FILE_TOO_LARGE, NAME_TAKEN, NAME_TOO_LONG, QUOTA_FULL, RuleError
+from empiremuse.rules.errors import FILE_TOO_LARGE, NAME_TAKEN, NAME_TOO_LONG, QUOTA_FULL, URL_TOO_LONG, RuleError
 from empiremuse.rules.favorites import check_import_name, name_limit
 from empiremuse.rules.limits import (
     FAV_NAME_MAX,
     FAV_NAME_MIN,
+    FAV_URL_MAX,
+    GUILD_LINK_URL_MAX,
     GUILD_LINK_NAME_MAX,
     GUILD_LINK_NAME_MIN,
     ITG_TITLE_MAX,
@@ -28,12 +31,12 @@ from empiremuse.rules.limits import (
 )
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
-from empiremuse.rules.urls import clean_avatar, is_clean_url
+from empiremuse.rules.urls import check_url, clean_avatar, clean_url
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
 from empiremuse.utils.music.checks import check_pool_bots
-from empiremuse.utils.music.converters import time_format, fix_characters, URL_REG
+from empiremuse.utils.music.converters import time_format, fix_characters
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.music.skin_utils import skin_converter
@@ -50,6 +53,8 @@ from empiremuse.utils.others import (
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
+
+logger = logging.getLogger(__name__)
 
 
 class VolumeInteraction(disnake.ui.View):
@@ -707,6 +712,21 @@ def _integration_entry(value, url: str, avatar: str):
     return {"url": url, "avatar": avatar} if avatar else {"url": url}
 
 
+def _url_error_text(error: RuleError, *, with_label: bool = False) -> str:
+    """Mensagem de uma URL de arquivo recusada: longa demais (cita o limite) ou inválida."""
+    if error.code == URL_TOO_LONG:
+        if with_label:
+            return (
+                f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{error.limit}\n"
+                f"URL:** {_echo(error.value)}"
+            )
+        return (
+            f"**Um item de seu arquivo {_echo(error.value)} ultrapassa a quantidade de caracteres "
+            f"permitido:{error.limit}**"
+        )
+    return _invalid_link_text(error.value)
+
+
 def _name_error_text(error: RuleError, low: int, high: int) -> str:
     """Mensagem de um nome de arquivo recusado: acima do teto da configuração ou inválido/repetido."""
     if error.code == NAME_TOO_LONG:
@@ -816,10 +836,11 @@ class FavModalImport(disnake.ui.Modal):
     async def callback(self, inter: disnake.ModalInteraction, /) -> None:
         try:
             json_data = json.loads(inter.text_values["json_data"])
-        except Exception as e:
+        except (ValueError, RecursionError):
+            logger.exception("Importação de favoritos/links/integrações: JSON inválido")
             await inter.send(
                 "**Ocorreu um erro ao analisar os dados ou foi enviado dados inválidos/não-formatado "
-                f"em formato json.**\n\n`{repr(e)}`",
+                "em formato json.**",
                 ephemeral=True,
             )
             return
@@ -856,21 +877,10 @@ class FavModalImport(disnake.ui.Modal):
         clean_data = {}
 
         for name, url in json_data.items():
-            if not isinstance(url, str):
-                await inter.send(_invalid_link_text(url), ephemeral=True)
-                return False
+            url = check_url(url, self.view.bot.config["USER_FAV_MAX_URL_LENGTH"])
 
-            url = url.strip()
-
-            if len(url) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"]):
-                await inter.send(
-                    f"**Um item de seu arquivo {_echo(url)} ultrapassa a quantidade de caracteres permitido:{max_url_chars}**",
-                    ephemeral=True,
-                )
-                return False
-
-            if not URL_REG.match(url) or not is_clean_url(url):
-                await inter.send(_invalid_link_text(url), ephemeral=True)
+            if isinstance(url, RuleError):
+                await inter.send(_url_error_text(url), ephemeral=True)
                 return False
 
             clean_name = check_import_name(name, clean_data, self.view.bot.config["USER_FAV_MAX_NAME_LENGTH"])
@@ -922,13 +932,10 @@ class FavModalImport(disnake.ui.Modal):
                 )
                 return False
 
-            url = data["url"].strip()
+            url = check_url(data["url"], self.view.bot.config["USER_FAV_MAX_URL_LENGTH"])
 
-            if len(url) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"]):
-                await inter.send(
-                    f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_url_chars}\nURL:** {_echo(url)}",
-                    ephemeral=True,
-                )
+            if isinstance(url, RuleError):
+                await inter.send(_url_error_text(url, with_label=True), ephemeral=True)
                 return False
 
             if len(data["description"]) > (max_description_chars := 50):
@@ -936,10 +943,6 @@ class FavModalImport(disnake.ui.Modal):
                     f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_description_chars}\nDescrição:** {_echo(data['description'])}",
                     ephemeral=True,
                 )
-                return False
-
-            if not URL_REG.match(url) or not is_clean_url(url):
-                await inter.send(_invalid_link_text(url), ephemeral=True)
                 return False
 
             if (clean_name := clean_import_name(name, FAV_NAME_MIN, FAV_NAME_MAX, clean_data)) is None:
@@ -987,25 +990,16 @@ class FavModalImport(disnake.ui.Modal):
         clean_data = {}
 
         for name, value in json_data.items():
-            url = value.get("url") if isinstance(value, dict) else value
+            url = check_url(value.get("url") if isinstance(value, dict) else value, 150)
 
-            if not isinstance(url, str):
-                await inter.send(_invalid_link_text(url), ephemeral=True)
-                return False
-
-            url = url.strip()
-
-            if len(url) > (max_url_chars := 150):
-                await inter.send(
-                    f"**Um item de seu arquivo {_echo(url)} ultrapassa a quantidade de caracteres permitido:{max_url_chars}**",
-                    ephemeral=True,
-                )
+            if isinstance(url, RuleError):
+                await inter.send(_url_error_text(url), ephemeral=True)
                 return False
 
             avatar = clean_avatar(value.get("avatar")) if isinstance(value, dict) else ""
 
-            if not URL_REG.match(url) or not is_clean_url(url) or avatar is None:
-                await inter.send(_invalid_link_text(url if avatar is not None else value["avatar"]), ephemeral=True)
+            if avatar is None:
+                await inter.send(_invalid_link_text(value["avatar"]), ephemeral=True)
                 return False
 
             if (clean_name := clean_import_name(name, 1, ITG_TITLE_MAX, clean_data)) is None:
@@ -1118,12 +1112,10 @@ class FavModalAdd(disnake.ui.Modal):
         if self.view.mode == ViewMode.fav_manager:
             url = inter.text_values["user_fav_url"].strip()
 
-            try:
-                valid_url = URL_REG.findall(url)[0]
-            except IndexError:
+            if (valid_url := clean_url(url, FAV_URL_MAX)) is None:
                 await inter.send(
                     embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {url}", color=disnake.Color.red()
+                        description=f"**Nenhum link válido encontrado:** {_echo(url)}", color=disnake.Color.red()
                     ),
                     ephemeral=True,
                 )
@@ -1176,12 +1168,10 @@ class FavModalAdd(disnake.ui.Modal):
         elif self.view.mode == ViewMode.guild_fav_manager:
             url = inter.text_values["guild_fav_url"].strip()
 
-            try:
-                valid_url = URL_REG.findall(url)[0]
-            except IndexError:
+            if (valid_url := clean_url(url, GUILD_LINK_URL_MAX)) is None:
                 await inter.send(
                     embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {url}", color=disnake.Color.red()
+                        description=f"**Nenhum link válido encontrado:** {_echo(url)}", color=disnake.Color.red()
                     ),
                     ephemeral=True,
                 )
@@ -1241,14 +1231,13 @@ class FavModalAdd(disnake.ui.Modal):
 
             self.view.data = await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users)
 
-            url = inter.text_values["user_integration_url"].strip()
+            typed_url = inter.text_values["user_integration_url"].strip()
 
-            try:
-                url = URL_REG.findall(url)[0]
-            except IndexError:
+            if (url := clean_url(typed_url, FAV_URL_MAX)) is None:
                 await inter.edit_original_message(
                     embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {url}", color=disnake.Color.red()
+                        description=f"**Nenhum link válido encontrado:** {_echo(typed_url)}",
+                        color=disnake.Color.red(),
                     )
                 )
                 return
@@ -1276,14 +1265,14 @@ class FavModalAdd(disnake.ui.Modal):
 
                 try:
                     result = await self.view.bot.spotify.get_user_info(user_id)
-                except Exception as e:
+                except Exception:
+                    logger.exception("Integração: erro ao consultar o perfil (%s)", "spotify")
                     await inter.edit_original_message(
                         embed=disnake.Embed(
-                            description=f"**Ocorreu um erro ao obter informações do spotify:** ```py\n{repr(e)}```",
+                            description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
                             color=self.view.bot.get_color(),
                         )
                     )
-                    traceback.print_exc()
                     return
 
                 if not result:
@@ -1315,14 +1304,14 @@ class FavModalAdd(disnake.ui.Modal):
 
                 try:
                     result = await self.view.bot.deezer.get_user_info(int(url_id))
-                except Exception as e:
+                except Exception:
+                    logger.exception("Integração: erro ao consultar o perfil (%s)", "deezer")
                     await inter.edit_original_message(
                         embed=disnake.Embed(
-                            description=f"**Ocorreu um erro ao obter informações do spotify:** ```py\n{repr(e)}```",
+                            description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
                             color=self.view.bot.get_color(),
                         )
                     )
-                    traceback.print_exc()
                     return
 
                 data = {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
@@ -1354,10 +1343,10 @@ class FavModalAdd(disnake.ui.Modal):
                     info = await loop.run_in_executor(
                         None, lambda: self.view.bot.pool.ytdl.extract_info(base_url, download=False)
                     )
-                except Exception as e:
-                    traceback.print_exc()
+                except Exception:
+                    logger.exception("Integração: erro ao ler a URL com o yt-dlp")
                     await inter.edit_original_message(
-                        f"**Ocorreu um erro ao obter informação da url:** ```py\n{repr(e)}```"
+                        "**Ocorreu um erro ao obter informação da url. Tente novamente mais tarde.**"
                     )
                     return
 
@@ -3248,9 +3237,9 @@ class SkinEditorMenu(disnake.ui.View):
                 await inter.response.edit_message(view=self, **self.build_embeds())
             else:
                 await inter.edit_original_message(view=self, **self.build_embeds())
-        except Exception as e:
-            traceback.print_exc()
-            await inter.send(f"**Ocorreu um erro ao processar a mensagem:** ```py\n{repr(e)}```", ephemeral=True)
+        except Exception:
+            logger.exception("Editor de skin: erro ao atualizar a mensagem")
+            await inter.send("**Ocorreu um erro ao processar a mensagem.**", ephemeral=True)
 
     async def modal_handler(self, inter: disnake.ModalInteraction):
         if inter.custom_id == "skin_editor_message_content":
@@ -3359,8 +3348,12 @@ class SkinEditorMenu(disnake.ui.View):
 
             try:
                 info = json.loads(inter.text_values["skin"])
-            except Exception as e:
-                await inter.send(f"**Ocorreu um erro ao processar sua skin:** ```py\n{repr(e)}```", ephemeral=True)
+            except (ValueError, RecursionError):
+                logger.exception("Editor de skin: JSON inválido na importação")
+                await inter.send(
+                    "**Ocorreu um erro ao processar sua skin: confira se o conteúdo é um JSON válido.**",
+                    ephemeral=True,
+                )
                 return
 
             try:

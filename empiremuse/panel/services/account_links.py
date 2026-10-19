@@ -1,9 +1,9 @@
 """Seções da conta: favoritos pessoais (U-02, ``fav_links``) e integrações (U-03, ``integration_links``).
 
-Espelham o ``fav_manager`` e o ``integrations_manager`` de ``utils/music/interactions.py`` (FavModalAdd/FavModalImport)
-e o ``/fav add``: adicionar usa o modal (nome 2–25, URL 10–200 extraída com ``URL_REG.findall``); importar usa os limites
-``USER_FAV_MAX_*`` e grava só o trecho que é URL (``URL_REG.match``). Limites de quantidade vêm de ``bot.config`` a cada
-requisição (0 = ilimitado; o dono do bot é isento). Nada aqui faz requisição externa.
+Usam as mesmas regras do ``fav_manager`` e do ``integrations_manager`` de ``utils/music/interactions.py`` (em
+``empiremuse.rules``): adicionar segue o modal (nome 2–25, URL pura de 10 a 200 caracteres); importar usa os limites
+``USER_FAV_MAX_*`` e exige a URL inteira (aparada, sem texto ao redor). Limites de quantidade vêm de ``bot.config`` a
+cada requisição (0 = ilimitado; o dono do bot é isento). Nada aqui faz requisição externa.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from empiremuse.rules.limits import (
 )
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
-from empiremuse.rules.urls import extract_url_legacy, url_prefix_legacy
+from empiremuse.rules.urls import clean_url
 
 EXPORT_PATH = "/painel/conta/favoritos/exportar"
 
@@ -64,12 +64,12 @@ def modal_url(raw: str) -> Optional[str]:
     text = raw.strip()
     if not FAV_URL_MIN <= len(text) <= FAV_URL_MAX:
         return None
-    return extract_url_legacy(text)
+    return clean_url(text)
 
 
 def import_url(value: Any, max_chars: int) -> Optional[str]:
-    """URL do importador: texto, até ``max_chars`` e começando com URL; grava só o trecho que casa."""
-    return url_prefix_legacy(value, max_chars)
+    """URL do importador: a URL pura (aparada, sem texto ao redor) de até ``max_chars`` caracteres, ou ``None``."""
+    return clean_url(value, max_chars)
 
 
 def _msg_name(name_max: int) -> str:

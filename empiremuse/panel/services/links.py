@@ -34,7 +34,7 @@ from empiremuse.rules.entries import check_name, merge_import, save_entry
 from empiremuse.rules.errors import NAME_TAKEN, RuleError
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
-from empiremuse.rules.urls import URL_REG, extract_url_legacy
+from empiremuse.rules.urls import clean_url
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def _valid_fields(url_raw: str, description: str, stored: str = "") -> tuple[Opt
     errors: dict[str, str] = {}
     url = None
     if URL_MIN <= len(url_raw) <= URL_MAX:
-        url = extract_url_legacy(url_raw)
+        url = clean_url(url_raw)
     if url is None:
         errors["url"] = MSG_URL
     if description and description != stored and not DESCRIPTION_MIN <= len(description) <= DESCRIPTION_MAX:
@@ -224,7 +224,7 @@ def _clean_import_item(item: Any, max_url: int) -> Optional[dict[str, str]]:
     url, description = item.get("url"), item.get("description")
     if not isinstance(url, str) or not isinstance(description, str):
         return None
-    match = URL_REG.match(url)
-    if len(url) > max_url or not match or len(description) > DESCRIPTION_MAX:
+    clean = clean_url(url, max_url)
+    if clean is None or len(description) > DESCRIPTION_MAX:
         return None
-    return {"url": match.group(0), "description": description}  # só o trecho que é URL, como ao adicionar
+    return {"url": clean, "description": description}
