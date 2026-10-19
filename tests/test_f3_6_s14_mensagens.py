@@ -1160,13 +1160,21 @@ class TestLacunasDaMutacao:
         assert SEGREDO not in saida.out + saida.err
 
     @pytest.mark.asyncio
-    async def test_song_request_erro_esperado_aparece_sem_bloco_de_codigo(self, monkeypatch):
-        classe, self_, ctx, mensagem, envios, _ = montar_pedido(monkeypatch, GenericError("**Sem permissão aqui.**"))
+    @pytest.mark.parametrize(
+        ("erro", "trecho"),
+        [
+            (GenericError("**Sem permissão aqui.**"), "Sem permissão aqui."),
+            (wavelink.WavelinkException("This video is not available"), "indisponível ou privado"),
+        ],
+        ids=["generico", "traduzido_pelo_parse_error"],
+    )
+    async def test_song_request_erro_esperado_aparece_sem_bloco_de_codigo(self, monkeypatch, erro, trecho):
+        classe, self_, ctx, mensagem, envios, _ = montar_pedido(monkeypatch, erro)
 
         await classe.song_requests(self_, ctx, mensagem)
 
         [(args, _)] = envios
-        assert "```" not in args[0]
+        assert trecho in args[0] and args[0].startswith("<@1>. ") and "```" not in args[0] and "ERR-" not in args[0]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("gera", [True, False], ids=["com_codigo", "sem_codigo"])
@@ -1247,4 +1255,5 @@ class TestGuardaAstEmModels:
             for nome in self.FUNCOES
         }
         assert "log_unexpected_error" in chamadas["invoke_np"]
+        assert "code_suffix" in chamadas["invoke_np"] and "code_suffix" in chamadas["get_autoqueue_tracks"]
         assert {"log_unexpected_error", "log_lavalink_failure", "lavalink_text"} <= chamadas["get_autoqueue_tracks"]

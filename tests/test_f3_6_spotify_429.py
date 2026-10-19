@@ -239,7 +239,7 @@ class TestRetryAfterPuro:
             ("٣٠", 60),  # dígitos arábico-índicos: isdigit() é verdadeiro, mas não é um inteiro de cabeçalho HTTP
             ("1000", 1000),
             ("9" * 13, 3600),
-            ("9" * 4000, 3600),
+            ("9" * 5000, 3600),  # acima do limite de 4300 dígitos do int(): converter levantaria ValueError
             (" 7\t", 7),
         ],
         ids=repr,
