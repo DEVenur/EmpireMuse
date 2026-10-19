@@ -1316,12 +1316,13 @@ class TestKI54CotaNoModalDeFavorito:
         assert "Não há espaço disponível" in inter.texto
 
     @pytest.mark.asyncio
-    async def test_novo_nome_que_ja_existe_sobrescreve_sem_ocupar_vaga(self):
+    async def test_adicionar_nome_que_ja_existe_e_recusado_e_nao_sobrescreve(self):
+        """Etapa 3 (F3-5b, A6): adicionar à mão com um nome que já existe não sobrescreve mais (antes sobrescrevia sem
+        ocupar vaga); recusa e não grava. Editar a própria entrada com a cota cheia segue permitido (guarda abaixo)."""
         bot = ModalBot(favs=2, fav_links=favs_cheios(2))
         inter = await adicionar_favorito(bot, nome="fav0", url=f"{URL_BASE}/novo")
-        assert bot.salvos_usuario, f"KI-54: sobrescrever um nome que já existe não ocupa vaga: {inter.texto!r}"
-        salvo = bot.salvos_usuario[-1]["fav_links"]
-        assert salvo["fav0"] == f"{URL_BASE}/novo" and len(salvo) == 2
+        assert bot.salvos_usuario == [] and "já" in inter.texto
+        assert bot.user_data["fav_links"] == favs_cheios(2)
 
     @pytest.mark.asyncio
     async def test_guarda_editar_entrada_existente_com_a_cota_cheia_continua_permitido(self):

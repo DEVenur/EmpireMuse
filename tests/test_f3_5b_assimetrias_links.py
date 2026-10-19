@@ -160,10 +160,21 @@ class TestA2UrlDoModal:
 
 class TestA3LimiteDoNomeDoFavorito:
     @pytest.mark.asyncio
-    async def test_painel_importa_nomes_de_26_a_35_caracteres(self):  # MUDA (etapa 3, A3/D2): teto 25
-        nome = "n" * 30
-        guardado, erros = await importar_no_painel(FAVORITOS, {nome: URL})
-        assert erros == {} and guardado == {nome: URL}
+    async def test_painel_importa_ate_25_e_recusa_de_26_a_35_com_a_configuracao_padrao(self):
+        """Etapa 3 (A3/D2): o teto é min(configuração, 25); o padrão 35 deixa de valer para nomes de 26 a 35."""
+        aceito, erros = await importar_no_painel(FAVORITOS, {"n" * 25: URL})
+        assert erros == {} and aceito == {"n" * 25: URL}
+        for tamanho in (26, 30, 35):
+            guardado, erros = await importar_no_painel(FAVORITOS, {"n" * tamanho: URL}, bot=BotDoPainel(nome_max=35))
+            assert guardado is None and erros, f"nome de {tamanho} caracteres deveria ser recusado"
+
+    @pytest.mark.asyncio
+    async def test_configuracao_intermediaria_vale_como_teto_nos_dois_lados(self):
+        """D2: com USER_FAV_MAX_NAME_LENGTH = 20 o teto é 20, no painel e no bot."""
+        for tamanho, aceito in ((20, True), (21, False)):
+            no_painel, _ = await importar_no_painel(FAVORITOS, {"n" * tamanho: URL}, bot=BotDoPainel(nome_max=20))
+            no_bot, _ = await importar_no_bot(FAVORITOS, {"n" * tamanho: URL}, bot=ModalBot(nome_max=20))
+            assert (no_painel is not None, no_bot is not None) == (aceito, aceito), tamanho
 
     @pytest.mark.asyncio
     async def test_painel_recusa_acima_do_teto_da_configuracao(self):
@@ -235,30 +246,65 @@ class TestA5NomesQueSoDiferemNaCaixa:
         assert sorted(guardado) == ["Rock", "rock"]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("modo", MODOS)
-    async def test_painel_mantem_os_dois_nomes(self, modo):  # MUDA (etapa 3, A5): casefold também no painel
+    @pytest.mark.parametrize("modo", [FAVORITOS, INTEGRACOES], ids=["favoritos", "integracoes"])
+    async def test_painel_substitui_o_nome_que_so_difere_na_caixa(self, modo):
+        """Etapa 3 (A5): o painel também compara sem diferenciar a caixa (importar substitui o existente)."""
         antigas = self.existentes(modo, f"{URL_BASE}/antiga")
         guardado, erros = await importar_no_painel(modo, arquivo_do_modo(modo, "rock", URL), existentes=antigas)
-        assert erros == {} and sorted(guardado) == ["Rock", "rock"]
+        assert erros == {} and list(guardado) == ["rock"]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("modo", MODOS)
-    async def test_arquivo_com_o_mesmo_nome_em_caixas_diferentes(self, modo):
-        um = arquivo_do_modo(modo, "Rock", URL)
-        outro = arquivo_do_modo(modo, "rock", URL)
-        arquivo = {**um, **outro}
+    async def test_importar_substituindo_pela_caixa_nao_ocupa_vaga_no_painel(self):
+        guardado, erros = await importar_no_painel(
+            FAVORITOS, {"rock": URL}, bot=BotDoPainel(favs=1), existentes={"Rock": f"{URL_BASE}/antiga"}
+        )
+        assert erros == {} and guardado == {"rock": URL}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", [FAVORITOS, INTEGRACOES], ids=["favoritos", "integracoes"])
+    async def test_arquivo_com_o_mesmo_nome_em_caixas_diferentes_e_recusado_nos_dois_lados(self, modo):
+        arquivo = {**arquivo_do_modo(modo, "Rock", URL), **arquivo_do_modo(modo, "rock", URL)}
         no_bot, texto = await importar_no_bot(modo, arquivo)
         assert no_bot is None and "repetir nomes" in texto
-        no_painel, erros = await importar_no_painel(modo, arquivo)  # MUDA (etapa 3, A5): o painel também recusa
-        assert erros == {} and sorted(no_painel) == ["Rock", "rock"]
+        no_painel, erros = await importar_no_painel(modo, arquivo)  # Etapa 3 (A5): o painel também recusa
+        assert no_painel is None and erros
 
     @pytest.mark.asyncio
-    async def test_modal_do_bot_e_painel_deixam_rock_e_rock_coexistirem(self):  # MUDA (etapa 3, A5)
+    async def test_guarda_arquivo_do_servidor_com_o_mesmo_nome_em_caixas_diferentes_o_bot_recusa(self):
+        arquivo = {**arquivo_do_modo(SERVIDOR_MODO, "Rock", URL), **arquivo_do_modo(SERVIDOR_MODO, "rock", URL)}
+        no_bot, texto = await importar_no_bot(SERVIDOR_MODO, arquivo)
+        assert no_bot is None and "repetir nomes" in texto
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_recusa_adicionar_nome_que_so_difere_na_caixa(self):
+        """Etapa 3 (A5): adicionar à mão recusa o nome que colide (sem diferenciar a caixa) com OUTRA entrada."""
         bot = ModalBot(fav_links={"Rock": URL})
-        await adicionar_favorito(bot, nome="rock")
-        assert sorted(bot.salvos_usuario[-1]["fav_links"]) == ["Rock", "rock"]
+        inter = await adicionar_favorito(bot, nome="rock")
+        assert bot.salvos_usuario == [] and "já" in inter.texto and "nome" in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_painel_recusa_adicionar_nome_que_so_difere_na_caixa(self):
         resultado = await painel_favoritos(BotDoPainel(), "favorito_adicionar", {"Rock": URL}, nome="rock", url=URL)
-        assert resultado.errors == {} and sorted(resultado.new["fav_links"]) == ["Rock", "rock"]
+        assert resultado.new == {} and resultado.errors.get("nome")
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_edita_para_outra_caixa_do_proprio_nome(self):
+        """Renomear ``rock`` para ``Rock`` é permitido: a colisão é com OUTRA entrada, não consigo mesma."""
+        bot = ModalBot(fav_links={"rock": URL, "pop": URL})
+        await adicionar_favorito(bot, nome="Rock", url=f"{URL_BASE}/b", editando="rock")
+        assert bot.salvos_usuario[-1]["fav_links"] == {"Rock": f"{URL_BASE}/b", "pop": URL}
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_recusa_editar_para_o_nome_de_outra_entrada_em_outra_caixa(self):
+        bot = ModalBot(fav_links={"antigo": URL, "Pop": URL})
+        inter = await adicionar_favorito(bot, nome="pop", url=f"{URL_BASE}/b", editando="antigo")
+        assert bot.salvos_usuario == [] and "já" in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_guarda_editar_sem_renomear_funciona_mesmo_com_um_par_antigo_rock_e_rock(self):
+        bot = ModalBot(fav_links={"Rock": URL, "rock": URL})
+        await adicionar_favorito(bot, nome="Rock", url=f"{URL_BASE}/b", editando="Rock")
+        assert bot.salvos_usuario[-1]["fav_links"] == {"Rock": f"{URL_BASE}/b", "rock": URL}
 
 
 # ============================================================================ A6, A7 — renomear e sanitizar no modal
@@ -266,10 +312,25 @@ class TestA5NomesQueSoDiferemNaCaixa:
 
 class TestA6RenomearSobrescreveEmSilencio:
     @pytest.mark.asyncio
-    async def test_modal_do_bot_renomeando_sobre_outra_entrada_apaga_a_outra(self):  # MUDA (etapa 3, A6): recusa
+    async def test_modal_do_bot_recusa_renomear_sobre_outra_entrada(self):
+        """Etapa 3 (A6): antes o modal apagava em silêncio a entrada ``outro``; agora recusa e não grava nada."""
         bot = ModalBot(fav_links={"antigo": f"{URL_BASE}/1", "outro": f"{URL_BASE}/2"})
-        await adicionar_favorito(bot, nome="outro", url=f"{URL_BASE}/novo", editando="antigo")
-        assert bot.salvos_usuario[-1]["fav_links"] == {"outro": f"{URL_BASE}/novo"}
+        inter = await adicionar_favorito(bot, nome="outro", url=f"{URL_BASE}/novo", editando="antigo")
+        assert bot.salvos_usuario == [], "nada pode ser gravado quando a renomeação colide"
+        assert "já" in inter.texto and "nome" in inter.texto
+        assert bot.user_data["fav_links"] == {"antigo": f"{URL_BASE}/1", "outro": f"{URL_BASE}/2"}
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_renomear_para_um_nome_livre_move_a_entrada(self):
+        bot = ModalBot(fav_links={"antigo": f"{URL_BASE}/1", "outro": f"{URL_BASE}/2"})
+        await adicionar_favorito(bot, nome="novo", url=f"{URL_BASE}/novo", editando="antigo")
+        assert bot.salvos_usuario[-1]["fav_links"] == {"outro": f"{URL_BASE}/2", "novo": f"{URL_BASE}/novo"}
+
+    @pytest.mark.asyncio
+    async def test_modal_do_bot_recusa_adicionar_nome_exato_que_ja_existe(self):
+        bot = ModalBot(fav_links={"outro": f"{URL_BASE}/2"})
+        inter = await adicionar_favorito(bot, nome="outro", url=f"{URL_BASE}/novo")
+        assert bot.salvos_usuario == [] and "já" in inter.texto
 
     @pytest.mark.asyncio
     async def test_painel_recusa_adicionar_nome_existente(self):
@@ -289,15 +350,23 @@ class TestA6RenomearSobrescreveEmSilencio:
         assert bot.salvos_usuario[-1]["fav_links"] == {"antigo": f"{URL_BASE}/novo"}
 
 
-class TestA7NomeSemSanitizacaoNoModal:
-    """O modal do bot só aplica ``strip``; o painel revalida depois (2 a 25 caracteres, sem ``Cc``/``Cf``)."""
+class TestA7NomeSanitizadoNoModal:
+    """Etapa 3 (A7): o modal do bot revalida o nome depois do ``strip`` (2 a 25 caracteres, sem ``Cc``/``Cf``), como o
+    painel."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("nome", [" a", "ab​", "a\x07b"])  # MUDA (etapa 3, A7): o modal recusa como o painel
-    async def test_modal_do_bot_grava_o_nome_apos_o_strip(self, nome):
+    @pytest.mark.parametrize("nome", [" a", "a ", "ab\u200b", "a\x07b", "\u200bab"], ids=lambda n: repr(n))
+    async def test_modal_do_bot_recusa_o_nome_invalido_e_nao_grava(self, nome):
         bot = ModalBot()
-        await adicionar_favorito(bot, nome=nome)
-        assert list(bot.salvos_usuario[-1]["fav_links"]) == [nome.strip()]
+        inter = await adicionar_favorito(bot, nome=nome)
+        assert bot.salvos_usuario == [], f"{nome!r} não pode ser gravado"
+        assert "nome" in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_guarda_modal_do_bot_apara_as_pontas_de_um_nome_valido(self):
+        bot = ModalBot()
+        await adicionar_favorito(bot, nome="  Rock  ")
+        assert list(bot.salvos_usuario[-1]["fav_links"]) == ["Rock"]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("nome", [" a", "ab​", "a\x07b", "a"])

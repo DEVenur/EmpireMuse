@@ -46,13 +46,6 @@ class TestA4BotaoDoEmbed:
         assert not gravou(bot) and "espaço suficiente" in inter.texto
 
     @pytest.mark.asyncio
-    async def test_o_nome_nao_e_validado_nem_truncado(self):  # MUDA (etapa 3, A4/D3): trunca em 25 e limpa
-        titulo = "t" * 60 + "​"
-        bot = BotDoPlayer()
-        await favoritar_pelo_embed(bot, titulo)
-        assert list(bot.ultimo_global["fav_links"]) == [titulo]
-
-    @pytest.mark.asyncio
     async def test_a_url_nao_e_validada(self):  # MUDA (etapa 4, A4): usa a regra de URL
         bot = BotDoPlayer()
         url = "https://exemplo.invalid/" + "x" * 300
@@ -91,19 +84,6 @@ class TestA4SeletorDoPlayer:
         assert bot.ultimo_global["fav_links"]["Minha musica"] == URL and bot.eventos == ["fav_add"]
 
     @pytest.mark.asyncio
-    async def test_o_nome_e_truncado_com_o_limite_de_url_e_ganha_reticencias(self):  # MUDA (etapa 3, A4/D3): 25
-        bot = BotDoPlayer(url_max=90)
-        titulo = "t" * 120
-        await favoritar_pelo_seletor(bot, titulo)
-        assert list(bot.ultimo_global["fav_links"]) == ["t" * 90 + "..."]
-
-    @pytest.mark.asyncio
-    async def test_o_limite_de_url_da_configuracao_vira_o_limite_do_nome(self):  # MUDA (etapa 3, A4/D3)
-        bot = BotDoPlayer(url_max=40)
-        await favoritar_pelo_seletor(bot, "t" * 60)
-        assert list(bot.ultimo_global["fav_links"]) == ["t" * 40 + "..."]
-
-    @pytest.mark.asyncio
     async def test_sobrescrever_um_nome_existente_com_a_lista_cheia_salva(self):
         """Etapa 2 (A4): sobrescrever não ocupa vaga (antes o seletor recusava com a lista cheia)."""
         bot = BotDoPlayer(favs=3, favoritos={"f0": URL, "f1": URL, "f2": URL})
@@ -129,3 +109,67 @@ class TestA4SeletorDoPlayer:
         bot = BotDoPlayer(favs=favs, dono=dono, favoritos={f"f{i}": URL for i in range(8)})
         await favoritar_pelo_seletor(bot, "Mais um")
         assert "Mais um" in bot.ultimo_global["fav_links"]
+
+
+BOTOES = [
+    pytest.param(favoritar_pelo_embed, id="botao_do_embed"),
+    pytest.param(favoritar_pelo_seletor, id="seletor_do_player"),
+]
+
+
+class TestA4NomeVindoDaFaixa:
+    """Etapa 3 (A4/D3): o nome vem do título da faixa, não de quem digita. É truncado em 25 caracteres e limpo
+    (sem controle/formatação, sem espaços nas pontas); só é recusado se sobrar menos de 2 caracteres. O limite de URL
+    da configuração (antes usado por engano no seletor) não interfere."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("favoritar", BOTOES)
+    @pytest.mark.parametrize(
+        ("titulo", "esperado"),
+        [
+            ("t" * 60, "t" * 25),
+            ("t" * 25, "t" * 25),
+            ("t" * 60 + "\u200b", "t" * 25),
+            ("  Minha música  ", "Minha música"),
+            ("ab\u200bcd", "abcd"),
+            ("a\x07bc", "abc"),
+            ("x" * 24 + " " + "y" * 10, "x" * 24),
+            ("ab", "ab"),
+        ],
+        ids=[
+            "longo",
+            "no_limite",
+            "longo_com_cf_no_fim",
+            "pontas",
+            "cf_no_meio",
+            "controle",
+            "corte_em_espaco",
+            "dois",
+        ],
+    )
+    async def test_nome_truncado_e_limpo(self, favoritar, titulo, esperado):
+        bot = BotDoPlayer(url_max=90)
+        await favoritar(bot, titulo)
+        assert list(bot.ultimo_global["fav_links"]) == [esperado]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("favoritar", BOTOES)
+    @pytest.mark.parametrize("titulo", ["a", "", "   ", "a\u200b", "\u200b\u200b"], ids=repr)
+    async def test_nome_com_menos_de_2_caracteres_depois_de_limpo_e_recusado(self, favoritar, titulo):
+        bot = BotDoPlayer()
+        inter = await favoritar(bot, titulo)
+        assert not gravou(bot) and inter.texto, "recusa com uma mensagem ao usuário"
+
+    @pytest.mark.asyncio
+    async def test_o_limite_de_url_da_configuracao_nao_vira_o_limite_do_nome(self):
+        bot = BotDoPlayer(url_max=40)
+        await favoritar_pelo_seletor(bot, "t" * 60)
+        assert list(bot.ultimo_global["fav_links"]) == ["t" * 25]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("favoritar", BOTOES)
+    async def test_sobrescrever_acontece_pelo_nome_ja_truncado(self, favoritar):
+        """Duas faixas de títulos longos que começam igual caem no mesmo nome de 25 caracteres: a 2ª sobrescreve."""
+        bot = BotDoPlayer(favs=1, favoritos={"t" * 25: URL})
+        await favoritar(bot, "t" * 60, "https://exemplo.invalid/outra")
+        assert bot.ultimo_global["fav_links"] == {"t" * 25: "https://exemplo.invalid/outra"}

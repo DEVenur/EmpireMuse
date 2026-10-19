@@ -274,7 +274,10 @@ class FavoritesImportExportTest(FavoritesBase):
         assert self.do_import(browser, payload).code == 200
         assert self.do_import(browser, {"x" * 40: BASE + "a"}).code == 422
         self.world.config["USER_FAV_MAX_NAME_LENGTH"] = 40
-        assert self.do_import(browser, {"x" * 40: BASE + "a"}).code == 200
+        # Etapa 3 (F3-5b, D2): o teto é min(configuração, 25); subir a configuração para 40 não libera nomes de 26+
+        assert self.do_import(browser, {"x" * 40: BASE + "a"}).code == 422
+        assert self.do_import(browser, {"x" * 26: BASE + "a"}).code == 422
+        assert self.do_import(browser, {"x" * 25: BASE + "a"}).code == 200
 
     def test_import_space_rule_counts_overwritten_names_as_free(self):
         self.world.set_doc(fav_links=full(9))
