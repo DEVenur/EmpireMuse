@@ -90,7 +90,7 @@ Em caso de exceções inesperadas em comandos de barra ou prefixados, pedidos de
 
 Para investigar uma falha reportada cruzando o código:
 - **Log em arquivo**: O log em arquivo só existe quando `ENABLE_LOGGER=true` estiver ativado no `.env`, gravado no caminho `RUNTIME_DIR/.logs/disnake.log` (sob `EMPIREMUSE_HOME` ou diretório atual). Como esse arquivo é recriado a cada inicialização do bot (`mode="w"` no `FileHandler` configurado no `BotPool` em `empiremuse/utils/client.py`), registros anteriores a uma reinicialização não permanecem no disco.
-- **Webhook de erros (recomendado para histórico)**: Para reter o histórico persistente entre reinicializações, recomenda-se configurar `ERROR_REPORT_WEBHOOK`. O bot encaminha a notificação de erro com o código `ERR-XXXXXX` no embed e no anexo do traceback, permitindo buscar e auditar falhas passadas a qualquer momento.
+- **Webhook de erros (recomendado para histórico)**: Para reter o histórico persistente entre reinicializações, recomenda-se configurar `AUTO_ERROR_REPORT_WEBHOOK` para o envio automático de relatórios detalhados com o código `ERR-XXXXXX` no embed e no anexo do traceback, ou `ERROR_REPORT_WEBHOOK` para exibir o botão manual "Reporte esse erro" aos usuários.
 
 ## 4. Como rodar
 
