@@ -63,9 +63,12 @@ class SchemaError(ValueError):
     """Dado recusado: ``path`` aponta o campo e ``code`` diz o motivo; nunca leva o valor."""
 
     def __init__(self, path: str, code: str):
-        super().__init__(f"{code} em {path or '<raiz>'}")
+        super().__init__(path, code)  # ``args`` = (path, code): é o que ``copy`` e ``pickle`` usam para reconstruir
         self.path = path
         self.code = code
+
+    def __str__(self) -> str:
+        return f"{self.code} em {self.path or '<raiz>'}"
 
 
 # ============================================================================ varredura iterativa
