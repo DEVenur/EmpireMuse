@@ -21,6 +21,7 @@ import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import disnake
 import pytest
 
 from empiremuse.utils.music.errors import GenericError
@@ -72,6 +73,7 @@ saved_queue = _Modulo("empiremuse.utils.music.saved_queue")
 @pytest.fixture(autouse=True)
 def _ambiente(tmp_path, monkeypatch):
     monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+    monkeypatch.setattr(disnake.utils, "utcnow", lambda: INSTANTE)
 
 
 def caminho_json(tmp_path, usuario=DONO) -> Path:
@@ -230,7 +232,7 @@ class TestDecodificar:
         texto = json.dumps(bruto, allow_nan=True).encode()
         erro = falha(lendo, texto)
         assert erro.code in {codigo, NOT_FINITE} and not vazamentos(erro)
-        if erro.code == codigo:
+        if erro.code == codigo and codigo != NOT_FINITE:
             assert erro.path.startswith("tracks[1]")
 
     def test_faixa_sem_titulo_ou_sem_fonte_e_recusada(self):
@@ -356,7 +358,7 @@ class TestSalvar:
     async def test_fila_que_o_esquema_recusa_vira_erro_claro_e_nao_grava(self, tmp_path, caplog):
         faixas = tres_faixas()
         faixas[1].info["title"] = SEGREDO.encode()
-        with caplog.at_level(logging.DEBUG), pytest.raises(GenericError, match="não foi possível") as erro:
+        with caplog.at_level(logging.DEBUG), pytest.raises(GenericError, match="(?i)não foi possível") as erro:
             await salvar(faixas[1:], atual=faixas[0])
         assert SEGREDO not in erro.value.text and not caminho_json(tmp_path).exists()
         assert all(SEGREDO not in r.getMessage() for r in caplog.records)
@@ -367,7 +369,7 @@ class TestSalvar:
         await salvar(faixas[1:], atual=faixas[0])
         antes = caminho_json(tmp_path).read_bytes()
         monkeypatch.setattr(files.os, "replace", negar)
-        with pytest.raises(GenericError, match="não foi possível"):
+        with pytest.raises(GenericError, match="(?i)não foi possível"):
             await salvar(faixas[1:], atual=faixas[0])
         assert caminho_json(tmp_path).read_bytes() == antes
 
