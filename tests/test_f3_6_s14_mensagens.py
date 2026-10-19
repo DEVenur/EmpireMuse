@@ -895,7 +895,9 @@ class TestTokenAtravessandoOLimiteDoLog:
 
         log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.cogs.ll_yt_oauth"))
         assert "OAUTHTOK" not in log and "AB12CD" not in log, f"pedaço do token no log: {log!r}"
-        assert "HTTP 500" in log and "***" in log
+        assert "HTTP 500" in log
+        if antes + len("***") <= 500:  # o marcador cabe antes do corte; mais perto do limite ele mesmo pode ser cortado
+            assert "***" in log
 
     @pytest.mark.asyncio
     async def test_guarda_o_corpo_sem_token_continua_no_log_truncado(self, monkeypatch, tmp_path, caplog):
@@ -952,4 +954,4 @@ class TestCanalDeVozNoRelatorio:
 
         [campo] = [c for c in embed.fields if c.name == "Canal de voz (bot):"]
         assert disnake.utils.escape_markdown(nome) in campo.value
-        assert "[link](https://evil.example)" not in campo.value
+        assert "\\[link]" in campo.value, "o colchete do link markdown precisa sair escapado"
