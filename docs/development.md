@@ -83,7 +83,11 @@ conforme a identidade desejada.
 
 ### Suporte e Códigos de Erro (`ERR-XXXXXX`)
 
-Em caso de exceções inesperadas em comandos de barra ou prefixados e na página de erro 500 do painel web, o bot gera um código de identificação único de 6 caracteres hexadecimais no padrão `ERR-XXXXXX` (via `generate_error_code` em `empiremuse/rules/error_code.py` usando `secrets.token_hex`). O usuário recebe uma mensagem neutra com o código, sem exposição de tracebacks ou detalhes internos. O mesmo código é anexado ao log da aplicação (`.logs/disnake.log`) e enviado na notificação para o webhook configurado em `ERROR_REPORT_WEBHOOK`. Para investigar uma falha reportada, basta cruzar o código informado pelo usuário buscando-o diretamente nos logs ou no canal do webhook de erros.
+Em caso de exceções inesperadas em comandos de barra ou prefixados e na página de erro 500 do painel web, o bot gera um código de identificação único de 6 caracteres hexadecimais no padrão `ERR-XXXXXX` (via `new_error_code` em `empiremuse/rules/error_code.py` usando `secrets.token_hex`, com geração segura garantida por `safe_error_code`). O usuário recebe uma mensagem neutra com o código, sem exposição de tracebacks ou detalhes internos.
+
+Para investigar uma falha reportada cruzando o código:
+- **Log em arquivo**: O log em arquivo só existe quando `ENABLE_LOGGER=true` estiver ativado no `.env`, gravado no caminho `RUNTIME_DIR/.logs/disnake.log` (sob `EMPIREMUSE_HOME` ou diretório atual). Como esse arquivo é recriado a cada inicialização do bot (`mode="w"` no `FileHandler` configurado no `BotPool` em `empiremuse/utils/client.py`), registros anteriores a uma reinicialização não permanecem no disco.
+- **Webhook de erros (recomendado para histórico)**: Para reter o histórico persistente entre reinicializações, recomenda-se configurar `ERROR_REPORT_WEBHOOK`. O bot encaminha a notificação de erro com o código `ERR-XXXXXX` no embed e no anexo do traceback, permitindo buscar e auditar falhas passadas a qualquer momento.
 
 ## 4. Como rodar
 

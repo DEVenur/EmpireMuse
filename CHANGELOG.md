@@ -9,7 +9,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Adicionado
 - **Código Curto de Erro para Suporte (Fase 3 / F3-6)**:
-  - Criação do módulo `empiremuse/rules/error_code.py` com a função `generate_error_code`, gerando identificador aleatório no formato `ERR-XXXXXX` com 6 caracteres hexadecimais via `secrets.token_hex` (sem timestamps, IDs de usuários ou tokens). A função `safe_error_code` assegura geração resiliente sem propagar exceções.
+  - Criação do módulo `empiremuse/rules/error_code.py` com a função `new_error_code`, gerando identificador aleatório no formato `ERR-XXXXXX` com 6 caracteres hexadecimais via `secrets.token_hex` (sem timestamps, IDs de usuários ou tokens). A função `safe_error_code` assegura geração resiliente sem propagar exceções.
   - Exibição do código de erro ao usuário em falhas inesperadas no Discord (comandos de barra e prefixados, com ou sem permissão de links incorporados) e na página de erro 500 do painel web.
   - Registro do código `ERR-XXXXXX` no arquivo de log da aplicação (`.logs/disnake.log`) e no webhook de relatório de erros (`ERROR_REPORT_WEBHOOK`, no campo do embed e no nome do arquivo de anexo), permitindo cruzar o relato do usuário com o traceback completo nos registros do sistema. Erros de validação e regras de negócio esperadas não geram código.
 - **Configuração do Servidor Web e Relé RPC (Fase 3 / F3-4)**:

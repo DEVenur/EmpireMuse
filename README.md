@@ -114,7 +114,9 @@ Para configurar um ambiente local, executar testes e contribuir com o desenvolvi
 Em caso de falha inesperada durante a execução de comandos (slash ou prefixo) ou na navegação pelo painel web (erro 500), o EmpireMuse exibe ao usuário uma mensagem amigável acompanhada de um código de erro curto no formato `ERR-XXXXXX` (gerado aleatoriamente e sem expor detalhes internos):
 
 - **Para o usuário**: Ao solicitar suporte ou abrir um chamado no servidor [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) ou no repositório, basta informar o código `ERR-XXXXXX` exibido na mensagem ou página de erro.
-- **Para o administrador / dono da instância**: Para investigar a causa raiz, basta buscar pelo código informado (ex.: `grep ERR-XXXXXX .logs/disnake.log`) no arquivo de log do bot ou localizá-lo na notificação enviada ao canal de webhook de erros (`ERROR_REPORT_WEBHOOK`), onde o traceback completo e os detalhes contextuais da exceção estarão registrados.
+- **Para o administrador / dono da instância**: Para investigar a causa raiz:
+  - **Arquivo de log local**: O log em arquivo só existe quando `ENABLE_LOGGER=true` estiver ativado no `.env`, gravado no caminho `RUNTIME_DIR/.logs/disnake.log` (ex.: `grep ERR-XXXXXX .logs/disnake.log`). Como esse arquivo é recriado a cada inicialização do bot (`mode="w"` no `FileHandler` de `BotPool` em `empiremuse/utils/client.py`), registros anteriores a uma reinicialização não permanecem no disco.
+  - **Canal de webhook (recomendado para histórico)**: Para guardar o histórico persistente de erros entre reinicializações, recomenda-se configurar a variável `ERROR_REPORT_WEBHOOK`. Com o webhook configurado, cada falha inesperada gera uma notificação detalhada com o código `ERR-XXXXXX`, traceback completo e dados de contexto, permitindo localizar incidentes passados a qualquer momento.
 
 ---
 
