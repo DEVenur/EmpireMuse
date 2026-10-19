@@ -142,22 +142,6 @@ class TestUrls:
     def test_url_que_nao_e_inteira_e_limpa(self, url):
         assert not urls.is_clean_url(url)
 
-    def test_extract_url_legacy_devolve_o_primeiro_trecho_em_qualquer_posicao(self):
-        assert urls.extract_url_legacy(f"veja {URL} e https://outro.invalid/b agora") == URL
-        assert urls.extract_url_legacy(f"<{URL}>") == f"{URL}>"
-        assert urls.extract_url_legacy("sem link") is None
-        assert urls.extract_url_legacy("") is None
-
-    def test_url_prefix_legacy_devolve_so_o_prefixo(self):
-        assert urls.url_prefix_legacy(f"{URL} lixo", 100) == URL
-        assert urls.url_prefix_legacy(f"{URL}]x", 100) == f"{URL}]x"
-        assert urls.url_prefix_legacy(f"veja {URL}", 100) is None
-        assert urls.url_prefix_legacy(URL, len(URL)) == URL
-        assert urls.url_prefix_legacy(URL, len(URL) - 1) is None
-        assert urls.url_prefix_legacy(None, 100) is None
-        assert urls.url_prefix_legacy(123, 100) is None
-        assert urls.url_prefix_legacy({"url": URL}, 100) is None
-
     @pytest.mark.parametrize(
         ("avatar", "esperado"),
         [

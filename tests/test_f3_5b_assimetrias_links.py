@@ -507,7 +507,9 @@ class TestA8CotaDaIntegracaoAntesDeSaberSeOTituloExiste:
     @pytest.mark.asyncio
     async def test_modal_salva_reeditar_integracao_existente_com_a_lista_cheia(self):
         """Etapa 2 (A8): a cota só vale para título NOVO; reeditar um existente não ocupa vaga."""
-        bot = ModalBot(integracoes=1, integration_links={"【DZ】: Ana": {"url": f"{URL_BASE}/antiga"}})
+        bot = ModalBot(
+            integracoes=1, integration_links={"【DZ】: Ana": {"url": "https://www.deezer.com/profile/123456"}}
+        )
         await adicionar_integracao(bot)
         salvo = bot.salvos_usuario[-1]["integration_links"]
         assert list(salvo) == ["【DZ】: Ana"] and salvo["【DZ】: Ana"]["url"].endswith("/profile/123456")
