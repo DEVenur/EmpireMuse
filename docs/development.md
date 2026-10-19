@@ -81,6 +81,10 @@ A lista completa, comentada, está em `.example.env`. Em desenvolvimento, `ENABL
 próprias (self-hosting), certifique-se de configurar `SUPPORT_SERVER` (com seu convite ou vazio) e `EMBED_COLOR`
 conforme a identidade desejada.
 
+### Suporte e Códigos de Erro (`ERR-XXXXXX`)
+
+Em caso de exceções inesperadas em comandos de barra ou prefixados e na página de erro 500 do painel web, o bot gera um código de identificação único de 6 caracteres hexadecimais no padrão `ERR-XXXXXX` (via `generate_error_code` em `empiremuse/rules/error_code.py` usando `secrets.token_hex`). O usuário recebe uma mensagem neutra com o código, sem exposição de tracebacks ou detalhes internos. O mesmo código é anexado ao log da aplicação (`.logs/disnake.log`) e enviado na notificação para o webhook configurado em `ERROR_REPORT_WEBHOOK`. Para investigar uma falha reportada, basta cruzar o código informado pelo usuário buscando-o diretamente nos logs ou no canal do webhook de erros.
+
 ## 4. Como rodar
 
 ```bash

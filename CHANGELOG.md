@@ -8,6 +8,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Código Curto de Erro para Suporte (Fase 3 / F3-6)**:
+  - Criação do módulo `empiremuse/rules/error_code.py` com a função `generate_error_code`, gerando identificador aleatório no formato `ERR-XXXXXX` com 6 caracteres hexadecimais via `secrets.token_hex` (sem timestamps, IDs de usuários ou tokens). A função `safe_error_code` assegura geração resiliente sem propagar exceções.
+  - Exibição do código de erro ao usuário em falhas inesperadas no Discord (comandos de barra e prefixados, com ou sem permissão de links incorporados) e na página de erro 500 do painel web.
+  - Registro do código `ERR-XXXXXX` no arquivo de log da aplicação (`.logs/disnake.log`) e no webhook de relatório de erros (`ERROR_REPORT_WEBHOOK`, no campo do embed e no nome do arquivo de anexo), permitindo cruzar o relato do usuário com o traceback completo nos registros do sistema. Erros de validação e regras de negócio esperadas não geram código.
 - **Configuração do Servidor Web e Relé RPC (Fase 3 / F3-4)**:
   - Novas opções de configuração adicionadas ao `DEFAULT_CONFIG`, ao `.example.env` e ao template do Pterodactyl: `RPC_SERVER_SECRET`, `RPC_ALLOWED_ORIGINS` e `WEB_BIND_ADDRESS`.
   - `RPC_SERVER_SECRET`: segredo para registro de bots no servidor RPC via cabeçalho `X-RPC-Key` (quando vazio, gera automaticamente um segredo criptográfico efêmero por processo para comunicação interna).
@@ -213,6 +217,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Remoção de 6 tutoriais legados de hospedagem em `docs/guides/` (`heroku-hosting.md`, `mongodb.md`, `replit-atualizar.md`, `replit-hosting.md`, `replit-hosting-opcionais.md` e `replit-token.md`), reorganizando o índice em `docs/guides/README.md` exclusivamente em torno dos 4 guias técnicos oficiais do projeto (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
 
 ### Corrigido
+- **Correções do Backlog e Resiliência (Fase 3 / F3-6)**:
+  - **Preservação do Valor Zero Inteiro no Carregamento de Configurações (`empiremuse/config_loader.py`, KI-55)**: A conversão de configurações em `load_config` passa a respeitar o valor inteiro `0` definido em `config.json` para chaves inteiras (como `MAX_USER_FAVS`, `MAX_USER_INTEGRATIONS`, limites de filas e conexões), recorrendo ao valor padrão de `DEFAULT_CONFIG` apenas quando a chave estiver ausente ou com valor vazio.
+  - **Pausa Temporária do Spotify em Limite de Taxa (`empiremuse/utils/music/audio_sources/spotify.py`, `empiremuse/rules/ratelimit.py`, KI-56)**: Respostas HTTP 429 da API do Spotify não desativam mais o suporte permanentemente até a reinicialização do bot. O cliente pausa as requisições temporariamente apenas pelo intervalo indicado no cabeçalho `Retry-After` (entre 1 segundo e 1 hora, ou 60 segundos por padrão caso ausente ou inválido via `retry_after_seconds`), retornando erro claro e amigável ao usuário sem requisições desnecessárias à API e retomando as operações automaticamente após o término do período.
+  - **Parsing Estruturado da URL do Remote Git (`empiremuse/utils/client.py`, `empiremuse/rules/git_remote.py`, KI-33)**: Leitura da saída de `git remote -v` por campos via `parse_remote_web_url`, priorizando o remote `origin` (ou o primeiro remote de busca), com suporte a separação por espaços ou tabulações, conversão de formatos SSH, SCP e `git://` para HTTPS e remoção de credenciais de usuário ou senha na URL do link de commit exibido no comando `/about` e no painel web.
+  - **Isolamento de Estado do Pool de Bots (`empiremuse/utils/client.py`)**: Remoção das variáveis mutáveis `bots` e `guild_bots` declaradas no escopo de classe de `BotPool`, garantindo que cada instância crie e mantenha seus próprios contêineres exclusivamente durante sua inicialização.
 - **Comandos, painel e importadores (Fase 3 / F3-5a)**:
   - **Reset de Canal de Pedidos (`empiremuse/utils/music/request_channel.py`, KI-36)**: A operação de reset executa as alterações no Discord primeiro (edição da mensagem, exclusão do canal ou exclusão da thread/post de fórum) e só grava no banco de dados após o sucesso; em caso de falha no Discord, a configuração do banco é preservada e o usuário recebe uma mensagem genérica sem exposição de detalhes técnicos.
   - **Setup de Fórum (`empiremuse/utils/music/request_channel.py`, KI-37)**: Removida a chamada redundante a `post.edit()` sem argumentos na criação de canal de pedidos em fórum.
@@ -284,6 +293,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - O processo do Lavalink local deixa de herdar o ambiente completo do processo do bot (`os.environ`), recebendo exclusivamente uma lista restrita de variáveis essenciais do sistema operacional (*allowlist*): `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `TMPDIR`, `TEMP`, `TMP`, `JAVA_HOME` e `SERVER_PORT` (necessária para que o bot se comunique com o servidor local e lida pelo Spring via *relaxed binding*). No Windows, inclui também variáveis essenciais do sistema (`SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`, tratadas sem diferenciação de maiúsculas/minúsculas).
   - O trio de propriedades de autenticação `PLUGINS_YOUTUBE_OAUTH_ENABLED`, `PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN` e `PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION` só é injetado no ambiente do subprocesso quando a variável `YOUTUBE_OAUTH_REFRESH_TOKEN` estiver preenchida com um token não vazio. Sem token, nenhuma dessas variáveis é repassada, mesmo que existam no ambiente hospedeiro do bot.
   - **Nota de mudança / Compatibilidade**: Variáveis de ambiente como `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, configurações de proxy de rede (`HTTP_PROXY`, `HTTPS_PROXY`), `LAVALINK_SERVER_PASSWORD` ou prefixos genéricos `PLUGINS_*` definidos no ambiente do bot não são mais repassados ao processo do Lavalink local. Caso necessite configurar opções de inicialização da JVM, senhas ou configurações de plugins, declare-as explicitamente no arquivo `application.yml`.
+
+### Interno
+- **Varredura Estática de Marca Independente do Repositório Git (`tests/test_branding.py`, KI-34)**:
+  - O teste automatizado de integridade de marca passa a carregar as regras do `.gitignore` da raiz e varrer a árvore de arquivos de forma autônoma quando o diretório `.git` não estiver presente (como em arquivos compactados ou imagens de contêiner), produzindo resultado equivalente ao de `git ls-files`.
+  - A checagem de termos restritos passa a casar palavras ou hosts inteiros sem diferenciação entre maiúsculas e minúsculas, eliminando falsos positivos em substrings legítimas.
 
 ### Adiado
 - **Deploy em 1 clique**: botões de deploy em 1 clique em plataformas de terceiros descontinuados definitivamente em favor de contêineres Docker oficiais e auto-hospedagem padronizada.
