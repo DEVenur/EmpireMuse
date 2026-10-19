@@ -8,7 +8,7 @@ FAV_URL_MIN, FAV_URL_MAX = 10, 200
 
 # Integrações pessoais (``integration_links`` do usuário).
 ITG_TITLE_MAX = 90
-ITG_URL_MAX = 150  # valor fixo do importador do comando
+ITG_URL_MAX = 200  # o mesmo teto do modal de integração (o importador aceita tudo que o modal salva)
 ITG_AVATAR_MAX = 250
 
 # Links fixos do servidor (``player_controller.fav_links``).

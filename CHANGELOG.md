@@ -137,6 +137,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Regras Únicas para Comandos e Painel (Fase 3 / F3-5b, parte 2)**:
+  - Os modais de adicionar/editar favorito, link fixo e integração passam a exigir apenas a URL pura (aceita `<url>`, mas recusa texto ao redor, credenciais e caracteres de formatação/marcação como `[`, `]`, `<`, `>`, `)` e `\`).
+  - O painel web passa a recusar URLs contendo texto extra ou prefixos residuais em vez de cortá-los silenciosamente.
+  - Nomes de favoritos pessoais têm limite máximo de 25 caracteres e a verificação não diferencia maiúsculas de minúsculas (ex.: "Rock" e "rock" são considerados o mesmo favorito, sobrescrevendo a entrada sem ocupar nova vaga).
+  - O prefixo do servidor, pessoal e do comando de dono exige de 1 a 5 caracteres sem espaços internos nem caracteres de controle; no painel web, enviar um prefixo apenas com espaços redefine a configuração para o padrão.
+  - O comando `/add_dj_role` passa a validar o limite máximo de 25 cargos de DJ por servidor, recusando a tentativa de adicionar o 26º cargo.
+  - O botão de favoritar faixas no player agora respeita o limite configurado (`MAX_USER_FAVS`), recusa links com caracteres fora do padrão e informa mensagens claras de erro.
+  - Descrições de links fixos do servidor passam a ser aceitas vazias ou com tamanho entre 3 e 50 caracteres (descrições existentes de 1 a 2 caracteres são mantidas, mas novos cadastros ou reimportações exigem o intervalo válido).
+  - Integrações passam a aceitar URLs de até 200 caracteres e são sempre persistidas estruturadas como objeto (`{"url": ...}` ou `{"url": ..., "avatar": ...}`).
+  - A adição de integrações aplica um tempo de espera (cooldown) de 15 segundos por membro antes de efetuar consultas a serviços externos (Spotify, Deezer ou YouTube).
 - **Regras de Negócio Compartilhadas (Fase 3 / F3-5b, parte 1)**:
   - Criação do pacote `empiremuse/rules/` centralizando constantes de limites (`limits`), funções de texto (`text`), validações de URLs (`urls`), cálculo de cota (`quota`) e configurações permitidas (`settings`).
   - O pacote utiliza exclusivamente a biblioteca padrão do Python, sem dependências de frameworks (`disnake`, `tornado`, `motor`) nem de outros módulos da aplicação.
@@ -217,6 +227,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Remoção de 6 tutoriais legados de hospedagem em `docs/guides/` (`heroku-hosting.md`, `mongodb.md`, `replit-atualizar.md`, `replit-hosting.md`, `replit-hosting-opcionais.md` e `replit-token.md`), reorganizando o índice em `docs/guides/README.md` exclusivamente em torno dos 4 guias técnicos oficiais do projeto (`atualizar-lavalink.md`, `youtube-oauth.md`, `painel-web.md` e `spotify-keys.md`).
 
 ### Corrigido
+- **Unificação de Regras e Correções de UI (Fase 3 / F3-5b, parte 2)**:
+  - **Cota do Botão de Favoritar (`empiremuse/cogs/music.py`, KI-42)**: Correção no botão de favoritar faixas do player, que somava indevidamente a quantidade de favoritos consigo mesma, atingindo falsamente o limite antes da cota real.
+  - **Formatação de Cargos no Comando de Remoção (`empiremuse/cogs/music_settings.py`, KI-42)**: O comando `remove_dj_role` passa a exibir a lista de cargos formatada corretamente com menções `<@&id>`.
+  - **Ocultação de Detalhes Técnicos em Mensagens de Erro (`empiremuse/utils/music/interactions.py`, KI-48)**: As mensagens de erro exibidas ao usuário em modais e importadores deixam de apresentar a representação bruta de exceções (`repr(e)`), mantendo mensagens orientadas ao usuário e registrando detalhes técnicos exclusivamente nos logs.
 - **Correções do Backlog e Resiliência (Fase 3 / F3-6)**:
   - **Preservação do Valor Zero Inteiro e Piso Mínimo em Configurações (`empiremuse/config_loader.py`, KI-55)**: A conversão de configurações em `load_config` passa a respeitar o valor inteiro `0` definido em `config.json` para chaves inteiras quando aplicável (como `MAX_USER_FAVS` e `MAX_USER_INTEGRATIONS`), recorrendo ao valor padrão de `DEFAULT_CONFIG` apenas quando ausente ou vazio. As configurações `VOTE_SKIP_AMOUNT`, `HINT_RATE`, `DBCACHE_SIZE`, `PLAYLIST_CACHE_SIZE` e `MONGO_TIMEOUT` passam a ter piso mínimo de `1`, elevando automaticamente para `1` qualquer valor igual a `0` ou negativo vindo de `config.json`, `.env` ou variáveis de ambiente. Valores com tipos incompatíveis (como coleções, listas ou infinitos) em chaves numéricas passam a emitir a mensagem de erro padronizada identificando a chave configurada.
   - **Pausa Temporária do Spotify em Limite de Taxa (`empiremuse/utils/music/audio_sources/spotify.py`, `empiremuse/rules/ratelimit.py`, KI-56)**: Respostas HTTP 429 da API do Spotify não desativam mais o suporte permanentemente até a reinicialização do bot. O cliente pausa as requisições temporariamente apenas pelo intervalo indicado no cabeçalho `Retry-After` (entre 1 segundo e 1 hora, ou 60 segundos por padrão caso ausente ou inválido via `retry_after_seconds`), retornando erro claro e amigável ao usuário sem requisições desnecessárias à API e retomando as operações automaticamente após o término do período.

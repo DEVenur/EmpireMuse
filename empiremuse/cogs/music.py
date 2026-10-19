@@ -26,6 +26,8 @@ from yt_dlp import YoutubeDL
 
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
+from empiremuse.rules.errors import RuleError
+from empiremuse.rules.favorites import save_track
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -71,6 +73,7 @@ from empiremuse.utils.music.errors import (
     error_code_text,
     log_unexpected_error,
 )
+from empiremuse.utils.music.user_limits import quota_for, track_fav_error_text
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
     QueueInteraction,
@@ -6229,26 +6232,16 @@ class Music(commands.Cog):
 
             user_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.users)
 
-            if self.bot.config["MAX_USER_FAVS"] > 0 and not (await self.bot.is_owner(interaction.author)):
-                if (current_favs_size := len(user_data["fav_links"])) > self.bot.config["MAX_USER_FAVS"]:
-                    await interaction.edit_original_message(
-                        f"A quantidade de itens no seu arquivo de favorito excede "
-                        f"a quantidade máxima permitida ({self.bot.config['MAX_USER_FAVS']})."
-                    )
-                    return
+            limit = await quota_for(self.bot, interaction.author, "MAX_USER_FAVS")
 
-                if (current_favs_size + (user_favs := len(user_data["fav_links"]))) > self.bot.config["MAX_USER_FAVS"]:
-                    await interaction.edit_original_message(
-                        "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
-                        f"Limite atual: {self.bot.config['MAX_USER_FAVS']}\n"
-                        f"Quantidade de favoritos salvos: {user_favs}\n"
-                        f"Você precisa de: {(current_favs_size + user_favs) - self.bot.config['MAX_USER_FAVS']}"
-                    )
-                    return
+            saved = save_track(user_data["fav_links"], embed.author.name[1:], embed.author.url, limit=limit)
 
-            fav_name = embed.author.name[1:]
+            if isinstance(saved, RuleError):
+                await interaction.edit_original_message(track_fav_error_text(saved))
+                return
 
-            user_data["fav_links"][fav_name] = embed.author.url
+            fav_name = saved.name
+            user_data["fav_links"] = saved.entries
 
             await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 
@@ -6587,21 +6580,20 @@ class Music(commands.Cog):
 
                 user_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.users)
 
-                if self.bot.config["MAX_USER_FAVS"] > 0 and not (await self.bot.is_owner(interaction.author)):
-                    if len(user_data["fav_links"]) >= self.bot.config["MAX_USER_FAVS"]:
-                        await interaction.edit_original_message(
-                            embed=disnake.Embed(
-                                color=self.bot.get_color(interaction.guild.me),
-                                description="Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
-                                f"Limite atual: {self.bot.config['MAX_USER_FAVS']}",
-                            ),
-                            view=None,
-                        )
-                        return
+                limit = await quota_for(self.bot, interaction.author, "MAX_USER_FAVS")
 
-                user_data["fav_links"][fix_characters(info["name"], self.bot.config["USER_FAV_MAX_URL_LENGTH"])] = info[
-                    "url"
-                ]
+                saved = save_track(user_data["fav_links"], info["name"], info["url"], limit=limit)
+
+                if isinstance(saved, RuleError):
+                    await interaction.edit_original_message(
+                        embed=disnake.Embed(
+                            color=self.bot.get_color(interaction.guild.me), description=track_fav_error_text(saved)
+                        ),
+                        view=None,
+                    )
+                    return
+
+                user_data["fav_links"] = saved.entries
 
                 await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 

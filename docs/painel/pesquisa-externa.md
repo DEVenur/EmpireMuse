@@ -71,12 +71,12 @@ Observação: não há código aberto dos dashboards de bots populares (MEE6, Dy
 
 ## 3. Blocos Python recomendados
 
-- **Mesmo processo, mesmo loop (verificado no código):** `utils/client.py:977` chama `web_app.start()` dentro do `BotPool`;
-  os bots rodam como tarefas no mesmo `loop` (`:968`). O Tornado 6 usa o loop do `asyncio`, então handlers `async` do painel
+- **Mesmo processo, mesmo loop (verificado no código):** `BotPool.setup` em `empiremuse/utils/client.py` chama `web_app.start()` dentro do `BotPool`;
+  os bots rodam como tarefas no mesmo `loop` (`BotPool.setup`). O Tornado 6 usa o loop do `asyncio`, então handlers `async` do painel
   acessam `pool.bots`, caches do disnake e o banco (`MongoDatabase`/`LocalDatabase.get_data/update_data`, `utils/db.py`)
   sem fila, IPC nem thread. Isso dispensa ASGI/Quart/FastAPI (opção B) e IPC (opção C).
-  ⚠ O servidor web só sobe com `RUN_RPC_SERVER` ativo (`utils/client.py:968`); o painel herda essa condição.
-- **Rotas:** registrar `/painel/*` no `tornado.web.Application` de `run_app` (`web_app.py:431`), mantendo `/` e `/ws`.
+  ⚠ O servidor web só sobe com `RUN_RPC_SERVER` ativo (`BotPool.setup` em `empiremuse/utils/client.py`); o painel herda essa condição.
+- **Rotas:** registrar `/painel/*` no `tornado.web.Application` de `run_app` em `empiremuse/web_app.py`, mantendo `/` e `/ws`.
 - **Configurações do `Application` a ativar:** `cookie_secret` (≥32 bytes aleatórios, de variável de ambiente, nunca no repositório;
   o Tornado aceita dicionário de chaves versionadas para rotação), `xsrf_cookies=True`,
   `xsrf_cookie_kwargs={"httponly": True, "secure": True, "samesite": "Lax"}` (parâmetros confirmados no código instalado:
@@ -89,7 +89,7 @@ Observação: não há código aberto dos dashboards de bots populares (MEE6, Dy
   (dicionário em memória com TTL para uma instância, ou coleção própria em `utils/db.py` com índice TTL no Mongo). Evita gravar token do Discord no cookie.
 - **Cliente HTTP do Discord:** `aiohttp.ClientSession` único, com timeout, tratamento de 429 (`Retry-After`) e sem registrar tokens em log.
 - **Autorização por servidor (autoridade = dados do bot):** `guild = bot.get_guild(id)` para algum bot do pool; membro via `guild.get_member(user_id)`
-  ou `await guild.fetch_member()` (a intent de membros já é ligada em `utils/client.py:643`); aprovar se `member.guild_permissions.manage_guild or .administrator`
+  ou `await guild.fetch_member()` (a intent de membros já é ligada em `BotPool.setup` em `empiremuse/utils/client.py`); aprovar se `member.guild_permissions.manage_guild or .administrator`
   ou `guild.owner_id == user_id`. Revalidar em **toda escrita** (cache curto de 30–60 s), nunca só no login.
 - **Dependências novas sugeridas:** nenhuma.
 
@@ -191,7 +191,7 @@ Fonte primária: repositório oficial `discord/discord-api-docs` (código-fonte 
 | 3 | Tamanho máximo do status de canal de voz | **Até 500 caracteres** (`status`, `?string`; `null`/vazio limpa). `PUT /channels/{id}/voice-status`; exige `SET_VOICE_CHANNEL_STATUS`, e também `MANAGE_CHANNELS` se o usuário/bot não estiver conectado ao canal. Aceita `X-Audit-Log-Reason`. | https://docs.discord.com/developers/resources/channel (seção "Set Voice Channel Status") |
 | 4 | Link de convite com servidor pré-selecionado | `https://discord.com/oauth2/authorize?client_id=<ID>&scope=bot%20applications.commands&permissions=<INTEIRO>&guild_id=<ID>&disable_guild_select=true`. `guild_id` pré-preenche o seletor se o usuário puder adicionar o bot ali; `disable_guild_select=true` impede trocar. Informando só `client_id` (+ `permissions`, `guild_id`, `disable_guild_select`) vale a **configuração de instalação padrão do portal**; informar `scope`, `integration_type` ou `redirect_uri` a substitui. Ao redirecionar, `guild_id` chega só como dica (a docs recomenda o "OAuth2 code grant" do bot para ter certeza). | https://docs.discord.com/developers/topics/oauth2 (seção "Bot Authorization Flow" e "Advanced Bot Authorization") |
 
-Observação sobre o status de voz: o limite de 500 é do Discord. O modelo permanente do EmpireMuse (`voice_channel_status`, `utils/music/interactions.py:2113`) é um texto com variáveis; o Backend deve validar o tamanho **depois de expandir o modelo** ou limitar o modelo de forma conservadora (não conferi o limite aplicado hoje no modal).
+Observação sobre o status de voz: o limite de 500 é do Discord. O modelo permanente do EmpireMuse (`voice_channel_status`, `SetStageTitle` em `empiremuse/utils/music/interactions.py`) é um texto com variáveis; o Backend deve validar o tamanho **depois de expandir o modelo** ou limitar o modelo de forma conservadora (não conferi o limite aplicado hoje no modal).
 
 ### 6.1 Verificação dos 13 achados preliminares do Backend (§5 do `pesquisa-backend.md`)
 
@@ -225,4 +225,4 @@ Concordo integralmente com a recomendação do Backend (Tornado nativo + fluxo O
 - Authlib: https://github.com/authlib/authlib · https://pypi.org/project/Authlib/
 - fastapi-discord: https://github.com/Tert0/fastapi-discord · starlette-discord: https://github.com/nwunderly/starlette-discord · Flask-Discord: https://github.com/weibeu/Flask-Discord · discord-oauth2.py: https://github.com/treeben77/discord-oauth2.py · ext-oauth2: https://github.com/Snipy7374/ext-oauth2 · discord-ext-ipc: https://github.com/Ext-Creators/discord-ext-ipc
 - Dashboards: https://github.com/MrAugu/simple-discordjs-dashboard · https://github.com/LachlanDev/Discord-BOT-Dashboard-V2 · https://github.com/fuma-nama/discord-bot-dashboard-next · https://github.com/botlabs-gg/yagpdb · https://github.com/Cog-Creators/Red-Dashboard · https://github.com/ZeppelinBot/Zeppelin (LICENSE.md: Elastic License 2.0) · https://github.com/Discord-Dashboard/Core · https://www.npmjs.com/package/discord-dashboard · https://github.com/RayExo/ZyroX-CV2-AIO-With-Dashboard
-- Código local consultado (somente leitura): `web_app.py:423-442`, `utils/client.py:643,968-977`, `requirements.txt:15`.
+- Código local consultado (somente leitura): `run_app` e `start` em `empiremuse/web_app.py`, `BotPool.setup` em `empiremuse/utils/client.py`, `requirements.txt:15`.

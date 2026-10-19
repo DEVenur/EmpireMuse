@@ -201,7 +201,7 @@ def ignore() -> Ignore:
 class TestDiscloudConfig:
     def test_formato_chave_igual_valor_sem_espacos_nem_crlf(self, config_bruto):
         assert "\r" not in config_bruto, "CRLF pode quebrar a leitura do discloud.config"
-        assert not config_bruto.startswith("﻿"), "BOM no início do arquivo"
+        assert not config_bruto.startswith("\ufeff"), "BOM no início do arquivo"
         for linha in config_bruto.splitlines():
             if linha.strip() and not linha.lstrip().startswith("#"):
                 assert re.fullmatch(r"[A-Z_]+=\S.*", linha), f"linha fora do padrão CHAVE=valor: {linha!r}"

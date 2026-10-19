@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import pickle
 import re
 import traceback
@@ -15,18 +16,50 @@ from typing import List, Union, Optional, TYPE_CHECKING, Literal
 import disnake
 from disnake.ext import commands
 
-from empiremuse.rules.limits import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
-from empiremuse.rules.quota import quota_limit
-from empiremuse.rules.text import clean_import_name, drop_same_names
-from empiremuse.rules.urls import clean_avatar, is_clean_url
+from empiremuse.rules.entries import merge_import, save_entry
+from empiremuse.rules.errors import (
+    AVATAR_INVALID,
+    DESCRIPTION_INVALID,
+    DESCRIPTION_TOO_LONG,
+    FILE_TOO_LARGE,
+    ITEM_FORMAT,
+    NAME_TAKEN,
+    NAME_TOO_LONG,
+    QUOTA_FULL,
+    STATUS_CHARS,
+    STATUS_TOO_LONG,
+    URL_TOO_LONG,
+    RuleError,
+)
+from empiremuse.rules.favorites import check_import_name, name_limit
+from empiremuse.rules.guild_links import check_description, import_entry as guild_link_entry
+from empiremuse.rules.integrations import import_entry as integration_entry, save_external
+from empiremuse.rules.limits import (
+    FAV_NAME_MAX,
+    FAV_NAME_MIN,
+    FAV_URL_MAX,
+    GUILD_LINK_URL_MAX,
+    GUILD_LINK_NAME_MAX,
+    GUILD_LINK_NAME_MIN,
+    ITG_TITLE_MAX,
+    ITG_URL_MAX,
+    MAX_GUILD_LINKS,
+    VOICE_PLACEHOLDERS,
+    VOICE_STATUS_MAX_LENGTH,
+)
+from empiremuse.rules.quota import has_room
+from empiremuse.rules.text import clean_import_name
+from empiremuse.rules.settings import validate_voice_status
+from empiremuse.rules.urls import check_url, clean_url
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
 from empiremuse.utils.music.checks import check_pool_bots
-from empiremuse.utils.music.converters import time_format, fix_characters, URL_REG
+from empiremuse.utils.music.converters import time_format, fix_characters
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.music.skin_utils import skin_converter
+from empiremuse.utils.music.user_limits import quota_for
 from empiremuse.utils.others import (
     check_cmd,
     CustomContext,
@@ -39,6 +72,8 @@ from empiremuse.utils.others import (
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
+
+logger = logging.getLogger(__name__)
 
 
 class VolumeInteraction(disnake.ui.View):
@@ -664,11 +699,6 @@ class ViewMode:
     integrations_manager = "2"
 
 
-def _integration_url(entry) -> Optional[str]:
-    """URL de uma integração importada: texto simples (formato antigo) ou ``{"url": ..., "avatar": ...}`` (exportador)."""
-    return entry.get("url") if isinstance(entry, dict) else entry
-
-
 IMPORT_ECHO_LIMIT = 100
 
 
@@ -689,19 +719,141 @@ def _invalid_name_text(name, low: int, high: int) -> str:
     )
 
 
-def _integration_entry(value, url: str, avatar: str):
-    """O que é gravado: o texto da URL (formato antigo) ou ``{"url"}`` e, se houver, ``"avatar"`` (nada além disso)."""
-    if not isinstance(value, dict):
-        return url
-    return {"url": url, "avatar": avatar} if avatar else {"url": url}
+def _url_error_text(error: RuleError, *, with_label: bool = False) -> str:
+    """Mensagem de uma URL de arquivo recusada: longa demais (cita o limite) ou inválida."""
+    if error.code == URL_TOO_LONG:
+        if with_label:
+            return (
+                f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{error.limit}\n"
+                f"URL:** {_echo(error.value)}"
+            )
+        return (
+            f"**Um item de seu arquivo {_echo(error.value)} ultrapassa a quantidade de caracteres "
+            f"permitido:{error.limit}**"
+        )
+    return _invalid_link_text(error.value)
 
 
-async def _quota_limit(bot, user, config_key: str) -> int:
-    """Limite de cota do usuário: ``0`` = sem limite (configuração ``0`` ou dono do bot), regra de ``empiremuse.rules.quota``."""
-    maximum = int(bot.config[config_key])
-    if maximum <= 0:
-        return 0
-    return quota_limit(maximum, await bot.is_owner(user))
+def _guild_link_error_text(name, error: RuleError) -> str:
+    """Mensagem de um item de link do servidor recusado: formato, URL ou descrição."""
+    if error.code == ITEM_FORMAT:
+        return (
+            f"**O item `{_echo(name, 25)}` do seu arquivo está mal formatado:** cada item precisa ser um "
+            'objeto com os campos "url" e "description" em texto.'
+        )
+    if error.code == DESCRIPTION_TOO_LONG:
+        return (
+            f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{error.limit}\n"
+            f"Descrição:** {_echo(error.value)}"
+        )
+    if error.code == DESCRIPTION_INVALID:
+        return (
+            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 50 caracteres, "
+            f"sem caracteres de controle:** {_echo(error.value)}"
+        )
+    return _url_error_text(error, with_label=True)
+
+
+def _name_error_text(error: RuleError, low: int, high: int) -> str:
+    """Mensagem de um nome de arquivo recusado: acima do teto da configuração ou inválido/repetido."""
+    if error.code == NAME_TOO_LONG:
+        return (
+            f"**Um item de seu arquivo ({_echo(error.value)}) ultrapassa a quantidade de caracteres "
+            f"permitido:{error.limit}**"
+        )
+    return _invalid_name_text(error.value, low, high)
+
+
+def _save_error_text(error: RuleError, low: int, high: int, taken: str) -> str:
+    """Mensagem de uma recusa ao salvar um favorito/link pelo modal (``taken``: texto do nome repetido)."""
+    if error.code == NAME_TAKEN:
+        return f"**{taken}**"
+    if error.code == QUOTA_FULL:
+        return "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
+    return f"**O nome informado é inválido: use de {low} a {high} caracteres, sem caracteres de controle.**"
+
+
+_IMPORT_QUOTA_TEXTS = {
+    "favoritos": (
+        "A quantidade de itens no seu arquivo de favorito excede a quantidade máxima permitida ({limit}).",
+        "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...",
+        "Quantidade de favoritos salvos",
+    ),
+    "integrações": (
+        "A quantidade de itens no seu arquivo de integrações excede a quantidade máxima permitida ({limit}).",
+        "Você não possui espaço suficiente para adicionar todos as integrações de seu arquivo...",
+        "Quantidade de integrações salvas",
+    ),
+    "links": (
+        "A quantidade de itens no arquivo excede a quantidade máxima permitida ({limit}).",
+        "A lista de músicas/playlist do servidor não possui espaço suficiente para adicionar todos os itens de seu arquivo...",
+        "Quantidade de links salvos",
+    ),
+}
+
+
+def _import_quota_text(error: RuleError, kind: str) -> str:
+    """Mensagem de cota de uma importação (``kind``: favoritos, integrações ou links)."""
+    too_large, no_space, saved = _IMPORT_QUOTA_TEXTS[kind]
+    if error.code == FILE_TOO_LARGE:
+        return too_large.format(limit=error.limit)
+    kept, incoming = error.value
+    return f"{no_space}\nLimite atual: {error.limit}\n{saved}: {kept}\nVocê precisa de: {kept + incoming - error.limit}"
+
+
+_NO_ROOM_INTEGRATION_TEXT = (
+    "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
+)
+
+
+def _retry_text(retry_after: float) -> str:
+    """Mensagem neutra do cooldown ao adicionar uma integração (o balde é o do importador, mas não é uma importação)."""
+    return "**Aguarde {} antes de tentar novamente.**".format(
+        time_format(int(max(retry_after, 1)) * 1000, use_names=True)
+    )
+
+
+def _wait_text(retry_after: float) -> str:
+    """Mensagem do cooldown por membro do importador (a do exportador e a do modal de integração são outras)."""
+    return "**Você deve aguardar {} para importar.**".format(
+        time_format(int(max(retry_after, 1)) * 1000, use_names=True)
+    )
+
+
+def _profile_source(url: str) -> Optional[str]:
+    """De onde vem o perfil do link (``spotify``, ``deezer``, ``youtube`` ou ``soundcloud``), ou ``None`` se não é suportado."""
+    if spotify_regex_w_user.match(url):
+        return "spotify"
+    if deezer_regex.match(url):
+        return "deezer"
+    if youtube_regex.search(url):
+        return "youtube"
+    if soundcloud_regex.search(url):
+        return "soundcloud"
+    return None
+
+
+def _profile_key(url) -> Optional[tuple]:
+    """Identifica o perfil de um link (fonte e id), para saber se duas URLs diferentes são do mesmo perfil."""
+    if not isinstance(url, str):
+        return None
+    if match := spotify_regex_w_user.match(url):
+        return "spotify", match.groups()[-1]
+    if match := deezer_regex.match(url):
+        return "deezer", match.groups()[-1]
+    if match := youtube_regex.search(url):
+        return "youtube", match.group(0).lower()
+    if match := soundcloud_regex.search(url):
+        return "soundcloud", match.group(1).lower()
+    return None
+
+
+def _profile_saved(entries: dict, url: str) -> bool:
+    """Alguma integração já salva é do mesmo perfil do link (gravar de novo sobrescreve, não ocupa vaga)?"""
+    key = _profile_key(url)
+    return key is not None and any(
+        _profile_key(entry.get("url") if isinstance(entry, dict) else entry) == key for entry in entries.values()
+    )
 
 
 class FavModalImport(disnake.ui.Modal):
@@ -756,20 +908,16 @@ class FavModalImport(disnake.ui.Modal):
         raise GenericError(f"Modo atual ainda não implementado: {self.view.mode} | {type(self.view.mode)}")
 
     async def _reject_rate_limited(self, inter: disnake.ModalInteraction, retry_after: float) -> None:
-        await inter.send(
-            "**Você deve aguardar {} para importar.**".format(
-                time_format(int(max(retry_after, 1)) * 1000, use_names=True)
-            ),
-            ephemeral=True,
-        )
+        await inter.send(_wait_text(retry_after), ephemeral=True)
 
     async def callback(self, inter: disnake.ModalInteraction, /) -> None:
         try:
             json_data = json.loads(inter.text_values["json_data"])
-        except Exception as e:
+        except (ValueError, RecursionError):
+            logger.exception("Importação de favoritos/links/integrações: JSON inválido")
             await inter.send(
                 "**Ocorreu um erro ao analisar os dados ou foi enviado dados inválidos/não-formatado "
-                f"em formato json.**\n\n`{repr(e)}`",
+                "em formato json.**",
                 ephemeral=True,
             )
             return
@@ -781,269 +929,166 @@ class FavModalImport(disnake.ui.Modal):
             )
             return
 
-        if self.view.mode == ViewMode.fav_manager:
-            if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
-                await self._reject_rate_limited(inter, retry_after)
-                return
+        importers = {
+            ViewMode.fav_manager: self._import_favorites,
+            ViewMode.guild_fav_manager: self._import_guild_links,
+            ViewMode.integrations_manager: self._import_integrations,
+        }
 
-            clean_data = {}
-
-            for name, url in json_data.items():
-                if not isinstance(url, str):
-                    await inter.send(_invalid_link_text(url), ephemeral=True)
-                    return
-
-                url = url.strip()
-
-                if len(url) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"]):
-                    await inter.send(
-                        f"**Um item de seu arquivo {_echo(url)} ultrapassa a quantidade de caracteres permitido:{max_url_chars}**",
-                        ephemeral=True,
-                    )
-                    return
-
-                if not URL_REG.match(url) or not is_clean_url(url):
-                    await inter.send(_invalid_link_text(url), ephemeral=True)
-                    return
-
-                if (clean_name := clean_import_name(name, FAV_NAME_MIN, FAV_NAME_MAX, clean_data)) is None:
-                    await inter.send(_invalid_name_text(name, FAV_NAME_MIN, FAV_NAME_MAX), ephemeral=True)
-                    return
-
-                clean_data[clean_name] = url
-
-            json_data = clean_data
-
-            await inter.response.defer(ephemeral=True)
-
-            work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
-
-            for name in json_data.keys():
-                if len(name) > (max_name_chars := self.view.bot.config["USER_FAV_MAX_NAME_LENGTH"]):
-                    await inter.edit_original_message(
-                        f"**Um item de seu arquivo ({_echo(name)}) ultrapassa a quantidade de caracteres permitido:{max_name_chars}**"
-                    )
-                    return
-
-            drop_same_names(work["fav_links"], json_data)
-
-            if self.view.bot.config["MAX_USER_FAVS"] > 0 and not (await self.view.bot.is_owner(inter.author)):
-                if (json_size := len(json_data)) > self.view.bot.config["MAX_USER_FAVS"]:
-                    await inter.edit_original_message(
-                        f"A quantidade de itens no seu arquivo de favorito excede "
-                        f"a quantidade máxima permitida ({self.view.bot.config['MAX_USER_FAVS']})."
-                    )
-                    return
-
-                if (json_size + (user_favs := len(work["fav_links"]))) > self.view.bot.config["MAX_USER_FAVS"]:
-                    await inter.edit_original_message(
-                        "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
-                        f"Limite atual: {self.view.bot.config['MAX_USER_FAVS']}\n"
-                        f"Quantidade de favoritos salvos: {user_favs}\n"
-                        f"Você precisa de: {(json_size + user_favs) - self.view.bot.config['MAX_USER_FAVS']}"
-                    )
-                    return
-
-            self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
-            self.view.data["fav_links"].update(json_data)
-
-            await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
-
-            await inter.edit_original_message(content="**Favoritos importados com sucesso!**")
-
-            if (s := len(json_data)) > 1:
-                self.view.log = f"{s} favoritos foram importados com sucesso."
-            else:
-                name = next(iter(json_data))
-                self.view.log = f"O favorito [`{name}`]({json_data[name]}) foi importado com sucesso."
-
-        elif self.view.mode == ViewMode.guild_fav_manager:
-            if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
-                await self._reject_rate_limited(inter, retry_after)
-                return
-
-            clean_data = {}
-
-            for name, data in json_data.items():
-                if not (
-                    isinstance(data, dict)
-                    and isinstance(data.get("url"), str)
-                    and isinstance(data.get("description"), str)
-                ):
-                    await inter.send(
-                        f"**O item `{_echo(name, 25)}` do seu arquivo está mal formatado:** cada item precisa ser um "
-                        'objeto com os campos "url" e "description" em texto.',
-                        ephemeral=True,
-                    )
-                    return
-
-                url = data["url"].strip()
-
-                if len(url) > (max_url_chars := self.view.bot.config["USER_FAV_MAX_URL_LENGTH"]):
-                    await inter.send(
-                        f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_url_chars}\nURL:** {_echo(url)}",
-                        ephemeral=True,
-                    )
-                    return
-
-                if len(data["description"]) > (max_description_chars := 50):
-                    await inter.send(
-                        f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{max_description_chars}\nDescrição:** {_echo(data['description'])}",
-                        ephemeral=True,
-                    )
-                    return
-
-                if not URL_REG.match(url) or not is_clean_url(url):
-                    await inter.send(_invalid_link_text(url), ephemeral=True)
-                    return
-
-                if (clean_name := clean_import_name(name, FAV_NAME_MIN, FAV_NAME_MAX, clean_data)) is None:
-                    await inter.send(_invalid_name_text(name, FAV_NAME_MIN, FAV_NAME_MAX), ephemeral=True)
-                    return
-
-                clean_data[clean_name] = {"url": url, "description": data["description"]}
-
-            json_data = clean_data
-
-            await inter.response.defer(ephemeral=True)
-
-            work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
-
-            if not work["player_controller"]["channel"] or not self.view.bot.get_channel(
-                int(work["player_controller"]["channel"])
-            ):
-                await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
-                return
-
-            for name in json_data.keys():
-                try:
-                    del work["player_controller"]["fav_links"][name]
-                except KeyError:
-                    continue
-
-            if (json_size := len(json_data)) > 25:
-                await inter.edit_original_message(
-                    f"A quantidade de itens no arquivo excede a quantidade máxima permitida (25)."
-                )
-                return
-
-            if (json_size + (user_favs := len(work["player_controller"]["fav_links"]))) > 25:
-                await inter.edit_original_message(
-                    "A lista de músicas/playlist do servidor não possui espaço suficiente para adicionar todos os itens de seu arquivo...\n"
-                    f"Limite atual: 25\n"
-                    f"Quantidade de links salvos: {user_favs}\n"
-                    f"Você precisa de: {(json_size + user_favs) - 25}"
-                )
-                return
-
-            self.view.guild_data = work  # só depois de todas as checagens: uma recusa não altera a tela
-            self.view.guild_data["player_controller"]["fav_links"].update(json_data)
-
-            await self.view.bot.update_data(inter.guild_id, self.view.guild_data, db_name=DBModel.guilds)
-
-            guild = self.view.bot.get_guild(inter.guild_id)
-
-            await inter.edit_original_message(content="**Links fixos do servidor foram importados com sucesso!**")
-
-            if (s := len(json_data)) > 1:
-                self.view.log = f"{s} links foram importados com sucesso para a lista de favoritos do servidor."
-            else:
-                name = next(iter(json_data))
-                self.view.log = f"O link [`{name}`]({json_data[name]['url']}) foi importado com sucesso para a lista de links do servidor.."
-
-            await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
-
-        elif self.view.mode == ViewMode.integrations_manager:
-            if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
-                await self._reject_rate_limited(inter, retry_after)
-                return
-
-            clean_data = {}
-
-            for name, value in json_data.items():
-                url = value.get("url") if isinstance(value, dict) else value
-
-                if not isinstance(url, str):
-                    await inter.send(_invalid_link_text(url), ephemeral=True)
-                    return
-
-                url = url.strip()
-
-                if len(url) > (max_url_chars := 150):
-                    await inter.send(
-                        f"**Um item de seu arquivo {_echo(url)} ultrapassa a quantidade de caracteres permitido:{max_url_chars}**",
-                        ephemeral=True,
-                    )
-                    return
-
-                avatar = clean_avatar(value.get("avatar")) if isinstance(value, dict) else ""
-
-                if not URL_REG.match(url) or not is_clean_url(url) or avatar is None:
-                    await inter.send(_invalid_link_text(url if avatar is not None else value["avatar"]), ephemeral=True)
-                    return
-
-                if (clean_name := clean_import_name(name, 1, ITG_TITLE_MAX, clean_data)) is None:
-                    await inter.send(_invalid_name_text(name, 1, ITG_TITLE_MAX), ephemeral=True)
-                    return
-
-                clean_data[clean_name] = _integration_entry(value, url, avatar)
-
-            json_data = clean_data
-
-            await inter.response.defer(ephemeral=True)
-
-            work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
-
-            drop_same_names(work["integration_links"], json_data)
-
-            if self.view.bot.config["MAX_USER_INTEGRATIONS"] > 0 and not (await self.view.bot.is_owner(inter.author)):
-                if (json_size := len(json_data)) > self.view.bot.config["MAX_USER_INTEGRATIONS"]:
-                    await inter.edit_original_message(
-                        f"A quantidade de itens no seu arquivo de integrações excede "
-                        f"a quantidade máxima permitida ({self.view.bot.config['MAX_USER_INTEGRATIONS']})."
-                    )
-                    return
-
-                if (json_size + (user_integrations := len(work["integration_links"]))) > self.view.bot.config[
-                    "MAX_USER_INTEGRATIONS"
-                ]:
-                    await inter.edit_original_message(
-                        "Você não possui espaço suficiente para adicionar todos as integrações de seu arquivo...\n"
-                        f"Limite atual: {self.view.bot.config['MAX_USER_INTEGRATIONS']}\n"
-                        f"Quantidade de integrações salvas: {user_integrations}\n"
-                        f"Você precisa de: {(json_size + user_integrations) - self.view.bot.config['MAX_USER_INTEGRATIONS']}"
-                    )
-                    return
-
-            self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
-
-            for name in json_data.keys():
-                try:
-                    del self.view.data["integration_links"][name.lower()[:90]]  # chave antiga: minúscula e truncada
-                except KeyError:
-                    continue
-
-            self.view.data["integration_links"].update(json_data)
-
-            await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
-
-            await inter.edit_original_message(content="**Integrações importadas com sucesso!**")
-
-            if (s := len(json_data)) > 1:
-                self.view.log = f"{s} integrações foram importadas com sucesso."
-            else:
-                name = next(iter(json_data))
-                self.view.log = (
-                    f"A integração [`{name}`]({_integration_url(json_data[name])}) foi importada com sucesso."
-                )
-
-        else:
+        if (importer := importers.get(self.view.mode)) is None:
             raise GenericError(f"**Modo ainda não implementado: {self.view.mode} | {type(self.view.mode)}**")
+
+        if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
+            await self._reject_rate_limited(inter, retry_after)
+            return
+
+        if not await importer(inter, json_data):
+            return
 
         if not isinstance(self.view.ctx, CustomContext):
             await self.view.ctx.edit_original_message(content=self.view.build_txt(), view=self.view)
         elif self.view.message:
             await self.view.message.edit(content=self.view.build_txt(), view=self.view)
+
+    async def _import_favorites(self, inter: disnake.ModalInteraction, json_data: dict) -> bool:
+        clean_data = {}
+
+        for name, url in json_data.items():
+            url = check_url(url, self.view.bot.config["USER_FAV_MAX_URL_LENGTH"])
+
+            if isinstance(url, RuleError):
+                await inter.send(_url_error_text(url), ephemeral=True)
+                return False
+
+            clean_name = check_import_name(name, clean_data, self.view.bot.config["USER_FAV_MAX_NAME_LENGTH"])
+
+            if isinstance(clean_name, RuleError):
+                await inter.send(_name_error_text(clean_name, FAV_NAME_MIN, FAV_NAME_MAX), ephemeral=True)
+                return False
+
+            clean_data[clean_name] = url
+
+        await inter.response.defer(ephemeral=True)
+
+        work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+
+        limit = await quota_for(self.view.bot, inter.author, "MAX_USER_FAVS")
+
+        merged = merge_import(work["fav_links"], clean_data, limit)
+
+        if isinstance(merged, RuleError):
+            await inter.edit_original_message(_import_quota_text(merged, "favoritos"))
+            return False
+
+        work["fav_links"] = merged
+        self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
+
+        await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
+
+        await inter.edit_original_message(content="**Favoritos importados com sucesso!**")
+
+        if (s := len(clean_data)) > 1:
+            self.view.log = f"{s} favoritos foram importados com sucesso."
+        else:
+            name = next(iter(clean_data))
+            self.view.log = f"O favorito [`{name}`]({clean_data[name]}) foi importado com sucesso."
+
+        return True
+
+    async def _import_guild_links(self, inter: disnake.ModalInteraction, json_data: dict) -> bool:
+        clean_data = {}
+
+        for name, data in json_data.items():
+            entry = guild_link_entry(data)
+
+            if isinstance(entry, RuleError):
+                await inter.send(_guild_link_error_text(name, entry), ephemeral=True)
+                return False
+
+            if (clean_name := clean_import_name(name, FAV_NAME_MIN, FAV_NAME_MAX, clean_data)) is None:
+                await inter.send(_invalid_name_text(name, FAV_NAME_MIN, FAV_NAME_MAX), ephemeral=True)
+                return False
+
+            clean_data[clean_name] = entry
+
+        await inter.response.defer(ephemeral=True)
+
+        work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
+
+        if not work["player_controller"]["channel"] or not self.view.bot.get_channel(
+            int(work["player_controller"]["channel"])
+        ):
+            await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
+            return False
+
+        merged = merge_import(work["player_controller"]["fav_links"], clean_data, MAX_GUILD_LINKS)
+
+        if isinstance(merged, RuleError):
+            await inter.edit_original_message(_import_quota_text(merged, "links"))
+            return False
+
+        work["player_controller"]["fav_links"] = merged
+        self.view.guild_data = work  # só depois de todas as checagens: uma recusa não altera a tela
+
+        await self.view.bot.update_data(inter.guild_id, self.view.guild_data, db_name=DBModel.guilds)
+
+        guild = self.view.bot.get_guild(inter.guild_id)
+
+        await inter.edit_original_message(content="**Links fixos do servidor foram importados com sucesso!**")
+
+        if (s := len(clean_data)) > 1:
+            self.view.log = f"{s} links foram importados com sucesso para a lista de favoritos do servidor."
+        else:
+            name = next(iter(clean_data))
+            self.view.log = f"O link [`{name}`]({clean_data[name]['url']}) foi importado com sucesso para a lista de links do servidor.."
+
+        await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
+
+        return True
+
+    async def _import_integrations(self, inter: disnake.ModalInteraction, json_data: dict) -> bool:
+        clean_data = {}
+
+        for name, value in json_data.items():
+            entry = integration_entry(value)
+
+            if isinstance(entry, RuleError):
+                text = _invalid_link_text(entry.value) if entry.code == AVATAR_INVALID else _url_error_text(entry)
+                await inter.send(text, ephemeral=True)
+                return False
+
+            if (clean_name := clean_import_name(name, 1, ITG_TITLE_MAX, clean_data)) is None:
+                await inter.send(_invalid_name_text(name, 1, ITG_TITLE_MAX), ephemeral=True)
+                return False
+
+            clean_data[clean_name] = entry
+
+        await inter.response.defer(ephemeral=True)
+
+        work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+
+        limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
+
+        merged = merge_import(work["integration_links"], clean_data, limit)
+
+        if isinstance(merged, RuleError):
+            await inter.edit_original_message(_import_quota_text(merged, "integrações"))
+            return False
+
+        work["integration_links"] = merged
+        self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
+
+        await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
+
+        await inter.edit_original_message(content="**Integrações importadas com sucesso!**")
+
+        if (s := len(clean_data)) > 1:
+            self.view.log = f"{s} integrações foram importadas com sucesso."
+        else:
+            name = next(iter(clean_data))
+            self.view.log = f"A integração [`{name}`]({clean_data[name]['url']}) foi importada com sucesso."
+
+        return True
 
 
 class FavModalAdd(disnake.ui.Modal):
@@ -1122,12 +1167,10 @@ class FavModalAdd(disnake.ui.Modal):
         if self.view.mode == ViewMode.fav_manager:
             url = inter.text_values["user_fav_url"].strip()
 
-            try:
-                valid_url = URL_REG.findall(url)[0]
-            except IndexError:
+            if (valid_url := clean_url(url, FAV_URL_MAX)) is None:
                 await inter.send(
                     embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {url}", color=disnake.Color.red()
+                        description=f"**Nenhum link válido encontrado:** {_echo(url)}", color=disnake.Color.red()
                     ),
                     ephemeral=True,
                 )
@@ -1137,21 +1180,27 @@ class FavModalAdd(disnake.ui.Modal):
 
             work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
 
-            name = inter.text_values["user_fav_name"].strip()
+            name_max = name_limit(self.view.bot.config["USER_FAV_MAX_NAME_LENGTH"])
+            limit = await quota_for(self.view.bot, inter.author, "MAX_USER_FAVS")
 
-            if name != self.name:
-                work["fav_links"].pop(self.name, None)
+            saved = save_entry(
+                work["fav_links"],
+                self.name,
+                inter.text_values["user_fav_name"],
+                valid_url,
+                name_min=FAV_NAME_MIN,
+                name_max=name_max,
+                limit=limit,
+            )
 
-            if name not in work["fav_links"]:
-                limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_FAVS")
-                if limit and len(work["fav_links"]) >= limit:
-                    await inter.edit_original_message(
-                        "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
-                    )
-                    return
+            if isinstance(saved, RuleError):
+                await inter.edit_original_message(
+                    _save_error_text(saved, FAV_NAME_MIN, name_max, "Você já tem um favorito com esse nome.")
+                )
+                return
 
-            self.view.data = work
-            self.view.data["fav_links"][name] = valid_url
+            work["fav_links"] = saved
+            self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
 
             await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
 
@@ -1174,50 +1223,54 @@ class FavModalAdd(disnake.ui.Modal):
         elif self.view.mode == ViewMode.guild_fav_manager:
             url = inter.text_values["guild_fav_url"].strip()
 
-            try:
-                valid_url = URL_REG.findall(url)[0]
-            except IndexError:
+            if (valid_url := clean_url(url, GUILD_LINK_URL_MAX)) is None:
                 await inter.send(
                     embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {url}", color=disnake.Color.red()
+                        description=f"**Nenhum link válido encontrado:** {_echo(url)}", color=disnake.Color.red()
                     ),
+                    ephemeral=True,
+                )
+                return
+
+            description = check_description(inter.text_values["guild_fav_description"])
+
+            if isinstance(description, RuleError):
+                await inter.send(
+                    "**A descrição deve ficar vazia ou ter de 3 a 50 caracteres, sem caracteres de controle.**",
                     ephemeral=True,
                 )
                 return
 
             await inter.response.defer(ephemeral=True)
 
-            self.view.guild_data = await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds)
+            work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
 
-            if not self.view.guild_data["player_controller"]["channel"] or not self.view.bot.get_channel(
-                int(self.view.guild_data["player_controller"]["channel"])
+            if not work["player_controller"]["channel"] or not self.view.bot.get_channel(
+                int(work["player_controller"]["channel"])
             ):
                 await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
                 return
 
-            name = inter.text_values["guild_fav_name"].strip()
-            description = inter.text_values["guild_fav_description"].strip()
+            saved = save_entry(
+                work["player_controller"]["fav_links"],
+                self.name,
+                inter.text_values["guild_fav_name"],
+                {"url": valid_url, "description": description},
+                name_min=GUILD_LINK_NAME_MIN,
+                name_max=GUILD_LINK_NAME_MAX,
+                limit=MAX_GUILD_LINKS,
+            )
 
-            if not self.view.guild_data["player_controller"]["channel"] or not self.view.bot.get_channel(
-                int(self.view.guild_data["player_controller"]["channel"])
-            ):
-                await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
-                return
-
-            try:
-                if name != self.name:
-                    del self.view.guild_data["player_controller"]["fav_links"][self.name]
-            except KeyError:
-                if len(self.view.guild_data["player_controller"]["fav_links"]) > 24:
-                    await inter.edit_original_message(
-                        "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
+            if isinstance(saved, RuleError):
+                await inter.edit_original_message(
+                    _save_error_text(
+                        saved, GUILD_LINK_NAME_MIN, GUILD_LINK_NAME_MAX, "Já existe um link com esse nome."
                     )
-                    return
+                )
+                return
 
-            self.view.guild_data["player_controller"]["fav_links"][name] = {
-                "url": valid_url,
-                "description": description,
-            }
+            work["player_controller"]["fav_links"] = saved
+            self.view.guild_data = work  # só depois de todas as checagens: uma recusa não altera a tela
 
             await self.view.bot.update_data(inter.guild_id, self.view.guild_data, db_name=DBModel.guilds)
 
@@ -1235,194 +1288,217 @@ class FavModalAdd(disnake.ui.Modal):
             await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
 
         elif self.view.mode == ViewMode.integrations_manager:
-            try:
-                await inter.response.defer(ephemeral=True, with_message=True)
-            except:
-                pass
-
-            self.view.data = await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users)
-
-            limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
-            if limit and len(self.view.data["integration_links"]) >= limit:
-                await inter.edit_original_message(
-                    "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
-                )
+            if not await self._add_integration(inter):
                 return
-
-            url = inter.text_values["user_integration_url"].strip()
-
-            try:
-                url = URL_REG.findall(url)[0]
-            except IndexError:
-                await inter.edit_original_message(
-                    embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {url}", color=disnake.Color.red()
-                    )
-                )
-                return
-
-            if matches := spotify_regex_w_user.match(url):
-                if not self.view.bot.spotify:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description="**O suporte ao spotify não está disponível no momento...**",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                url_type, user_id = matches.groups()
-
-                if url_type != "user":
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**Você deve usar link de um perfil de usuário do spotify.** {url}",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                try:
-                    result = await self.view.bot.spotify.get_user_info(user_id)
-                except Exception as e:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**Ocorreu um erro ao obter informações do spotify:** ```py\n{repr(e)}```",
-                            color=self.view.bot.get_color(),
-                        )
-                    )
-                    traceback.print_exc()
-                    return
-
-                if not result:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description="**O usuário do link informado não possui playlists públicas...**",
-                            color=self.view.bot.get_color(),
-                        )
-                    )
-                    return
-
-                data = {
-                    "title": f"[SP]: {result['display_name'][:90]}",
-                    "url": result["external_urls"]["spotify"],
-                    "avatar": result["images"][-1]["url"],
-                }
-
-            elif matches := deezer_regex.match(url):
-                url_type, url_id = matches.groups()[-2:]
-
-                if url_type != "profile":
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**Você deve usar link de um perfil de usuário do deezer.** {url}",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                try:
-                    result = await self.view.bot.deezer.get_user_info(int(url_id))
-                except Exception as e:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**Ocorreu um erro ao obter informações do spotify:** ```py\n{repr(e)}```",
-                            color=self.view.bot.get_color(),
-                        )
-                    )
-                    traceback.print_exc()
-                    return
-
-                data = {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
-
-            else:
-                match = youtube_regex.search(url)
-
-                if match:
-                    base_url = f"{match.group(0)}/playlists"
-                    source = "[YT]:"
-                else:
-                    match = soundcloud_regex.search(url)
-                    if match:
-                        group = match.group(1)
-                        base_url = f"https://soundcloud.com/{group}/sets"
-                    else:
-                        await inter.edit_original_message(
-                            embed=disnake.Embed(
-                                description=f"**Link informado não é suportado:** {url}", color=disnake.Color.red()
-                            )
-                        )
-                        return
-
-                    source = "[SC]:"
-
-                loop = self.view.bot.loop or asyncio.get_event_loop()
-
-                try:
-                    info = await loop.run_in_executor(
-                        None, lambda: self.view.bot.pool.ytdl.extract_info(base_url, download=False)
-                    )
-                except Exception as e:
-                    traceback.print_exc()
-                    await inter.edit_original_message(
-                        f"**Ocorreu um erro ao obter informação da url:** ```py\n{repr(e)}```"
-                    )
-                    return
-
-                if not info:
-                    msg = f"**O usuário/canal do link informado não existe:**\n{url}"
-
-                    if source == "[YT]:":
-                        msg += f"\n\n`Nota: Confira se no link contém usuário com @, ex: @ytchannel`"
-
-                    await inter.edit_original_message(embed=disnake.Embed(description=msg, color=disnake.Color.red()))
-                    return
-
-                if not info["entries"]:
-                    await inter.edit_original_message(
-                        embed=disnake.Embed(
-                            description=f"**O usuário/canal do link informado não possui playlists públicas...**",
-                            color=disnake.Color.red(),
-                        )
-                    )
-                    return
-
-                data = {"title": f"{source} {info['title']}", "url": info["original_url"]}
-
-            title = fix_characters(data["title"], 80)
-
-            self.view.data["integration_links"][title] = {"url": data["url"]}
-
-            try:
-                self.view.data["integration_links"][title]["avatar"] = data["avatar"]
-            except KeyError:
-                pass
-
-            await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
-
-            try:
-                me = (inter.guild or self.view.bot.get_guild(inter.guild_id)).me
-            except AttributeError:
-                me = None
-
-            await inter.edit_original_message(
-                embed=disnake.Embed(
-                    description=f"**Integração adicionada/editada com sucesso:** [`{title}`]({data['url']})\n"
-                    "**Ela vai aparecer nas seguintes ocasições:** ```\n"
-                    "- Ao usar o comando /play (selecionando a integração no preenchimento automático da busca)\n"
-                    "- Ao clicar no botão de tocar favorito do player.\n"
-                    "- Ao usar o comando play (prefixed) sem nome ou link.```",
-                    color=self.view.bot.get_color(me),
-                ),
-                view=None,
-            )
-
-            self.view.log = f"[`{data['title']}`](<{data['url']}>) foi adicionado nas suas integrações."
 
         if not isinstance(self.view.ctx, CustomContext):
             await self.view.ctx.edit_original_message(content=self.view.build_txt(), view=self.view)
         elif self.view.message:
             await self.view.message.edit(content=self.view.build_txt(), view=self.view)
+
+    async def _add_integration(self, inter: disnake.ModalInteraction) -> bool:
+        """Adiciona/edita uma integração a partir do link de um perfil; ``False`` se nada foi gravado."""
+        try:
+            await inter.response.defer(ephemeral=True, with_message=True)
+        except (disnake.HTTPException, disnake.InteractionResponded):
+            pass
+
+        work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
+
+        typed_url = inter.text_values["user_integration_url"].strip()
+
+        if (url := clean_url(typed_url, ITG_URL_MAX)) is None:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Nenhum link válido encontrado:** {_echo(typed_url)}", color=disnake.Color.red()
+                )
+            )
+            return False
+
+        if (source := _profile_source(url)) is None:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Link informado não é suportado:** {_echo(url)}", color=disnake.Color.red()
+                )
+            )
+            return False
+
+        # antes de qualquer consulta externa: o cooldown por membro e a lista cheia com um perfil que ainda não está salvo
+        if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
+            await inter.edit_original_message(_retry_text(retry_after))
+            return False
+
+        limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
+
+        if limit and len(work["integration_links"]) >= limit and not _profile_saved(work["integration_links"], url):
+            await inter.edit_original_message(_NO_ROOM_INTEGRATION_TEXT)
+            return False
+
+        if (data := await self._lookup_profile(inter, url, source)) is None:
+            return False
+
+        saved = save_external(
+            work["integration_links"],
+            fix_characters(data["title"], 80),
+            data.get("url"),
+            data.get("avatar"),
+            limit=limit,
+        )
+
+        if isinstance(saved, RuleError):
+            await inter.edit_original_message(
+                _NO_ROOM_INTEGRATION_TEXT
+                if saved.code == QUOTA_FULL
+                else "**Não foi possível usar os dados devolvidos pelo serviço. Tente novamente mais tarde.**"
+            )
+            return False
+
+        work["integration_links"] = saved.entries
+        self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
+
+        await self.view.bot.update_global_data(inter.author.id, self.view.data, db_name=DBModel.users)
+
+        try:
+            me = (inter.guild or self.view.bot.get_guild(inter.guild_id)).me
+        except AttributeError:
+            me = None
+
+        await inter.edit_original_message(
+            embed=disnake.Embed(
+                description=f"**Integração adicionada/editada com sucesso:** [`{saved.name}`]({saved.url})\n"
+                "**Ela vai aparecer nas seguintes ocasições:** ```\n"
+                "- Ao usar o comando /play (selecionando a integração no preenchimento automático da busca)\n"
+                "- Ao clicar no botão de tocar favorito do player.\n"
+                "- Ao usar o comando play (prefixed) sem nome ou link.```",
+                color=self.view.bot.get_color(me),
+            ),
+            view=None,
+        )
+
+        self.view.log = f"[`{saved.name}`](<{saved.url}>) foi adicionado nas suas integrações."
+
+        return True
+
+    async def _lookup_profile(self, inter: disnake.ModalInteraction, url: str, source: str) -> Optional[dict]:
+        """Consulta o perfil no Spotify, Deezer ou yt-dlp (``source``); ``None`` (com a mensagem já enviada) se falhar."""
+        if source == "spotify":
+            return await self._lookup_spotify(inter, url)
+
+        if source == "deezer":
+            return await self._lookup_deezer(inter, url)
+
+        return await self._lookup_ytdl(inter, url, source)
+
+    async def _lookup_spotify(self, inter: disnake.ModalInteraction, url: str) -> Optional[dict]:
+        if not self.view.bot.spotify:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description="**O suporte ao spotify não está disponível no momento...**",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        url_type, user_id = spotify_regex_w_user.match(url).groups()
+
+        if url_type != "user":
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Você deve usar link de um perfil de usuário do spotify.** {_echo(url)}",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        try:
+            result = await self.view.bot.spotify.get_user_info(user_id)
+        except Exception:
+            logger.exception("Integração: erro ao consultar o perfil (%s)", "spotify")
+            await self._profile_error(inter)
+            return None
+
+        if not result:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description="**O usuário do link informado não possui playlists públicas...**",
+                    color=self.view.bot.get_color(),
+                )
+            )
+            return None
+
+        return {
+            "title": f"[SP]: {result['display_name'][:90]}",
+            "url": result["external_urls"]["spotify"],
+            "avatar": result["images"][-1]["url"],
+        }
+
+    async def _lookup_deezer(self, inter: disnake.ModalInteraction, url: str) -> Optional[dict]:
+        url_type, url_id = deezer_regex.match(url).groups()[-2:]
+
+        if url_type != "profile":
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description=f"**Você deve usar link de um perfil de usuário do deezer.** {_echo(url)}",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        try:
+            result = await self.view.bot.deezer.get_user_info(int(url_id))
+        except Exception:
+            logger.exception("Integração: erro ao consultar o perfil (%s)", "deezer")
+            await self._profile_error(inter)
+            return None
+
+        return {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
+
+    async def _lookup_ytdl(self, inter: disnake.ModalInteraction, url: str, source: str) -> Optional[dict]:
+        if source == "youtube":
+            base_url, label = f"{youtube_regex.search(url).group(0)}/playlists", "[YT]:"
+        else:
+            base_url, label = f"https://soundcloud.com/{soundcloud_regex.search(url).group(1)}/sets", "[SC]:"
+
+        loop = self.view.bot.loop or asyncio.get_event_loop()
+
+        try:
+            info = await loop.run_in_executor(
+                None, lambda: self.view.bot.pool.ytdl.extract_info(base_url, download=False)
+            )
+        except Exception:
+            logger.exception("Integração: erro ao ler a URL com o yt-dlp")
+            await inter.edit_original_message(
+                "**Ocorreu um erro ao obter informação da url. Tente novamente mais tarde.**"
+            )
+            return None
+
+        if not info:
+            msg = f"**O usuário/canal do link informado não existe:**\n{_echo(url)}"
+
+            if label == "[YT]:":
+                msg += "\n\n`Nota: Confira se no link contém usuário com @, ex: @ytchannel`"
+
+            await inter.edit_original_message(embed=disnake.Embed(description=msg, color=disnake.Color.red()))
+            return None
+
+        if not info["entries"]:
+            await inter.edit_original_message(
+                embed=disnake.Embed(
+                    description="**O usuário/canal do link informado não possui playlists públicas...**",
+                    color=disnake.Color.red(),
+                )
+            )
+            return None
+
+        return {"title": f"{label} {info['title']}", "url": info["original_url"]}
+
+    async def _profile_error(self, inter: disnake.ModalInteraction) -> None:
+        await inter.edit_original_message(
+            embed=disnake.Embed(
+                description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
+                color=self.view.bot.get_color(),
+            )
+        )
 
 
 class FavMenuView(disnake.ui.View):
@@ -2292,17 +2368,7 @@ class ViewModal(disnake.ui.Modal):
 
 
 class SetStageTitle(disnake.ui.View):
-    placeholders = (
-        "{track.title}",
-        "{track.timestamp}",
-        "{track.emoji}",
-        "{track.author}",
-        "{track.duration}",
-        "{track.source}",
-        "{track.playlist}",
-        "{requester.name}",
-        "{requester.id}",
-    )
+    placeholders = VOICE_PLACEHOLDERS
 
     placeholder_text = (
         "```ansi\n[34;1m{track.title}[0m -> Nome da música\n"
@@ -2360,7 +2426,7 @@ class SetStageTitle(disnake.ui.View):
                         label="status",
                         custom_id="status_voice_value",
                         placeholder="Pra desativar deixe vazio",
-                        max_length=496,
+                        max_length=VOICE_STATUS_MAX_LENGTH,
                         required=False,
                     ),
                 ],
@@ -2379,7 +2445,7 @@ class SetStageTitle(disnake.ui.View):
                         label="status permanente",
                         custom_id="status_voice_value",
                         placeholder="Pra desativar deixe vazio",
-                        max_length=496,
+                        max_length=VOICE_STATUS_MAX_LENGTH,
                         required=False,
                     ),
                 ],
@@ -2420,11 +2486,20 @@ class SetStageTitle(disnake.ui.View):
         except AttributeError:
             pass
 
-        values["status_voice_value"] = values["status_voice_value"].replace("\n", " ").strip()
+        status = validate_voice_status(values["status_voice_value"])
 
-        if values["status_voice_value"] and not any(p in values["status_voice_value"] for p in self.placeholders):
-            await inter.send("**Você deve usar pelo menos um placeholder válido...**", ephemeral=True)
+        if isinstance(status, RuleError):
+            if status.code == STATUS_TOO_LONG:
+                await inter.send(
+                    f"**O status pode ter no máximo {VOICE_STATUS_MAX_LENGTH} caracteres.**", ephemeral=True
+                )
+            elif status.code == STATUS_CHARS:
+                await inter.send("**O status não pode ter caracteres de controle nem de formatação.**", ephemeral=True)
+            else:
+                await inter.send("**Você deve usar pelo menos um placeholder válido...**", ephemeral=True)
             return
+
+        values["status_voice_value"] = status
 
         if inter.data.custom_id == "status_voice_channel_perm":
             if self.data["voice_channel_status"] == values["status_voice_value"]:
@@ -3249,9 +3324,9 @@ class SkinEditorMenu(disnake.ui.View):
                 await inter.response.edit_message(view=self, **self.build_embeds())
             else:
                 await inter.edit_original_message(view=self, **self.build_embeds())
-        except Exception as e:
-            traceback.print_exc()
-            await inter.send(f"**Ocorreu um erro ao processar a mensagem:** ```py\n{repr(e)}```", ephemeral=True)
+        except Exception:
+            logger.exception("Editor de skin: erro ao atualizar a mensagem")
+            await inter.send("**Ocorreu um erro ao processar a mensagem.**", ephemeral=True)
 
     async def modal_handler(self, inter: disnake.ModalInteraction):
         if inter.custom_id == "skin_editor_message_content":
@@ -3360,8 +3435,12 @@ class SkinEditorMenu(disnake.ui.View):
 
             try:
                 info = json.loads(inter.text_values["skin"])
-            except Exception as e:
-                await inter.send(f"**Ocorreu um erro ao processar sua skin:** ```py\n{repr(e)}```", ephemeral=True)
+            except (ValueError, RecursionError):
+                logger.exception("Editor de skin: JSON inválido na importação")
+                await inter.send(
+                    "**Ocorreu um erro ao processar sua skin: confira se o conteúdo é um JSON válido.**",
+                    ephemeral=True,
+                )
                 return
 
             try:

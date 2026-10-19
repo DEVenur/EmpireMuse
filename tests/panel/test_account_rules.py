@@ -121,8 +121,10 @@ class TestFavoritesRules:
         assert (campos["user_fav_name"].min_length, campos["user_fav_name"].max_length) == (2, 25)
         assert (campos["user_fav_url"].min_length, campos["user_fav_url"].max_length) == (10, 200)
         bot = ModalBot()
-        await adicionar_favorito(bot, url=f"veja {URL} agora")
-        assert bot.salvos_usuario[-1]["fav_links"]["novo"] == URL, "valor = URL em texto, extraída do que foi digitado"
+        await adicionar_favorito(bot, url=f"  <{URL}>  ")
+        assert bot.salvos_usuario[-1]["fav_links"]["novo"] == URL, (
+            "valor = URL em texto (Etapa 4: URL pura, desembrulhada)"
+        )
 
     @pytest.mark.asyncio
     async def test_add_modal_and_both_player_buttons_have_the_zero_and_owner_exemption(self):
@@ -176,8 +178,8 @@ class TestFavoritesRules:
 class TestIntegrationsRules:
     @pytest.mark.asyncio
     async def test_import_rules(self):
-        # URL: no máximo 150 caracteres e URL inteira, independentemente da configuração dos favoritos
-        for tamanho, aceito in ((150, True), (151, False)):
+        # URL: no máximo 200 caracteres (Etapa 5, D4) e URL inteira, independentemente da configuração dos favoritos
+        for tamanho, aceito in ((200, True), (201, False)):
             bot = ModalBot(url_max=90)
             await importar(bot, INTEGRACOES, {"Canal": url_com_tamanho(tamanho)})
             assert bool(bot.salvos_usuario) is aceito, tamanho

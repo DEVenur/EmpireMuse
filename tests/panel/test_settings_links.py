@@ -172,16 +172,26 @@ class LinksAddTest(LinksBase):
         assert self.add(self.logged_in(), "Sem desc", "https://example.com/s").code == 200
         assert self.stored()["Sem desc"] == link("https://example.com/s", "")
 
-    def test_url_is_extracted_like_the_command_does(self):
+    def test_url_must_be_a_pure_url_like_the_modal_now_requires(self):
+        """Etapa 4 (F3-5b, A2/D1): URL pura (apara as pontas e desembrulha ``<…>``); texto ao redor é recusado."""
         browser = self.logged_in()
-        cases = {
+        accepted = {
             "A1": ("  https://example.com/a  ", "https://example.com/a"),
-            "B2": ("veja https://example.com/b agora", "https://example.com/b"),
-            "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c"),
+            "B2": ("<https://example.com/b>", "https://example.com/b"),
         }
-        for name, (sent, expected) in cases.items():
+        for name, (sent, expected) in accepted.items():
             assert self.add(browser, name, sent).code == 200, name
             assert self.stored()[name]["url"] == expected
+        writes = len(self.db.writes)
+        refused = {
+            "C3": "javascript:alert(1)//https://example.com/c",
+            "D4": "veja https://example.com/d agora",
+            "E5": "https://example.com/e]",
+            "F6": "https://example.com/@everyone",
+        }
+        for name, sent in refused.items():
+            assert self.add(browser, name, sent).code == 422, name
+        assert len(self.db.writes) == writes
 
     def test_boundaries_follow_the_modal_not_the_user_favs_config(self):
         browser = self.logged_in()
@@ -362,7 +372,7 @@ class LinksImportExportTest(LinksBase):
     def test_valid_import_merges_and_overwrites_same_names(self):
         browser = self.logged_in()
         before = self.db.doc("1", 100)
-        payload = {"Fixo": link("https://example.com/novo", "reescrito"), "Rock": link("https://example.com/r", "r")}
+        payload = {"Fixo": link("https://example.com/novo", "reescrito"), "Rock": link("https://example.com/r", "rrr")}
         response = self.do_import(browser, payload)
         assert response.code == 200, f"status {response.code}"
         expected = copy.deepcopy(before)
@@ -372,7 +382,7 @@ class LinksImportExportTest(LinksBase):
     def test_invalid_payloads_are_422_and_write_nothing(self):
         browser = self.logged_in()
         before, writes = self.db.doc("1", 100), len(self.db.writes)
-        good = link("https://example.com/ok", "ok")
+        good = link("https://example.com/ok", "okok")
         cases = {
             "json inválido": "{nao é json",
             "lista em vez de objeto": [good],
@@ -382,8 +392,10 @@ class LinksImportExportTest(LinksBase):
             "url não é texto": {"A1": {"url": 5, "description": ""}},
             "url inválida": {"A1": link("ftp://example.com/a")},
             "url javascript": {"A1": link("javascript:alert(1)")},
-            "url maior que USER_FAV_MAX_URL_LENGTH (90)": {"A1": link(BASE_URL + "a" * 80)},
+            "url maior que 250": {"A1": link(BASE_URL + "a" * (251 - len(BASE_URL)))},
             "descrição 51": {"A1": link(BASE_URL + "a", "d" * 51)},
+            "descrição 1": {"A1": link(BASE_URL + "a", "d")},
+            "descrição 2": {"A1": link(BASE_URL + "a", "dd")},
             "nome 26": {"n" * 26: good},
             "26 itens": {f"I{i:02d}": good for i in range(26)},
             "vazio": {},
@@ -399,12 +411,15 @@ class LinksImportExportTest(LinksBase):
         Each.run(list(cases.items()), check)
         self.assert_untouched(before, writes)
 
-    def test_url_limit_is_read_from_the_bot_config_at_request_time(self):
+    def test_url_limit_is_the_modal_limit_and_ignores_the_personal_favorites_config(self):
+        """Etapa 5 (F3-5b, A13/D5): links do servidor aceitam até 250, como o modal; USER_FAV_MAX_URL_LENGTH não vale."""
         browser = self.logged_in()
-        payload = {"A1": link(BASE_URL + "a" * 80)}  # 100 caracteres
-        assert self.do_import(browser, payload).code == 422
-        self.world.config["USER_FAV_MAX_URL_LENGTH"] = 120
+        payload = {"A1": link(BASE_URL + "a" * (100 - len(BASE_URL)))}
         assert self.do_import(browser, payload).code == 200
+        self.world.config["USER_FAV_MAX_URL_LENGTH"] = 40
+        assert self.do_import(browser, payload).code == 200
+        too_long = {"A1": link(BASE_URL + "a" * (251 - len(BASE_URL)))}
+        assert self.do_import(browser, too_long).code == 422
 
     def test_space_rule_counts_overwritten_names_as_free(self):
         browser = self.logged_in()
@@ -413,7 +428,7 @@ class LinksImportExportTest(LinksBase):
         before, writes = self.db.doc("1", 100), len(self.db.writes)
         assert self.do_import(browser, extra).code == 422, "24 + 2 novos > 25"
         self.assert_untouched(before, writes)
-        overwrite = {"L00": link(BASE_URL + "novo", "x"), "N1": link(BASE_URL + "1")}
+        overwrite = {"L00": link(BASE_URL + "novo", "xxx"), "N1": link(BASE_URL + "1")}
         assert self.do_import(browser, overwrite).code == 200, "L00 já existe: só 1 vaga nova (24 + 1 = 25)"
         assert len(self.stored()) == MAX_LINKS
 
@@ -443,6 +458,9 @@ class LinksImportExportTest(LinksBase):
 
     def test_export_then_import_round_trips_without_changes(self):
         browser = self.logged_in()
+        set_links(
+            self.db, "1", 100, {"Fixo": link("https://example.com/x", "ddd"), "Longo": link(BASE_URL + "a" * 150)}
+        )
         exported = browser.get("/painel/servidores/100/links/exportar").body.decode()
         before = self.db.doc("1", 100)
         assert self.do_import(browser, exported).code == 200
@@ -659,13 +677,18 @@ class LinksImportNormalizationTest(LinksBase):
     def do_import(self, browser, payload):
         return self.act(browser, 100, "importar", dados=json.dumps(payload))
 
-    def test_import_stores_only_the_url_reg_match_not_the_trailing_text(self):
+    def test_import_requires_the_whole_url_not_only_its_prefix(self):
+        """Etapa 4 (F3-5b, A1): o painel recusa o arquivo em vez de guardar só o prefixo da URL."""
         browser = self.logged_in()
+        writes = len(self.db.writes)
         payload = {
-            "Lixo": link("https://example.com/ <img src=x onerror=alert(1)>", "d"),
-            "Dois": link("https://example.com/b?x=1 texto depois", "e"),
+            "Lixo": link("https://example.com/ <img src=x onerror=alert(1)>", "ddd"),
+            "Dois": link("https://example.com/b?x=1 texto depois", "eee"),
         }
-        assert self.do_import(browser, payload).code == 200
+        assert self.do_import(browser, payload).code == 422
+        assert len(self.db.writes) == writes
+        clean = {"Lixo": link("https://example.com/", "ddd"), "Dois": link("  https://example.com/b?x=1  ", "eee")}
+        assert self.do_import(browser, clean).code == 200
         assert self.stored()["Lixo"]["url"] == "https://example.com/"
         assert self.stored()["Dois"]["url"] == "https://example.com/b?x=1"
 

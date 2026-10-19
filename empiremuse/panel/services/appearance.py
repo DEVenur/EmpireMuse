@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 from empiremuse.panel.services.base import DBModel, Args, FormContext, ParseResult, SettingsForm, first, flag
 from empiremuse.panel.services.player import active_player
-from empiremuse.rules.limits import CUSTOM_SKIN_PREFIX as CUSTOM_PREFIX
+from empiremuse.rules import limits
 from empiremuse.rules.settings import allowed_names
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ async def reload_skin(player: Any, skin: str, static_skin: str, text: str) -> No
     target, current = (static_skin, player.skin_static) if player.static else (skin, player.skin)
     if target == str(current):
         return
-    if skin.startswith(CUSTOM_PREFIX) or static_skin.startswith(CUSTOM_PREFIX):
+    if skin.startswith(limits.CUSTOM_SKIN_PREFIX) or static_skin.startswith(limits.CUSTOM_SKIN_PREFIX):
         logger.info("Skin personalizada não é recarregada pelo painel; use o Discord para aplicá-la.")
         return
     try:
