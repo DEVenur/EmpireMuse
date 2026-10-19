@@ -15,15 +15,15 @@ from typing import Any, Optional
 
 from empiremuse.panel.services.account_base import AccountContext, AccountSection, Parsed, Refusal
 from empiremuse.panel.services.base import Args, first, flag
+from empiremuse.rules import limits
 from empiremuse.rules.errors import PREFIX_LENGTH, RuleError
-from empiremuse.rules.limits import PREFIX_MAX_LENGTH as PREFIX_MAX
 from empiremuse.rules.settings import validate_prefix
 
 logger = logging.getLogger(__name__)
 
 TOKEN_LENGTH = 50
 TOKEN_ALPHABET = string.ascii_letters + string.digits
-MSG_PREFIX_LENGTH = f"O prefixo deve ter de 1 a {PREFIX_MAX} caracteres."
+MSG_PREFIX_LENGTH = f"O prefixo deve ter de 1 a {limits.PREFIX_MAX_LENGTH} caracteres."
 MSG_PREFIX_CHARS = "O prefixo não pode conter espaços nem caracteres de controle."
 MSG_LASTFM_UNLINKED = "Nenhuma conta do Last.fm está vinculada. Vincule pelo Discord e tente novamente."
 MSG_RPC_UNAVAILABLE = "O token do app de RPC não está disponível neste bot."

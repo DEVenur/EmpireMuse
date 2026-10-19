@@ -21,7 +21,7 @@ from empiremuse.panel.services.channel_tokens import ResetTokens
 from empiremuse.panel.services.base import DBModel, DIGITS, Args, FormContext, first, flag, version_of
 from empiremuse.panel.services.service import SettingsService
 from empiremuse.panel.services.tasks import Job, Task, TaskFailure, TaskRunner
-from empiremuse.rules.limits import FORUM_TITLE_MAX as FORUM_TITLE_MAX, FORUM_TITLE_MIN as FORUM_TITLE_MIN
+from empiremuse.rules import limits
 from empiremuse.utils import branding
 from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
@@ -53,7 +53,7 @@ _TYPE_NAMES = (
 
 MSG_MODE = "Escolha como configurar o canal de pedidos."
 MSG_CHANNEL = "Escolha um canal da lista."
-MSG_TITLE = f"O título do post deve ter de {FORUM_TITLE_MIN} a {FORUM_TITLE_MAX} caracteres."
+MSG_TITLE = f"O título do post deve ter de {limits.FORUM_TITLE_MIN} a {limits.FORUM_TITLE_MAX} caracteres."
 MSG_TYPE = "Escolha o tipo de canal: texto, voz ou palco."
 MSG_STAGE = "Canais de palco só existem em servidores com o recurso Comunidade ativado."
 MSG_CATEGORY = "Escolha uma categoria da lista (ou deixe sem categoria)."
@@ -259,7 +259,7 @@ class ChannelService:
             return Check({"canal": refusal_message(exc)}, echo, missing)
         errors: dict[str, str] = {}
         is_forum = isinstance(target, disnake.ForumChannel)
-        if is_forum and not FORUM_TITLE_MIN <= len(echo["titulo_forum"]) <= FORUM_TITLE_MAX:
+        if is_forum and not limits.FORUM_TITLE_MIN <= len(echo["titulo_forum"]) <= limits.FORUM_TITLE_MAX:
             errors["titulo_forum"] = MSG_TITLE
         purge = echo["limpar_mensagens"] and not is_forum
         if purge and not self._can_purge(ctx, target):

@@ -17,19 +17,10 @@ from empiremuse.panel.services.base import (
     FormContext,
     ParseResult,
     SettingsForm,
-    clean_title,
     first,
     load_json_object,
 )
-from empiremuse.rules.limits import (
-    GUILD_LINK_DESCRIPTION_MAX as DESCRIPTION_MAX,
-    GUILD_LINK_DESCRIPTION_MIN as DESCRIPTION_MIN,
-    GUILD_LINK_NAME_MAX as NAME_MAX,
-    GUILD_LINK_NAME_MIN as NAME_MIN,
-    GUILD_LINK_URL_MAX as URL_MAX,
-    GUILD_LINK_URL_MIN as URL_MIN,
-    MAX_GUILD_LINKS as MAX_LINKS,
-)
+from empiremuse.rules import limits
 from empiremuse.rules.entries import check_name, merge_import, save_entry
 from empiremuse.rules.errors import NAME_TAKEN, RuleError
 from empiremuse.rules.guild_links import check_description, import_entry
@@ -42,16 +33,19 @@ logger = logging.getLogger(__name__)
 ACTIONS = ("adicionar", "editar", "remover", "importar")
 MSG_ACTION = "Ação desconhecida."
 MSG_NO_CHANNEL = "Configure o canal de pedidos primeiro."
-MSG_NAME = f"O nome deve ter de {NAME_MIN} a {NAME_MAX} caracteres."
+MSG_NAME = f"O nome deve ter de {limits.GUILD_LINK_NAME_MIN} a {limits.GUILD_LINK_NAME_MAX} caracteres."
 MSG_NAME_TAKEN = "Já existe um link com esse nome."
 MSG_NAME_UNKNOWN = "Link não encontrado."
-MSG_URL = f"Informe um endereço http(s) válido de {URL_MIN} a {URL_MAX} caracteres."
-MSG_DESCRIPTION = f"A descrição deve ficar vazia ou ter de {DESCRIPTION_MIN} a {DESCRIPTION_MAX} caracteres."
-MSG_FULL = f"A lista já tem o máximo de {MAX_LINKS} links; remova algum para adicionar outro."
+MSG_URL = f"Informe um endereço http(s) válido de {limits.GUILD_LINK_URL_MIN} a {limits.GUILD_LINK_URL_MAX} caracteres."
+MSG_DESCRIPTION = (
+    f"A descrição deve ficar vazia ou ter de {limits.GUILD_LINK_DESCRIPTION_MIN} a "
+    f"{limits.GUILD_LINK_DESCRIPTION_MAX} caracteres."
+)
+MSG_FULL = f"A lista já tem o máximo de {limits.MAX_GUILD_LINKS} links; remova algum para adicionar outro."
 MSG_IMPORT_JSON = "O conteúdo precisa ser um JSON válido, no formato exportado por este painel ou pelo bot."
 MSG_IMPORT_EMPTY = "O arquivo não tem nenhum link."
 MSG_IMPORT_ITEM = "Um dos itens do arquivo é inválido (nome, URL ou descrição)."
-MSG_IMPORT_COUNT = f"O arquivo tem mais de {MAX_LINKS} links."
+MSG_IMPORT_COUNT = f"O arquivo tem mais de {limits.MAX_GUILD_LINKS} links."
 MSG_IMPORT_SPACE = "A lista do servidor não tem espaço suficiente para todos os itens do arquivo."
 
 
@@ -59,11 +53,6 @@ class LinkView(NamedTuple):
     nome: str
     url: str
     descricao: str
-
-
-def clean_name(raw: Any) -> Optional[str]:
-    """Nome normalizado (strip, 2–25, sem caracteres de controle/quebra de linha) ou ``None`` se não vale."""
-    return clean_title(raw, NAME_MIN, NAME_MAX)
 
 
 def _links_of(doc: dict) -> dict[str, dict[str, str]]:
@@ -78,7 +67,7 @@ def _valid_fields(url_raw: str, description: str, stored: str = "") -> tuple[Opt
     """(URL extraída, erros) com os limites do modal do comando; reenviar a descrição já gravada não é troca."""
     errors: dict[str, str] = {}
     url = None
-    if URL_MIN <= len(url_raw) <= URL_MAX:
+    if limits.GUILD_LINK_URL_MIN <= len(url_raw) <= limits.GUILD_LINK_URL_MAX:
         url = clean_url(url_raw)
     if url is None:
         errors["url"] = MSG_URL
@@ -132,7 +121,7 @@ class LinksForm(SettingsForm):
         return {
             "itens": items,
             "total": len(items),
-            "maximo": MAX_LINKS,
+            "maximo": limits.MAX_GUILD_LINKS,
             "pode_editar": bool(current["canal_configurado"]),
         }
 
@@ -155,10 +144,12 @@ class LinksForm(SettingsForm):
         return handler[action](ctx, current["fav_links"], echo)
 
     def _add(self, ctx: FormContext, links: dict, echo: dict) -> ParseResult:
-        name = check_name(links, None, echo["nome"], name_min=NAME_MIN, name_max=NAME_MAX)
+        name = check_name(
+            links, None, echo["nome"], name_min=limits.GUILD_LINK_NAME_MIN, name_max=limits.GUILD_LINK_NAME_MAX
+        )
         if isinstance(name, RuleError):
             return _error("nome", MSG_NAME_TAKEN if name.code == NAME_TAKEN else MSG_NAME, echo)
-        if not has_room(links, name, MAX_LINKS):
+        if not has_room(links, name, limits.MAX_GUILD_LINKS):
             return _error("nome", MSG_FULL, echo)
         url, errors = _valid_fields(echo["url"], echo["descricao"])
         if errors:
@@ -173,7 +164,15 @@ class LinksForm(SettingsForm):
         if errors:
             return ParseResult({}, errors, echo)
         entry = {"url": url, "description": echo["descricao"]}
-        saved = save_entry(links, name, name, entry, name_min=NAME_MIN, name_max=NAME_MAX, limit=0)
+        saved = save_entry(
+            links,
+            name,
+            name,
+            entry,
+            name_min=limits.GUILD_LINK_NAME_MIN,
+            name_max=limits.GUILD_LINK_NAME_MAX,
+            limit=0,
+        )
         return ParseResult({"fav_links": saved}, {}, echo)
 
     def _remove(self, ctx: FormContext, links: dict, echo: dict) -> ParseResult:
@@ -186,7 +185,7 @@ class LinksForm(SettingsForm):
         items, message = self._parse_import(ctx, echo["dados"])
         if message:
             return _error("dados", message, echo)
-        merged = merge_import(links, items, MAX_LINKS)
+        merged = merge_import(links, items, limits.MAX_GUILD_LINKS)
         if isinstance(merged, RuleError):
             return _error("dados", MSG_IMPORT_SPACE, echo)
         return ParseResult({"fav_links": merged}, {}, echo)
@@ -199,11 +198,12 @@ class LinksForm(SettingsForm):
             return {}, MSG_IMPORT_JSON
         if not data:
             return {}, MSG_IMPORT_EMPTY
-        if len(data) > MAX_LINKS:
+        if len(data) > limits.MAX_GUILD_LINKS:
             return {}, MSG_IMPORT_COUNT
         items: dict[str, dict[str, str]] = {}
         for raw_name, item in data.items():
-            name = clean_import_name(raw_name, NAME_MIN, NAME_MAX, items)  # colisão após o strip/caixa é recusada
+            # colisão após o strip/caixa é recusada
+            name = clean_import_name(raw_name, limits.GUILD_LINK_NAME_MIN, limits.GUILD_LINK_NAME_MAX, items)
             clean = import_entry(item)
             if name is None or isinstance(clean, RuleError):
                 return {}, MSG_IMPORT_ITEM

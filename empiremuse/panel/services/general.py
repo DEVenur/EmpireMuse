@@ -10,21 +10,17 @@ import disnake
 
 from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, first
 from empiremuse.panel.services.player import active_player
-from empiremuse.rules.limits import (
-    PREFIX_MAX_LENGTH as PREFIX_MAX_LENGTH,
-    VOICE_PLACEHOLDERS as VOICE_PLACEHOLDERS,
-    VOICE_STATUS_MAX_LENGTH as VOICE_STATUS_MAX_LENGTH,
-)
-from empiremuse.rules.errors import PREFIX_LENGTH, STATUS_TOO_LONG, RuleError
+from empiremuse.rules import limits
+from empiremuse.rules.errors import PREFIX_LENGTH, STATUS_CHARS, STATUS_TOO_LONG, RuleError
 from empiremuse.rules.settings import validate_prefix, validate_voice_status
-from empiremuse.rules.text import normalize_status as normalize_status
 
 logger = logging.getLogger(__name__)
 
-MSG_PREFIX_LENGTH = f"O prefixo pode ter no máximo {PREFIX_MAX_LENGTH} caracteres."
+MSG_PREFIX_LENGTH = f"O prefixo pode ter no máximo {limits.PREFIX_MAX_LENGTH} caracteres."
 MSG_PREFIX_CHARS = "O prefixo não pode conter espaços nem caracteres de controle."
 MSG_VOICE_PLACEHOLDER = "Use pelo menos um placeholder válido, como {track.title}."
-MSG_VOICE_LENGTH = f"O texto pode ter no máximo {VOICE_STATUS_MAX_LENGTH} caracteres."
+MSG_VOICE_LENGTH = f"O texto pode ter no máximo {limits.VOICE_STATUS_MAX_LENGTH} caracteres."
+MSG_VOICE_CHARS = "O texto não pode ter caracteres de controle nem de formatação."
 
 
 class PrefixForm(SettingsForm):
@@ -70,14 +66,16 @@ class VoiceStatusForm(SettingsForm):
         doc["voice_channel_status"] = new["voice_channel_status"]
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        return {"placeholders": VOICE_PLACEHOLDERS}
+        return {"placeholders": limits.VOICE_PLACEHOLDERS}
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
         raw = first(args, "voice_channel_status") or ""
         echo = {"voice_channel_status": raw}
         text = validate_voice_status(raw)
         if isinstance(text, RuleError):
-            message = MSG_VOICE_LENGTH if text.code == STATUS_TOO_LONG else MSG_VOICE_PLACEHOLDER
+            message = {STATUS_TOO_LONG: MSG_VOICE_LENGTH, STATUS_CHARS: MSG_VOICE_CHARS}.get(
+                text.code, MSG_VOICE_PLACEHOLDER
+            )
             return ParseResult({}, {"voice_channel_status": message}, echo)
         return ParseResult({"voice_channel_status": text}, {}, echo)
 

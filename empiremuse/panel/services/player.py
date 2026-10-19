@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, flag, first
+from empiremuse.rules import limits
 from empiremuse.rules.errors import ROLE_DUPLICATE, ROLE_LIMIT
-from empiremuse.rules.limits import MAX_DJ_ROLES as MAX_DJ_ROLES, VOLUMES as VOLUMES
 from empiremuse.rules.settings import check_dj_roles, order_dj_roles, parse_volume
 
 MSG_VOLUME = "Escolha um volume válido: de 5 a 100 (de 5 em 5) ou de 110 a 150 (de 10 em 10)."
 MSG_ROLE_INVALID = "Selecione apenas cargos que existem neste servidor."
 MSG_ROLE_DUPLICATE = "Há cargos repetidos na seleção."
-MSG_ROLE_LIMIT = f"Selecione no máximo {MAX_DJ_ROLES} cargos."
+MSG_ROLE_LIMIT = f"Selecione no máximo {limits.MAX_DJ_ROLES} cargos."
 
 
 def active_player(bot: Any, guild_id: int) -> Any:
@@ -40,7 +40,7 @@ class PlayerForm(SettingsForm):
         return {**current, "default_player_volume": str(current["default_player_volume"])}
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        return {"volumes": VOLUMES}
+        return {"volumes": limits.VOLUMES}
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
         raw = first(args, "default_player_volume") or ""
