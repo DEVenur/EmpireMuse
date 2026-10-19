@@ -275,6 +275,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
 
 ### Segurança
+- **Ocultação de Detalhes Técnicos e Tracebacks em Mensagens ao Usuário (Fase 3 / F3-6)**:
+  - Substituição de representações de exceção (`repr(e)`), causas internas, respostas HTTP brutas e blocos de código em mensagens exibidas a usuários, donos ou na interface web por mensagens genéricas e neutras em português.
+  - O detalhe técnico da exceção e o traceback completo são registrados exclusivamente nos logs do servidor (e no webhook de relatório de erros via `ERROR_REPORT_WEBHOOK` quando configurado), acompanhados do código curto de suporte (`ERR-XXXXXX`) em erros inesperados.
+  - Implementação dos auxiliares `plain_snippet` em `empiremuse/rules/text.py` (para higienização e truncamento seguro de mensagens externas, como erros do Lavalink, em uma linha sem formatação de código) e `log_unexpected_error`, `error_code_text` e `code_suffix` em `empiremuse/utils/music/errors.py`.
+  - Cobertura aplicada no fluxo de autorização do YouTube (`empiremuse/cogs/ll_yt_oauth.py`), canal de pedidos por texto (`empiremuse/cogs/music.py`), painel do dono (`empiremuse/utils/owner_panel.py`), inicialização de bots no pool (`empiremuse/utils/client.py`) e eventos de reprodução, autoplay, conexão e resolução de faixas parciais (`empiremuse/utils/music/models.py`). Instruções de configuração para o administrador (como Privileged Intents e token inválido) permanecem preservadas na página de status.
 - **Endurecimento do Relé RPC e Validação Estrutural de Protocolo (Fase 3 / F3-4)**:
   - **Módulo de Protocolo Dedicado (`empiremuse/rpc_protocol.py`)**: Criação de módulo puro (sem I/O) para centralização de limites, sanitização de campos permitidos, validações de identificadores e controle de taxa.
   - **Autenticação no Registro de Bots**: Conexões de bots exigem autenticação prévia via cabeçalho `X-RPC-Key` validada em tempo constante (`hmac.compare_digest`) com base em `RPC_SERVER_SECRET` (ou segredo efêmero por processo quando não configurado). Mensagens e eventos só são repassados aos usuários a partir de bots autenticados e registrados com sucesso.

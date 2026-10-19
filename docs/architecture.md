@@ -96,7 +96,7 @@ Com vários bots no mesmo servidor, **apenas um** deve responder a cada comando.
 - Para comandos com prefixo, todos os bots recebem a mensagem. A coordenação usa os eventos
   `pool_dispatch` e `pool_payload_ready` e `PoolException` para que os bots não escolhidos descartem o
   comando (`empiremuse/utils/music/checks.py:144-169`, `248-254`, `295-306`); `message_ids` (TTL 30 s) deduplica (`empiremuse/utils/client.py:106`).
-- Erros de usuário (`NoVoice`, `NoPlayer`, `GenericError`) vêm de `empiremuse/utils/music/errors.py`.
+- Erros de usuário (`NoVoice`, `NoPlayer`, `GenericError`) vêm de `empiremuse/utils/music/errors.py`. Em exceções inesperadas, o detalhe da falha vai só para o log do servidor (com o traceback completo) e o usuário recebe uma mensagem genérica neutra com o código de erro (`ERR-XXXXXX`).
 
 ## 5. Player
 

@@ -83,7 +83,7 @@ conforme a identidade desejada.
 
 ### Suporte e Códigos de Erro (`ERR-XXXXXX`)
 
-Em caso de exceções inesperadas em comandos de barra ou prefixados e na página de erro 500 do painel web, o bot gera um código de identificação único de 6 caracteres hexadecimais no padrão `ERR-XXXXXX` (via `new_error_code` em `empiremuse/rules/error_code.py` usando `secrets.token_hex`, com geração segura garantida por `safe_error_code`). O usuário recebe uma mensagem neutra com o código, sem exposição de tracebacks ou detalhes internos.
+Em caso de exceções inesperadas em comandos de barra ou prefixados, pedidos de música (`song_requests`), eventos de reprodução (`LavalinkPlayer`), painel do dono e na página de erro 500 do painel web, o bot gera um código de identificação único de 6 caracteres hexadecimais no padrão `ERR-XXXXXX` (via `new_error_code` em `empiremuse/rules/error_code.py` usando `secrets.token_hex`, com geração segura garantida por `safe_error_code`). O detalhe técnico da exceção e o traceback completo são registrados unicamente no log do servidor (e no webhook de erros, se configurado); o usuário recebe apenas uma mensagem genérica neutra com o código para informar ao suporte.
 
 Para investigar uma falha reportada cruzando o código:
 - **Log em arquivo**: O log em arquivo só existe quando `ENABLE_LOGGER=true` estiver ativado no `.env`, gravado no caminho `RUNTIME_DIR/.logs/disnake.log` (sob `EMPIREMUSE_HOME` ou diretório atual). Como esse arquivo é recriado a cada inicialização do bot (`mode="w"` no `FileHandler` configurado no `BotPool` em `empiremuse/utils/client.py`), registros anteriores a uma reinicialização não permanecem no disco.
