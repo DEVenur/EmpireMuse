@@ -730,3 +730,226 @@ class TestGuardaDeEstruturaEmModels:
             if re.search(padrao, linha) and "print(" not in linha
         ]
         assert not achados, f"padrão {padrao!r} nas linhas {achados} de models.py"
+
+
+# ============================================================================ complemento do AppSec (F-3, F-4, I-11, Info)
+#
+# Decisões do MAESTRO depois da auditoria complementar:
+# * F-3: o ``error_description`` do Spotify não chega mais ao usuário (revoga o "motivo informado" do KI-15); fica no log;
+# * F-4: a mensagem do nó Lavalink aparece dentro de um code span (a crase já é trocada), nos dois usos;
+# * I-11: a troca do refreshToken por ``***`` no corpo da resposta vem ANTES do corte em 500 caracteres.
+
+HOSTIL = "Veja https://evil.example/login <@123456789012345678> <#123456789012345678> @everyone :emoji:"
+
+
+class SessaoDeToken:
+    """Sessão do aiohttp falsa: o ``POST`` do token devolve sempre o JSON informado."""
+
+    def __init__(self, corpo):
+        self.corpo = corpo
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    def post(self, url, headers=None, data=None, **kwargs):
+        return self
+
+    async def json(self, *args, **kwargs):
+        return dict(self.corpo)
+
+
+class TestSpotifyAutenticacao:
+    MOTIVO = "motivo-externo-do-spotify https://evil.example/login <@123456789012345678>"
+
+    def cliente(self, monkeypatch, tmp_path, corpo):
+        from empiremuse.utils.music.audio_sources import spotify
+
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(spotify, "ClientSession", lambda *a, **k: SessaoDeToken(corpo))
+        return spotify.SpotifyClient(client_id="id-de-teste", client_secret="segredo-de-teste")
+
+    @pytest.mark.asyncio
+    async def test_o_motivo_do_spotify_nao_chega_ao_usuario_e_vai_para_o_log(self, monkeypatch, tmp_path, caplog):
+        cliente = self.cliente(monkeypatch, tmp_path, {"error": "invalid_client", "error_description": self.MOTIVO})
+
+        with caplog.at_level(logging.WARNING):
+            with pytest.raises(GenericError) as erro:
+                await cliente.get_access_token()
+
+        texto = erro.value.text
+        for proibido in ("motivo-externo", "evil.example", "<@", "invalid_client", "motivo informado"):
+            assert proibido not in texto, f"vazou para o usuário: {proibido!r} em {texto!r}"
+        assert "Spotify" in texto and "responsável" in texto
+        assert "motivo-externo-do-spotify" in caplog.text, "o motivo continua disponível, só que no log"
+        assert "segredo-de-teste" not in caplog.text and "segredo-de-teste" not in texto
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "corpo",
+        [{"error": "invalid_client", "error_description": "Invalid client"}, {"error": "invalid_client"}],
+        ids=["com-descricao", "so-error"],
+    )
+    async def test_a_mensagem_e_fixa_qualquer_que_seja_o_motivo(self, monkeypatch, tmp_path, corpo):
+        textos = set()
+        for variante in (corpo, {"error": "outro", "error_description": self.MOTIVO}):
+            cliente = self.cliente(monkeypatch, tmp_path, variante)
+            with pytest.raises(GenericError) as erro:
+                await cliente.get_access_token()
+            textos.add(erro.value.text)
+            assert cliente.token_refresh is False
+        assert len(textos) == 1, textos
+
+
+class TestLavalinkTextEmCodeSpan:
+    def test_a_mensagem_vira_um_unico_code_span_com_o_conteudo_dentro(self):
+        from empiremuse.utils.music.models import lavalink_text
+
+        texto = lavalink_text(HOSTIL)
+
+        assert texto.startswith("`") and texto.endswith("`") and texto.count("`") == 2
+        for parte in ("https://evil.example/login", "<@123456789012345678>", "<#123456789012345678>", "@everyone"):
+            assert parte in texto[1:-1], f"{parte!r} deveria aparecer, mas dentro do code span"
+
+    def test_crase_da_mensagem_nao_fecha_o_code_span(self):
+        from empiremuse.utils.music.models import lavalink_text
+
+        texto = lavalink_text("fecha `aqui` e ``ali`` <@1>")
+
+        assert texto.count("`") == 2 and texto.startswith("`") and texto.endswith("`")
+        assert "<@1>" in texto[1:-1]
+
+    def test_sem_escape_dentro_do_span(self):
+        """Dentro do code span a barra invertida apareceria literal: o texto vai como está (já sem quebra de linha)."""
+        from empiremuse.utils.music.models import lavalink_text
+
+        assert lavalink_text("vídeo *indisponível*\nneste país") == "`vídeo *indisponível* neste país`"
+
+    def test_continua_truncada_e_vazio_nao_gera_span_vazio(self):
+        from empiremuse.utils.music.models import lavalink_text
+
+        longa = lavalink_text("m" * 1000)
+        assert longa.count("m") == 200 and longa.startswith("`") and longa.endswith("`")
+        for vazio in ("", None, "   \n "):
+            assert "`" not in lavalink_text(vazio), f"span vazio para {vazio!r}"
+
+    @pytest.mark.asyncio
+    async def test_falha_de_reproducao_mostra_o_motivo_no_code_span(self, monkeypatch):
+        track = faixa()
+        p = jogador(monkeypatch, current=track, last_track=track)
+        enfileirar_e_encerrar(p, monkeypatch, evento_de_falha(HOSTIL))
+
+        await p.hook_events()
+
+        texto = p.text_channel.send.await_args.kwargs["embed"].description
+        [linha] = [linha for linha in texto.splitlines() if linha.startswith("**Motivo:**")]
+        assert re.fullmatch(r"\*\*Motivo:\*\* `[^`]+`", linha), linha
+        fora = texto.replace(linha, "")
+        for ativo in ("evil.example", "<@", "<#", "@everyone"):
+            assert ativo not in fora, f"{ativo!r} fora do code span: {fora!r}"
+
+    def test_o_autoplay_usa_o_mesmo_helper_sem_envolver_em_crases(self):
+        """``get_autoqueue_tracks`` é longo demais para dirigir com dublê: a guarda lê o código dos dois usos."""
+        import empiremuse.utils.music.models as models
+
+        fonte = Path(models.__file__).read_text(encoding="utf-8")
+        usos = [linha.strip() for linha in fonte.splitlines() if "lavalink_text(" in linha and "def " not in linha]
+        assert len(usos) == 2, usos
+        assert any("exception.message" in uso for uso in usos) and any("event.message" in uso for uso in usos)
+        assert not [uso for uso in usos if "`{lavalink_text" in uso or "{lavalink_text(" not in uso], usos
+        assert not re.search(r"\{(?:exception|event)\.message[^}]*\}", fonte), "mensagem crua do nó numa f-string"
+
+
+class TestTokenAtravessandoOLimiteDoLog:
+    TOKEN = "OAUTHTOK-AB12CD34EF56GH78"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("antes", [0, 480, 490, 495, 499, 500])
+    async def test_o_token_cortado_no_limite_nao_escapa_da_troca(self, monkeypatch, tmp_path, caplog, antes):
+        from empiremuse.cogs import ll_yt_oauth
+
+        (tmp_path / "application.yml").write_text(
+            "plugins:\n  youtube:\n    oauth:\n      enabled: false\n", encoding="utf-8"
+        )
+
+        class VisaoComToken(FakeView):
+            def __init__(self, bot=None, ctx=None):
+                super().__init__(bot, ctx)
+                self.data["refresh_token"] = TestTokenAtravessandoOLimiteDoLog.TOKEN
+
+        node = SimpleNamespace(
+            info={"plugins": ["youtube-plugin"]},
+            rest_uri="http://127.0.0.1:2333",
+            _websocket=SimpleNamespace(headers={}),
+        )
+        corpo = "x" * antes + self.TOKEN + " cauda"
+        post = AsyncMock(return_value=Resposta(500, texto=corpo))
+        cog, ctx, mensagem = montar_oauth(monkeypatch, tmp_path, node=node, post=post)
+        monkeypatch.setattr(ll_yt_oauth, "YtOauthView", VisaoComToken)
+
+        with caplog.at_level(logging.WARNING, logger="empiremuse.cogs.ll_yt_oauth"):
+            await cog.oauth_command(ctx)
+
+        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.cogs.ll_yt_oauth"))
+        assert "OAUTHTOK" not in log and "AB12CD" not in log, f"pedaço do token no log: {log!r}"
+        assert "HTTP 500" in log and "***" in log
+
+    @pytest.mark.asyncio
+    async def test_guarda_o_corpo_sem_token_continua_no_log_truncado(self, monkeypatch, tmp_path, caplog):
+        (tmp_path / "application.yml").write_text(
+            "plugins:\n  youtube:\n    oauth:\n      enabled: false\n", encoding="utf-8"
+        )
+        node = SimpleNamespace(
+            info={"plugins": ["youtube-plugin"]},
+            rest_uri="http://127.0.0.1:2333",
+            _websocket=SimpleNamespace(headers={}),
+        )
+        post = AsyncMock(return_value=Resposta(500, texto="erro-interno " + "y" * 2000))
+        cog, ctx, _ = montar_oauth(monkeypatch, tmp_path, node=node, post=post)
+
+        with caplog.at_level(logging.WARNING, logger="empiremuse.cogs.ll_yt_oauth"):
+            await cog.oauth_command(ctx)
+
+        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.cogs.ll_yt_oauth"))
+        assert "erro-interno" in log and "y" * 600 not in log
+
+
+class TestCanalDeVozNoRelatorio:
+    def test_o_nome_do_canal_do_bot_vai_com_escape(self):
+        from empiremuse.cogs.error_handler import ErrorHandler
+
+        nome = "*negrito* __x__ [link](https://evil.example)"
+
+        def canal(id_, nome_):
+            return SimpleNamespace(id=id_, name=nome_, user_limit=0, voice_states={})
+
+        canal_do_usuario, canal_do_bot = canal(1, nome), canal(2, "outro")
+        handler = ErrorHandler.__new__(ErrorHandler)
+        handler.bot = SimpleNamespace(get_color=lambda *a: 0, intents=SimpleNamespace(message_content=False))
+        guild = SimpleNamespace(
+            id=9, name="Servidor", me=SimpleNamespace(voice=SimpleNamespace(channel=canal_do_bot)), icon=None
+        )
+        ctx = SimpleNamespace(
+            bot=handler.bot,
+            guild=guild,
+            channel=SimpleNamespace(id=3, name="texto"),
+            author=SimpleNamespace(
+                id=5,
+                bot=False,
+                voice=SimpleNamespace(channel=canal_do_usuario),
+                display_avatar=SimpleNamespace(
+                    with_static_format=lambda formato: SimpleNamespace(url="https://exemplo.invalid/a.png")
+                ),
+            ),
+            data=SimpleNamespace(name="play"),
+            filled_options={},
+        )
+
+        embed = handler.build_report_embed(ctx)
+
+        [campo] = [c for c in embed.fields if c.name == "Canal de voz (bot):"]
+        assert disnake.utils.escape_markdown(nome) in campo.value
+        assert "[link](https://evil.example)" not in campo.value
