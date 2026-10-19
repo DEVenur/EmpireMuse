@@ -227,3 +227,25 @@ class TestPerfilDoSpotifyIncompleto:
     async def test_guarda_nome_longo_continua_cortado_em_90(self):
         dados, _ = await consulta_spotify(perfil(display_name="n" * 200))
         assert dados["title"] == "[SP]: " + "n" * 90
+
+
+class TestPerfilDoSpotifyOutrasLacunas:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("links", [None, {}, {"spotify": ""}, {"spotify": None}, _AUSENTE], ids=repr)
+    async def test_sem_link_do_perfil_usa_o_link_informado(self, links):
+        dados, inter = await consulta_spotify(perfil(external_urls=links))
+        assert dados is not None, inter.texto
+        assert dados["url"] == URL_PERFIL
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("nome", "esperado"), [("   ", "abc123"), ("  Ana  ", "Ana"), (123, "123")], ids=repr)
+    async def test_nome_so_de_espacos_cai_no_id_e_as_pontas_sao_aparadas(self, nome, esperado):
+        dados, _ = await consulta_spotify(perfil(display_name=nome))
+        assert dados["title"] == f"[SP]: {esperado}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("imagens", [["https://exemplo.invalid/a.png"], [None], [{"url": ""}]], ids=repr)
+    async def test_imagem_que_nao_e_um_objeto_com_url_nao_vira_avatar(self, imagens):
+        dados, inter = await consulta_spotify(perfil(images=imagens))
+        assert dados is not None, inter.texto
+        assert not dados.get("avatar")
