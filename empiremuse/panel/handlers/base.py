@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 from typing import Any, Optional
 
@@ -9,6 +10,7 @@ import tornado.web
 
 from empiremuse.panel.sessions import PanelUser, Session, SessionStore
 from empiremuse.panel.settings import PanelSettings
+from empiremuse.rules.error_code import safe_error_code
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,7 @@ _ERROR_TEXTS = {
     500: ("Erro interno", "Algo deu errado do nosso lado. Tente novamente em instantes."),
 }
 _DEFAULT_ERROR_TEXT = ("Não foi possível concluir", "Não foi possível concluir a solicitação.")
-_FALLBACK_ERROR_BODY = '<!doctype html><meta charset="utf-8"><title>Erro</title><p>Erro {code}.</p>'
+_FALLBACK_ERROR_BODY = '<!doctype html><meta charset="utf-8"><title>Erro</title><p>Erro {code}.</p>{reference}'
 
 
 def avatar_url_for(user: Optional[PanelUser]) -> str:
@@ -103,7 +105,8 @@ class PanelResponseMixin:
             if value.log_message:
                 logger.warning("%d %s: " + value.log_message, value.status_code, summary, *value.args)
             return
-        logger.error("Uncaught exception %s", summary, exc_info=(typ, value, tb))
+        code = self._error_code = safe_error_code()  # o mesmo código vai ao log e à página de erro
+        logger.error("Uncaught exception %s%s", summary, f" [{code}]" if code else "", exc_info=(typ, value, tb))
 
     def set_default_headers(self) -> None:
         for name, value in SECURITY_HEADERS.items():
@@ -111,24 +114,26 @@ class PanelResponseMixin:
         if self.panel_settings.is_https:
             self.set_header("Strict-Transport-Security", HSTS_VALUE)
 
-    def render_error(self, status_code: int, titulo: str, mensagem: str) -> None:
-        """Responde com a página de erro genérica, sem detalhes internos."""
+    def render_error(self, status_code: int, titulo: str, mensagem: str, referencia: str = "") -> None:
+        """Responde com a página de erro genérica, sem detalhes internos (``referencia``: código do erro, se houver)."""
         self.set_status(status_code)
         self.set_header("Cache-Control", "no-store")
-        self.render(ERROR_TEMPLATE, titulo=titulo, codigo=status_code, mensagem=mensagem)
+        self.render(ERROR_TEMPLATE, titulo=titulo, codigo=status_code, mensagem=mensagem, referencia=referencia)
 
     def write_error(self, status_code: int, **kwargs: Any) -> None:
         """Responde sempre com a página genérica, sem stack trace nem detalhes internos."""
         titulo, mensagem = _ERROR_TEXTS.get(status_code, _DEFAULT_ERROR_TEXT)
+        referencia = getattr(self, "_error_code", "") if status_code >= 500 else ""  # só o 500 real tem código
         try:
-            self.render_error(status_code, titulo, mensagem)
+            self.render_error(status_code, titulo, mensagem, referencia)
         except Exception:
             logger.exception("Falha ao renderizar %s", ERROR_TEMPLATE)
             self.clear()
             self.set_status(status_code)
             self.set_header("Content-Type", "text/html; charset=UTF-8")
             self.set_header("Cache-Control", "no-store")
-            self.finish(_FALLBACK_ERROR_BODY.format(code=int(status_code)))
+            reference = f"<p>Código do erro: <code>{html.escape(referencia)}</code></p>" if referencia else ""
+            self.finish(_FALLBACK_ERROR_BODY.format(code=int(status_code), reference=reference))
 
 
 class PanelHandler(PanelResponseMixin, tornado.web.RequestHandler):

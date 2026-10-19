@@ -10,8 +10,9 @@ import disnake
 from aiohttp import ClientSession
 from disnake.ext import commands
 
+from empiremuse.rules.error_code import safe_error_code
 from empiremuse.utils.music.converters import URL_REG
-from empiremuse.utils.music.errors import parse_error, PoolException
+from empiremuse.utils.music.errors import parse_error, PoolException, error_code_text
 from empiremuse.utils.others import send_message, CustomContext, string_to_file, paginator, check_cmd
 
 if TYPE_CHECKING:
@@ -38,14 +39,36 @@ class ErrorHandler(commands.Cog):
                 disnake.ui.Button(label="Servidor de suporte", url=self.bot.config["SUPPORT_SERVER"], emoji="💻")
             )
 
+    def report_embed_with_code(self, ctx, code: str) -> disnake.Embed:
+        """Embed do relatório do webhook, com o código do erro quando houver."""
+        embed = self.build_report_embed(ctx)
+        if code:
+            embed.add_field(name="Código do erro:", value=f"`{code}`", inline=False)
+        return embed
+
+    @staticmethod
+    def traceback_filename(kind: str, code: str) -> str:
+        """Nome do anexo do traceback; o código (só hexadecimal e hífen) entra no nome para achar o relatório."""
+        return f"error_traceback_{kind}_{code}.txt" if code else f"error_traceback_{kind}.txt"
+
     def mask_token(self, text: str) -> str:
         token = self.bot.http.token
         return text.replace(token, "mytoken") if token else text
 
-    def log_unexpected_error(self, error: BaseException, origin: str) -> None:
-        """Registra o erro inesperado com o traceback completo (só no log do servidor)."""
+    def log_unexpected_error(self, error: BaseException, origin: str) -> str:
+        """Registra o erro inesperado com o traceback completo (só no log do servidor) e devolve o código dele.
+
+        O código (``ERR-…``) vai na mensagem do log, para o usuário e para o webhook; ``""`` se não foi possível gerar.
+        """
+        code = safe_error_code()
         error = getattr(error, "original", error)
-        logger.error("Erro inesperado no comando (%s)", origin, exc_info=(type(error), error, error.__traceback__))
+        logger.error(
+            "Erro inesperado no comando (%s)%s",
+            origin,
+            f" [{code}]" if code else "",
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        return code
 
     @commands.Cog.listener("on_interaction_player_error")
     async def on_inter_player_error(self, inter: disnake.ApplicationCommandInteraction, error: Exception):
@@ -111,6 +134,7 @@ class ErrorHandler(commands.Cog):
         kwargs = {"text": ""}
         color = disnake.Color.red()
         send_webhook = False
+        code = ""
 
         try:
             if inter.message.author.bot or mention_author:
@@ -122,7 +146,7 @@ class ErrorHandler(commands.Cog):
             components = self.components
 
             if not no_log:
-                self.log_unexpected_error(error, f"interação /{getattr(inter.data, 'name', '?')}")
+                code = self.log_unexpected_error(error, f"interação /{getattr(inter.data, 'name', '?')}")
 
             kwargs["embed"] = disnake.Embed(
                 color=color, title="Ocorreu um erro no comando:", description=UNEXPECTED_ERROR_TEXT
@@ -131,6 +155,8 @@ class ErrorHandler(commands.Cog):
             if self.bot.config["AUTO_ERROR_REPORT_WEBHOOK"]:
                 send_webhook = True
                 kwargs["embed"].description += " `Meu desenvolvedor será notificado sobre o problema.`"
+
+            kwargs["embed"].description += error_code_text(code)
 
         else:
             kwargs["embeds"] = []
@@ -158,8 +184,8 @@ class ErrorHandler(commands.Cog):
             await self.webhook_max_concurrency.acquire(inter)
 
             await self.send_webhook(
-                embed=self.build_report_embed(inter),
-                file=string_to_file(self.mask_token(full_error_msg), "error_traceback_interaction.txt"),
+                embed=self.report_embed_with_code(inter, code),
+                file=string_to_file(self.mask_token(full_error_msg), self.traceback_filename("interaction", code)),
             )
 
             await asyncio.sleep(20)
@@ -252,6 +278,7 @@ class ErrorHandler(commands.Cog):
         error_msg, full_error_msg, kill_process, components, mention_author = parse_error(ctx, error, no_log=True)
         kwargs = {"content": ""}
         send_webhook = False
+        code = ""
 
         if ctx.author.bot or mention_author:
             kwargs["content"] = ctx.author.mention
@@ -259,7 +286,7 @@ class ErrorHandler(commands.Cog):
         if not error_msg:
             components = self.components
 
-            self.log_unexpected_error(error, f"prefixo {getattr(ctx.command, 'name', '?')}")
+            code = self.log_unexpected_error(error, f"prefixo {getattr(ctx.command, 'name', '?')}")
 
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(
@@ -269,8 +296,12 @@ class ErrorHandler(commands.Cog):
                     send_webhook = True
                     kwargs["embed"].description += " `Meu desenvolvedor será notificado sobre o problema.`"
 
+                kwargs["embed"].description += error_code_text(code)
+
             else:
-                kwargs["content"] += f"\n**Ocorreu um erro no comando:**\n{UNEXPECTED_ERROR_TEXT}"
+                kwargs["content"] += (
+                    f"\n**Ocorreu um erro no comando:**\n{UNEXPECTED_ERROR_TEXT}{error_code_text(code)}"
+                )
 
         else:
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
@@ -318,8 +349,8 @@ class ErrorHandler(commands.Cog):
             await self.webhook_max_concurrency.acquire(ctx)
 
             await self.send_webhook(
-                embed=self.build_report_embed(ctx),
-                file=string_to_file(self.mask_token(full_error_msg), "error_traceback_prefixed.txt"),
+                embed=self.report_embed_with_code(ctx, code),
+                file=string_to_file(self.mask_token(full_error_msg), self.traceback_filename("prefixed", code)),
             )
 
             await asyncio.sleep(20)
@@ -452,13 +483,13 @@ class ErrorHandler(commands.Cog):
                     embed.add_field(
                         name="Canal de voz (bot):",
                         inline=False,
-                        value=f"{vc.channel.name}"
+                        value=f"```\n{disnake.utils.escape_markdown(vcbot.channel.name)}"
                         + (
-                            f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})"
-                            if vc.channel.user_limit
+                            f" ({len(vcbot.channel.voice_states)}/{vcbot.channel.user_limit})"
+                            if vcbot.channel.user_limit
                             else ""
                         )
-                        + f"\nID: {vc.channel.id}```",
+                        + f"\nID: {vcbot.channel.id}```",
                     )
             if ctx.guild.icon:
                 embed.set_thumbnail(url=ctx.guild.icon.with_static_format("png").url)

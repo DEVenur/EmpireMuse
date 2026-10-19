@@ -103,6 +103,9 @@ class TestUrlPura:
         def __str__(self):
             return URL
 
+        def __repr__(self):  # id estável no parametrize (sem o endereço de memória do objeto)
+            return "ComTexto()"
+
     @pytest.mark.parametrize("valor", [ComTexto(), 12345, None, b"https://exemplo.invalid/a"], ids=repr)
     def test_recusa_o_que_nao_e_texto_mesmo_que_o_str_seja_uma_url(self, valor):
         erro = check_url(valor, 200)

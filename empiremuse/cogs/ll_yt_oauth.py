@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os.path
-import traceback
 import uuid
 from typing import TYPE_CHECKING, Optional
 
@@ -12,9 +12,14 @@ import ruamel.yaml
 from disnake.ext import commands
 
 from empiremuse import paths
-from empiremuse.utils.music.errors import GenericError
+from empiremuse.rules.text import plain_snippet
+from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.interactions import AskView
 from empiremuse.utils.others import CustomContext
+
+logger = logging.getLogger(__name__)
+
+RESPONSE_LOG_LIMIT = 500
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -229,7 +234,8 @@ class YtOauthLL(commands.Cog):
                     db_name="global",
                 )
             except Exception as e:
-                txts.append(f"Falha ao salvar refreshToken no MongoDB: {repr(e)}")
+                code = log_unexpected_error(logger, e, "salvar o refreshToken no MongoDB")
+                txts.append(f"Falha ao salvar o refreshToken no MongoDB. Veja o log do servidor{code_suffix(code)}.")
 
         app_yml = paths.RUNTIME_DIR / "application.yml"
         if app_yml.is_file():
@@ -259,8 +265,15 @@ class YtOauthLL(commands.Cog):
                     )
 
                     if resp.status != 204:
+                        body = plain_snippet((await resp.text()).replace(refresh_token, "***"), RESPONSE_LOG_LIMIT)
+                        logger.warning(
+                            "Falha ao aplicar o refreshToken no lavalink LOCAL: HTTP %s, resposta: %s",
+                            resp.status,
+                            body,
+                        )
                         txts.append(
-                            f"Erro ao aplicar refreshToken no lavalink LOCAL: {resp.status} - {await resp.text()}"
+                            f"Erro ao aplicar o refreshToken no lavalink LOCAL (HTTP {resp.status}). "
+                            "Veja o log do servidor."
                         )
                     else:
                         txts.append("O refreshToken foi configurado automaticamente no servidor lavalink LOCAL")
@@ -269,8 +282,10 @@ class YtOauthLL(commands.Cog):
                     txts.append("O refreshToken foi adicionado no application.yml com sucesso!")
 
             except Exception as e:
-                traceback.print_exc()
-                txts.append(f"Erro ao salvar refreshToken no application.yml: {repr(e)}")
+                code = log_unexpected_error(logger, e, "salvar o refreshToken no application.yml")
+                txts.append(
+                    f"Erro ao salvar o refreshToken no application.yml. Veja o log do servidor{code_suffix(code)}."
+                )
 
         txts.append("Evite mostrar esse token publicamente!")
 

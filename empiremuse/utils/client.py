@@ -32,12 +32,13 @@ from user_agent import generate_user_agent
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
+from empiremuse.rules.git_remote import parse_remote_web_url
 from empiremuse.utils import branding
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
 from empiremuse.utils.music.checks import check_pool_bots
-from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
@@ -64,9 +65,6 @@ logger = logging.getLogger(__name__)
 
 
 class BotPool:
-    # valores só de referência: cada instância cria os seus em __init__ (listas/dicts de classe seriam compartilhados)
-    bots: List[BotCore] = []
-    guild_bots: Dict[str, List[BotCore]] = {}
     killing_state = False
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
@@ -377,8 +375,8 @@ class BotPool:
                 )
 
             else:
-                traceback.print_tb(e.__traceback__)
-                e = repr(e)
+                code = log_unexpected_error(logger, e, f"inicialização do bot {bot.identifier}")
+                e = f"Falha ao iniciar o bot (veja o log do servidor{code_suffix(code)})."
             self.failed_bots[bot.identifier] = e
             try:
                 self.bots.remove(bot)
@@ -797,16 +795,9 @@ class BotPool:
             self.commit = None
 
         try:
-            self.remote_git_url = (
-                check_output(["git", "remote", "-v"])
-                .decode("ascii")
-                .strip()
-                .split("\n")[0][7:]
-                .replace(".git", "")
-                .replace(" (fetch)", "")
-            )
-        except:
-            pass
+            self.remote_git_url = parse_remote_web_url(check_output(["git", "remote", "-v"]).decode("utf-8", "replace"))
+        except (OSError, subprocess.CalledProcessError):
+            pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
         if not self.remote_git_url:
             self.remote_git_url = self.config["SOURCE_REPO"].removesuffix(".git")

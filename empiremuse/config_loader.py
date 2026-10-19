@@ -285,13 +285,13 @@ def load_config():
         "PANEL_SESSION_TTL_HOURS",
         "PANEL_SESSION_IDLE_MINUTES",
     ]:
-        if not CONFIG[i]:
+        if CONFIG[i] in ("", None):  # só o ausente e o vazio usam o padrão; o 0 inteiro do config.json vale
             CONFIG[i] = DEFAULT_CONFIG[i]
             continue
 
         try:
             CONFIG[i] = int(CONFIG[i])
-        except ValueError as e:
+        except (ValueError, TypeError, OverflowError) as e:  # texto, lista/objeto do config.json e Infinity
             raise Exception(f"Você usou uma configuração inválida! {i}: {CONFIG[i]}\n{repr(e)}")
 
     # converter strings que requer valor bool/nulo.
@@ -369,6 +369,12 @@ def load_config():
 
     if CONFIG["PLAYER_INFO_BACKUP_INTERVAL_MONGO"] < 120:
         CONFIG["PLAYER_INFO_BACKUP_INTERVAL_MONGO"] = 120
+
+    # 0 ou negativo não tem significado válido nestas chaves: 0 no voteskip faria o primeiro voto pular, 0 nos caches
+    # levanta ValueError na primeira gravação, 0 nas dicas quebra o player e 0 no mongo é conexão sem timeout
+    for i in ["VOTE_SKIP_AMOUNT", "HINT_RATE", "DBCACHE_SIZE", "PLAYLIST_CACHE_SIZE", "MONGO_TIMEOUT"]:
+        if CONFIG[i] < 1:
+            CONFIG[i] = 1
 
     if CONFIG["LAVALINK_RECONNECT_RETRIES"] < 0:
         raise Exception(

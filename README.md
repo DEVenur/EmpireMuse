@@ -109,6 +109,17 @@ Para configurar um ambiente local, executar testes e contribuir com o desenvolvi
 
 ---
 
+## Suporte e Códigos de Erro
+
+Em caso de falha inesperada durante a execução de comandos (slash ou prefixo) ou na navegação pelo painel web (erro 500), o EmpireMuse exibe ao usuário uma mensagem amigável acompanhada de um código de erro curto no formato `ERR-XXXXXX` (gerado aleatoriamente e sem expor detalhes internos):
+
+- **Para o usuário**: Ao solicitar suporte ou abrir um chamado no servidor [Discord EmpireHUB](https://discord.gg/KgtyNg9U6H) ou no repositório, basta informar o código `ERR-XXXXXX` exibido na mensagem ou página de erro.
+- **Para o administrador / dono da instância**: Para investigar a causa raiz:
+  - **Arquivo de log local**: O log em arquivo só existe quando `ENABLE_LOGGER=true` estiver ativado no `.env`, gravado no caminho `RUNTIME_DIR/.logs/disnake.log` (ex.: `grep ERR-XXXXXX .logs/disnake.log`). Como esse arquivo é recriado a cada inicialização do bot (`mode="w"` no `FileHandler` de `BotPool` em `empiremuse/utils/client.py`), registros anteriores a uma reinicialização não permanecem no disco.
+  - **Canal de webhook (recomendado para histórico)**: Para guardar o histórico persistente de erros entre reinicializações, recomenda-se configurar `AUTO_ERROR_REPORT_WEBHOOK` (envio automático de notificações com o código `ERR-XXXXXX`, traceback completo e dados de contexto) ou `ERROR_REPORT_WEBHOOK` (habilita o botão manual "Reporte esse erro" para envio pelo usuário).
+
+---
+
 ## Créditos e Licença
 
 O **EmpireMuse** é um software livre distribuído sob os termos da licença **GNU General Public License v2.0 (GPL-2.0)**. Em conformidade com a licença, todos os avisos de direitos autorais originais foram preservados.

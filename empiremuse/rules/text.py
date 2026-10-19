@@ -1,4 +1,4 @@
-"""Regras de texto: nomes normalizados, nomes iguais sem diferenciar a caixa e status de voz."""
+"""Regras de texto: nomes normalizados, nomes iguais sem diferenciar a caixa, status de voz e trechos de texto externo."""
 
 from __future__ import annotations
 
@@ -60,3 +60,16 @@ def clean_track_name(raw: Any, low: int, high: int) -> Optional[str]:
     visible = "".join(char for char in raw if unicodedata.category(char) not in ("Cc", "Cf"))
     name = visible.strip()[:high].strip()
     return name if len(name) >= low else None
+
+
+def plain_snippet(value: Any, limit: int) -> str:
+    """Texto externo (por exemplo, a mensagem de erro do Lavalink) seguro para mostrar numa linha de mensagem.
+
+    Uma linha só, sem caracteres de controle/formatação e sem crase (não quebra o markdown nem abre bloco de código);
+    mais longo que ``limit`` é cortado com reticências.
+    """
+    text = "" if value is None else str(value)
+    text = "".join(" " if char.isspace() else char for char in text)
+    text = "".join(char for char in text if unicodedata.category(char) not in ("Cc", "Cf"))
+    text = " ".join(text.replace("`", "'").split())
+    return text if len(text) <= limit else text[:limit] + "…"

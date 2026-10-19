@@ -15,10 +15,10 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | Área | Itens | Mais grave |
 |---|---|---|
 | Instalação e implantação | KI-01 … KI-05 | alto |
-| Configuração | KI-06 … KI-08 | médio |
+| Configuração | KI-06 … KI-08, KI-55 | médio |
 | Banco de dados | KI-09 … KI-10 | alto |
 | Pool de bots e inicialização | KI-11 … KI-14 | médio |
-| Spotify | KI-15 … KI-20 | alto |
+| Spotify | KI-15 … KI-20, KI-56 | alto |
 | Player e busca de faixas | KI-21 … KI-22, KI-44 | médio |
 | Cliente Lavalink (`empiremuse/wavelink/`) e Lavalink local | KI-23 … KI-24 | médio |
 | Servidor web / RPC (robustez) | KI-25 … KI-26 | médio |
@@ -43,6 +43,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | KI-06 | `empiremuse/config_loader.py` (`bools`, `load_config`) | [Resolvido] A tabela de booleanos só tem chaves em minúsculas; `bools[CONFIG[i]]` não normaliza o valor. | Resolvido na Fase 3 (F3-2): booleanos do ambiente/.env/config.json são normalizados para minúsculas e aceitam qualquer combinação de maiúsculas/minúsculas. | médio |
 | KI-07 | `empiremuse/config_loader.py` (`load_config`), `empiremuse/cogs/music.py` (`Music.node_reconnect`) | [Resolvido] `LAVALINK_RECONNECT_RETRIES < 5` vira `0`, e `0` é tratado como "sem limite" em `Music.node_reconnect`. | Resolvido na Fase 3 (F3-2): tentativas entre 1 e 4 são respeitadas, 0 permanece como sem limite e valores negativos geram erro claro. | médio |
 | KI-08 | `empiremuse/config_loader.py` (`load_config`) | [Resolvido] `except:` nu ao ler o `.env`. | Resolvido na Fase 3 (F3-2): captura apenas OSError e UnicodeError com aviso em log citando o caminho, sem engolir nem vazar o conteúdo. | baixo |
+| KI-55 | `empiremuse/config_loader.py` (`load_config`) | [Resolvido] 0 no config.json trocado pelo padrão. | Resolvido na Fase 3 (F3-6): valor 0 inteiro é respeitado nas chaves inteiras, usando padrão só quando ausente ou vazio. | baixo |
 
 ## Banco de dados
 
@@ -70,6 +71,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | KI-18 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.track_search`) | [Resolvido] `quote(query)` é aplicado antes de passar `params=` ao aiohttp, que codifica de novo. | Resolvido na Fase 3 (F3-3): aiohttp recebe a query crua em params= sem codificação dupla, preservando acentos e símbolos. | médio |
 | KI-19 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_valid_access_token`, `SpotifyClient.get_access_token`) | [Resolvido] `get_valid_access_token` lê `spotify_cache["expires_at"]` sem checar; com cache vazio dá `KeyError`. Além disso, a chave é gravada como `"tyoe"` (typo de `"type"`). | Resolvido na Fase 3 (KeyError na F3-1; typo "tyoe" corrigido para "type" na F3-3 mantendo compatibilidade com caches antigos). | médio |
 | KI-20 | `empiremuse/utils/music/audio_sources/spotify.py` (`SpotifyClient.get_playlist_info`) | [Parcial] Importação de playlist usa `playlists/{id}` e `playlists/{id}/tracks`. Segundo o briefing (mudança da API do Spotify em fev/2026), playlists de terceiros podem não ser mais acessíveis com *client credentials*. **Ainda não testado com credenciais reais.** | Parcialmente tratado na Fase 3 (F3-3): erros 403 e 404 da API geram mensagens claras em português, mas a confirmação com credenciais reais continua pendente com o dono. | a confirmar (pendente de teste com credenciais reais) |
+| KI-56 | `empiremuse/utils/music/audio_sources/spotify.py`, `empiremuse/rules/ratelimit.py` | [Resolvido] 429 do Spotify desativava o suporte até reiniciar. | Resolvido na Fase 3 (F3-6): cliente pausa temporariamente apenas pelo período do Retry-After (1 s a 1 h) e retoma automaticamente. | médio |
 
 ## Player e busca de faixas (`empiremuse/utils/music/models.py`)
 
@@ -108,8 +110,8 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | ID | Local | Problema | Impacto | Sev. |
 |---|---|---|---|---|
 | KI-32 | `docs/guides/*.md` | Os guias ainda usam capturas de tela hospedadas no CDN do Discord e no GitHub do upstream. | As imagens podem expirar ou sumir. Migrar para `assets/` ou arte própria. | baixo |
-| KI-33 | `empiremuse/utils/client.py` (`BotPool.setup`) | A URL do remote é extraída por fatiamento fixo da saída de `git remote -v` (assume o remote `origin`). | Resultado incorreto com outro nome de remote ou formato de saída. Trocar por *parsing* por campos. | baixo |
-| KI-34 | `tests/test_branding.py` | As varreduras estáticas dependem de `git ls-files` (exigem `.git`) e usam correspondência por substring. | Falham fora de um clone Git e podem gerar falsos positivos/negativos. Revisar no saneamento. | baixo |
+| KI-33 | `empiremuse/utils/client.py` (`BotPool.setup`), `empiremuse/rules/git_remote.py` | [Resolvido] A URL do remote é extraída por fatiamento fixo da saída de `git remote -v`. | Resolvido na Fase 3 (F3-6): URL do remote lida por parsing de campos, sem credenciais de usuário ou senha no link do commit e com normalização de protocolos. | baixo |
+| KI-34 | `tests/test_branding.py` | [Resolvido] As varreduras estáticas dependem de `git ls-files` e usam correspondência por substring. | Resolvido na Fase 3 (F3-6): varredura estática funciona fora de um clone git usando .gitignore e casando palavras inteiras. | baixo |
 | KI-35 | `empiremuse/utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Assets e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com` da branch `main`. | Forks de terceiros continuam apontando para a DiscordEmpireHub até ajustarem `empiremuse/utils/branding.py` (informativo). | baixo |
 
 ## Painel web e comandos relacionados (saneamento)

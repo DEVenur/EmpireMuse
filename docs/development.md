@@ -53,6 +53,9 @@ Do menor para o maior peso — o último vence:
 Depois da mescla, números e booleanos são convertidos. Os booleanos são convertidos via `bools` em
 `empiremuse/config_loader.py` e aceitam `true`/`false`/`none` em qualquer caixa (`True`, `FALSE`, etc.);
 apenas valores fora de `true`/`false`/`none` geram erro na inicialização citando a chave configurada.
+As configurações numéricas `VOTE_SKIP_AMOUNT`, `HINT_RATE`, `DBCACHE_SIZE`, `PLAYLIST_CACHE_SIZE` e `MONGO_TIMEOUT`
+possuem piso mínimo de `1`: valores informados iguais a `0` ou negativos são automaticamente elevados para `1`.
+Valores de tipo incompatível em chaves inteiras geram erro explicativo na inicialização indicando a chave configurada.
 
 ### Variáveis essenciais
 
@@ -80,6 +83,14 @@ A lista completa, comentada, está em `.example.env`. Em desenvolvimento, `ENABL
 `./.logs/disnake.log` e `COMMAND_LOG=true` registra os comandos de usuários que não são donos. Em instâncias
 próprias (self-hosting), certifique-se de configurar `SUPPORT_SERVER` (com seu convite ou vazio) e `EMBED_COLOR`
 conforme a identidade desejada.
+
+### Suporte e Códigos de Erro (`ERR-XXXXXX`)
+
+Em caso de exceções inesperadas em comandos de barra ou prefixados, pedidos de música (`song_requests`), eventos de reprodução (`LavalinkPlayer`), painel do dono e na página de erro 500 do painel web, o bot gera um código de identificação único de 6 caracteres hexadecimais no padrão `ERR-XXXXXX` (via `new_error_code` em `empiremuse/rules/error_code.py` usando `secrets.token_hex`, com geração segura garantida por `safe_error_code`). O detalhe técnico da exceção e o traceback completo são registrados unicamente no log do servidor (e no webhook de erros, se configurado); o usuário recebe apenas uma mensagem genérica neutra com o código para informar ao suporte.
+
+Para investigar uma falha reportada cruzando o código:
+- **Log em arquivo**: O log em arquivo só existe quando `ENABLE_LOGGER=true` estiver ativado no `.env`, gravado no caminho `RUNTIME_DIR/.logs/disnake.log` (sob `EMPIREMUSE_HOME` ou diretório atual). Como esse arquivo é recriado a cada inicialização do bot (`mode="w"` no `FileHandler` configurado no `BotPool` em `empiremuse/utils/client.py`), registros anteriores a uma reinicialização não permanecem no disco.
+- **Webhook de erros (recomendado para histórico)**: Para reter o histórico persistente entre reinicializações, recomenda-se configurar `AUTO_ERROR_REPORT_WEBHOOK` para o envio automático de relatórios detalhados com o código `ERR-XXXXXX` no embed e no anexo do traceback, ou `ERROR_REPORT_WEBHOOK` para exibir o botão manual "Reporte esse erro" aos usuários.
 
 ## 4. Como rodar
 

@@ -56,7 +56,7 @@ from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
 from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.converters import time_format, fix_characters
-from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.music.errors import GenericError, error_code_text, log_unexpected_error
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.music.user_limits import quota_for
@@ -1091,6 +1091,16 @@ class FavModalImport(disnake.ui.Modal):
         return True
 
 
+def _spotify_profile(result: dict, user_id: str, url: str) -> dict:
+    """Título, URL e avatar da resposta do Spotify; perfil sem nome, sem imagem ou sem link não quebra (N-4)."""
+    name = str(result.get("display_name") or "").strip() or user_id
+    profile = {"title": f"[SP]: {name[:90]}", "url": (result.get("external_urls") or {}).get("spotify") or url}
+    images = result.get("images") or []
+    if images and isinstance(images[-1], dict) and images[-1].get("url"):
+        profile["avatar"] = images[-1]["url"]
+    return profile
+
+
 class FavModalAdd(disnake.ui.Modal):
     def __init__(self, name: Optional[str], url: Optional[str], view, **kwargs):
         self.view = view
@@ -1412,9 +1422,9 @@ class FavModalAdd(disnake.ui.Modal):
 
         try:
             result = await self.view.bot.spotify.get_user_info(user_id)
-        except Exception:
-            logger.exception("Integração: erro ao consultar o perfil (%s)", "spotify")
-            await self._profile_error(inter)
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "integração: consulta do perfil (spotify)")
+            await self._profile_error(inter, code)
             return None
 
         if not result:
@@ -1426,11 +1436,7 @@ class FavModalAdd(disnake.ui.Modal):
             )
             return None
 
-        return {
-            "title": f"[SP]: {result['display_name'][:90]}",
-            "url": result["external_urls"]["spotify"],
-            "avatar": result["images"][-1]["url"],
-        }
+        return _spotify_profile(result, user_id, url)
 
     async def _lookup_deezer(self, inter: disnake.ModalInteraction, url: str) -> Optional[dict]:
         url_type, url_id = deezer_regex.match(url).groups()[-2:]
@@ -1446,9 +1452,9 @@ class FavModalAdd(disnake.ui.Modal):
 
         try:
             result = await self.view.bot.deezer.get_user_info(int(url_id))
-        except Exception:
-            logger.exception("Integração: erro ao consultar o perfil (%s)", "deezer")
-            await self._profile_error(inter)
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "integração: consulta do perfil (deezer)")
+            await self._profile_error(inter, code)
             return None
 
         return {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
@@ -1465,10 +1471,10 @@ class FavModalAdd(disnake.ui.Modal):
             info = await loop.run_in_executor(
                 None, lambda: self.view.bot.pool.ytdl.extract_info(base_url, download=False)
             )
-        except Exception:
-            logger.exception("Integração: erro ao ler a URL com o yt-dlp")
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "integração: leitura da URL com o yt-dlp")
             await inter.edit_original_message(
-                "**Ocorreu um erro ao obter informação da url. Tente novamente mais tarde.**"
+                "**Ocorreu um erro ao obter informação da url. Tente novamente mais tarde.**" + error_code_text(code)
             )
             return None
 
@@ -1492,10 +1498,11 @@ class FavModalAdd(disnake.ui.Modal):
 
         return {"title": f"{label} {info['title']}", "url": info["original_url"]}
 
-    async def _profile_error(self, inter: disnake.ModalInteraction) -> None:
+    async def _profile_error(self, inter: disnake.ModalInteraction, error_code: str = "") -> None:
         await inter.edit_original_message(
             embed=disnake.Embed(
-                description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**",
+                description="**Ocorreu um erro ao obter as informações do perfil. Tente novamente mais tarde.**"
+                + error_code_text(error_code),
                 color=self.view.bot.get_color(),
             )
         )
@@ -3324,9 +3331,9 @@ class SkinEditorMenu(disnake.ui.View):
                 await inter.response.edit_message(view=self, **self.build_embeds())
             else:
                 await inter.edit_original_message(view=self, **self.build_embeds())
-        except Exception:
-            logger.exception("Editor de skin: erro ao atualizar a mensagem")
-            await inter.send("**Ocorreu um erro ao processar a mensagem.**", ephemeral=True)
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "editor de skin: atualização da mensagem")
+            await inter.send("**Ocorreu um erro ao processar a mensagem.**" + error_code_text(code), ephemeral=True)
 
     async def modal_handler(self, inter: disnake.ModalInteraction):
         if inter.custom_id == "skin_editor_message_content":
