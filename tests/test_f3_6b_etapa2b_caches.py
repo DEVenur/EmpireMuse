@@ -176,14 +176,16 @@ class TestApagadosSemAbrir:
         pool_vazio().load_cache()
         assert not (tmp_path / "local_database").exists()
 
-    def test_o_reinicio_apos_gravar_apaga_o_que_o_gravador_deixou(self, tmp_path):
+    def test_o_gravador_deixa_json_e_o_reinicio_nao_cria_nem_le_pkl(self, tmp_path):
+        """Desde a etapa 6 o gravador escreve JSON; o ``.pkl`` antigo é que não é mais lido nem recriado."""
         pool = pool_vazio()
         pool.playlist_cache[PLAYLIST] = RESPOSTA_DE_PLAYLIST
         asyncio.run(gravar_o_cache_de_playlist(pool))
-        assert caminho_do_cache(tmp_path, "playlist_cache.pkl").is_file()
+        assert not caminho_do_cache(tmp_path, "playlist_cache.pkl").exists()
         novo = pool_vazio()
         novo.load_cache()
-        assert len(novo.playlist_cache) == 0 and not caminho_do_cache(tmp_path, "playlist_cache.pkl").exists()
+        assert novo.playlist_cache.get(PLAYLIST) == RESPOSTA_DE_PLAYLIST
+        assert not caminho_do_cache(tmp_path, "playlist_cache.pkl").exists()
 
 
 # ============================================================================ carga hostil e conteúdo ruim
@@ -278,18 +280,18 @@ class TestSoOsCachesLegadosSaem:
         assert (tmp_path / ".lastfm_cache.json").is_file()
 
     def test_o_cache_de_playlist_nao_e_apagado_a_cada_gravacao(self, tmp_path):
-        """Só o ``load_cache`` (na subida) remove; o ``cache_updater`` continua gravando em pickle até a etapa 6."""
+        """Só o ``load_cache`` (na subida) remove os arquivos antigos; o ``cache_updater`` grava o JSON a cada volta."""
         pool = pool_vazio()
         pool.playlist_cache["k"] = [1]
         asyncio.run(gravar_o_cache_de_playlist(pool))
         asyncio.run(gravar_o_cache_de_playlist(pool))
-        assert caminho_do_cache(tmp_path, "playlist_cache.pkl").is_file()
+        assert (pasta_dos_caches(tmp_path) / "playlist_cache.json").is_file()
 
-    def test_o_lastfm_continua_gravando_na_raiz_em_pickle(self, tmp_path):
+    def test_o_lastfm_grava_na_raiz_em_json(self, tmp_path):
         lastfm = LastFM("chave", "segredo")
         lastfm.cache["x"] = {}
         lastfm.scrobble_save_cache()
-        assert (tmp_path / ".lastfm_cache").is_file()
+        assert (tmp_path / ".lastfm_cache.json").is_file() and not (tmp_path / ".lastfm_cache").exists()
 
 
 # ============================================================================ falha ao apagar não derruba a inicialização

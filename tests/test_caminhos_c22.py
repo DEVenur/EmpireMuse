@@ -164,7 +164,7 @@ class TestArtefatosSemModulosDoProjeto:
         pool.playlist_cache["https://exemplo.invalid/playlist/1"] = {"loadType": "EMPTY", "tracks": []}
         await gravar_o_cache_de_playlist(pool)
         self.sem_modulos_do_projeto(
-            (tmp_path / "local_database" / "playlist_cache.pkl").read_bytes(), "cache de playlist"
+            (tmp_path / "local_database" / "playlist_cache.json").read_bytes(), "cache de playlist"
         )
 
 

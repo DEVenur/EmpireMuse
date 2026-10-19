@@ -1,15 +1,13 @@
-"""F3-6b, etapas 0 e 2b — os caches em disco: o que é GRAVADO hoje e o que a 2b muda na LEITURA.
+"""F3-6b, etapas 0, 2b e 6 — os caches em disco: o que a leitura faz com os arquivos ANTIGOS e o que é gravado agora.
 
-Quatro arquivos: ``playlist_cache.pkl``, ``partial_track_cache.pkl`` e ``.lyric_cache_data`` (em ``local_database/``,
-tratados pelo ``BotPool.load_cache``) e ``.lastfm_cache`` (na raiz do diretório de dados, tratado pelo ``LastFM``). Só o
-cache de playlist (``BotPool.cache_updater``) e o do Last.fm são GRAVADOS (em pickle, até a etapa 6); os outros dois vêm de
-versões antigas.
+Quatro arquivos antigos: ``playlist_cache.pkl``, ``partial_track_cache.pkl`` e ``.lyric_cache_data`` (em ``local_database/``,
+tratados pelo ``BotPool.load_cache``) e ``.lastfm_cache`` (na raiz do diretório de dados, tratado pelo ``LastFM``).
 
 Depois da etapa 2b (chave de corte) NENHUM cache legado é lido: o arquivo é apagado sem ser aberto e o cache recomeça vazio
-(decisão P3: caches não migram). O que continua valendo: cache ausente ou ilegível não derruba a inicialização
-(``TestCacheIlegivel``), e o que muda de propósito está em ``TestLeituraDosArquivosAntigos`` (hoje, descarte) e em
-``tests/test_f3_6b_etapa2b_caches.py`` (o descarte em detalhe). ``TestFormatoGravadoHoje`` descreve o artefato gravado: o
-gravador serializa o próprio ``TTLCache``, e por isso o arquivo pede classes de ``cachetools`` fora da allowlist.
+(decisão P3: caches não migram). Desde a etapa 6 só o cache de playlist (``BotPool.cache_updater``) e o do Last.fm são
+GRAVADOS, em JSON (``playlist_cache.json`` e ``.lastfm_cache.json``); o formato novo é testado em
+``tests/test_f3_6b_etapa6_caches.py``. Aqui ficam as fixtures compartilhadas, o descarte dos arquivos antigos e o que vale
+para qualquer formato: cache ausente ou ilegível não derruba a inicialização.
 """
 
 import asyncio
@@ -22,20 +20,12 @@ from cachetools import TTLCache
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.music.lastfm_tools import LastFM
-from tests.helpers_f3_6b import globais_do_pickle, opcodes_do_pickle, protocolo_do_pickle
 
 PLAYLIST = "https://exemplo.invalid/playlist/1"
 RESPOSTA_DE_PLAYLIST = {
     "loadType": "PLAYLIST_LOADED",
     "playlistInfo": {"name": "Minha Playlist", "selectedTrack": -1},
     "tracks": [{"track": "QAAAcodificado", "info": {"title": "Música 1", "length": 180000, "sourceName": "youtube"}}],
-}
-GLOBAIS_DO_TTLCACHE = {
-    ("cachetools", "TTLCache"),
-    ("cachetools", "TTLCache._Link"),
-    ("cachetools", "_TimedCache._Timer"),
-    ("collections", "OrderedDict"),
-    ("time", "monotonic"),
 }
 
 
@@ -94,24 +84,24 @@ async def gravar_o_cache_de_playlist(pool: BotPool) -> None:
 
 class TestRoundTrip:
     @pytest.mark.asyncio
-    async def test_cache_de_playlist_gravado_nao_volta_depois_do_reinicio_e_o_arquivo_some(self, tmp_path):
-        """Depois da 2b o cache gravado em pickle NÃO é lido de volta: o reinício o apaga e recomeça vazio."""
+    async def test_cache_de_playlist_gravado_volta_depois_do_reinicio(self, tmp_path):
+        """Desde a etapa 6 o cache é JSON e VOLTA no reinício (dentro do TTL); o ``.pkl`` antigo continua sendo descartado."""
         pool = pool_vazio()
         pool.playlist_cache[PLAYLIST] = RESPOSTA_DE_PLAYLIST
         await gravar_o_cache_de_playlist(pool)
-        arquivo = tmp_path / "local_database" / "playlist_cache.pkl"
+        arquivo = tmp_path / "local_database" / "playlist_cache.json"
         assert arquivo.is_file()
         novo = pool_vazio()
         novo.load_cache()
-        assert len(novo.playlist_cache) == 0 and not novo.partial_track_cache and not novo.lyric_data_cache
-        assert not arquivo.exists()
+        assert novo.playlist_cache.get(PLAYLIST) == RESPOSTA_DE_PLAYLIST
+        assert not novo.partial_track_cache and not novo.lyric_data_cache
 
     @pytest.mark.asyncio
     async def test_o_cache_de_playlist_fica_em_local_database_e_a_pasta_e_criada(self, tmp_path):
         pool = pool_vazio()
         pool.playlist_cache["k"] = [1, 2, 3]
         await gravar_o_cache_de_playlist(pool)
-        assert (tmp_path / "local_database" / "playlist_cache.pkl").is_file()
+        assert (tmp_path / "local_database" / "playlist_cache.json").is_file()
 
     @pytest.mark.asyncio
     async def test_cache_vazio_e_gravado_e_o_reinicio_nao_da_erro(self, tmp_path):
@@ -120,15 +110,13 @@ class TestRoundTrip:
         novo.load_cache()
         assert len(novo.playlist_cache) == 0
 
-    def test_cache_do_lastfm_e_gravado_na_raiz_mas_nao_volta_depois_do_reinicio(self, tmp_path):
+    def test_cache_do_lastfm_e_gravado_na_raiz_e_volta_depois_do_reinicio(self, tmp_path):
         lastfm = LastFM("chave", "segredo")
         lastfm.cache["Artista - Música"] = {"name": "Música", "artist": "Artista", "album": "Álbum"}
         lastfm.cache["Sem Resultado - X"] = {}
         lastfm.scrobble_save_cache()
-        assert (tmp_path / ".lastfm_cache").is_file() and not (tmp_path / "local_database").exists()
-        outro = LastFM("chave", "segredo")
-        assert len(outro.cache) == 0
-        assert not (tmp_path / ".lastfm_cache").exists()
+        assert (tmp_path / ".lastfm_cache.json").is_file() and not (tmp_path / "local_database").exists()
+        assert len(LastFM("chave", "segredo").cache) == 2
 
     def test_lastfm_sem_arquivo_comeca_com_cache_vazio(self, tmp_path):
         assert len(LastFM("chave", "segredo").cache) == 0
@@ -233,52 +221,3 @@ class TestCacheIlegivelQueEscapaDoExcept:
     def test_lastfm_com_esse_conteudo_nao_derruba_e_fica_vazio(self, tmp_path, conteudo):
         (tmp_path / ".lastfm_cache").write_bytes(conteudo)
         assert len(LastFM("chave", "segredo").cache) == 0
-
-
-# ============================================================================ o que o formato de hoje tem e a migração muda
-
-
-class TestFormatoGravadoHoje:
-    """Deixa de valer quando a etapa 2b parar de ler os caches antigos e a etapa 6 gravar JSON."""
-
-    @pytest.mark.asyncio
-    async def test_o_cache_de_playlist_e_o_proprio_ttlcache_em_pickle(self, tmp_path):
-        pool = pool_vazio()
-        pool.playlist_cache[PLAYLIST] = RESPOSTA_DE_PLAYLIST
-        await gravar_o_cache_de_playlist(pool)
-        dados = (tmp_path / "local_database" / "playlist_cache.pkl").read_bytes()
-        assert protocolo_do_pickle(dados) in {4, 5}
-        assert globais_do_pickle(dados) == GLOBAIS_DO_TTLCACHE
-        assert {"NEWOBJ", "BUILD"} <= set(opcodes_do_pickle(dados))
-
-    def test_o_cache_do_lastfm_tambem_e_o_ttlcache_em_pickle(self, tmp_path):
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["A - B"] = {"name": "B", "artist": "A", "album": ""}
-        lastfm.scrobble_save_cache()
-        dados = (tmp_path / ".lastfm_cache").read_bytes()
-        assert globais_do_pickle(dados) == GLOBAIS_DO_TTLCACHE
-
-    def test_um_dicionario_comum_pede_so_tipos_simples(self):
-        """O que os arquivos antigos "de versão anterior" (dicionário comum) guardam: nenhuma classe."""
-        assert globais_do_pickle(pickle.dumps({PLAYLIST: RESPOSTA_DE_PLAYLIST})) == set()
-
-    def test_o_ttlcache_pede_classes_de_fora_das_quatro_do_leitor_restrito(self):
-        """Por isso os caches não passam pelo leitor restrito: viram descarte (cache não é dado do usuário)."""
-        permitidas = {
-            ("datetime", "datetime"),
-            ("datetime", "timezone"),
-            ("datetime", "timedelta"),
-            ("collections", "deque"),
-        }
-        assert {("cachetools", "TTLCache"), ("time", "monotonic")} <= GLOBAIS_DO_TTLCACHE - permitidas
-
-    def test_a_gravacao_do_lastfm_e_sincrona_e_acontece_a_cada_chamada(self, tmp_path):
-        """``scrobble_save_cache`` grava no ato (sem executor): a etapa 6 só muda o formato e o destino."""
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["x"] = {}
-        lastfm.scrobble_save_cache()
-        primeiro = (tmp_path / ".lastfm_cache").read_bytes()
-        lastfm.cache["y"] = {"name": "n", "artist": "a", "album": ""}
-        lastfm.scrobble_save_cache()
-        assert (tmp_path / ".lastfm_cache").read_bytes() != primeiro
-        assert not asyncio.iscoroutinefunction(LastFM.scrobble_save_cache)
