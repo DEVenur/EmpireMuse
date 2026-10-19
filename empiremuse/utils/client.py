@@ -65,9 +65,6 @@ logger = logging.getLogger(__name__)
 
 
 class BotPool:
-    # valores só de referência: cada instância cria os seus em __init__ (listas/dicts de classe seriam compartilhados)
-    bots: List[BotCore] = []
-    guild_bots: Dict[str, List[BotCore]] = {}
     killing_state = False
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
