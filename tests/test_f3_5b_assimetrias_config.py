@@ -17,14 +17,17 @@ from empiremuse.panel.services.account_base import AccountContext
 from empiremuse.panel.services.account_misc import PrefixSection
 from empiremuse.panel.services.appearance import allowed_skins, allowed_static_skins
 from empiremuse.panel.services.base import FormContext
-from empiremuse.panel.services.channel import FORUM_TITLE_MAX, FORUM_TITLE_MIN, MSG_TITLE
-from empiremuse.panel.services.general import (
+from empiremuse.panel.services.channel import MSG_TITLE
+from empiremuse.panel.services.general import PrefixForm, VoiceStatusForm
+from empiremuse.panel.services.player import DjForm, PlayerForm
+from empiremuse.rules.limits import (
+    FORUM_TITLE_MAX,
+    FORUM_TITLE_MIN,
+    MAX_DJ_ROLES,
     VOICE_PLACEHOLDERS,
     VOICE_STATUS_MAX_LENGTH,
-    PrefixForm,
-    VoiceStatusForm,
+    VOLUMES,
 )
-from empiremuse.panel.services.player import MAX_DJ_ROLES, VOLUMES, DjForm, PlayerForm
 from tests.helpers_modais import SERVIDOR_DO_COMANDO
 from tests.test_request_channel_characterization import Scenario, click, modal_answer
 from tests.helpers_f3_5b import (
@@ -88,89 +91,119 @@ def world(monkeypatch):
 
 
 class TestA17Prefixos:
-    """Prefixo do servidor e do usuário: o comando apara as pontas e aceita espaço interno e caracteres de controle;
-    o painel não apara, recusa qualquer espaço em branco e caracteres ``Cc``/``Cf``, e vazio é "redefinir"."""
+    """Etapa 6a (A17/A25, D6): regra única de prefixo no comando (servidor e pessoal), no ``setguildprefix`` do dono e
+    no painel: apara as pontas; depois 1 a 5 caracteres, sem espaço em branco nem ``Cc``/``Cf``. Vazio é "redefinir"
+    no painel e recusa nos comandos ``set*`` (que têm ``reset*``)."""
+
+    VALIDOS = [
+        ("ab", "ab"),
+        ("a" * 5, "a" * 5),
+        ("😀" * 5, "😀" * 5),
+        ("?", "?"),
+        ("  ab  ", "ab"),
+        (" " + "a" * 5 + " ", "a" * 5),
+    ]
+    INVALIDOS = [
+        "a b",
+        "a\tb",
+        "a\u200bb",
+        "a\x07b",
+        "a\u2028b",
+        "a" * 6,
+        "😀" * 6,
+        " " + "a" * 6,
+        "a" * 500,
+    ]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("comando", COMANDOS_DE_PREFIXO)
-    @pytest.mark.parametrize(
-        ("entrada", "gravado"),
-        [
-            ("ab", "ab"),
-            ("a" * 5, "a" * 5),
-            ("😀" * 5, "😀" * 5),
-            ("  ab  ", "ab"),  # MUDA (etapa 6a, A17): a regra única também apara as pontas (já é assim no comando)
-            ("a b", "a b"),  # MUDA (etapa 6a, A17/A25): espaço interno passa a ser recusado
-            ("a​b", "a​b"),  # MUDA (etapa 6a, A17): caractere de formatação (Cf) passa a ser recusado
-            ("a\x07b", "a\x07b"),  # MUDA (etapa 6a, A17): caractere de controle (Cc) passa a ser recusado
-        ],
-    )
+    @pytest.mark.parametrize(("entrada", "gravado"), VALIDOS)
     async def test_comando_aceita(self, comando, entrada, gravado):
         valor, erro = await prefixo_no_comando(comando, entrada)
         assert (valor, erro) == (gravado, None)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("comando", COMANDOS_DE_PREFIXO)
-    @pytest.mark.parametrize("entrada", ["", "   ", "a" * 6, "😀" * 6, "a" * 500])
-    async def test_comando_recusa_vazio_e_acima_de_cinco(self, comando, entrada):
+    @pytest.mark.parametrize("entrada", ["", "   ", *INVALIDOS], ids=repr)
+    async def test_comando_recusa_vazio_espaco_interno_controle_e_acima_de_cinco(self, comando, entrada):
         valor, erro = await prefixo_no_comando(comando, entrada)
-        assert valor is None and erro
+        assert valor is None and erro, f"{entrada!r} deveria ser recusado"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("comando", COMANDOS_DE_PREFIXO)
+    async def test_a_recusa_nao_toca_no_cache_nem_no_banco(self, comando):
+        bot = BotDeComandos()
+        resultado = await executar(bot, comando, "a b")
+        assert resultado.recusado and bot.gravacoes == [] and bot.pool.guild_prefix_cache == {}
+        assert bot.pool.user_prefix_cache == {}
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("comando", COMANDOS_DE_PREFIXO)
     async def test_a25_a_mensagem_de_recusa_promete_sem_espacos_e_ate_cinco_caracteres(self, comando):
-        _, erro = await prefixo_no_comando(comando, "a" * 6)
+        _, erro = await prefixo_no_comando(comando, "a b")
         assert "espaços" in erro and "5 caracteres" in erro
 
-    @pytest.mark.parametrize(
-        ("entrada", "aceito"),
-        [("ab", "ab"), ("a" * 5, "a" * 5), ("😀" * 5, "😀" * 5), ("?", "?"), ("", "")],
-    )
+    @pytest.mark.parametrize(("entrada", "aceito"), [*VALIDOS, ("", ""), ("   ", "")], ids=lambda valor: repr(valor))
     def test_painel_do_servidor_aceita(self, entrada, aceito):
         assert prefixo_do_servidor_no_painel(entrada) == (aceito, None)  # vazio = voltar ao prefixo padrão
 
-    @pytest.mark.parametrize(
-        "entrada",
-        [" ab", "ab ", "a b", "a\tb", "\n", "a​b", "a\x07b", "a" * 6, "😀" * 6],  # MUDA (6a): " ab"/"ab " aparados
-    )
+    @pytest.mark.parametrize("entrada", INVALIDOS, ids=repr)
     def test_painel_do_servidor_recusa(self, entrada):
         valor, erro = prefixo_do_servidor_no_painel(entrada)
         assert valor is None and erro
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("entrada", "aceito"), [("ab", "ab"), ("a" * 5, "a" * 5), ("", "")])
+    @pytest.mark.parametrize(("entrada", "aceito"), [*VALIDOS, ("", "")], ids=lambda valor: repr(valor))
     async def test_painel_do_usuario_aceita(self, entrada, aceito):
         assert await prefixo_do_usuario_no_painel(entrada) == (aceito, None)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("entrada", [" ab", "a b", "a​b", "a\x07b", "a" * 6])  # MUDA (6a): " ab" aparado
+    @pytest.mark.parametrize("entrada", INVALIDOS, ids=repr)
     async def test_painel_do_usuario_recusa(self, entrada):
         valor, erro = await prefixo_do_usuario_no_painel(entrada)
         assert valor is None and erro
 
+    @pytest.mark.asyncio
+    async def test_painel_guarda_o_prefixo_aparado_no_cache_com_chave_int(self):
+        pool = SimpleNamespace(guild_prefix_cache={})
+        ctx = SimpleNamespace(pool=pool, guild_id=SERVIDOR_DO_COMANDO)
+        resultado = PrefixForm().parse(ctx, {"prefix": ""}, args_de(prefix="  >>  "))
+        await PrefixForm().effects(ctx, {"prefix": ""}, resultado.new)
+        assert pool.guild_prefix_cache == {SERVIDOR_DO_COMANDO: ">>"}
 
-class TestA18PrefixoDoDonoSemLimite:
-    """``setguildprefix`` (dono do bot) é o único caminho sem teto de tamanho nem de caracteres."""
+
+class TestA18PrefixoDoDono:
+    """Etapa 6a (D6): ``setguildprefix`` obedece à mesma regra do prefixo; os prefixos já gravados continuam."""
+
+    ALVO = 123456789012345678
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "prefixo",
-        ["x" * 50, "a b", "a​b", "a\x07b"],  # MUDA (etapa 6a, D6/A18): mesma regra do prefixo (1 a 5, sem espaço)
+        ("prefixo", "gravado"), [(">>", ">>"), ("  >>  ", ">>"), ("a" * 5, "a" * 5), ("😀" * 5, "😀" * 5)]
     )
-    async def test_aceita_qualquer_texto_apos_o_strip(self, prefixo):
+    async def test_aceita_o_que_a_regra_aceita_com_strip(self, prefixo, gravado):
         bot = BotDeComandos(dono=True)
-        alvo = 123456789012345678
-        resultado = await executar(bot, legacy_cmds.Owner.setguildprefix, alvo, prefixo)
-        assert not resultado.recusado and bot.ultimo_global["prefix"] == prefixo
-        assert bot.pool.guild_prefix_cache == {alvo: prefixo}
+        resultado = await executar(bot, legacy_cmds.Owner.setguildprefix, self.ALVO, prefixo)
+        assert not resultado.recusado and bot.ultimo_global["prefix"] == gravado
+        assert bot.pool.guild_prefix_cache == {self.ALVO: gravado}
 
     @pytest.mark.asyncio
-    async def test_guarda_prefixos_ja_gravados_nao_sao_tocados_e_o_reset_continua_igual(self):
+    @pytest.mark.parametrize("prefixo", ["x" * 50, "a" * 6, "a b", "a\u200bb", "a\x07b", "a\tb"], ids=repr)
+    async def test_recusa_o_que_a_regra_recusa_e_nao_grava_nada(self, prefixo):
         bot = BotDeComandos(dono=True)
-        alvo = 123456789012345678
-        bot.documento("global", "guilds", alvo)["prefix"] = "x" * 20
-        await executar(bot, legacy_cmds.Owner.setguildprefix, alvo, None)
-        assert bot.ultimo_global["prefix"] == "" and bot.pool.guild_prefix_cache == {alvo: ""}
+        bot.pool.guild_prefix_cache[self.ALVO] = "velho"
+        resultado = await executar(bot, legacy_cmds.Owner.setguildprefix, self.ALVO, prefixo)
+        assert resultado.recusado and bot.gravacoes == []
+        assert bot.pool.guild_prefix_cache == {self.ALVO: "velho"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("prefixo", [None, "", "   "])
+    async def test_guarda_sem_prefixo_ou_em_branco_remove_o_prefixo(self, prefixo):
+        bot = BotDeComandos(dono=True)
+        bot.documento("global", "guilds", self.ALVO)["prefix"] = "x" * 20  # gravado antes da regra
+        resultado = await executar(bot, legacy_cmds.Owner.setguildprefix, self.ALVO, prefixo)
+        assert not resultado.recusado
+        assert bot.ultimo_global["prefix"] == "" and bot.pool.guild_prefix_cache == {self.ALVO: ""}
 
 
 # ============================================================================ A19 — status do canal de voz
@@ -234,16 +267,17 @@ class TestA19StatusDoCanalDeVoz:
         assert no_comando == status_no_painel(texto)[0] == "Agora: {track.title}"
 
     @pytest.mark.asyncio
-    async def test_o_comando_nao_trata_o_retorno_de_carro_e_o_painel_trata(self):  # MUDA (etapa 6a, A19)
-        texto = "Agora:\r\n{track.title}"
+    @pytest.mark.parametrize(
+        "texto", ["Agora:\r\n{track.title}", "Agora:\r{track.title}", "\r\n Agora:\r\n{track.title}\r"]
+    )
+    async def test_o_retorno_de_carro_tambem_vira_espaco_no_comando(self, texto):
+        """Etapa 6a (A19): a normalização do painel (``\\r\\n``, ``\\r`` e ``\\n`` viram espaço) vale no comando."""
         no_comando, _ = await status_no_comando(BotDeComandos(), texto)
-        assert no_comando == "Agora:\r {track.title}"
-        assert status_no_painel(texto)[0] == "Agora: {track.title}"
-        assert status_no_painel("Agora:\r{track.title}")[0] == "Agora: {track.title}"  # \r solto também vira espaço
+        assert no_comando == status_no_painel(texto)[0] == "Agora: {track.title}"
 
     @pytest.mark.asyncio
-    async def test_o_limite_de_496_e_do_campo_do_discord_no_comando_e_do_texto_normalizado_no_painel(self):
-        # MUDA (etapa 6a, A19): a regra única conta sobre o texto normalizado também no comando
+    async def test_o_limite_de_496_conta_o_texto_normalizado_no_comando_e_no_painel(self):
+        """Etapa 6a (A19): o comando também mede o texto normalizado (antes só o campo do Discord limitava o bruto)."""
         assert VOICE_STATUS_MAX_LENGTH == 496
         view = interactions.SetStageTitle(
             ContextoDoStatus(), BotDeComandos(), GuildaFalsa(), {"voice_channel_status": ""}
@@ -257,6 +291,18 @@ class TestA19StatusDoCanalDeVoz:
         assert status_no_painel(no_limite)[0] == no_limite
         assert status_no_painel(no_limite + "x")[0] is None
         assert status_no_painel("  " + no_limite + "  ")[0] == no_limite  # as pontas não contam
+        for texto, aceito in ((no_limite, True), ("  " + no_limite + "  ", True), (no_limite + "x", False)):
+            salvo, mensagem = await status_no_comando(BotDeComandos(), texto)
+            assert (salvo == no_limite) is aceito, (len(texto), mensagem)
+            assert aceito or (salvo is None and mensagem)
+
+    @pytest.mark.asyncio
+    async def test_a_quebra_de_linha_que_vira_espaco_nao_estoura_o_limite_no_comando(self):
+        emoji = "{track.emoji}"
+        miolo = "x" * (496 - len(emoji) - 3)
+        texto = "a\r\n" + miolo + "\r\n" + emoji  # normalizado: 496 caracteres; bruto: 498
+        salvo, _ = await status_no_comando(BotDeComandos(), texto)
+        assert salvo == "a " + miolo + " " + emoji and len(salvo) == 496
 
 
 # ============================================================================ A20 — volume padrão
@@ -292,14 +338,44 @@ TETO_DE_CARGOS_DJ = 25
 
 class TestA21CargosDeDj:
     @pytest.mark.asyncio
-    async def test_o_comando_adiciona_alem_de_25_sem_teto(self, monkeypatch):  # MUDA (etapa 6b, A21/D7): recusa o 26º
+    async def test_o_comando_recusa_o_26o_cargo_com_mensagem_clara(self, monkeypatch):
+        """Etapa 6b (A21/D7): o teto de 25 também vale no comando; dados já acima de 25 ficam como estão."""
         existentes = cargos(TETO_DE_CARGOS_DJ)
         novo = CargoFalso(5000)
         bot = BotDeComandos()
         bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"] = [str(c.id) for c in existentes]
         guilda = GuildaFalsa([*existentes, novo])
-        await comando_de_dj(monkeypatch, "add_dj_role", bot, guilda, novo)
-        assert len(bot.ultimo_do_bot["djroles"]) == TETO_DE_CARGOS_DJ + 1
+        inter = await comando_de_dj(monkeypatch, "add_dj_role", bot, guilda, novo)
+        assert bot.gravacoes == [], "nada pode ser gravado"
+        assert "25" in inter.texto and "DJ" in inter.texto
+        assert len(bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"]) == TETO_DE_CARGOS_DJ
+
+    @pytest.mark.asyncio
+    async def test_o_comando_aceita_o_25o_cargo(self, monkeypatch):
+        existentes = cargos(TETO_DE_CARGOS_DJ - 1)
+        novo = CargoFalso(5000)
+        bot = BotDeComandos()
+        bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"] = [str(c.id) for c in existentes]
+        await comando_de_dj(monkeypatch, "add_dj_role", bot, GuildaFalsa([*existentes, novo]), novo)
+        assert len(bot.ultimo_do_bot["djroles"]) == TETO_DE_CARGOS_DJ and bot.ultimo_do_bot["djroles"][-1] == "5000"
+
+    @pytest.mark.asyncio
+    async def test_guarda_dados_ja_acima_de_25_continuam_e_remover_funciona(self, monkeypatch):
+        existentes = cargos(TETO_DE_CARGOS_DJ + 5)
+        bot = BotDeComandos()
+        bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"] = [str(c.id) for c in existentes]
+        await comando_de_dj(monkeypatch, "remove_dj_role", bot, GuildaFalsa(existentes), existentes[0])
+        assert len(bot.ultimo_do_bot["djroles"]) == TETO_DE_CARGOS_DJ + 4
+
+    @pytest.mark.asyncio
+    async def test_o_repetido_e_o_everyone_seguem_recusados_com_a_lista_cheia(self, monkeypatch):
+        existentes = cargos(TETO_DE_CARGOS_DJ)
+        bot = BotDeComandos()
+        bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"] = [str(c.id) for c in existentes]
+        guilda = GuildaFalsa(existentes)
+        repetido = await comando_de_dj(monkeypatch, "add_dj_role", bot, guilda, existentes[0])
+        everyone = await comando_de_dj(monkeypatch, "add_dj_role", bot, guilda, guilda.default_role)
+        assert bot.gravacoes == [] and "já está na lista" in repetido.texto and "não pode adicionar" in everyone.texto
 
     @pytest.mark.asyncio
     async def test_o_comando_recusa_everyone_e_repetido_e_guarda_ids_em_texto(self, monkeypatch):
@@ -345,15 +421,14 @@ class TestA21CargosDeDj:
 
 class TestA22RemoverCargoDeDj:
     @pytest.mark.asyncio
-    async def test_a_lista_mostrada_usa_mencao_de_canal_em_vez_de_cargo(
-        self, monkeypatch
-    ):  # MUDA (etapa 6b, A22): <@&id>
+    async def test_a_lista_mostrada_usa_mencao_de_cargo(self, monkeypatch):
+        """Etapa 6b (A22): a lista de cargos mostra ``<@&id>`` (antes ``<#id>``, menção de CANAL)."""
         a, b, ausente = CargoFalso(1001), CargoFalso(1002), CargoFalso(1003)
         bot = BotDeComandos()
         bot.documento("bot", "guilds", SERVIDOR_DO_COMANDO)["djroles"] = ["1001", "1002"]
         inter = await comando_de_dj(monkeypatch, "remove_dj_role", bot, GuildaFalsa([a, b, ausente]), ausente)
         assert "não está na lista de DJ" in inter.texto
-        assert "<#1001> <#1002>" in inter.texto and "<@&1001>" not in inter.texto
+        assert "<@&1001> <@&1002>" in inter.texto and "<#1001>" not in inter.texto
 
     @pytest.mark.asyncio
     async def test_guarda_remover_cargo_existente_grava_sem_ele(self, monkeypatch):

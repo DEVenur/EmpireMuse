@@ -8,7 +8,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, NamedTuple, Optional, Sequence
 
-from empiremuse.rules.text import clean_title as clean_title  # reexportado: o painel e os testes importam daqui
 from empiremuse.utils.db import DBModel
 
 Args = Mapping[str, Sequence[str]]

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any, NamedTuple, Optional
 
 from empiremuse.panel.services.base import Args
-from empiremuse.rules.quota import quota_limit
+from empiremuse.utils.music.user_limits import quota_for
 
 ACCOUNT_PATH = "/painel/conta"
 ACTION_UNKNOWN_TEXT = "Ação desconhecida."
@@ -50,10 +50,7 @@ def is_web_link(url: str) -> bool:
 
 async def effective_limit(ctx: AccountContext, config_key: str) -> int:
     """Limite aplicável ao usuário: 0 = ilimitado (config 0 ou dono do bot), como no comando; lido a cada chamada."""
-    maximum = int(ctx.bot.config[config_key])
-    if maximum <= 0:
-        return 0
-    return quota_limit(maximum, await ctx.bot.is_owner(ctx.user))
+    return await quota_for(ctx.bot, ctx.user, config_key)
 
 
 class AccountSection:

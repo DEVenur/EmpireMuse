@@ -20,6 +20,8 @@ from disnake.http import Route
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
 from empiremuse.config_loader import DEFAULT_CONFIG, load_config
+from empiremuse.rules.errors import RuleError
+from empiremuse.rules.settings import validate_prefix
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import check_voice, check_requester_channel, can_connect
@@ -30,6 +32,8 @@ from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import CustomContext, string_to_file, token_regex, CommandArgparse, select_bot_pool
 from empiremuse.utils.owner_panel import panel_command, PanelView
+
+MSG_INVALID_PREFIX = "**O prefixo não pode conter espaços ou ter acima de 5 caracteres.**"
 
 # Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
 EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
@@ -369,10 +373,10 @@ class Owner(commands.Cog):
         usage="{prefix}{cmd} [prefixo]\nEx: {prefix}{cmd} >>",
     )
     async def setprefix(self, ctx: CustomContext, prefix: str):
-        prefix = prefix.strip()
+        prefix = validate_prefix(prefix)
 
-        if not prefix or len(prefix) > 5:
-            raise GenericError("**O prefixo não pode conter espaços ou ter acima de 5 caracteres.**")
+        if isinstance(prefix, RuleError):
+            raise GenericError(MSG_INVALID_PREFIX)
 
         guild_data = await self.bot.get_global_data(ctx.guild.id, db_name=DBModel.guilds)
 
@@ -420,10 +424,10 @@ class Owner(commands.Cog):
         usage="{prefix}{cmd} [prefixo]\nEx: {prefix}{cmd} >>",
     )
     async def setuserprefix(self, ctx: CustomContext, prefix: str):
-        prefix = prefix.strip()
+        prefix = validate_prefix(prefix)
 
-        if not prefix or len(prefix) > 5:
-            raise GenericError("**O prefixo não pode conter espaços ou ter acima de 5 caracteres.**")
+        if isinstance(prefix, RuleError):
+            raise GenericError(MSG_INVALID_PREFIX)
 
         user_data = await self.bot.get_global_data(ctx.author.id, db_name=DBModel.users)
 
@@ -476,6 +480,9 @@ class Owner(commands.Cog):
         embed = disnake.Embed(color=self.bot.get_color(ctx.guild.me))
 
         prefix = (prefix or "").strip()
+
+        if prefix and isinstance(validate_prefix(prefix), RuleError):
+            raise GenericError(MSG_INVALID_PREFIX)
 
         if not prefix:
             guild_data["prefix"] = ""

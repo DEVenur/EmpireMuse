@@ -15,6 +15,15 @@ import disnake
 import humanize
 from disnake.ext import commands
 
+from empiremuse.rules.errors import ROLE_DUPLICATE, RuleError
+from empiremuse.rules.limits import (
+    CUSTOM_SKIN_PREFIX,
+    FORUM_TITLE_MAX,
+    FORUM_TITLE_MIN,
+    MAX_DJ_ROLES,
+    VOLUMES,
+)
+from empiremuse.rules.settings import add_dj_role as add_role, allowed_names
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel
@@ -183,17 +192,13 @@ class PlayerSettings(disnake.ui.View):
         player_volume_select = disnake.ui.Select(
             placeholder="Selecione um volume padrão.",
             options=[
-                disnake.SelectOption(label=f"Volume padrão: {i}", default=i == self.default_player_volume, value=str(i))
-                for i in range(5, 101, 5)
-            ]
-            + [
                 disnake.SelectOption(
                     label=f"Volume padrão: {i}",
                     default=i == self.default_player_volume,
-                    description="Nota: Acima de 100% o audio pode ficar ruim.",
+                    description="Nota: Acima de 100% o audio pode ficar ruim." if i > 100 else None,
                     value=str(i),
                 )
-                for i in range(110, 151, 10)
+                for i in VOLUMES
             ],
         )
 
@@ -425,9 +430,9 @@ class MusicSettings(commands.Cog):
                         style=disnake.TextInputStyle.short,
                         label="Nome",
                         custom_id="forum_title",
-                        min_length=4,
-                        max_length=30,
-                        value=channel_name[:30],
+                        min_length=FORUM_TITLE_MIN,
+                        max_length=FORUM_TITLE_MAX,
+                        value=channel_name[:FORUM_TITLE_MAX],
                         required=True,
                     )
                 ],
@@ -664,9 +669,9 @@ class MusicSettings(commands.Cog):
                             style=disnake.TextInputStyle.short,
                             label="Nome",
                             custom_id="forum_title",
-                            min_length=4,
-                            max_length=30,
-                            value=channel_name[:30],
+                            min_length=FORUM_TITLE_MIN,
+                            max_length=FORUM_TITLE_MAX,
+                            value=channel_name[:FORUM_TITLE_MAX],
                             required=True,
                         )
                     ],
@@ -864,11 +869,19 @@ class MusicSettings(commands.Cog):
 
         guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
 
-        if str(role.id) in guild_data["djroles"]:
-            await inter.send(f"O cargo {role.mention} já está na lista de DJ's", ephemeral=True)
+        roles = add_role(guild_data["djroles"], str(role.id))
+
+        if isinstance(roles, RuleError):
+            if roles.code == ROLE_DUPLICATE:
+                await inter.send(f"O cargo {role.mention} já está na lista de DJ's", ephemeral=True)
+            else:
+                await inter.send(
+                    f"A lista de DJ's já tem o máximo de {MAX_DJ_ROLES} cargos; remova algum para adicionar outro.",
+                    ephemeral=True,
+                )
             return
 
-        guild_data["djroles"].append(str(role.id))
+        guild_data["djroles"] = roles
 
         await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
 
@@ -915,7 +928,7 @@ class MusicSettings(commands.Cog):
             await inter.send(
                 f"O cargo {role.mention} não está na lista de DJ's\n\n"
                 + "Cargos:\n"
-                + " ".join(f"<#{r}>" for r in guild_data["djroles"]),
+                + " ".join(f"<@&{r}>" for r in guild_data["djroles"]),
                 ephemeral=True,
             )
             return
@@ -953,14 +966,14 @@ class MusicSettings(commands.Cog):
         if not bot:
             return
 
-        skin_list = [s for s in bot.player_skins if s not in bot.config["IGNORE_SKINS"].split()]
-        static_skin_list = [s for s in bot.player_static_skins if s not in bot.config["IGNORE_STATIC_SKINS"].split()]
+        skin_list = list(allowed_names(bot.player_skins, bot.config["IGNORE_SKINS"]))
+        static_skin_list = list(allowed_names(bot.player_static_skins, bot.config["IGNORE_STATIC_SKINS"]))
 
         await inter.response.defer(ephemeral=True)
 
         guild = bot.get_guild(inter.guild_id) or inter.guild
 
-        add_skin_prefix = lambda d: [f"> custom_skin: {i}" for i in d.keys()]
+        add_skin_prefix = lambda d: [f"{CUSTOM_SKIN_PREFIX}{i}" for i in d.keys()]
 
         guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
 
@@ -976,8 +989,8 @@ class MusicSettings(commands.Cog):
 
         skins_opts = [
             disnake.SelectOption(
-                emoji="💠" if s.startswith("> custom_skin: ") else "🎨",
-                label=f"Modo normal: {s.replace('> custom_skin: ', '')}",
+                emoji="💠" if s.startswith(CUSTOM_SKIN_PREFIX) else "🎨",
+                label=f"Modo normal: {s.replace(CUSTOM_SKIN_PREFIX, '')}",
                 value=s,
                 **{"default": True, "description": "skin atual"} if selected == s else {},
             )
@@ -985,8 +998,8 @@ class MusicSettings(commands.Cog):
         ]
         static_skins_opts = [
             disnake.SelectOption(
-                emoji="💠" if s.startswith("> custom_skin: ") else "🎨",
-                label=f"Song-Request: {s.replace('> custom_skin: ', '')}",
+                emoji="💠" if s.startswith(CUSTOM_SKIN_PREFIX) else "🎨",
+                label=f"Song-Request: {s.replace(CUSTOM_SKIN_PREFIX, '')}",
                 value=s,
                 **{"default": True, "description": "skin atual"} if static_selected == s else {},
             )
@@ -995,8 +1008,8 @@ class MusicSettings(commands.Cog):
 
         global_skins_opts = [
             disnake.SelectOption(
-                emoji="💠" if s.startswith("> custom_skin: ") else "🎨",
-                label=f"Modo Normal: {s.replace('> custom_skin: ', '')}",
+                emoji="💠" if s.startswith(CUSTOM_SKIN_PREFIX) else "🎨",
+                label=f"Modo Normal: {s.replace(CUSTOM_SKIN_PREFIX, '')}",
                 value=s,
                 **{"default": True, "description": "skin atual"} if global_selected == s else {},
             )
@@ -1004,8 +1017,8 @@ class MusicSettings(commands.Cog):
         ]
         global_static_skins_opts = [
             disnake.SelectOption(
-                emoji="💠" if s.startswith("> custom_skin: ") else "🎨",
-                label=f"Song-Request: {s.replace('> custom_skin: ', '')}",
+                emoji="💠" if s.startswith(CUSTOM_SKIN_PREFIX) else "🎨",
+                label=f"Song-Request: {s.replace(CUSTOM_SKIN_PREFIX, '')}",
                 value=s,
                 **{"default": True, "description": "skin atual"} if global_static_selected == s else {},
             )
@@ -1087,13 +1100,13 @@ class MusicSettings(commands.Cog):
                 try:
                     changed_skins_txt += f"Global - Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
                 except:
-                    changed_skins_txt += f"Global - Modo Normal: `{select_view.skin_selected.replace('> custom_skin: ', '[custom skin]: ')}`\n"
+                    changed_skins_txt += f"Global - Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
             if global_static_selected != select_view.static_skin_selected:
                 try:
                     changed_skins_txt += f"Global - Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
                 except:
-                    changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace('> custom_skin: ', '[custom skin]: ')}`\n"
+                    changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
         else:
             guild_data["player_controller"]["skin"] = select_view.skin_selected
@@ -1105,14 +1118,14 @@ class MusicSettings(commands.Cog):
                     changed_skins_txt += f"Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
                 except:
                     changed_skins_txt += (
-                        f"Modo Normal: `{select_view.skin_selected.replace('> custom_skin: ', '[custom skin]: ')}`\n"
+                        f"Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
                     )
 
             if static_selected != select_view.static_skin_selected:
                 try:
                     changed_skins_txt += f"Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
                 except:
-                    changed_skins_txt += f"Song Request: `{select_view.static_skin_selected.replace('> custom_skin: ', '[custom skin]: ')}`\n"
+                    changed_skins_txt += f"Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
         if global_mode != select_view.global_mode:
             changed_skins_txt += "Skin Global: `" + ("Ativado" if select_view.global_mode else "Desativado") + "`\n"

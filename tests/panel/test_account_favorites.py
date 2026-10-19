@@ -98,16 +98,26 @@ class FavoritesWriteTest(FavoritesBase):
         assert self.world.doc() == expected and self.db.writes == [("global", UID)]
         assert isinstance(self.favs()["Pop"], str), "valor é a URL em texto (não objeto)"
 
-    def test_url_is_extracted_with_url_reg_like_the_command(self):
+    def test_url_must_be_a_pure_url_like_the_modal_now_requires(self):
+        """Etapa 4 (F3-5b, A2/D1): URL pura (apara as pontas e desembrulha ``<…>``); texto ao redor é recusado."""
         browser = self.logged_in()
-        cases = {
+        accepted = {
             "A1": ("  https://example.com/a  ", "https://example.com/a"),
-            "B2": ("veja https://example.com/b agora", "https://example.com/b"),
-            "C3": ("javascript:alert(1)//https://example.com/c", "https://example.com/c"),
+            "B2": ("<https://example.com/b>", "https://example.com/b"),
         }
-        for name, (sent, expected) in cases.items():
+        for name, (sent, expected) in accepted.items():
             assert self.add(browser, name, sent).code == 200, name
             assert self.favs()[name] == expected
+        before = self.world.doc()
+        refused = {
+            "C3": "javascript:alert(1)//https://example.com/c",
+            "D4": "veja https://example.com/d agora",
+            "E5": "https://example.com/e]",
+            "F6": "https://example.com/@everyone",
+        }
+        for name, sent in refused.items():
+            assert self.add(browser, name, sent).code == 422, name
+        assert self.world.doc() == before
 
     def test_add_boundaries_follow_the_modal(self):
         browser = self.logged_in()
@@ -228,13 +238,18 @@ class FavoritesImportExportTest(FavoritesBase):
         expected["fav_links"] = {"Rock": BASE + "novo", "Pop": BASE + "pop"}
         assert self.world.doc() == expected and self.db.writes == [("global", UID)]
 
-    def test_import_stores_only_the_url_reg_match_and_normalizes_names(self):
+    def test_import_requires_the_whole_url_and_normalizes_names(self):
+        """Etapa 4 (F3-5b, A1): o painel não guarda mais só o prefixo da URL; recusa o arquivo todo."""
         browser = self.logged_in()
-        payload = {
+        before = self.world.doc()
+        dirty = {
             "  Lixo  ": "https://example.com/ <img src=x onerror=alert(1)>",
             "Dois": "https://example.com/b?x=1 depois",
         }
-        assert self.do_import(browser, payload).code == 200
+        assert self.do_import(browser, dirty).code == 422
+        assert self.world.doc() == before
+        clean = {"  Lixo  ": "https://example.com/", "Dois": "  https://example.com/b?x=1  "}
+        assert self.do_import(browser, clean).code == 200
         assert self.favs()["Lixo"] == "https://example.com/" and self.favs()["Dois"] == "https://example.com/b?x=1"
         assert "  Lixo  " not in self.favs()
 
@@ -274,7 +289,10 @@ class FavoritesImportExportTest(FavoritesBase):
         assert self.do_import(browser, payload).code == 200
         assert self.do_import(browser, {"x" * 40: BASE + "a"}).code == 422
         self.world.config["USER_FAV_MAX_NAME_LENGTH"] = 40
-        assert self.do_import(browser, {"x" * 40: BASE + "a"}).code == 200
+        # Etapa 3 (F3-5b, D2): o teto é min(configuração, 25); subir a configuração para 40 não libera nomes de 26+
+        assert self.do_import(browser, {"x" * 40: BASE + "a"}).code == 422
+        assert self.do_import(browser, {"x" * 26: BASE + "a"}).code == 422
+        assert self.do_import(browser, {"x" * 25: BASE + "a"}).code == 200
 
     def test_import_space_rule_counts_overwritten_names_as_free(self):
         self.world.set_doc(fav_links=full(9))
@@ -371,10 +389,14 @@ class IntegrationsTest(FavoritesBase):
         assert stored["Por objeto"].get("avatar") == "https://example.com/av.png"
         assert stored["Meu canal"] == {"url": "https://example.com/canal", "avatar": "https://example.com/a.png"}
 
-    def test_import_stores_only_the_url_match_and_never_calls_the_outside(self):
+    def test_import_requires_the_whole_url_and_never_calls_the_outside(self):
         browser = self.logged_in()
+        before = self.world.doc()
+        dirty = {"Spotify": "https://open.spotify.com/user/alguem texto depois"}
+        assert self.do_import(browser, dirty).code == 422, "Etapa 4 (A1): recusa em vez de guardar só o prefixo"
+        assert self.world.doc() == before
         payload = {
-            "Spotify": "https://open.spotify.com/user/alguem texto depois",
+            "Spotify": "https://open.spotify.com/user/alguem",
             "Deezer": "https://www.deezer.com/br/profile/123",
             "Youtube": "https://www.youtube.com/@canal",
         }
@@ -391,7 +413,7 @@ class IntegrationsTest(FavoritesBase):
             "vazio": {},
             "url inválida": {"Aa": "ftp://x.example/a"},
             "url javascript": {"Aa": "javascript:alert(1)"},
-            "url > 150": {"Aa": BASE + "a" * 140},
+            "url > 200": {"Aa": BASE + "a" * 190},
             "título > 90": {"t" * 91: BASE + "a"},
             "título vazio": {"   ": BASE + "a"},
             "valor sem url": {"Aa": {"avatar": BASE + "a.png"}},

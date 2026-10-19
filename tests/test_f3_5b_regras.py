@@ -20,7 +20,7 @@ class TestLimites:
     def test_valores_atuais(self):
         assert (limits.FAV_NAME_MIN, limits.FAV_NAME_MAX) == (2, 25)
         assert (limits.FAV_URL_MIN, limits.FAV_URL_MAX) == (10, 200)
-        assert (limits.ITG_TITLE_MAX, limits.ITG_URL_MAX, limits.ITG_AVATAR_MAX) == (90, 150, 250)
+        assert (limits.ITG_TITLE_MAX, limits.ITG_URL_MAX, limits.ITG_AVATAR_MAX) == (90, 200, 250)
         assert limits.MAX_GUILD_LINKS == 25
         assert (limits.GUILD_LINK_NAME_MIN, limits.GUILD_LINK_NAME_MAX) == (2, 25)
         assert (limits.GUILD_LINK_URL_MIN, limits.GUILD_LINK_URL_MAX) == (10, 250)
@@ -62,7 +62,7 @@ class TestTexto:
             (" a ", 2, 5, None),
             ("abcde", 2, 5, "abcde"),
             ("abcdef", 2, 5, None),
-            ("ab​", 2, 5, None),
+            ("ab\u200b", 2, 5, None),
             ("a\x07b", 2, 5, None),
             ("a\nb", 2, 5, None),
             ("a b", 2, 5, "a b"),
@@ -110,10 +110,9 @@ class TestUrls:
             "http://exemplo.invalid/a",
             "https://exemplo.invalid/a",
             "https://exemplo.invalid/a%20b",
-            "https://exemplo.invalid/a(b)!*,",
+            "https://exemplo.invalid/a(b!*,",
             "https://exemplo.invalid/a?x=1&y=2+3",
             "https://exemplo.invalid/a%2",
-            "https://exemplo.invalid/a<b>",  # `<` e `>` fazem parte da classe: é o resíduo do A2
             "https://exemplo.invalid/@user",
             "https://exemplo.invalid/a_b-c.d",
         ],
@@ -133,6 +132,10 @@ class TestUrls:
             "https://exemplo.invalid/a]b",
             "https://exemplo.invalid/@everyone",
             "https://exemplo.invalid/@HERE",
+            "https://exemplo.invalid/a)b",  # endurecimento: `)`, `<`, `>` e `\\` dentro da URL
+            "https://exemplo.invalid/a<b>",
+            "https://exemplo.invalid/a\\b",
+            "https://usuario:senha@exemplo.invalid/a",  # credencial na autoridade
             "https://exemplo.invalid/a#z",
             "https://exemplo.invalid/a~",
             "https://exemplo.invalid/a{b}",
@@ -141,22 +144,6 @@ class TestUrls:
     )
     def test_url_que_nao_e_inteira_e_limpa(self, url):
         assert not urls.is_clean_url(url)
-
-    def test_extract_url_legacy_devolve_o_primeiro_trecho_em_qualquer_posicao(self):
-        assert urls.extract_url_legacy(f"veja {URL} e https://outro.invalid/b agora") == URL
-        assert urls.extract_url_legacy(f"<{URL}>") == f"{URL}>"
-        assert urls.extract_url_legacy("sem link") is None
-        assert urls.extract_url_legacy("") is None
-
-    def test_url_prefix_legacy_devolve_so_o_prefixo(self):
-        assert urls.url_prefix_legacy(f"{URL} lixo", 100) == URL
-        assert urls.url_prefix_legacy(f"{URL}]x", 100) == f"{URL}]x"
-        assert urls.url_prefix_legacy(f"veja {URL}", 100) is None
-        assert urls.url_prefix_legacy(URL, len(URL)) == URL
-        assert urls.url_prefix_legacy(URL, len(URL) - 1) is None
-        assert urls.url_prefix_legacy(None, 100) is None
-        assert urls.url_prefix_legacy(123, 100) is None
-        assert urls.url_prefix_legacy({"url": URL}, 100) is None
 
     @pytest.mark.parametrize(
         ("avatar", "esperado"),

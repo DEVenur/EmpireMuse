@@ -18,7 +18,7 @@ import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.utils.db import DBModel, LocalDatabase, db_models
 from empiremuse.utils.music import interactions, request_channel
 from empiremuse.utils.music.converters import perms_translations, time_format
-from empiremuse.panel.services.account_links import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
+from empiremuse.rules.limits import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import CustomContext
 from empiremuse.utils.music.interactions import FavMenuView, FavModalAdd, FavModalImport, ViewMode
@@ -680,9 +680,9 @@ class TestKI47ItensMalFormadosNoImportadorDoServidor:
         "lista": ["https://exemplo.invalid/a"],
         "numero": 42,
         "nulo": None,
-        "sem_url": {"description": "d"},
+        "sem_url": {"description": "ddd"},
         "sem_description": {"url": "https://exemplo.invalid/a"},
-        "url_nao_texto": {"url": 123, "description": "d"},
+        "url_nao_texto": {"url": 123, "description": "ddd"},
         "description_nao_texto": {"url": "https://exemplo.invalid/a", "description": 5},
     }
 
@@ -861,7 +861,7 @@ def url_com_tamanho(prefixo, tamanho):
 
 
 class TestImportadorDeIntegracoesAvatarELimites:
-    """O avatar do objeto ``{url, avatar}`` é validado (URL, texto, até 250 caracteres) e a URL vai até 150."""
+    """O avatar do objeto ``{url, avatar}`` é validado (URL, texto, até 250 caracteres) e a URL vai até 200 (Etapa 5 da F3-5b, D4; antes 150)."""
 
     PREFIXO = "https://avatar.invalid/"
 
@@ -895,8 +895,8 @@ class TestImportadorDeIntegracoesAvatarELimites:
         assert url_guardada(bot.salvos_usuario[-1]["integration_links"]["【YT】: Canal"]) == f"{URL_BASE}/c"
 
     @pytest.mark.asyncio
-    async def test_url_com_150_caracteres_e_aceita_e_com_151_e_recusada(self):
-        for tamanho, aceita in ((150, True), (151, False)):
+    async def test_url_com_200_caracteres_e_aceita_e_com_201_e_recusada(self):
+        for tamanho, aceita in ((200, True), (201, False)):
             bot = ModalBot()
             nome = {"【YT】: Canal": url_com_tamanho(f"{URL_BASE}/", tamanho)}
             inter = await importar(bot, ViewMode.integrations_manager, nome, estrito=True)
@@ -917,11 +917,11 @@ class TestImportadoresGravamSoOsCamposEsperados:
     @pytest.mark.asyncio
     async def test_servidor_grava_so_url_e_description(self):
         bot = ModalBot()
-        item = {"url": f"{URL_BASE}/a", "description": "d", "extra": "x", "outro": 1}
+        item = {"url": f"{URL_BASE}/a", "description": "ddd", "extra": "x", "outro": 1}
         await importar(bot, ViewMode.guild_fav_manager, {"Item": item})
         assert bot.salvos_servidor[-1]["player_controller"]["fav_links"]["Item"] == {
             "url": f"{URL_BASE}/a",
-            "description": "d",
+            "description": "ddd",
         }
 
     @pytest.mark.asyncio
@@ -1103,8 +1103,8 @@ class TestKI50NomesDasEntradas:
     @pytest.mark.asyncio
     async def test_guarda_links_do_servidor_reimportar_o_mesmo_nome_no_limite_de_25_sobrescreve(self):
         bot = ModalBot()
-        existentes = {f"Item{i}": {"url": f"{URL_BASE}/{i}", "description": "d"} for i in range(24)}
-        existentes["Rock"] = {"url": f"{URL_BASE}/velho", "description": "d"}
+        existentes = {f"Item{i}": {"url": f"{URL_BASE}/{i}", "description": "ddd"} for i in range(24)}
+        existentes["Rock"] = {"url": f"{URL_BASE}/velho", "description": "ddd"}
         bot.guild_data["player_controller"]["fav_links"] = existentes
         await importar(
             bot, ViewMode.guild_fav_manager, arquivo_com(ViewMode.guild_fav_manager, "Rock", f"{URL_BASE}/n")
@@ -1120,7 +1120,7 @@ class TestKI51RecusaNaoMudaOCache:
     URL = f"{URL_BASE}/a"
 
     def cenarios(self):
-        itens_servidor = {f"item{i}": {"url": self.URL, "description": "d"} for i in range(26)}
+        itens_servidor = {f"item{i}": {"url": self.URL, "description": "ddd"} for i in range(26)}
         return {
             "favoritos_acima_da_cota": (
                 ViewMode.fav_manager,
@@ -1150,7 +1150,7 @@ class TestKI51RecusaNaoMudaOCache:
             "servidor_com_nome_longo_demais": (
                 ViewMode.guild_fav_manager,
                 dict(),
-                {"item0": {"url": self.URL, "description": "d"}, "n" * 26: {"url": self.URL, "description": "d"}},
+                {"item0": {"url": self.URL, "description": "ddd"}, "n" * 26: {"url": self.URL, "description": "ddd"}},
             ),
         }
 
@@ -1170,9 +1170,9 @@ class TestKI51RecusaNaoMudaOCache:
         modo, config, arquivo = self.cenarios()[caso]
         bot = ModalBot(**config)
         bot.guild_data["player_controller"]["fav_links"] = {
-            "item0": {"url": self.URL, "description": "d"},
-            "item1": {"url": self.URL, "description": "d"},
-            "item2": {"url": self.URL, "description": "d"},
+            "item0": {"url": self.URL, "description": "ddd"},
+            "item1": {"url": self.URL, "description": "ddd"},
+            "item2": {"url": self.URL, "description": "ddd"},
         }
         antes = copy.deepcopy((bot.user_data, bot.guild_data))
         inter = await importar(bot, modo, arquivo)
@@ -1206,18 +1206,18 @@ class TestKI52TrechoEcoadoNasMensagensDeErro:
             "favorito_com_crases": (ViewMode.fav_manager, {"Item": "nao```@everyone"}),
             "favorito_nome_gigante": (ViewMode.fav_manager, {"n" * self.GIGANTE: f"{URL_BASE}/a"}),
             "favorito_nao_texto_gigante": (ViewMode.fav_manager, {"Item": ["a" * self.GIGANTE]}),
-            "servidor_url_longa": (ViewMode.guild_fav_manager, {"Item": {"url": url_gigante, "description": "d"}}),
+            "servidor_url_longa": (ViewMode.guild_fav_manager, {"Item": {"url": url_gigante, "description": "ddd"}}),
             "servidor_descricao_gigante": (
                 ViewMode.guild_fav_manager,
                 {"Item": {"url": f"{URL_BASE}/a", "description": "d" * self.GIGANTE}},
             ),
             "servidor_url_com_crases": (
                 ViewMode.guild_fav_manager,
-                {"Item": {"url": "nao```@everyone", "description": "d"}},
+                {"Item": {"url": "nao```@everyone", "description": "ddd"}},
             ),
             "servidor_nome_gigante": (
                 ViewMode.guild_fav_manager,
-                {"n" * self.GIGANTE: {"url": f"{URL_BASE}/a", "description": "d"}},
+                {"n" * self.GIGANTE: {"url": f"{URL_BASE}/a", "description": "ddd"}},
             ),
             "integracao_url_longa": (ViewMode.integrations_manager, {"Canal": url_gigante}),
             "integracao_com_crases": (ViewMode.integrations_manager, {"Canal": "nao```@everyone"}),
@@ -1268,7 +1268,7 @@ class TestKI53RefreshDepoisDaImportacao:
 
     ARQUIVOS = {
         ViewMode.fav_manager: {"Rock": f"{URL_BASE}/a"},
-        ViewMode.guild_fav_manager: {"Rock": {"url": f"{URL_BASE}/a", "description": "d"}},
+        ViewMode.guild_fav_manager: {"Rock": {"url": f"{URL_BASE}/a", "description": "ddd"}},
         ViewMode.integrations_manager: {"Canal": f"{URL_BASE}/a"},
     }
 
@@ -1316,12 +1316,13 @@ class TestKI54CotaNoModalDeFavorito:
         assert "Não há espaço disponível" in inter.texto
 
     @pytest.mark.asyncio
-    async def test_novo_nome_que_ja_existe_sobrescreve_sem_ocupar_vaga(self):
+    async def test_adicionar_nome_que_ja_existe_e_recusado_e_nao_sobrescreve(self):
+        """Etapa 3 (F3-5b, A6): adicionar à mão com um nome que já existe não sobrescreve mais (antes sobrescrevia sem
+        ocupar vaga); recusa e não grava. Editar a própria entrada com a cota cheia segue permitido (guarda abaixo)."""
         bot = ModalBot(favs=2, fav_links=favs_cheios(2))
         inter = await adicionar_favorito(bot, nome="fav0", url=f"{URL_BASE}/novo")
-        assert bot.salvos_usuario, f"KI-54: sobrescrever um nome que já existe não ocupa vaga: {inter.texto!r}"
-        salvo = bot.salvos_usuario[-1]["fav_links"]
-        assert salvo["fav0"] == f"{URL_BASE}/novo" and len(salvo) == 2
+        assert bot.salvos_usuario == [] and "já" in inter.texto.lower()
+        assert bot.user_data["fav_links"] == favs_cheios(2)
 
     @pytest.mark.asyncio
     async def test_guarda_editar_entrada_existente_com_a_cota_cheia_continua_permitido(self):
@@ -1364,14 +1365,14 @@ class TestKI51ResiduoNaView:
         if modo == ViewMode.guild_fav_manager:
             bot = ModalBot()
             bot.guild_data["player_controller"]["fav_links"] = {
-                f"item{i}": {"url": self.URL, "description": "d"} for i in range(24)
+                f"item{i}": {"url": self.URL, "description": "ddd"} for i in range(24)
             }
             arquivo = {
                 "item0": {"url": self.URL, "description": "novo"},
                 "item1": {"url": self.URL, "description": "novo"},
-                "novo1": {"url": self.URL, "description": "d"},
-                "novo2": {"url": self.URL, "description": "d"},
-                "novo3": {"url": self.URL, "description": "d"},
+                "novo1": {"url": self.URL, "description": "ddd"},
+                "novo2": {"url": self.URL, "description": "ddd"},
+                "novo3": {"url": self.URL, "description": "ddd"},
             }
             return bot, arquivo, "item5", "guild_data"
         if modo == ViewMode.fav_manager:
