@@ -30,8 +30,8 @@ HOSTIS_NO_CAMINHO = [
     pytest.param("https://github.com/o/r\x1b.git", id="ESC"),
     pytest.param("https://github.com/o/r\x07", id="BEL"),
     pytest.param("https://github.com/o/r\x7f", id="DEL"),
-    pytest.param("https://github.com/o/r​", id="Cf-largura-zero"),
-    pytest.param("https://github.com/o/r‮", id="Cf-inversao-bidi"),
+    pytest.param("https://github.com/o/r\u200b", id="Cf-largura-zero"),
+    pytest.param("https://github.com/o/r\u202e", id="Cf-inversao-bidi"),
     pytest.param("https://github.com/o r", id="espaco-interno"),
     pytest.param("https://github.com/o r", id="espaco-inseparavel"),
     pytest.param("https://github.com/o/r)[x](https://evil.example", id="fecha-o-link-markdown"),
@@ -50,7 +50,7 @@ HOSTIS_NO_CAMINHO = [
 HOSTIS_NO_HOST = [
     pytest.param("https://git\x00hub.com/o/r", id="NUL-no-host"),
     pytest.param("https://git\x1bhub.com/o/r", id="ESC-no-host"),
-    pytest.param("https://git​hub.com/o/r", id="Cf-no-host"),
+    pytest.param("https://git\u200bhub.com/o/r", id="Cf-no-host"),
     pytest.param("https://git)hub.com/o/r", id="parentese-no-host"),
     pytest.param("https://git<hub.com/o/r", id="menor-no-host"),
 ]
@@ -75,7 +75,7 @@ class TestRecusaConteudoPerigoso:
             "git@github.com:o/<r>.git",
             "git@github.com:o/r\\x.git",
             "git@github.com:o r.git",
-            "git@github.com:o/r‮.git",
+            "git@github.com:o/r\u202e.git",
         ],
         ids=repr,
     )
@@ -90,7 +90,7 @@ class TestRecusaConteudoPerigoso:
             "ssh://git@github.com/o/<r>.git",
             "git://github.com/o/r[x].git",
             "ssh://git@github.com/o r.git",
-            "git://github.com/o/r​",
+            "git://github.com/o/r\u200b",
         ],
         ids=repr,
     )
