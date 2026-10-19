@@ -55,6 +55,7 @@ Depois da mescla, números e booleanos são convertidos. Os booleanos são conve
 apenas valores fora de `true`/`false`/`none` geram erro na inicialização citando a chave configurada.
 As configurações numéricas `VOTE_SKIP_AMOUNT`, `HINT_RATE`, `DBCACHE_SIZE`, `PLAYLIST_CACHE_SIZE` e `MONGO_TIMEOUT`
 possuem piso mínimo de `1`: valores informados iguais a `0` ou negativos são automaticamente elevados para `1`.
+Valores de tipo incompatível em chaves inteiras geram erro explicativo na inicialização indicando a chave configurada.
 
 ### Variáveis essenciais
 
