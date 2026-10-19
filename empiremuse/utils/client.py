@@ -32,6 +32,7 @@ from user_agent import generate_user_agent
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
+from empiremuse.rules.git_remote import parse_remote_web_url
 from empiremuse.utils import branding
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
@@ -797,16 +798,9 @@ class BotPool:
             self.commit = None
 
         try:
-            self.remote_git_url = (
-                check_output(["git", "remote", "-v"])
-                .decode("ascii")
-                .strip()
-                .split("\n")[0][7:]
-                .replace(".git", "")
-                .replace(" (fetch)", "")
-            )
-        except:
-            pass
+            self.remote_git_url = parse_remote_web_url(check_output(["git", "remote", "-v"]).decode("utf-8", "replace"))
+        except (OSError, subprocess.CalledProcessError):
+            pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
         if not self.remote_git_url:
             self.remote_git_url = self.config["SOURCE_REPO"].removesuffix(".git")
