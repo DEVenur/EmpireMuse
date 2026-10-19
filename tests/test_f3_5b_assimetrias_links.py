@@ -494,7 +494,7 @@ class TestA7NomeSanitizadoNoModal:
         assert list(bot.salvos_usuario[-1]["fav_links"]) == ["Rock"]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("nome", [" a", "ab​", "a\x07b", "a"])
+    @pytest.mark.parametrize("nome", [" a", "ab\u200b", "a\x07b", "a"])
     async def test_painel_recusa(self, nome):
         resultado = await painel_favoritos(BotDoPainel(), "favorito_adicionar", {}, nome=nome, url=URL)
         assert resultado.new == {} and resultado.errors.get("nome")

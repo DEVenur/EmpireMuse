@@ -81,7 +81,7 @@ class TestNomeDaFaixa:
     def test_limpa_controle_e_formatacao_antes_de_cortar(self):
         """O corte vale para o texto já limpo (D3): 20 letras separadas por invisíveis continuam 20 (mutante: cortar
         o texto bruto e só então limpar, que devolveria 13)."""
-        titulo = "a​" * 20
+        titulo = "a\u200b" * 20
         assert clean_track_name(titulo, 2, 25) == "a" * 20
 
     def test_corta_em_25_e_apara_de_novo(self):
@@ -311,7 +311,7 @@ class TestPrefixo:
         erro = validate_prefix(valor)
         assert isinstance(erro, RuleError) and erro.code == PREFIX_EMPTY
 
-    @pytest.mark.parametrize("valor", ["a b", "a\tb", "a​b", "a\x07b"], ids=repr)
+    @pytest.mark.parametrize("valor", ["a b", "a\tb", "a\u200bb", "a\x07b"], ids=repr)
     def test_espaco_interno_e_invisivel_tem_codigo_de_caracteres(self, valor):
         erro = validate_prefix(valor)
         assert isinstance(erro, RuleError) and erro.code == PREFIX_CHARS

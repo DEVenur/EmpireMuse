@@ -62,7 +62,7 @@ class TestTexto:
             (" a ", 2, 5, None),
             ("abcde", 2, 5, "abcde"),
             ("abcdef", 2, 5, None),
-            ("ab​", 2, 5, None),
+            ("ab\u200b", 2, 5, None),
             ("a\x07b", 2, 5, None),
             ("a\nb", 2, 5, None),
             ("a b", 2, 5, "a b"),
