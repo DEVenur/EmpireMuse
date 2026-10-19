@@ -49,6 +49,8 @@ OUTRAS_REFERENCIAS = [
     ("utils/music/lastfm_tools.py", "LastFM.scrobble_load_cache", "UnpicklingError", 1),
 ]
 # Arquivos que fazem ``import pickle`` hoje.
+LEGADO = "serialization/legacy_pickle.py"  # o único leitor autorizado a usar o pickle: fora do inventário do produto
+
 IMPORTADORES = [
     "cogs/music.py",
     "cogs/music_settings.py",
@@ -95,7 +97,7 @@ def inventario_do_pacote() -> dict[str, list[tuple[str, str, int]]]:
     """``{arquivo relativo a empiremuse/: referências ao pickle}``, só dos arquivos que têm alguma."""
     achado = {}
     for arquivo in sorted(PACOTE.rglob("*.py")):
-        if "__pycache__" in arquivo.parts:
+        if "__pycache__" in arquivo.parts or arquivo.relative_to(PACOTE).as_posix() == LEGADO:
             continue
         codigo = arquivo.read_text(encoding="utf-8")
         if "pickle" not in codigo.lower():
@@ -162,7 +164,7 @@ def test_outras_referencias_ao_pickle_sao_as_do_inventario(inventario):
 def test_arquivos_que_importam_o_pickle_sao_os_do_inventario():
     achado = set()
     for arquivo in PACOTE.rglob("*.py"):
-        if "__pycache__" in arquivo.parts:
+        if "__pycache__" in arquivo.parts or arquivo.relative_to(PACOTE).as_posix() == LEGADO:
             continue
         for no in ast.walk(ast.parse(arquivo.read_text(encoding="utf-8"))):
             nomes = []
