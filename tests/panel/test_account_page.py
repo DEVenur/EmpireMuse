@@ -205,7 +205,7 @@ class UserPrefixTest(AccountCase):
             response = self.act(browser, "prefixo", custom_prefix=bad)
             assert response.code == 422 and 'aria-invalid="true"' in response.body.decode()
 
-        Each.run(["a b", "a\tb", "a\nb", "a\x00", "​"], check)  # Etapa 6a (A17): "a\r" agora é aparado
+        Each.run(["a b", "a\tb", "a\nb", "a\x00", "\u200b"], check)  # Etapa 6a (A17): "a\r" agora é aparado
         assert (
             self.world.doc() == before and len(self.db.writes) == writes and self.pool.user_prefix_cache == {UID: "!"}
         )
