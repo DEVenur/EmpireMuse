@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from cachetools import TTLCache
 
 from empiremuse import paths
 from empiremuse.panel.handlers import brand
@@ -84,7 +85,7 @@ class TestGuardasDeCache:
         (db_dir / filename).write_bytes(conteudo)
 
         pool = BotPool.__new__(BotPool)
-        pool.playlist_cache = {}
+        pool.playlist_cache = TTLCache(maxsize=10, ttl=1800)  # o ``load_cache`` lê o TTL do cache de playlist
         pool.partial_track_cache = {}
         pool.lyric_data_cache = {}
 

@@ -175,6 +175,7 @@ ai_prompt.txt
 /.tmp/
 /.deployed
 /.lastfm_cache
+/.lastfm_cache.json
 /.ytdl_cache/
 /.ytdl_cookie
 

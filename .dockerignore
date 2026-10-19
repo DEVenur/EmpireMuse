@@ -25,6 +25,7 @@ local_database
 .app_commands_sync_data/
 .spotify_cache.json
 .lastfm_cache
+.lastfm_cache.json
 .ytdl_cache/
 .ytdl_cookie
 guild_bots.json
