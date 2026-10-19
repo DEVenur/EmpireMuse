@@ -4,8 +4,8 @@
   ``disnake``, ``tornado``, ``motor``, ``cachetools`` nem outro módulo do projeto.
 * ``pickle`` só pode ser importado em ``empiremuse/serialization/legacy_pickle.py`` (o único leitor do formato antigo).
 
-Os dois testes sobre o código de verdade NASCEM ``xfail(strict=True)``: hoje o pacote ``serialization`` não existe e seis
-arquivos importam o ``pickle``. Cada um vira verde quando a etapa correspondente termina, e o ``strict`` obriga a tirar a
+Os dois testes sobre o código de verdade NASCERAM ``xfail(strict=True)``: o pacote ``serialization`` não existia e seis
+arquivos importam o ``pickle`` (o de ``serialization`` já passou; o de IMPORT do pickle segue xfail até as gravações saírem). Cada um vira verde quando a etapa correspondente termina, e o ``strict`` obriga a tirar a
 marca no mesmo commit (um teste que passa sem ninguém notar não protege nada). O que já vale hoje é o resto: o varredor,
 provado com código e pastas sintéticos, e a proibição dos demais formatos binários executáveis.
 
@@ -114,7 +114,7 @@ def violacoes_de_formatos(raiz: Path, grupo, *, excecao: str | None = None) -> l
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="nasce vermelho: passa quando a etapa 2b tirar o último import de pickle de fora de legacy_pickle.py",
+    reason="nasce vermelho: é teste de IMPORT e passa quando as etapas 3 a 6 trocarem o último pickle.dumps (a 2b só tira as LEITURAS)",
 )
 def test_pickle_so_e_importado_em_legacy_pickle():
     assert violacoes_de_formatos(PACOTE, MODULOS_PICKLE, excecao=LEGADO) == []
@@ -128,6 +128,26 @@ def test_serializacao_so_importa_a_biblioteca_padrao_e_as_regras():
 
 
 # ============================================================================ o que já vale hoje
+
+
+def test_nenhum_pickle_load_loads_ou_unpickler_fora_do_legacy_pickle():
+    """Teste de LEITURA (e não de import): depois da 2b, ler pickle só é possível por ``legacy_pickle``.
+
+    As gravações (``pickle.dumps``/``dump``) seguem até as etapas 3 a 6 e por isso o teste de import acima continua xfail.
+    """
+    from tests.test_f3_6b_inventario_pickle import CHAMADAS_DE_LEITURA, referencias_ao_pickle
+
+    achadas = []
+    for arquivo in arquivos(PACOTE):
+        relativo = arquivo.relative_to(PACOTE).as_posix()
+        if relativo == LEGADO:
+            continue
+        achadas.extend(
+            f"{relativo}::{funcao or '<modulo>'} usa pickle.{atributo}"
+            for funcao, atributo, _linha in referencias_ao_pickle(arquivo.read_text(encoding="utf-8"))
+            if atributo in CHAMADAS_DE_LEITURA | {"_load", "_loads"}
+        )
+    assert achadas == []
 
 
 def test_nenhum_outro_formato_executavel_e_importado():

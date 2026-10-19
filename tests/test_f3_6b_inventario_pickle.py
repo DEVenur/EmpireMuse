@@ -1,5 +1,7 @@
 """F3-6b, etapa 0 — inventário por ``ast`` dos pontos que leem e gravam ``pickle`` em ``empiremuse/``.
 
+O ``legacy_pickle.py`` fica FORA do inventário (é o único leitor autorizado).
+
 Os testes de inventário (``test_pontos_de_leitura_sao_os_do_inventario`` e
 ``test_pontos_de_gravacao_sao_os_do_inventario``) comparam o que o código tem com as tabelas ``LEITURAS`` e ``GRAVACOES``
 abaixo. Quando um ponto some (ou aparece), o teste falha e a mensagem lista EXATAMENTE o que sumiu e o que apareceu: a
@@ -24,7 +26,10 @@ CHAMADAS_DE_GRAVACAO = frozenset({"dump", "dumps", "Pickler"})
 # (arquivo relativo a empiremuse/, função, chamada, linhas, dado, pontos, etapa que remove).
 # ``dado`` = família do dado; ``pontos`` = pontos lógicos (o par ``custom_skins``/``custom_skins_static`` conta um só,
 # cada um dos 3 caches de ``load_cache`` conta um); a última coluna é a etapa que remove o ponto.
-LEITURAS = [
+LEGADO = "serialization/legacy_pickle.py"  # o único leitor autorizado: fora do inventário do produto
+
+# As 11 leituras de ANTES da etapa 2b (documentam os números do plano). Depois da 2b o produto não lê pickle sozinho.
+LEITURAS_ANTES_DA_2B = [
     ("cogs/player_resume.py", "PlayerSession.get_player_sessions_mongo", "loads", 1, "sessao", 1, "2b"),
     ("cogs/player_resume.py", "PlayerSession.get_player_sessions_local", "loads", 1, "sessao", 1, "2b"),
     ("cogs/music.py", "Music.play", "loads", 1, "fila", 1, "2b"),
@@ -35,6 +40,8 @@ LEITURAS = [
     ("utils/client.py", "BotPool.load_cache", "load", 3, "cache", 3, "2b"),
     ("utils/music/lastfm_tools.py", "LastFM.scrobble_load_cache", "load", 1, "cache", 1, "2b"),
 ]
+# Estado atual (depois da 2b): nenhuma leitura. Quem ler pickle passa por ``legacy_pickle.load_legacy``.
+LEITURAS: list = []
 GRAVACOES = [
     ("cogs/player_resume.py", "PlayerSession.save_session_mongo", "dumps", 1, "sessao", 1, "5"),
     ("cogs/player_resume.py", "PlayerSession.save_session_local", "dumps", 1, "sessao", 1, "5"),
@@ -44,16 +51,10 @@ GRAVACOES = [
     ("utils/music/lastfm_tools.py", "LastFM.scrobble_save_cache", "dump", 1, "cache", 1, "6"),
 ]
 # Referências que não são chamada de leitura nem de gravação (hoje: as classes de erro dos ``except`` dos caches).
-OUTRAS_REFERENCIAS = [
-    ("utils/client.py", "BotPool.load_cache", "UnpicklingError", 3),
-    ("utils/music/lastfm_tools.py", "LastFM.scrobble_load_cache", "UnpicklingError", 1),
-]
-# Arquivos que fazem ``import pickle`` hoje.
-LEGADO = "serialization/legacy_pickle.py"  # o único leitor autorizado a usar o pickle: fora do inventário do produto
-
+OUTRAS_REFERENCIAS: list = []  # antes da 2b: o ``pickle.UnpicklingError`` dos ``except`` dos caches (4 referências)
+# Arquivos que fazem ``import pickle`` depois da 2b (só para gravar; ``music_settings.py`` só lia e deixa de importar).
 IMPORTADORES = [
     "cogs/music.py",
-    "cogs/music_settings.py",
     "cogs/player_resume.py",
     "utils/client.py",
     "utils/music/interactions.py",
@@ -194,33 +195,35 @@ def test_nenhuma_referencia_ao_pickle_fica_fora_de_funcao(inventario):
 
 
 class TestNumerosDoInventario:
-    """As tabelas acima têm de fechar com os números combinados (para não perder um ponto ao editar a tabela)."""
+    """Os números do plano (11 / 14 / 9 / 6) e o que a 2b muda: as 11 leituras somem e as 6 gravações ficam."""
 
-    def test_leituras_sao_11_pontos_14_linhas_e_9_funcoes(self):
-        assert sum(pontos for *_, pontos, _ in LEITURAS) == 11
-        assert sum(linhas for _, _, _, linhas, *_ in LEITURAS) == 14
-        assert len({(arquivo, funcao) for arquivo, funcao, *_ in LEITURAS}) == 9
+    def test_antes_da_2b_eram_11_pontos_14_linhas_e_9_funcoes(self):
+        assert sum(pontos for *_, pontos, _ in LEITURAS_ANTES_DA_2B) == 11
+        assert sum(linhas for _, _, _, linhas, *_ in LEITURAS_ANTES_DA_2B) == 14
+        assert len({(arquivo, funcao) for arquivo, funcao, *_ in LEITURAS_ANTES_DA_2B}) == 9
 
-    def test_gravacoes_sao_6(self):
-        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 6
-        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 6
-
-    def test_leituras_por_familia_de_dado(self):
-        """2b troca por ``load_legacy`` os 7 pontos de sessão (2), fila (1) e skin (4), e remove os 4 de cache."""
-        pontos = Counter()
-        linhas = Counter()
-        for _, _, _, n_linhas, dado, n_pontos, _ in LEITURAS:
+    def test_antes_da_2b_as_leituras_por_familia_de_dado(self):
+        """A 2b troca por ``load_legacy`` os 7 pontos de sessão (2), fila (1) e skin (4), e remove os 4 de cache."""
+        pontos, linhas = Counter(), Counter()
+        for _, _, _, n_linhas, dado, n_pontos, _ in LEITURAS_ANTES_DA_2B:
             pontos[dado] += n_pontos
             linhas[dado] += n_linhas
         assert dict(pontos) == {"sessao": 2, "fila": 1, "skin": 4, "cache": 4}
         assert linhas["skin"] == 7
 
-    def test_toda_leitura_sai_na_2b_e_toda_gravacao_depois(self):
-        assert {etapa for *_, etapa in LEITURAS} == {"2b"}
+    def test_toda_leitura_antiga_saiu_na_2b(self):
+        assert {etapa for *_, etapa in LEITURAS_ANTES_DA_2B} == {"2b"}
+
+    def test_depois_da_2b_nao_ha_leitura_nem_referencia_solta_ao_pickle(self):
+        assert LEITURAS == [] and OUTRAS_REFERENCIAS == []
+
+    def test_gravacoes_sao_6_e_saem_nas_etapas_3_a_6(self):
+        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 6
+        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 6
         assert {etapa for *_, etapa in GRAVACOES} == {"3", "4", "5", "6"}
 
     def test_as_tabelas_nao_repetem_chaves(self):
-        for tabela in (LEITURAS, GRAVACOES):
+        for tabela in (LEITURAS_ANTES_DA_2B, GRAVACOES):
             chaves = [(arquivo, funcao, chamada) for arquivo, funcao, chamada, *_ in tabela]
             assert len(chaves) == len(set(chaves))
 

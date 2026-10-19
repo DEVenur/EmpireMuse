@@ -166,11 +166,17 @@ def montar_leitura(monkeypatch, faixas_lidas):
     monkeypatch.setattr(music, "check_player_perm", nada)
     monkeypatch.setattr(music, "check_channel_limit", lambda *args, **kwargs: True)
 
+    async def rodar():
+        """Roda o ``Music.play`` sem capturar nada: o teste vê o ``Parou`` (leitura ok) ou o erro que a leitura levantou."""
+        await Music.play.callback(cog, inter, CONSULTA, **PADROES_DO_PLAY)
+
     async def executar():
         with pytest.raises(Parou) as parada:
-            await Music.play.callback(cog, inter, CONSULTA, **PADROES_DO_PLAY)
+            await rodar()
         return parada.value.faixas
 
+    executar.rodar = rodar
+    executar.inter = inter
     return executar
 
 
@@ -270,7 +276,7 @@ class TestFormatoGravadoHoje:
 
 
 class TestLegadoEmVariosProtocolos:
-    """O leitor de hoje aceita a fila em qualquer protocolo (e até sem ``zlib``). O leitor restrito aceita só 4 e 5."""
+    """Depois da 2b (``load_legacy``): fila nos protocolos 4 e 5 com ``zlib``; o resto vira ``GenericError`` e o arquivo FICA."""
 
     @staticmethod
     def escrever(tmp_path, dados: bytes):
@@ -286,14 +292,24 @@ class TestLegadoEmVariosProtocolos:
         return {"tracks": infos(faixas), "created_at": INSTANTE, "guild_id": SERVIDOR}
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
-    async def test_le_a_fila_nos_protocolos_3_4_e_5(self, tmp_path, monkeypatch, protocolo):
+    @pytest.mark.parametrize("protocolo", [4, 5])
+    async def test_le_a_fila_nos_protocolos_4_e_5(self, tmp_path, monkeypatch, protocolo):
         self.escrever(tmp_path, zlib.compress(pickle.dumps(self.conteudo(), protocol=protocolo)))
         lidas = await ler(monkeypatch)
         assert [f.info["title"] for f in lidas] == ["Música 1", "Faixa Deezer 2", "Faixa parcial 3"]
 
     @pytest.mark.asyncio
-    async def test_o_leitor_de_hoje_aceita_pickle_sem_zlib(self, tmp_path, monkeypatch):
-        """A rota "sem zlib" sai no JSON novo: o codec novo exige o envelope."""
+    @pytest.mark.parametrize("protocolo", [0, 1, 2, 3])
+    async def test_fila_de_protocolo_antigo_vira_erro_claro_e_o_arquivo_fica(self, tmp_path, monkeypatch, protocolo):
+        self.escrever(tmp_path, zlib.compress(pickle.dumps(self.conteudo(), protocol=protocolo)))
+        executar = montar_leitura(monkeypatch, None)
+        with pytest.raises(GenericError, match="incompatível"):
+            await executar.rodar()
+        assert caminho_da_fila(tmp_path).is_file()
+
+    @pytest.mark.asyncio
+    async def test_pickle_sem_zlib_vira_erro_claro(self, tmp_path, monkeypatch):
+        """Sem o antigo "se não for zlib, lê assim mesmo": o envelope é obrigatório."""
         self.escrever(tmp_path, pickle.dumps(self.conteudo(), protocol=4))
-        assert len(await ler(monkeypatch)) == 3
+        with pytest.raises(GenericError, match="incompatível"):
+            await montar_leitura(monkeypatch, None).rodar()

@@ -8,8 +8,8 @@ Dois grupos:
 * o que continua valendo depois da migração para JSON (``TestRoundTripDoDisco``, ``TestRoundTripDoMongo``,
   ``TestTiposDaSessao``): os mesmos dados e os mesmos tipos (``datetime`` UTC, ``set``, lista de log) voltam iguais;
 * o que descreve o formato antigo e muda DE PROPÓSITO nas etapas seguintes (``TestFormatoGravadoHoje``,
-  ``TestLegadoEmVariosProtocolos``, ``TestCamposQueAMigracaoDescarta``): envelope, protocolo, opcodes e o fato de o
-  leitor de hoje aceitar qualquer protocolo e dispensar o ``zlib``. Cada um diz na docstring quando deixa de valer.
+  ``TestCamposQueAMigracaoDescarta``): envelope, protocolo e opcodes. ``TestLegadoEmVariosProtocolos`` vale DEPOIS da
+  etapa 2b: só os protocolos 4 e 5, com ``zlib``, são lidos (por ``load_legacy``). Cada um diz na docstring quando deixa de valer.
 """
 
 import base64
@@ -374,7 +374,7 @@ class TestFormatoGravadoHoje:
 
 
 class TestLegadoEmVariosProtocolos:
-    """O leitor de hoje aceita sessões em qualquer protocolo (e até sem ``zlib``). O leitor restrito aceita só 4 e 5."""
+    """Depois da 2b (``load_legacy``): sessões nos protocolos 4 e 5 com ``zlib``; o resto é PULADO (e fica no disco/Mongo)."""
 
     @pytest_asyncio.fixture
     async def sessao_original(self, tmp_path):
@@ -387,8 +387,8 @@ class TestLegadoEmVariosProtocolos:
         (pasta / nome).write_bytes(dados)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
-    async def test_o_disco_le_a_sessao_nos_protocolos_3_4_e_5(self, tmp_path, sessao_original, protocolo):
+    @pytest.mark.parametrize("protocolo", [4, 5])
+    async def test_o_disco_le_a_sessao_nos_protocolos_4_e_5(self, tmp_path, sessao_original, protocolo):
         self.escrever_no_disco(tmp_path, zlib.compress(pickle.dumps(sessao_original, protocol=protocolo)))
         lidas = await cog_de_sessoes().get_player_sessions_local()
         assert lidas == [sessao_original]
@@ -397,8 +397,8 @@ class TestLegadoEmVariosProtocolos:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
-    async def test_o_mongo_le_a_sessao_nos_protocolos_3_4_e_5(self, tmp_path, sessao_original, protocolo):
+    @pytest.mark.parametrize("protocolo", [4, 5])
+    async def test_o_mongo_le_a_sessao_nos_protocolos_4_e_5(self, tmp_path, sessao_original, protocolo):
         mongo = MongoEmMemoria()
         cru = zlib.compress(pickle.dumps(sessao_original, protocol=protocolo))
         await mongo.update_data(
@@ -407,17 +407,39 @@ class TestLegadoEmVariosProtocolos:
         assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == [sessao_original]
 
     @pytest.mark.asyncio
-    async def test_o_leitor_de_hoje_aceita_pickle_sem_zlib(self, tmp_path, sessao_original):
-        """A rota "sem zlib" sai no JSON novo: o codec novo exige o envelope."""
-        self.escrever_no_disco(tmp_path, pickle.dumps(sessao_original, protocol=4))
-        assert await cog_de_sessoes().get_player_sessions_local() == [sessao_original]
+    @pytest.mark.parametrize("protocolo", [0, 1, 2, 3])
+    async def test_o_disco_pula_a_sessao_de_protocolo_antigo_e_deixa_o_arquivo(
+        self, tmp_path, sessao_original, protocolo
+    ):
+        self.escrever_no_disco(tmp_path, zlib.compress(pickle.dumps(sessao_original, protocol=protocolo)))
+        assert await cog_de_sessoes().get_player_sessions_local() == []
+        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").is_file()
 
     @pytest.mark.asyncio
-    async def test_o_leitor_de_hoje_aceita_mongo_sem_zlib(self, tmp_path, sessao_original):
+    @pytest.mark.parametrize("protocolo", [0, 1, 2, 3])
+    async def test_o_mongo_pula_a_sessao_de_protocolo_antigo_e_deixa_o_documento(
+        self, tmp_path, sessao_original, protocolo
+    ):
+        mongo = MongoEmMemoria()
+        cru = zlib.compress(pickle.dumps(sessao_original, protocol=protocolo))
+        await mongo.update_data(
+            SERVIDOR, {"data": base64.b64encode(cru).decode()}, db_name=BOT_ID, collection="player_sessions"
+        )
+        assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == []
+        assert str(SERVIDOR) in mongo.colecao(BOT_ID, "player_sessions") and mongo.apagados == []
+
+    @pytest.mark.asyncio
+    async def test_o_disco_pula_pickle_sem_zlib(self, tmp_path, sessao_original):
+        """Sem o antigo "se não for zlib, lê assim mesmo": o envelope é obrigatório."""
+        self.escrever_no_disco(tmp_path, pickle.dumps(sessao_original, protocol=4))
+        assert await cog_de_sessoes().get_player_sessions_local() == []
+
+    @pytest.mark.asyncio
+    async def test_o_mongo_pula_texto_sem_zlib(self, tmp_path, sessao_original):
         mongo = MongoEmMemoria()
         cru = base64.b64encode(pickle.dumps(sessao_original, protocol=4)).decode()
         await mongo.update_data(SERVIDOR, {"data": cru}, db_name=BOT_ID, collection="player_sessions")
-        assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == [sessao_original]
+        assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == []
 
     @pytest.mark.asyncio
     async def test_so_arquivos_pkl_sao_lidos_e_o_bak_fica_de_fora(self, tmp_path, sessao_original):

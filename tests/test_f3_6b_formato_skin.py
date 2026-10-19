@@ -7,7 +7,7 @@ Os leitores (``SkinEditorMenu.load_skin``, o laço depois de salvar no ``SkinEdi
 dicionário pronto; o gravador é o ``modal_handler`` do botão de salvar.
 
 * o que continua valendo depois da migração: os leitores entregam ao player o MESMO dicionário, venha o dado como
-  texto legado (protocolos 3, 4 e 5) ou como dicionário (``TestLeitores``, ``TestEditorSalvaESegue``);
+  texto legado (protocolos 4 e 5; os mais antigos viram recusa, em ``tests/test_f3_6b_etapa2b_pontos.py``) ou como dicionário (``TestLeitores``, ``TestEditorSalvaESegue``);
 * o que muda de propósito na etapa 3 (``TestFormatoGravadoHoje``): a skin gravada é texto (``base64`` de ``pickle``).
 """
 
@@ -213,7 +213,7 @@ class TestEditorSalvaESegue:
     @pytest.mark.asyncio
     async def test_o_player_ativo_recebe_as_skins_como_dicionarios_inclusive_as_legadas(self, editor_sem_tela):
         legada = skin_realista(content="legada")
-        dados = dados_globais(normais={"Velha": texto_legado(legada, 3)})
+        dados = dados_globais(normais={"Velha": texto_legado(legada, 4)})
         jogador = Jogador()
         menu, _, _ = editor_sem_tela(dados, [jogador])
         menu.message_data = skin_realista(content="nova")
@@ -227,7 +227,7 @@ class TestEditorSalvaESegue:
 
 class TestEditorConverteTambemAsSkinsDoSongRequest:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
+    @pytest.mark.parametrize("protocolo", [4, 5])
     async def test_o_player_ativo_recebe_as_skins_legadas_do_song_request_como_dicionarios(
         self, editor_sem_tela, protocolo
     ):
@@ -247,9 +247,9 @@ class TestEditorConverteTambemAsSkinsDoSongRequest:
 
 class TestLeitores:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
+    @pytest.mark.parametrize("protocolo", [4, 5])
     @pytest.mark.parametrize(("prefixo", "campo"), [("> cs: ", "custom_skins"), ("> css: ", "custom_skins_static")])
-    async def test_load_skin_converte_o_texto_legado_nos_protocolos_3_4_e_5(
+    async def test_load_skin_converte_o_texto_legado_nos_protocolos_4_e_5(
         self, editor_sem_tela, protocolo, prefixo, campo
     ):
         skin = skin_realista()
@@ -268,7 +268,7 @@ class TestLeitores:
         assert menu.message_data == skin
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("vazia", [{}, None])
+    @pytest.mark.parametrize("vazia", [{}, None, ""], ids=["dict", "none", "texto-vazio"])
     async def test_load_skin_de_skin_vazia_usa_a_skin_padrao_do_editor(self, editor_sem_tela, vazia):
         menu, _, _ = editor_sem_tela(dados_globais(normais={"Vazia": vazia}))
         await menu.load_skin(SimpleNamespace(values=["> cs: Vazia"]))
@@ -281,7 +281,7 @@ class TestLeitores:
         assert menu.message_data == base_skin
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
+    @pytest.mark.parametrize("protocolo", [4, 5])
     async def test_create_player_entrega_as_skins_como_dicionarios(self, protocolo):
         normal, fixa = skin_realista(content="normal"), skin_realista(content="fixa")
         dados = {
@@ -297,7 +297,7 @@ class TestLeitores:
         assert recebidos["custom_skin_static_data"] == {"F": fixa}
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [3, 4, 5])
+    @pytest.mark.parametrize("protocolo", [4, 5])
     async def test_change_skin_entrega_as_skins_como_dicionarios_ao_player_ativo(self, monkeypatch, protocolo):
         normal, fixa = skin_realista(content="normal"), skin_realista(content="fixa")
         dados = {
@@ -411,8 +411,19 @@ async def chamar_create_player(global_data) -> dict:
 
 
 async def chamar_change_skin(monkeypatch, global_data, *, nova_skin, skin_atual="default") -> Jogador:
-    """Roda o ``MusicSettings.change_skin`` REAL com a escolha da tela já feita; devolve o player ativo."""
+    """Roda o ``MusicSettings.change_skin`` REAL com a escolha da tela já feita; devolve o player ativo.
+
+    Tudo que o comando diz ao dono (texto e embeds, enviados ou editados) fica em ``jogador.mensagens``.
+    """
     jogador = Jogador(skin=skin_atual)
+    jogador.mensagens = mensagens = []
+
+    async def registrar(conteudo=None, **kwargs):
+        mensagens.append(str(conteudo or ""))
+        embed = kwargs.get("embed")
+        if embed is not None:
+            mensagens.append(str(embed.description or ""))
+
     bot = BotDeSkins(global_data, [jogador])
     bot.player_skins = {"default": SimpleNamespace(preview="https://exemplo.invalid/p")}
     bot.player_static_skins = {"default": SimpleNamespace(preview="https://exemplo.invalid/p")}
@@ -436,8 +447,8 @@ async def chamar_change_skin(monkeypatch, global_data, *, nova_skin, skin_atual=
                 guild_id=SERVIDOR,
                 response=SimpleNamespace(defer=_aguardar, is_done=lambda: True),
                 author=SimpleNamespace(mention="<@900>"),
-                edit_original_message=_aguardar,
-                send=_aguardar,
+                edit_original_message=registrar,
+                send=registrar,
             )
             self.children = []
 
@@ -458,8 +469,8 @@ async def chamar_change_skin(monkeypatch, global_data, *, nova_skin, skin_atual=
         guild=SimpleNamespace(id=SERVIDOR),
         author=SimpleNamespace(mention="<@900>"),
         response=SimpleNamespace(defer=_aguardar, is_done=lambda: True),
-        edit_original_message=_aguardar,
-        send=_aguardar,
+        edit_original_message=registrar,
+        send=registrar,
     )
     await MusicSettings.change_skin.callback(cog, interaction)
     return jogador
