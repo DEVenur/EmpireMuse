@@ -1,7 +1,6 @@
 """F3-6 — painel: o 500 real mostra o código curto de erro e o mesmo código vai para o log; 4xx não têm código.
 
-Escrito pelo Backend por exceção do MAESTRO (o QA estava sem sessão); o QA revisa e faz a mutação depois.
-Desenho em .local/F3-erro-codigo-plano.md: o código nasce em ``PanelResponseMixin.log_exception`` (só para exceção que NÃO é
+Desenho: o código nasce em ``PanelResponseMixin.log_exception`` (só para exceção que NÃO é
 ``tornado.web.HTTPError``) e ``write_error`` o mostra na página genérica; a mensagem da exceção nunca aparece.
 """
 

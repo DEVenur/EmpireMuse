@@ -1,6 +1,4 @@
-"""F3-6 — S-14: o texto de uma exceção não chega ao usuário, ao dono nem à página web (inventário em .local/S-14-inventario.md).
-
-Escrito pelo Backend por exceção do MAESTRO (o QA estava sem sessão); o QA revisa e faz a mutação depois.
+"""F3-6 — S-14: o texto de uma exceção não chega ao usuário, ao dono nem à página web (S-14).
 
 Regra: onde o texto da exceção ia para a tela, entra uma mensagem genérica em pt-BR; o detalhe (com traceback) vai para o
 ``logger``; em erro inesperado a mensagem e o log levam o mesmo código curto (``ERR-…``). Decisões do MAESTRO:

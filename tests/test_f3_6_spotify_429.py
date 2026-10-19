@@ -1,7 +1,5 @@
 """F3-6 — Spotify 429: a pausa é temporária e se desfaz sozinha (antes um 429 desligava o Spotify do bot até reiniciar).
 
-Escrito pelo Backend por exceção do MAESTRO (o QA estava sem sessão); o QA revisa e faz a mutação depois.
-
 * um 429 pausa o cliente só pelo tempo do ``Retry-After`` da resposta (inteiro de segundos, limitado entre 1 s e 1 h) ou,
   sem ele ou com valor inválido, por 60 s;
 * passado o tempo, as requisições voltam a funcionar sozinhas;

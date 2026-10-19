@@ -1,6 +1,4 @@
-"""F3-6 — código curto de erro para cruzar o relato do usuário com o log (desenho em .local/F3-erro-codigo-plano.md).
-
-Escrito pelo Backend por exceção do MAESTRO (o QA estava sem sessão); o QA revisa e faz a mutação depois.
+"""F3-6 — código curto de erro para cruzar o relato do usuário com o log.
 
 * ``empiremuse.rules.error_code.new_error_code()`` devolve ``ERR-`` + 6 hexadecimais em maiúsculas, aleatório de
   ``secrets`` (não deriva de ID, token nem hora);

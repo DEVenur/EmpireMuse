@@ -53,6 +53,8 @@ Do menor para o maior peso — o último vence:
 Depois da mescla, números e booleanos são convertidos. Os booleanos são convertidos via `bools` em
 `empiremuse/config_loader.py` e aceitam `true`/`false`/`none` em qualquer caixa (`True`, `FALSE`, etc.);
 apenas valores fora de `true`/`false`/`none` geram erro na inicialização citando a chave configurada.
+As configurações numéricas `VOTE_SKIP_AMOUNT`, `HINT_RATE`, `DBCACHE_SIZE`, `PLAYLIST_CACHE_SIZE` e `MONGO_TIMEOUT`
+possuem piso mínimo de `1`: valores informados iguais a `0` ou negativos são automaticamente elevados para `1`.
 
 ### Variáveis essenciais
 
