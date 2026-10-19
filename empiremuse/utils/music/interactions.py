@@ -16,7 +16,7 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.rules.limits import FAV_NAME_MAX, FAV_NAME_MIN, ITG_TITLE_MAX
-from empiremuse.rules.quota import quota_limit
+from empiremuse.rules.quota import file_exceeds, has_room, import_has_room
 from empiremuse.rules.text import clean_import_name, drop_same_names
 from empiremuse.rules.urls import clean_avatar, is_clean_url
 from empiremuse.utils.db import DBModel
@@ -27,6 +27,7 @@ from empiremuse.utils.music.converters import time_format, fix_characters, URL_R
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.music.skin_utils import skin_converter
+from empiremuse.utils.music.user_limits import quota_for
 from empiremuse.utils.others import (
     check_cmd,
     CustomContext,
@@ -696,14 +697,6 @@ def _integration_entry(value, url: str, avatar: str):
     return {"url": url, "avatar": avatar} if avatar else {"url": url}
 
 
-async def _quota_limit(bot, user, config_key: str) -> int:
-    """Limite de cota do usuário: ``0`` = sem limite (configuração ``0`` ou dono do bot), regra de ``empiremuse.rules.quota``."""
-    maximum = int(bot.config[config_key])
-    if maximum <= 0:
-        return 0
-    return quota_limit(maximum, await bot.is_owner(user))
-
-
 class FavModalImport(disnake.ui.Modal):
     def __init__(self, view):
         self.view = view
@@ -827,22 +820,22 @@ class FavModalImport(disnake.ui.Modal):
 
             drop_same_names(work["fav_links"], json_data)
 
-            if self.view.bot.config["MAX_USER_FAVS"] > 0 and not (await self.view.bot.is_owner(inter.author)):
-                if (json_size := len(json_data)) > self.view.bot.config["MAX_USER_FAVS"]:
-                    await inter.edit_original_message(
-                        f"A quantidade de itens no seu arquivo de favorito excede "
-                        f"a quantidade máxima permitida ({self.view.bot.config['MAX_USER_FAVS']})."
-                    )
-                    return
+            limit = await quota_for(self.view.bot, inter.author, "MAX_USER_FAVS")
 
-                if (json_size + (user_favs := len(work["fav_links"]))) > self.view.bot.config["MAX_USER_FAVS"]:
-                    await inter.edit_original_message(
-                        "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
-                        f"Limite atual: {self.view.bot.config['MAX_USER_FAVS']}\n"
-                        f"Quantidade de favoritos salvos: {user_favs}\n"
-                        f"Você precisa de: {(json_size + user_favs) - self.view.bot.config['MAX_USER_FAVS']}"
-                    )
-                    return
+            if file_exceeds(json_size := len(json_data), limit):
+                await inter.edit_original_message(
+                    f"A quantidade de itens no seu arquivo de favorito excede a quantidade máxima permitida ({limit})."
+                )
+                return
+
+            if not import_has_room(user_favs := len(work["fav_links"]), json_size, limit):
+                await inter.edit_original_message(
+                    "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
+                    f"Limite atual: {limit}\n"
+                    f"Quantidade de favoritos salvos: {user_favs}\n"
+                    f"Você precisa de: {(json_size + user_favs) - limit}"
+                )
+                return
 
             self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
             self.view.data["fav_links"].update(json_data)
@@ -996,24 +989,23 @@ class FavModalImport(disnake.ui.Modal):
 
             drop_same_names(work["integration_links"], json_data)
 
-            if self.view.bot.config["MAX_USER_INTEGRATIONS"] > 0 and not (await self.view.bot.is_owner(inter.author)):
-                if (json_size := len(json_data)) > self.view.bot.config["MAX_USER_INTEGRATIONS"]:
-                    await inter.edit_original_message(
-                        f"A quantidade de itens no seu arquivo de integrações excede "
-                        f"a quantidade máxima permitida ({self.view.bot.config['MAX_USER_INTEGRATIONS']})."
-                    )
-                    return
+            limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
 
-                if (json_size + (user_integrations := len(work["integration_links"]))) > self.view.bot.config[
-                    "MAX_USER_INTEGRATIONS"
-                ]:
-                    await inter.edit_original_message(
-                        "Você não possui espaço suficiente para adicionar todos as integrações de seu arquivo...\n"
-                        f"Limite atual: {self.view.bot.config['MAX_USER_INTEGRATIONS']}\n"
-                        f"Quantidade de integrações salvas: {user_integrations}\n"
-                        f"Você precisa de: {(json_size + user_integrations) - self.view.bot.config['MAX_USER_INTEGRATIONS']}"
-                    )
-                    return
+            if file_exceeds(json_size := len(json_data), limit):
+                await inter.edit_original_message(
+                    "A quantidade de itens no seu arquivo de integrações excede "
+                    f"a quantidade máxima permitida ({limit})."
+                )
+                return
+
+            if not import_has_room(user_integrations := len(work["integration_links"]), json_size, limit):
+                await inter.edit_original_message(
+                    "Você não possui espaço suficiente para adicionar todos as integrações de seu arquivo...\n"
+                    f"Limite atual: {limit}\n"
+                    f"Quantidade de integrações salvas: {user_integrations}\n"
+                    f"Você precisa de: {(json_size + user_integrations) - limit}"
+                )
+                return
 
             self.view.data = work  # só depois de todas as checagens: uma recusa não altera a tela
 
@@ -1142,13 +1134,12 @@ class FavModalAdd(disnake.ui.Modal):
             if name != self.name:
                 work["fav_links"].pop(self.name, None)
 
-            if name not in work["fav_links"]:
-                limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_FAVS")
-                if limit and len(work["fav_links"]) >= limit:
-                    await inter.edit_original_message(
-                        "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
-                    )
-                    return
+            limit = await quota_for(self.view.bot, inter.author, "MAX_USER_FAVS")
+            if not has_room(work["fav_links"], name, limit):
+                await inter.edit_original_message(
+                    "**Não há espaço disponível para adicionar novos favorito (remova algum e tente novamente).**"
+                )
+                return
 
             self.view.data = work
             self.view.data["fav_links"][name] = valid_url
@@ -1241,13 +1232,6 @@ class FavModalAdd(disnake.ui.Modal):
                 pass
 
             self.view.data = await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users)
-
-            limit = await _quota_limit(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
-            if limit and len(self.view.data["integration_links"]) >= limit:
-                await inter.edit_original_message(
-                    "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
-                )
-                return
 
             url = inter.text_values["user_integration_url"].strip()
 
@@ -1390,6 +1374,13 @@ class FavModalAdd(disnake.ui.Modal):
                 data = {"title": f"{source} {info['title']}", "url": info["original_url"]}
 
             title = fix_characters(data["title"], 80)
+
+            limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
+            if not has_room(self.view.data["integration_links"], title, limit):
+                await inter.edit_original_message(
+                    "**Não há espaço disponível para adicionar novas integrações (remova alguma e tente novamente).**"
+                )
+                return
 
             self.view.data["integration_links"][title] = {"url": data["url"]}
 

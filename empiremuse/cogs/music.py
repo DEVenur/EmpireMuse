@@ -25,6 +25,7 @@ from yt_dlp import YoutubeDL
 
 import empiremuse.wavelink as wavelink
 from empiremuse import paths
+from empiremuse.rules.quota import has_room
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -68,6 +69,7 @@ from empiremuse.utils.music.errors import (
     DiffVoiceChannel,
     NoPlayer,
 )
+from empiremuse.utils.music.user_limits import quota_for
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
     QueueInteraction,
@@ -6224,24 +6226,16 @@ class Music(commands.Cog):
 
             user_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.users)
 
-            if self.bot.config["MAX_USER_FAVS"] > 0 and not (await self.bot.is_owner(interaction.author)):
-                if (current_favs_size := len(user_data["fav_links"])) > self.bot.config["MAX_USER_FAVS"]:
-                    await interaction.edit_original_message(
-                        f"A quantidade de itens no seu arquivo de favorito excede "
-                        f"a quantidade máxima permitida ({self.bot.config['MAX_USER_FAVS']})."
-                    )
-                    return
-
-                if (current_favs_size + (user_favs := len(user_data["fav_links"]))) > self.bot.config["MAX_USER_FAVS"]:
-                    await interaction.edit_original_message(
-                        "Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
-                        f"Limite atual: {self.bot.config['MAX_USER_FAVS']}\n"
-                        f"Quantidade de favoritos salvos: {user_favs}\n"
-                        f"Você precisa de: {(current_favs_size + user_favs) - self.bot.config['MAX_USER_FAVS']}"
-                    )
-                    return
-
             fav_name = embed.author.name[1:]
+
+            limit = await quota_for(self.bot, interaction.author, "MAX_USER_FAVS")
+
+            if not has_room(user_data["fav_links"], fav_name, limit):
+                await interaction.edit_original_message(
+                    "Você não possui espaço suficiente para adicionar este favorito (remova algum e tente novamente).\n"
+                    f"Limite atual: {limit}"
+                )
+                return
 
             user_data["fav_links"][fav_name] = embed.author.url
 
@@ -6582,21 +6576,23 @@ class Music(commands.Cog):
 
                 user_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.users)
 
-                if self.bot.config["MAX_USER_FAVS"] > 0 and not (await self.bot.is_owner(interaction.author)):
-                    if len(user_data["fav_links"]) >= self.bot.config["MAX_USER_FAVS"]:
-                        await interaction.edit_original_message(
-                            embed=disnake.Embed(
-                                color=self.bot.get_color(interaction.guild.me),
-                                description="Você não possui espaço suficiente para adicionar todos os favoritos de seu arquivo...\n"
-                                f"Limite atual: {self.bot.config['MAX_USER_FAVS']}",
-                            ),
-                            view=None,
-                        )
-                        return
+                fav_name = fix_characters(info["name"], self.bot.config["USER_FAV_MAX_URL_LENGTH"])
 
-                user_data["fav_links"][fix_characters(info["name"], self.bot.config["USER_FAV_MAX_URL_LENGTH"])] = info[
-                    "url"
-                ]
+                limit = await quota_for(self.bot, interaction.author, "MAX_USER_FAVS")
+
+                if not has_room(user_data["fav_links"], fav_name, limit):
+                    await interaction.edit_original_message(
+                        embed=disnake.Embed(
+                            color=self.bot.get_color(interaction.guild.me),
+                            description="Você não possui espaço suficiente para adicionar este favorito "
+                            "(remova algum e tente novamente).\n"
+                            f"Limite atual: {limit}",
+                        ),
+                        view=None,
+                    )
+                    return
+
+                user_data["fav_links"][fav_name] = info["url"]
 
                 await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 

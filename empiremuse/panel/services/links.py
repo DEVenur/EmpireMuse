@@ -30,6 +30,7 @@ from empiremuse.rules.limits import (
     GUILD_LINK_URL_MIN as URL_MIN,
     MAX_GUILD_LINKS as MAX_LINKS,
 )
+from empiremuse.rules.quota import has_room, import_has_room
 from empiremuse.rules.urls import URL_REG, extract_url_legacy
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,7 @@ class LinksForm(SettingsForm):
             return _error("nome", MSG_NAME, echo)
         if name in links:
             return _error("nome", MSG_NAME_TAKEN, echo)
-        if len(links) >= MAX_LINKS:
+        if not has_room(links, name, MAX_LINKS):
             return _error("nome", MSG_FULL, echo)
         url, errors = _valid_fields(echo["url"], echo["descricao"])
         if errors:
@@ -185,7 +186,7 @@ class LinksForm(SettingsForm):
         if message:
             return _error("dados", message, echo)
         kept = {key: value for key, value in links.items() if key not in items}
-        if len(kept) + len(items) > MAX_LINKS:
+        if not import_has_room(len(kept), len(items), MAX_LINKS):
             return _error("dados", MSG_IMPORT_SPACE, echo)
         return ParseResult({"fav_links": {**kept, **items}}, {}, echo)
 

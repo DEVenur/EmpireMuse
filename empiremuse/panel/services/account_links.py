@@ -21,6 +21,7 @@ from empiremuse.rules.limits import (
     ITG_TITLE_MAX as ITG_TITLE_MAX,
     ITG_URL_MAX as ITG_URL_MAX,
 )
+from empiremuse.rules.quota import has_room, import_has_room
 from empiremuse.rules.urls import extract_url_legacy, url_prefix_legacy
 
 EXPORT_PATH = "/painel/conta/favoritos/exportar"
@@ -127,7 +128,7 @@ class FavoritesSection(AccountSection):
         if url is None:
             errors["url"] = MSG_URL
         limit = await effective_limit(ctx, "MAX_USER_FAVS")
-        if not errors and limit and len(favs) >= limit:
+        if not errors and not has_room(favs, name, limit):
             errors["nome"] = MSG_FAV_FULL
         if errors:
             return Parsed({}, errors, echo)
@@ -162,7 +163,7 @@ class FavoritesSection(AccountSection):
             return Parsed({}, {"dados": MSG_FAV_ITEM}, echo)
         kept = {key: value for key, value in favs.items() if key not in items}  # sobrescrever não ocupa vaga
         limit = await effective_limit(ctx, "MAX_USER_FAVS")
-        if limit and len(kept) + len(items) > limit:
+        if not import_has_room(len(kept), len(items), limit):
             return Parsed({}, {"dados": MSG_FAV_SPACE}, echo)
         return Parsed({"fav_links": {**kept, **items}}, {}, echo)
 
@@ -237,7 +238,7 @@ class IntegrationsSection(AccountSection):
             return Parsed({}, {"dados": MSG_ITG_ITEM}, echo)
         kept = {key: value for key, value in links.items() if key not in items}
         limit = await effective_limit(ctx, "MAX_USER_INTEGRATIONS")
-        if limit and len(kept) + len(items) > limit:
+        if not import_has_room(len(kept), len(items), limit):
             return Parsed({}, {"dados": MSG_ITG_SPACE}, echo)
         return Parsed({"integration_links": {**kept, **items}}, {}, echo)
 
