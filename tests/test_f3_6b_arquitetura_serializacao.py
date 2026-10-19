@@ -120,11 +120,6 @@ def test_pickle_so_e_importado_em_legacy_pickle():
     assert violacoes_de_formatos(PACOTE, MODULOS_PICKLE, excecao=LEGADO) == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="nasce vermelho: passa quando a etapa 1 criar empiremuse/serialization/ só com stdlib e empiremuse.rules",
-)
 def test_serializacao_so_importa_a_biblioteca_padrao_e_as_regras():
     pasta = PACOTE / "serialization"
     assert pasta.is_dir(), "empiremuse/serialization/ precisa existir"
