@@ -222,6 +222,8 @@ class TestSaidaSemRemoteUtil:
             "origin\thttps://exemplo.invalid (fetch)\n",
             "origin\thttps://exemplo.invalid/ (fetch)\n",
             "origin\tgit@github.com: (fetch)\n",
+            "origin\tgit@github.com:/ (fetch)\n",
+            "origin\tgit@github.com:.git (fetch)\n",
             "origin\thttps://[::1/projeto (fetch)\n",
             "origin\tftp://exemplo.invalid/org/projeto.git (fetch)\n",
         ],
