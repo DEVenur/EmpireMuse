@@ -26,6 +26,7 @@ from empiremuse.rules.errors import (
     NAME_TAKEN,
     NAME_TOO_LONG,
     QUOTA_FULL,
+    STATUS_TOO_LONG,
     URL_TOO_LONG,
     RuleError,
 )
@@ -42,9 +43,12 @@ from empiremuse.rules.limits import (
     ITG_TITLE_MAX,
     ITG_URL_MAX,
     MAX_GUILD_LINKS,
+    VOICE_PLACEHOLDERS,
+    VOICE_STATUS_MAX_LENGTH,
 )
 from empiremuse.rules.quota import has_room
 from empiremuse.rules.text import clean_import_name
+from empiremuse.rules.settings import validate_voice_status
 from empiremuse.rules.urls import check_url, clean_url
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
@@ -2289,17 +2293,7 @@ class ViewModal(disnake.ui.Modal):
 
 
 class SetStageTitle(disnake.ui.View):
-    placeholders = (
-        "{track.title}",
-        "{track.timestamp}",
-        "{track.emoji}",
-        "{track.author}",
-        "{track.duration}",
-        "{track.source}",
-        "{track.playlist}",
-        "{requester.name}",
-        "{requester.id}",
-    )
+    placeholders = VOICE_PLACEHOLDERS
 
     placeholder_text = (
         "```ansi\n[34;1m{track.title}[0m -> Nome da música\n"
@@ -2357,7 +2351,7 @@ class SetStageTitle(disnake.ui.View):
                         label="status",
                         custom_id="status_voice_value",
                         placeholder="Pra desativar deixe vazio",
-                        max_length=496,
+                        max_length=VOICE_STATUS_MAX_LENGTH,
                         required=False,
                     ),
                 ],
@@ -2376,7 +2370,7 @@ class SetStageTitle(disnake.ui.View):
                         label="status permanente",
                         custom_id="status_voice_value",
                         placeholder="Pra desativar deixe vazio",
-                        max_length=496,
+                        max_length=VOICE_STATUS_MAX_LENGTH,
                         required=False,
                     ),
                 ],
@@ -2417,11 +2411,18 @@ class SetStageTitle(disnake.ui.View):
         except AttributeError:
             pass
 
-        values["status_voice_value"] = values["status_voice_value"].replace("\n", " ").strip()
+        status = validate_voice_status(values["status_voice_value"])
 
-        if values["status_voice_value"] and not any(p in values["status_voice_value"] for p in self.placeholders):
-            await inter.send("**Você deve usar pelo menos um placeholder válido...**", ephemeral=True)
+        if isinstance(status, RuleError):
+            if status.code == STATUS_TOO_LONG:
+                await inter.send(
+                    f"**O status pode ter no máximo {VOICE_STATUS_MAX_LENGTH} caracteres.**", ephemeral=True
+                )
+            else:
+                await inter.send("**Você deve usar pelo menos um placeholder válido...**", ephemeral=True)
             return
+
+        values["status_voice_value"] = status
 
         if inter.data.custom_id == "status_voice_channel_perm":
             if self.data["voice_channel_status"] == values["status_voice_value"]:

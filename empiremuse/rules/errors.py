@@ -23,6 +23,11 @@ NO_SPACE = "no_space"
 PREFIX_EMPTY = "prefix_empty"
 PREFIX_LENGTH = "prefix_length"
 PREFIX_CHARS = "prefix_chars"
+STATUS_TOO_LONG = "status_too_long"
+STATUS_NO_PLACEHOLDER = "status_no_placeholder"
+ROLE_LIMIT = "role_limit"
+ROLE_DUPLICATE = "role_duplicate"
+ROLE_INVALID = "role_invalid"
 
 
 class RuleError(NamedTuple):

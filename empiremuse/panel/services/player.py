@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, NamedTuple
 
-from empiremuse.panel.services.base import DIGITS, Args, FormContext, ParseResult, SettingsForm, flag, first
+from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, flag, first
+from empiremuse.rules.errors import ROLE_DUPLICATE, ROLE_LIMIT
 from empiremuse.rules.limits import MAX_DJ_ROLES as MAX_DJ_ROLES, VOLUMES as VOLUMES
+from empiremuse.rules.settings import check_dj_roles, order_dj_roles, parse_volume
 
-_VOLUME = re.compile(r"[0-9]{1,3}", re.ASCII)
 MSG_VOLUME = "Escolha um volume válido: de 5 a 100 (de 5 em 5) ou de 110 a 150 (de 10 em 10)."
 MSG_ROLE_INVALID = "Selecione apenas cargos que existem neste servidor."
 MSG_ROLE_DUPLICATE = "Há cargos repetidos na seleção."
@@ -46,8 +46,8 @@ class PlayerForm(SettingsForm):
         raw = first(args, "default_player_volume") or ""
         flags = {name: flag(args, name) for name in self._FLAGS}
         echo = {"default_player_volume": raw, **flags}
-        volume = int(raw) if _VOLUME.fullmatch(raw) else None
-        if volume not in VOLUMES:
+        volume = parse_volume(raw)
+        if volume is None:
             return ParseResult({}, {"default_player_volume": MSG_VOLUME}, echo)
         return ParseResult({"default_player_volume": volume, **flags}, {}, echo)
 
@@ -90,19 +90,11 @@ class DjForm(SettingsForm):
         error = self._validate(ctx, sent)
         if error:
             return ParseResult({}, {"djroles": error}, {"djroles": sent})
-        stored = current["djroles"]
-        chosen = set(sent)
-        # Ordem estável: o que já estava gravado mantém a posição; o novo entra no fim, na ordem enviada.
-        ordered = [role_id for role_id in stored if role_id in chosen]
-        ordered += [role_id for role_id in sent if role_id not in set(stored)]
+        ordered = order_dj_roles(current["djroles"], sent)  # o que já estava gravado mantém a posição
         return ParseResult({"djroles": ordered}, {}, {"djroles": sent})
 
     def _validate(self, ctx: FormContext, sent: list[str]) -> str:
-        if len(sent) > MAX_DJ_ROLES:
-            return MSG_ROLE_LIMIT
-        if len(set(sent)) != len(sent):
-            return MSG_ROLE_DUPLICATE
-        valid = {role.id for role in self._roles(ctx)}
-        if any(not DIGITS.fullmatch(role_id) or role_id not in valid for role_id in sent):
-            return MSG_ROLE_INVALID
-        return ""
+        error = check_dj_roles(sent, {role.id for role in self._roles(ctx)})
+        if error is None:
+            return ""
+        return {ROLE_LIMIT: MSG_ROLE_LIMIT, ROLE_DUPLICATE: MSG_ROLE_DUPLICATE}.get(error.code, MSG_ROLE_INVALID)

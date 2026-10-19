@@ -15,7 +15,9 @@ from typing import Any, Optional
 
 from empiremuse.panel.services.account_base import AccountContext, AccountSection, Parsed, Refusal
 from empiremuse.panel.services.base import Args, first, flag
+from empiremuse.rules.errors import PREFIX_LENGTH, RuleError
 from empiremuse.rules.limits import PREFIX_MAX_LENGTH as PREFIX_MAX
+from empiremuse.rules.settings import validate_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +40,15 @@ class PrefixSection(AccountSection):
         return dict(self.values(doc))
 
     async def parse(self, ctx: AccountContext, doc: dict, action: str, args: Args) -> Parsed:
-        raw = first(args, "custom_prefix") or ""
-        echo = {"custom_prefix": raw}
-        if len(raw) > PREFIX_MAX:
-            return Parsed({}, {"custom_prefix": MSG_PREFIX_LENGTH}, echo)
-        if any(char.isspace() or unicodedata.category(char) in ("Cc", "Cf") for char in raw):
-            return Parsed({}, {"custom_prefix": MSG_PREFIX_CHARS}, echo)
-        return Parsed({"custom_prefix": raw}, {}, echo)  # vazio = remover (como resetuserprefix)
+        sent = first(args, "custom_prefix") or ""
+        echo = {"custom_prefix": sent}
+        if not sent.strip():
+            return Parsed({"custom_prefix": ""}, {}, echo)  # vazio = remover (como resetuserprefix)
+        prefix = validate_prefix(sent)
+        if isinstance(prefix, RuleError):
+            message = MSG_PREFIX_LENGTH if prefix.code == PREFIX_LENGTH else MSG_PREFIX_CHARS
+            return Parsed({}, {"custom_prefix": message}, echo)
+        return Parsed({"custom_prefix": prefix}, {}, echo)
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
         doc["custom_prefix"] = new["custom_prefix"]

@@ -15,6 +15,8 @@ from empiremuse.rules.limits import (
     VOICE_PLACEHOLDERS as VOICE_PLACEHOLDERS,
     VOICE_STATUS_MAX_LENGTH as VOICE_STATUS_MAX_LENGTH,
 )
+from empiremuse.rules.errors import PREFIX_LENGTH, STATUS_TOO_LONG, RuleError
+from empiremuse.rules.settings import validate_prefix, validate_voice_status
 from empiremuse.rules.text import normalize_status as normalize_status
 
 logger = logging.getLogger(__name__)
@@ -39,13 +41,16 @@ class PrefixForm(SettingsForm):
         doc["prefix"] = new["prefix"]
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
-        raw = first(args, "prefix") or ""
-        echo = {"prefix": raw}
-        if len(raw) > PREFIX_MAX_LENGTH:
-            return ParseResult({}, {"prefix": MSG_PREFIX_LENGTH}, echo)
-        if any(char.isspace() or unicodedata.category(char) in ("Cc", "Cf") for char in raw):
-            return ParseResult({}, {"prefix": MSG_PREFIX_CHARS}, echo)
-        return ParseResult({"prefix": raw}, {}, echo)  # vazio = voltar ao prefixo padrão (como resetprefix)
+        sent = first(args, "prefix") or ""
+        echo = {"prefix": sent}
+        if not sent.strip():
+            return ParseResult({"prefix": ""}, {}, echo)  # vazio = voltar ao prefixo padrão (como resetprefix)
+        prefix = validate_prefix(sent)
+        if isinstance(prefix, RuleError):
+            return ParseResult(
+                {}, {"prefix": MSG_PREFIX_LENGTH if prefix.code == PREFIX_LENGTH else MSG_PREFIX_CHARS}, echo
+            )
+        return ParseResult({"prefix": prefix}, {}, echo)
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
         ctx.pool.guild_prefix_cache[ctx.guild_id] = new["prefix"]
@@ -69,12 +74,11 @@ class VoiceStatusForm(SettingsForm):
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
         raw = first(args, "voice_channel_status") or ""
-        text = normalize_status(raw)
         echo = {"voice_channel_status": raw}
-        if len(text) > VOICE_STATUS_MAX_LENGTH:
-            return ParseResult({}, {"voice_channel_status": MSG_VOICE_LENGTH}, echo)
-        if text and not any(placeholder in text for placeholder in VOICE_PLACEHOLDERS):
-            return ParseResult({}, {"voice_channel_status": MSG_VOICE_PLACEHOLDER}, echo)
+        text = validate_voice_status(raw)
+        if isinstance(text, RuleError):
+            message = MSG_VOICE_LENGTH if text.code == STATUS_TOO_LONG else MSG_VOICE_PLACEHOLDER
+            return ParseResult({}, {"voice_channel_status": message}, echo)
         return ParseResult({"voice_channel_status": text}, {}, echo)
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
