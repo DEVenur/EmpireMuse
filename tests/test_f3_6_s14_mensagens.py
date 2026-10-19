@@ -920,38 +920,89 @@ class TestTokenAtravessandoOLimiteDoLog:
 
 
 class TestCanalDeVozNoRelatorio:
-    def test_o_nome_do_canal_do_bot_vai_com_escape(self):
+    """``build_report_embed``: o campo "Canal de voz (bot)" descreve o canal do BOT, em bloco de código fechado e com escape."""
+
+    NOME_DO_BOT = "*negrito* __x__ [link](https://evil.example)"
+
+    @staticmethod
+    def canal(id_, nome, limite=0, membros=0):
+        return SimpleNamespace(id=id_, name=nome, user_limit=limite, voice_states={n: n for n in range(membros)})
+
+    def embed(self, canal_do_usuario, canal_do_bot, *, usuario_em_voz=True):
         from empiremuse.cogs.error_handler import ErrorHandler
 
-        nome = "*negrito* __x__ [link](https://evil.example)"
-
-        def canal(id_, nome_):
-            return SimpleNamespace(id=id_, name=nome_, user_limit=0, voice_states={})
-
-        canal_do_usuario, canal_do_bot = canal(1, nome), canal(2, "outro")
         handler = ErrorHandler.__new__(ErrorHandler)
         handler.bot = SimpleNamespace(get_color=lambda *a: 0, intents=SimpleNamespace(message_content=False))
         guild = SimpleNamespace(
             id=9, name="Servidor", me=SimpleNamespace(voice=SimpleNamespace(channel=canal_do_bot)), icon=None
         )
+        autor = SimpleNamespace(
+            id=5,
+            bot=False,
+            voice=SimpleNamespace(channel=canal_do_usuario) if usuario_em_voz else None,
+            display_avatar=SimpleNamespace(
+                with_static_format=lambda formato: SimpleNamespace(url="https://exemplo.invalid/a.png")
+            ),
+        )
         ctx = SimpleNamespace(
             bot=handler.bot,
             guild=guild,
             channel=SimpleNamespace(id=3, name="texto"),
-            author=SimpleNamespace(
-                id=5,
-                bot=False,
-                voice=SimpleNamespace(channel=canal_do_usuario),
-                display_avatar=SimpleNamespace(
-                    with_static_format=lambda formato: SimpleNamespace(url="https://exemplo.invalid/a.png")
-                ),
-            ),
+            author=autor,
             data=SimpleNamespace(name="play"),
             filled_options={},
         )
+        return handler.build_report_embed(ctx)
 
-        embed = handler.build_report_embed(ctx)
+    @staticmethod
+    def campo(embed, nome):
+        return [c.value for c in embed.fields if c.name == nome]
 
-        [campo] = [c for c in embed.fields if c.name == "Canal de voz (bot):"]
-        assert disnake.utils.escape_markdown(nome) in campo.value
-        assert "\\[link]" in campo.value, "o colchete do link markdown precisa sair escapado"
+    def test_o_campo_do_bot_descreve_o_canal_do_bot_e_nao_o_do_usuario(self):
+        usuario = self.canal(1, "canal-do-usuario", limite=3, membros=1)
+        bot = self.canal(2, "canal-do-bot", limite=5, membros=2)
+
+        [valor] = self.campo(self.embed(usuario, bot), "Canal de voz (bot):")
+
+        assert valor == "```\ncanal-do-bot (2/5)\nID: 2```"
+        assert "canal-do-usuario" not in valor and "ID: 1" not in valor
+
+    def test_o_nome_do_canal_do_bot_vai_com_escape(self):
+        bot = self.canal(2, self.NOME_DO_BOT)
+
+        [valor] = self.campo(self.embed(self.canal(1, "outro"), bot), "Canal de voz (bot):")
+
+        assert disnake.utils.escape_markdown(self.NOME_DO_BOT) in valor
+        assert "\\[link]" in valor, "o colchete do link markdown precisa sair escapado"
+
+    def test_o_bloco_de_codigo_do_campo_do_bot_abre_e_fecha(self):
+        [valor] = self.campo(self.embed(self.canal(1, "a"), self.canal(2, "b")), "Canal de voz (bot):")
+
+        assert valor.startswith("```\n") and valor.endswith("```") and valor.count("```") == 2
+
+    def test_sem_limite_de_usuarios_nao_mostra_contagem(self):
+        [valor] = self.campo(
+            self.embed(self.canal(1, "a"), self.canal(2, "b", limite=0, membros=4)), "Canal de voz (bot):"
+        )
+
+        assert valor == "```\nb\nID: 2```"
+
+    def test_guarda_o_campo_do_usuario_continua_igual(self):
+        usuario = self.canal(1, "canal-do-usuario", limite=3, membros=1)
+
+        [valor] = self.campo(self.embed(usuario, self.canal(2, "canal-do-bot")), "Canal de voz (user):")
+
+        assert valor == "```\ncanal-do-usuario (1/3)\nID: 1```"
+
+    def test_guarda_no_mesmo_canal_nao_ha_campo_do_bot(self):
+        mesmo = self.canal(1, "mesmo")
+
+        embed = self.embed(mesmo, mesmo)
+
+        assert self.campo(embed, "Canal de voz (bot):") == []
+        assert len(self.campo(embed, "Canal de voz (user):")) == 1
+
+    def test_guarda_usuario_fora_de_voz_nao_gera_os_campos_de_voz(self):
+        embed = self.embed(None, self.canal(2, "b"), usuario_em_voz=False)
+
+        assert self.campo(embed, "Canal de voz (bot):") == [] and self.campo(embed, "Canal de voz (user):") == []
