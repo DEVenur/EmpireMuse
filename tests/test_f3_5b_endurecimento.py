@@ -270,14 +270,33 @@ class TestA3CooldownAntesDaConsultaExterna:
         bot = BotEspiao(retry_after=7.2)
         inter = await adicionar_integracao(bot, url=url)
         assert bot.consultas == [] and bot.salvos_usuario == []
-        assert "aguardar" in inter.texto
+        assert "Aguarde" in inter.texto
 
     @pytest.mark.asyncio
-    async def test_a_mensagem_de_espera_e_a_mesma_do_importador(self):
+    async def test_a_mensagem_de_espera_do_modal_e_neutra_e_diz_o_tempo(self):
+        """Ao ADICIONAR uma integração a espera não fala em importar (o balde é o mesmo, a mensagem não)."""
         bot = BotEspiao(retry_after=7.2)
         inter = await adicionar_integracao(bot, url=PERFIL_DEEZER)
-        esperado = (await importar(ModalBot(retry_after=7.2), INTEGRACOES, {"Canal": URL})).texto
-        assert esperado and inter.texto == esperado
+        assert inter.texto == "**Aguarde 7 segundos antes de tentar novamente.**"
+        assert "importar" not in inter.texto and "exportar" not in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_guarda_a_mensagem_do_importador_continua_falando_em_importar(self):
+        inter = await importar(ModalBot(retry_after=7.2), INTEGRACOES, {"Canal": URL})
+        assert inter.texto == "**Você deve aguardar 7 segundos para importar.**"
+
+    @pytest.mark.asyncio
+    async def test_guarda_a_mensagem_do_exportador_continua_falando_em_exportar(self):
+        from types import SimpleNamespace as Espelho
+
+        from empiremuse.utils.music.interactions import FavMenuView
+        from tests.helpers_modais import ModalInteraction
+
+        bot = ModalBot(retry_after=7.2)
+        inter = ModalInteraction()
+        espelho = Espelho(bot=bot, mode=FAVORITOS, data=bot.user_data, guild_data=bot.guild_data)
+        await FavMenuView.export_callback(espelho, inter)
+        assert "para exportar" in inter.texto and "aguardar" in inter.texto
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("url", "fonte"), FONTES)
@@ -293,7 +312,7 @@ class TestA3CooldownAntesDaConsultaExterna:
         bot = BotEspiao(retry_after=7.2)
         inter = await adicionar_integracao(bot, url=url)
         assert bot.baldes == 0 and bot.consultas == [] and bot.salvos_usuario == []
-        assert "aguardar" not in inter.texto
+        assert "Aguarde" not in inter.texto
 
 
 class TestA3ListaCheiaRecusaAntesDaConsulta:
@@ -341,7 +360,7 @@ class TestA3ListaCheiaRecusaAntesDaConsulta:
     async def test_o_cooldown_vem_antes_da_recusa_por_lista_cheia(self):
         bot = BotEspiao(integracoes=1, integration_links=self.CHEIA, retry_after=3)
         inter = await adicionar_integracao(bot, url=PERFIL_DEEZER)
-        assert bot.consultas == [] and "aguardar" in inter.texto
+        assert bot.consultas == [] and "Aguarde" in inter.texto
 
 
 class TestI3DadosExternosPassamPelaValidacao:
