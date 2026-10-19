@@ -170,10 +170,14 @@ class TestSessaoReal:
 
 class TestFilaReal:
     @pytest.mark.asyncio
-    async def test_a_fila_gravada_pelo_save_queue_e_lida_igual_ao_pickle_loads(self, tmp_path):
+    async def test_a_fila_no_formato_que_o_save_queue_gravava_e_lida_igual_ao_pickle_loads(self, tmp_path):
+        """Desde a etapa 4 o ``save_queue`` grava JSON; o ``.pkl`` que ele gravava antes é montado aqui com o mesmo conteúdo."""
+        from tests.helpers_f3_6b import INSTANTE, SERVIDOR
+        from tests.test_f3_6b_formato_fila_salva import infos
+
         faixas = tres_faixas()
-        await salvar(faixas[1:], atual=faixas[0])
-        raw = caminho_da_fila(tmp_path).read_bytes()
+        conteudo = {"tracks": infos(faixas), "created_at": INSTANTE, "guild_id": SERVIDOR}
+        raw = comprimido(pickle.dumps(conteudo))
         lido, _ = igual_ao_pickle_de_hoje(raw, "queue")
         assert set(lido) == {"tracks", "created_at", "guild_id"} and len(lido["tracks"]) == 3
         assert isinstance(lido["created_at"], datetime) and lido["created_at"].utcoffset() == timedelta(0)
