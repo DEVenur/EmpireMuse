@@ -806,8 +806,15 @@ _NO_ROOM_INTEGRATION_TEXT = (
 )
 
 
+def _retry_text(retry_after: float) -> str:
+    """Mensagem neutra do cooldown ao adicionar uma integração (o balde é o do importador, mas não é uma importação)."""
+    return "**Aguarde {} antes de tentar novamente.**".format(
+        time_format(int(max(retry_after, 1)) * 1000, use_names=True)
+    )
+
+
 def _wait_text(retry_after: float) -> str:
-    """Mensagem do cooldown por membro do importador e do modal de integração."""
+    """Mensagem do cooldown por membro do importador (a do exportador e a do modal de integração são outras)."""
     return "**Você deve aguardar {} para importar.**".format(
         time_format(int(max(retry_after, 1)) * 1000, use_names=True)
     )
@@ -1318,7 +1325,7 @@ class FavModalAdd(disnake.ui.Modal):
 
         # antes de qualquer consulta externa: o cooldown por membro e a lista cheia com um perfil que ainda não está salvo
         if retry_after := self.view.bot.get_cog("Music").fav_import_export_cd.get_bucket(inter).update_rate_limit():
-            await inter.edit_original_message(_wait_text(retry_after))
+            await inter.edit_original_message(_retry_text(retry_after))
             return False
 
         limit = await quota_for(self.view.bot, inter.author, "MAX_USER_INTEGRATIONS")
