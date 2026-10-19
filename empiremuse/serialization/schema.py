@@ -182,14 +182,27 @@ def _has_control(text: str, multiline: bool) -> bool:
 
 
 class Str(_Schema):
-    """Texto: sem surrogate solto nem ``Cc``/``Cf`` (``multiline`` libera só ``\\n``, ``\\r`` e ``\\t``)."""
+    """Texto: sem surrogate solto nem ``Cc``/``Cf`` (``multiline`` libera só ``\\n``, ``\\r`` e ``\\t``).
 
-    __slots__ = ("max_len", "min_len", "multiline", "_pattern")
+    ``allow_controls`` aceita ``Cc``/``Cf`` (metadado vindo de fora, como título de faixa com emoji de ZWJ ou marcas
+    bidirecionais); o surrogate solto continua recusado e o escape na exibição fica com quem exibe.
+    """
 
-    def __init__(self, max_len: int, *, min_len: int = 0, pattern: str | None = None, multiline: bool = False):
+    __slots__ = ("max_len", "min_len", "multiline", "allow_controls", "_pattern")
+
+    def __init__(
+        self,
+        max_len: int,
+        *,
+        min_len: int = 0,
+        pattern: str | None = None,
+        multiline: bool = False,
+        allow_controls: bool = False,
+    ):
         self.max_len = max_len
         self.min_len = min_len
         self.multiline = multiline
+        self.allow_controls = allow_controls
         self._pattern = re.compile(pattern) if pattern is not None else None
 
     def check(self, value: Any, path: str) -> str:
@@ -199,7 +212,7 @@ class Str(_Schema):
             raise SchemaError(path, LENGTH)
         if _SURROGATE.search(value):
             raise SchemaError(path, SURROGATE)
-        if _has_control(value, self.multiline):
+        if not self.allow_controls and _has_control(value, self.multiline):
             raise SchemaError(path, CONTROL)
         if self._pattern is not None and not self._pattern.fullmatch(value):
             raise SchemaError(path, PATTERN)
@@ -280,8 +293,11 @@ class List(_Schema):
         return [self.item.check(item, f"{path}[{index}]") for index, item in enumerate(value)]
 
 
+OMIT = object()  # ``Optional(..., default=OMIT)``: campo ausente continua ausente no resultado
+
+
 class Optional(_Schema):
-    """Campo que pode faltar (vira ``default``) ou ser ``None``."""
+    """Campo que pode faltar (vira ``default``, ou some do resultado com ``OMIT``) ou ser ``None``."""
 
     __slots__ = ("inner", "default")
 
@@ -293,7 +309,25 @@ class Optional(_Schema):
         return None if value is None else self.inner.check(value, path)
 
     def default_value(self) -> Any:
-        return copy.deepcopy(self.default)
+        return self.default if self.default is OMIT else copy.deepcopy(self.default)
+
+
+class OneOf(_Schema):
+    """Aceita o valor se algum dos esquemas aceitar; o erro é o do último."""
+
+    __slots__ = ("options",)
+
+    def __init__(self, *options: _Schema):
+        self.options = options
+
+    def check(self, value: Any, path: str) -> Any:
+        error: SchemaError | None = None
+        for option in self.options:
+            try:
+                return option.check(value, path)
+            except SchemaError as caught:
+                error = caught
+        raise SchemaError(path, error.code if error else TYPE)
 
 
 class Any_JSON(_Schema):  # noqa: N801 - nome fixado pelo plano da F3-6b
@@ -334,6 +368,7 @@ class Dict(_Schema):
         if unknown and self.extra == "error":
             raise SchemaError(path, UNKNOWN_FIELD)
         result = {name: self._field(name, field, value, path) for name, field in self.fields.items()}
+        result = {name: item for name, item in result.items() if item is not OMIT}
         if unknown and self.extra == "keep":
             result.update(self._keep(unknown, value, path))
         elif unknown:

@@ -53,6 +53,7 @@ from empiremuse.utils.music.models import (
     CustomYTDL,
 )
 from empiremuse.utils.music.remote_lavalink_serverlist import get_lavalink_servers
+from empiremuse.utils.music.saved_queue import migrate_saved_queues
 from empiremuse.utils.others import CustomContext, token_regex, sort_dict_recursively
 from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
@@ -660,6 +661,7 @@ class BotPool:
             print(traceback.format_exc())
 
     def setup(self):
+        migrate_saved_queues()
         self.load_skins()
 
         if self.config["ENABLE_LOGGER"]:

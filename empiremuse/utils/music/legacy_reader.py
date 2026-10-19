@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Optional, Union
 
 from empiremuse.serialization.legacy_pickle import LegacyFormatError, load_legacy
-from empiremuse.utils.music.errors import GenericError
 
 logger = logging.getLogger(__name__)
 
@@ -27,19 +26,6 @@ async def read_legacy_session(raw: Union[bytes, str], guild_id: Union[int, str])
     except LegacyFormatError as error:
         logger.warning("Sessão do player ignorada (formato incompatível): servidor %s, motivo %s", guild_id, error.code)
         return None
-
-
-async def read_legacy_queue(raw: bytes, guild_id: Union[int, str]) -> dict:
-    """A fila salva do usuário; recusada vira ``GenericError`` (o arquivo é mantido)."""
-    loop = asyncio.get_running_loop()
-    try:
-        return await loop.run_in_executor(None, lambda: load_legacy(raw, "queue"))
-    except LegacyFormatError as error:
-        logger.warning("Fila salva ignorada (formato incompatível): servidor %s, motivo %s", guild_id, error.code)
-        raise GenericError(
-            "**A sua fila salva está em um formato incompatível e não pôde ser carregada.**\n"
-            "O arquivo foi mantido; salve a fila de novo para substituí-la."
-        ) from None
 
 
 def convert_custom_skins(skins: dict, guild_id: Union[int, str]) -> tuple[dict, int]:
