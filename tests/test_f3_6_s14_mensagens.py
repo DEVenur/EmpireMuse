@@ -1257,3 +1257,19 @@ class TestGuardaAstEmModels:
         assert "log_unexpected_error" in chamadas["invoke_np"]
         assert "code_suffix" in chamadas["invoke_np"] and "code_suffix" in chamadas["get_autoqueue_tracks"]
         assert {"log_unexpected_error", "log_lavalink_failure", "lavalink_text"} <= chamadas["get_autoqueue_tracks"]
+
+    def test_a_mensagem_do_autoplay_com_falha_do_lavalink_leva_o_codigo(self, funcoes):
+        import ast
+
+        textos = [
+            no
+            for no in ast.walk(funcoes["get_autoqueue_tracks"])
+            if isinstance(no, ast.JoinedStr)
+            and any(
+                isinstance(v, ast.FormattedValue) and ast.unparse(v.value) == "exception.severity" for v in no.values
+            )
+        ]
+        assert textos, "a mensagem de falha do Lavalink no autoplay mudou de forma: ajuste esta guarda"
+        for texto in textos:
+            usados = {ast.unparse(v.value) for v in texto.values if isinstance(v, ast.FormattedValue)}
+            assert "code_suffix(error_code)" in usados
