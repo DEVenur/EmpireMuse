@@ -8,7 +8,7 @@
 /requirements*.txt @Or4cu1o
 /.github/ @Or4cu1o
 /LICENSE @Or4cu1o
-/SECURITY.md @Or4cu1o
+/.github/SECURITY.md @Or4cu1o
 /empiremuse/config_loader.py @Or4cu1o
 /empiremuse/web_app.py @Or4cu1o
 /empiremuse/cogs/legacy_cmds.py @Or4cu1o

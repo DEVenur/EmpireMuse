@@ -12,7 +12,7 @@ paths:
 > Complementa [ecc/common/security.md](../ecc/common/security.md) e
 > [ecc/python/security.md](../ecc/python/security.md). As regras gerais de lá (segredos fora do
 > código, validação de entrada, consultas parametrizadas, `bandit`) continuam valendo e não são
-> repetidas aqui. A política pública está em [`SECURITY.md`](../../../SECURITY.md).
+> repetidas aqui. A política pública está em [`SECURITY.md`](../../../.github/SECURITY.md).
 
 ## 1. Segredos do projeto
 
@@ -136,4 +136,4 @@ Mudanças em `empiremuse/web_app.py`, `empiremuse/utils/db.py`, persistência, `
 `empiremuse/cogs/player_resume.py`, `empiremuse/utils/music/local_lavalink.py`, `empiremuse/config_loader.py`, scripts de
 instalação/deploy e arquivos de dependências passam por revisão do agente AppSec (agente
 `security-reviewer` do ECC) antes do merge. Vulnerabilidades ainda não corrigidas **não** são
-descritas em issues, PRs, commits ou documentos públicos. Siga o fluxo de [`SECURITY.md`](../../../SECURITY.md).
+descritas em issues, PRs, commits ou documentos públicos. Siga o fluxo de [`SECURITY.md`](../../../.github/SECURITY.md).

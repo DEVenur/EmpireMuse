@@ -15,6 +15,7 @@
   ],
   "settings": {
     "search.exclude": {
+      ".runtime": true,
       ".venv": true,
       ".java": true,
       "local_database": true,
