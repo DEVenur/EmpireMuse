@@ -25,7 +25,7 @@ O plugin `ecc@ecc` opera no escopo de usuário. Utilize as capacidades integrada
 
 O Claude Code carrega automaticamente as regras sob `.claude/rules/`:
 - `.claude/rules/empiremuse/*`: Regras específicas do projeto (com precedência estrita).
-- `.claude/rules/ecc/{common,python}/*`: Regras genéricas do ECC (common + python, sem fastapi), versionadas **de propósito** no projeto para garantir que todos os colaboradores e instâncias sigam as mesmas diretrizes.
+- `.claude/rules/ecc/{common,python,java}/*`: Regras genéricas do ECC (common, python com fastapi e java), versionadas **de propósito** no projeto para garantir que todos os colaboradores e instâncias sigam as mesmas diretrizes.
 
 ## 3. Evitar Duplicação de Hooks, Agentes e Comandos
 
