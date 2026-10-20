@@ -45,14 +45,12 @@ LEITURAS: list = []
 GRAVACOES = [
     ("cogs/player_resume.py", "PlayerSession.save_session_mongo", "dumps", 1, "sessao", 1, "5"),
     ("cogs/player_resume.py", "PlayerSession.save_session_local", "dumps", 1, "sessao", 1, "5"),
-    ("utils/music/interactions.py", "SkinEditorMenu.modal_handler", "dumps", 1, "skin", 1, "3"),
 ]
 # Referências que não são chamada de leitura nem de gravação (hoje: as classes de erro dos ``except`` dos caches).
 OUTRAS_REFERENCIAS: list = []  # antes da 2b: o ``pickle.UnpicklingError`` dos ``except`` dos caches (4 referências)
 # Arquivos que fazem ``import pickle`` depois da 2b (só para gravar; ``music_settings.py`` só lia e deixa de importar).
 IMPORTADORES = [
     "cogs/player_resume.py",
-    "utils/music/interactions.py",
 ]
 
 
@@ -211,10 +209,10 @@ class TestNumerosDoInventario:
     def test_depois_da_2b_nao_ha_leitura_nem_referencia_solta_ao_pickle(self):
         assert LEITURAS == [] and OUTRAS_REFERENCIAS == []
 
-    def test_gravacoes_sao_3_depois_das_etapas_4_e_6_e_saem_nas_etapas_3_e_5(self):
-        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 3
-        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 3
-        assert {etapa for *_, etapa in GRAVACOES} == {"3", "5"}
+    def test_gravacoes_sao_2_depois_das_etapas_3_4_e_6_e_saem_na_etapa_5(self):
+        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 2
+        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 2
+        assert {etapa for *_, etapa in GRAVACOES} == {"5"}
 
     def test_as_tabelas_nao_repetem_chaves(self):
         for tabela in (LEITURAS_ANTES_DA_2B, GRAVACOES):
