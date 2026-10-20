@@ -5,7 +5,7 @@ Garante que:
 2. O comando auto-update via 'git reset --hard' / 'git pull' está desativado com mensagem clara;
 3. exportsource não empacota arquivos de squarecloud;
 4. Desvios e verificações de ambiente da Replit ('REPL_SLUG') foram totalmente expurgados, mantendo MONGO_SSL_FIX;
-5. Arquivos legados de deploy de terceiros estão ausentes da raiz do repositório, preservando lavalink.ini.example.
+5. Arquivos legados de deploy de terceiros estão ausentes da raiz do repositório, preservando deploy/lavalink.ini.example.
 """
 
 from pathlib import Path
@@ -43,8 +43,11 @@ class TestDeployLegadoD1:
         """(5) Arquivos legados de deploy e scripts de terceiros devem ser removidos da raiz."""
         present_files = [f for f in LEGACY_FILES if (PROJECT_DIR / f).exists()]
         assert not present_files, f"Arquivos legados ainda presentes no repositório: {present_files}"
-        # lavalink.ini.example deve ser mantido
-        assert (PROJECT_DIR / "lavalink.ini.example").is_file(), "lavalink.ini.example deve ser preservado"
+        # o exemplo de nós Lavalink foi para deploy/ (F3-7, D6) e não pode voltar para a raiz
+        assert (PROJECT_DIR / "deploy" / "lavalink.ini.example").is_file(), (
+            "deploy/lavalink.ini.example deve ser preservado"
+        )
+        assert not (PROJECT_DIR / "lavalink.ini.example").exists(), "lavalink.ini.example voltou para a raiz"
 
     def test_nenhum_uso_de_kill_1_no_codigo(self):
         """(1) O código do pacote empiremuse não deve conter invocações de 'kill 1'."""
