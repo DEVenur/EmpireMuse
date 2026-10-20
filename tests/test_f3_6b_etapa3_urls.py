@@ -34,7 +34,7 @@ PLACEHOLDERS_DE_URL = ["{track.thumb}", "{track.url}", "{playlist.url}", "{reque
 VALIDAS = [
     "",
     "https://exemplo.invalid/a.png",
-    "http://exemplo.invalid/a.png?x=1&y=2#f",
+    "http://exemplo.invalid/a.png?x=1&y=2",
     "https://cdn.exemplo.invalid/{guild.id}/icone.png",
     "https://exemplo.invalid/{track.thumb}",
     *PLACEHOLDERS_DE_URL,
@@ -42,6 +42,7 @@ VALIDAS = [
 INVALIDAS = [
     "ftp://exemplo.invalid/a.png",
     "javascript:alert(1)",
+    "https://exemplo.invalid/a.png#fragmento",
     "exemplo.invalid/a.png",
     "texto solto",
     " https://exemplo.invalid/a.png",

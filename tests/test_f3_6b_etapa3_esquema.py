@@ -252,7 +252,7 @@ class TestDescartaOQueNaoConhece:
                     "provider": {"name": "p"},
                     "description": "d",
                     "footer": {"text": "t", "proxy_icon_url": "u"},
-                    "image": {"url": "u", "width": 1, "height": 2},
+                    "image": {"url": "https://exemplo.invalid/u.png", "width": 1, "height": 2},
                     "fields": [{"name": "n", "value": "v", "extra": 1}],
                 }
             ],
@@ -263,7 +263,7 @@ class TestDescartaOQueNaoConhece:
                 {
                     "description": "d",
                     "footer": {"text": "t"},
-                    "image": {"url": "u"},
+                    "image": {"url": "https://exemplo.invalid/u.png"},
                     "fields": [{"name": "n", "value": "v"}],
                 }
             ],

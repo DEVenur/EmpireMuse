@@ -11,9 +11,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from empiremuse.rules.urls import clean_url
+
 from .codec import dumps
 from .schema import (
     OMIT,
+    PATTERN,
     TOO_BIG,
     TYPE,
     Bool,
@@ -59,8 +62,43 @@ class _Color(_Schema):
         return self._TEXT.check(value, path)
 
 
+# Placeholders que o ``skin_converter`` troca por uma URL (``rules`` de ``replaces``); só estes valem como valor inteiro do campo.
+URL_PLACEHOLDERS = frozenset({"{track.thumb}", "{track.url}", "{playlist.url}", "{requester.avatar}", "{guild.icon}"})
+# Todos os placeholders que o ``skin_converter`` substitui (``replaces`` e ``track_title_format``): dentro de uma URL maior valem.
+_KNOWN_PLACEHOLDERS = tuple(
+    "{" + name + "}"
+    for name in (
+        "track.title_25 track.title_42 track.title_58 track.title track.url track.author track.duration track.number "
+        "track.thumb playlist.name playlist.url player.loop.mode player.queue.size player.volume player.autoplay "
+        "player.nightcore player.hint player.log.text player.log.emoji requester.global_name requester.display_name "
+        "requester.mention requester.avatar guild.color guild.icon guild.name guild.id queue_format"
+    ).split()
+)
+
+
+class _Url(Str):
+    """Campo de URL do embed: vazio, um placeholder de URL, ou uma URL que passa na régua de ``rules/urls.py``.
+
+    Os placeholders dentro de uma URL maior (``https://cdn/{guild.id}.png``) são trocados por texto neutro antes da conferência;
+    a URL tem de ser aceita SEM ajuste (``clean_url`` apara e desembrulha ``<...>``, e aqui isso é recusa).
+    """
+
+    __slots__ = ()
+
+    def check(self, value: Any, path: str) -> str:
+        text = super().check(value, path)
+        if not text or text in URL_PLACEHOLDERS:
+            return text
+        probe = text
+        for placeholder in _KNOWN_PLACEHOLDERS:
+            probe = probe.replace(placeholder, "x")
+        if clean_url(probe) != probe:
+            raise SchemaError(path, PATTERN)
+        return text
+
+
 def _url() -> Optional:
-    return _optional(Str(MAX_URL))
+    return _optional(_Url(MAX_URL))
 
 
 _FIELD = Dict({"name": _text(256), "value": _text(1024), "inline": _optional(Bool())}, extra="ignore")
