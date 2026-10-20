@@ -11,7 +11,6 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.serialization.schema import SchemaError
-from empiremuse.serialization.session import encode_session
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import can_connect, can_send_message
@@ -733,20 +732,23 @@ class PlayerSession(commands.Cog):
             None, session_store.read_local_sessions, self.bot.user.id
         )
 
-    def _encode(self, id_: Union[int, str], data: dict):
-        """O JSON da sessão, ou ``None`` (com aviso só com o servidor e o motivo) se os dados não valem."""
+    async def _in_thread(self, id_: Union[int, str], data: dict, function, *leading):
+        """Roda ``function`` (validação e codificação pesadas) numa thread com a cópia dos dados tirada aqui, no laço.
+
+        Devolve o resultado, ou ``None`` (com aviso só com o servidor e o motivo) se os dados não valem.
+        """
         try:
-            return encode_session(data)
+            copy_of_data = session_store.snapshot(data)
+            return await asyncio.get_running_loop().run_in_executor(None, function, *leading, copy_of_data)
         except SchemaError as error:
             logger.warning("Sessão não salva (dados incompatíveis): servidor %s, motivo %s", id_, error.code)
             return None
 
     async def save_session_mongo(self, id_: Union[int, str], data: dict):
-        raw = self._encode(id_, data)
-        if raw is None:
+        document = await self._in_thread(id_, data, session_store.encode_for_mongo)
+        if document is None:
             return
 
-        document = await asyncio.get_running_loop().run_in_executor(None, session_store.new_document, raw)
         await self.bot.pool.mongo_database.update_data(
             id_=str(id_),
             data=document,
@@ -755,14 +757,8 @@ class PlayerSession(commands.Cog):
         )
 
     async def save_session_local(self, id_: Union[int, str], data: dict):
-        raw = self._encode(id_, data)
-        if raw is None:
-            return
-
         try:
-            await asyncio.get_running_loop().run_in_executor(
-                None, session_store.write_session_file, self.bot.user.id, id_, raw
-            )
+            await self._in_thread(id_, data, session_store.encode_for_disk, self.bot.user.id, id_)
         except OSError as error:
             logger.warning("Sessão não salva (falha ao gravar): servidor %s, motivo %s", id_, type(error).__name__)
 

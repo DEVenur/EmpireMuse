@@ -16,6 +16,7 @@ O que não converte por defeito do próprio dado (esquema, protocolo, tamanho, `
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import math
 import os
@@ -30,8 +31,9 @@ from empiremuse import paths
 from empiremuse.serialization.codec import pack, unpack
 from empiremuse.serialization.files import read_capped, write_private_atomic
 from empiremuse.serialization.legacy_pickle import MAX_RAW, load_legacy
-from empiremuse.serialization.schema import PATTERN, TYPE, VERSION, SchemaError
-from empiremuse.serialization.session import MAX_BYTES, decode_session, encode_session, validate_session
+from empiremuse.serialization import session as session_codec
+from empiremuse.serialization.schema import DEPTH, PATTERN, TYPE, VERSION, SchemaError
+from empiremuse.serialization.session import MAX_BYTES, decode_session, validate_session
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,31 @@ def legacy_dir(bot_id: int | str) -> Path:
 def _reason(error: Exception) -> str:
     """O motivo que vai ao log: o código do esquema ou o tipo da falha, nunca a mensagem (pode ter dado de fora)."""
     return getattr(error, "code", type(error).__name__)
+
+
+# ============================================================================ cópia e codificação (fora do laço)
+
+
+def snapshot(data: dict) -> dict:
+    """Cópia dos dados do player, tirada NO laço antes de a codificação ir para a thread.
+
+    O player continua mudando o ``info`` das faixas e as filas; a thread só lê a cópia. Custa ~0,1 s no teto (a validação
+    e a codificação, que custam ~0,9 s, é que saem do laço).
+    """
+    try:
+        return copy.deepcopy(data)
+    except RecursionError:
+        raise SchemaError("", DEPTH) from None
+
+
+def encode_for_mongo(copy_of_data: dict) -> dict:
+    """O documento da coleção nova a partir da cópia dos dados (tudo numa thread)."""
+    return new_document(session_codec.encode_session(copy_of_data))
+
+
+def encode_for_disk(bot_id: int | str, guild_id: int | str, copy_of_data: dict) -> None:
+    """Codifica e grava o arquivo da sessão (tudo numa thread); ``SchemaError`` se os dados não valem, ``OSError`` se não gravou."""
+    write_session_file(bot_id, guild_id, session_codec.encode_session(copy_of_data))
 
 
 # ============================================================================ disco
@@ -190,7 +217,7 @@ def _json_supersedes(target: Path, guild_id: int, legacy_files: list[Path]) -> b
 def _convert_legacy_file(path: Path, guild_id: int) -> bytes:
     """O JSON da sessão do ``.pkl``/``.bak``; ``SchemaError`` (inclui o legado) se o dado não vale, ``OSError`` se não leu."""
     document = load_legacy(read_capped(path, MAX_RAW["session"]), "session")
-    return encode_session(validate_session(document, expected_id=guild_id))
+    return session_codec.encode_session(validate_session(document, expected_id=guild_id))
 
 
 def _write_and_verify(target: Path, raw: bytes, guild_id: int) -> None:
@@ -277,7 +304,7 @@ def _convert_legacy_document(document: dict, guild_id: int) -> dict:
     if type(text) is not str:
         raise SchemaError("data", TYPE)
     clean = validate_session(load_legacy(text, "session"), expected_id=guild_id)
-    return new_document(encode_session(clean))
+    return new_document(session_codec.encode_session(clean))
 
 
 async def _on_document_failure(database: Any, db_name: str, document: dict, error: SchemaError) -> None:
