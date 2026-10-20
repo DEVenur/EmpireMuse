@@ -212,8 +212,9 @@ class LocalDatabase(BaseDB):
         return cursor if limit is None else cursor.limit(limit)
 
     async def iter_data(self, db_name: str, collection: str, filter: dict = None):
-        """Os documentos, um por vez (para percorrer uma coleção grande sem montar a lista)."""
-        for document in self._connect[collection][db_name].find(filter or {}):
+        """Os documentos, um por vez. O TinyMongo já guarda a coleção na memória; a fotografia da lista evita que quem grava
+        enquanto percorre (como o ``fixfavs``) mexa no que está sendo percorrido."""
+        for document in list(self._connect[collection][db_name].find(filter or {})):
             yield document
 
     async def delete_data(self, id_, db_name: str, collection: str):

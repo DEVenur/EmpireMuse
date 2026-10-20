@@ -911,30 +911,36 @@ class Misc(commands.Cog):
 
         async with ctx.typing():
             for bot in self.bot.pool.get_all_bots():
-                db_data = await bot.pool.database.query_data(
-                    collection=str(bot.user.id), db_name=DBModel.guilds, limit=300
-                )
+                documents = bot.pool.database.iter_data(collection=str(bot.user.id), db_name=DBModel.guilds)
 
-                async with aiofiles.open(backup_dir / f"guild_favs_{bot.user.id}.json", "w") as f:
-                    await f.write(json.dumps(db_data, indent=4))
-
-                for data in db_data:
+                async for data in self._backup_each(documents, backup_dir / f"guild_favs_{bot.user.id}.json"):
                     try:
                         remove_blank_spaces(data["player_controller"]["fav_links"])
                     except KeyError:
                         continue
                     await bot.update_data(id_=data["_id"], data=data, db_name=DBModel.guilds)
 
-            db_data = await self.bot.pool.database.query_data(collection="global", db_name=DBModel.users, limit=500)
+            documents = self.bot.pool.database.iter_data(collection="global", db_name=DBModel.users)
 
-            async with aiofiles.open(backup_dir / "user_favs.json", "w") as f:
-                await f.write(json.dumps(db_data, indent=4))
-
-            for data in db_data:
+            async for data in self._backup_each(documents, backup_dir / "user_favs.json"):
                 remove_blank_spaces(data["fav_links"])
                 await self.bot.update_global_data(id_=data["_id"], data=data, db_name=DBModel.users)
 
             await ctx.send("os favoritos foram corrigidos com sucesso!")
+
+    @staticmethod
+    async def _backup_each(documents, path):
+        """Entrega cada documento do cursor DEPOIS de gravar no backup (lista JSON) como ele estava; sem montar a lista toda."""
+        async with aiofiles.open(path, "w") as f:
+            await f.write("[")
+            first = True
+            try:
+                async for data in documents:
+                    await f.write(("" if first else ",") + "\n" + json.dumps(data, indent=4))
+                    first = False
+                    yield data
+            finally:
+                await f.write("\n]")
 
     async def cog_check(self, ctx):
         return await check_requester_channel(ctx)
