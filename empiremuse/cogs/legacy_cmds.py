@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -34,6 +35,8 @@ from empiremuse.utils.others import CustomContext, string_to_file, token_regex, 
 from empiremuse.utils.owner_panel import panel_command, PanelView
 
 MSG_INVALID_PREFIX = "**O prefixo não pode conter espaços ou ter acima de 5 caracteres.**"
+
+logger = logging.getLogger(__name__)
 
 # Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
 EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
@@ -354,10 +357,11 @@ class Owner(commands.Cog):
     async def updatelog(self, ctx: Union[CustomContext, disnake.MessageInteraction], amount: int = 10):
         git_dir = os.environ.get("GIT_DIR") or str(paths.RUNTIME_DIR / ".git")
         if not os.path.isdir(git_dir):
+            logger.warning("updatelog: não há repositório git em %s.", git_dir)  # o caminho fica só no log
             raise GenericError(
-                f"**Não há repositório git em `{git_dir}`, então não há histórico de atualizações para mostrar.**\n"
-                "Nota: na pasta `.runtime` de desenvolvimento isso é esperado. Para ver o histórico, use o git "
-                "diretamente no clone do projeto."
+                "**Não há repositório git iniciado no diretório do bot, então não há histórico de atualizações para "
+                "mostrar.**\nEm ambiente de desenvolvimento isso é esperado: consulte o histórico direto no clone do "
+                "projeto."
             )
 
         if not self.bot.pool.remote_git_url:
