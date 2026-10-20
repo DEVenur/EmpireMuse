@@ -38,6 +38,24 @@ MSG_INVALID_PREFIX = "**O prefixo não pode conter espaços ou ter acima de 5 ca
 # Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
 EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
 
+# Nomes que o source.zip nunca leva, mesmo que a lista do git, extra_dirs ou additional_files os traga. O .env sai só
+# como o .env-temp mascarado, gravado pelo zip_dir com o nome ".env".
+EXPORT_REFUSED_NAMES = frozenset(
+    {".env", ".env-temp", "config.json", ".ytdl_cookie", ".spotify_cache.json", "guild_bots.json"}
+)
+
+
+def is_export_refused(name: str) -> bool:
+    """Se `name` (resolvido contra o cwd, com `..` e links) é um segredo conhecido ou fica dentro da `.runtime/` do projeto."""
+    try:
+        path = Path(name).resolve()
+        dev_runtime = (paths.PROJECT_DIR / paths.DEV_RUNTIME_NAME).resolve()
+    except (OSError, ValueError, RuntimeError):
+        return True  # caminho que nem resolve não vai para o zip
+    if path.name.lower() in EXPORT_REFUSED_NAMES:
+        return True
+    return path == dev_runtime or dev_runtime in path.parents
+
 
 def format_git_log(data_list: list):
     data = []
@@ -83,7 +101,7 @@ class Owner(commands.Cog):
         "discloud.config",
     ]
 
-    extra_dirs = ["local_database", ".player_sessions"]
+    extra_dirs = ["local_database"]
 
     def __init__(self, bot: BotCore):
         self.bot = bot
@@ -334,8 +352,13 @@ class Owner(commands.Cog):
         hidden=False,
     )
     async def updatelog(self, ctx: Union[CustomContext, disnake.MessageInteraction], amount: int = 10):
-        if not os.path.isdir(os.environ["GIT_DIR"]):
-            raise GenericError("Não há repositorio iniciado no diretório do bot...\nNota: Use o comando update.")
+        git_dir = os.environ.get("GIT_DIR") or str(paths.RUNTIME_DIR / ".git")
+        if not os.path.isdir(git_dir):
+            raise GenericError(
+                f"**Não há repositório git em `{git_dir}`, então não há histórico de atualizações para mostrar.**\n"
+                "Nota: na pasta `.runtime` de desenvolvimento isso é esperado. Para ver o histórico, use o git "
+                "diretamente no clone do projeto."
+            )
 
         if not self.bot.pool.remote_git_url:
             self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"].removesuffix(".git")
@@ -640,7 +663,8 @@ class Owner(commands.Cog):
         else:
             return f"Arquivo [source.zip]({msg.jump_url}) foi enviado com sucesso no seu DM."
 
-    def zip_dir(self, filelist: list):
+    @staticmethod
+    def zip_dir(filelist: list):
         source_zip = paths.RUNTIME_DIR / "source.zip"
         env_temp = paths.RUNTIME_DIR / ".env-temp"
         try:
@@ -648,16 +672,19 @@ class Owner(commands.Cog):
         except:
             pass
 
+        env_written = False
         with ZipFile(str(source_zip), "a") as zipf:
             for f in filelist:
                 if not f:
                     continue
                 try:
-                    if f == ".env-temp":
-                        zipf.write(str(env_temp), ".env")
-                    else:
+                    if Path(f).resolve() == env_temp.resolve():
+                        if not env_written:  # o único .env do zip é o mascarado, uma vez só
+                            zipf.write(str(env_temp), ".env")
+                            env_written = True
+                    elif not is_export_refused(f):
                         zipf.write(f)
-                except FileNotFoundError:
+                except (FileNotFoundError, ValueError, RuntimeError):
                     continue
 
     @commands.is_owner()
