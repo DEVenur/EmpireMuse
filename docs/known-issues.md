@@ -16,7 +16,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 |---|---|---|
 | Instalação e implantação | KI-01 … KI-05 | alto |
 | Configuração | KI-06 … KI-08, KI-55 | médio |
-| Banco de dados | KI-09 … KI-10 | alto |
+| Banco de dados | KI-09 … KI-10, KI-57 … KI-58 | alto |
 | Pool de bots e inicialização | KI-11 … KI-14 | médio |
 | Spotify | KI-15 … KI-20, KI-56 | alto |
 | Player e busca de faixas | KI-21 … KI-22, KI-44 | médio |
@@ -51,6 +51,8 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 |---|---|---|---|---|
 | KI-09 | `empiremuse/utils/db.py` (`update_values`) | [Resolvido] `update_values` ignora valores do tipo lista (`elif not isinstance(v, list)`) ao migrar a versão do esquema. | Resolvido na Fase 3 (F3-1): a migração preserva listas e chaves do usuário. | alto |
 | KI-10 | `empiremuse/utils/db.py` (`LocalDatabase.update_data`) | [Resolvido] `LocalDatabase.update_data` captura qualquer exceção, imprime e segue, atualizando o cache como se tivesse gravado. | Resolvido na Fase 3 (F3-2): falhas de gravação sobem como erro, o cache só atualiza após gravação e documentos novos usam upsert. | médio |
+| KI-57 | `empiremuse/serialization/legacy_pickle.py` (`load_legacy`), `empiremuse/utils/music/legacy_reader.py` | Leitor do formato antigo de serialização mantido durante o período de transição. | O leitor legado sai na versão N+2 após a conclusão da migração dos dados legados para JSON. | baixo |
+| KI-58 | Ambiente de execução (`PYTHONHASHSEED`) | Fixação da variável `PYTHONHASHSEED` no ambiente de execução. | O operador não deve fixar `PYTHONHASHSEED` no ambiente por segurança do leitor do formato antigo. | baixo |
 
 ## Pool de bots e inicialização
 

@@ -7,10 +7,11 @@ import gc
 import json
 import logging
 import os
-import pickle
 import subprocess
 import threading
 import traceback
+from asyncio import get_running_loop
+from functools import partial
 from configparser import ConfigParser
 from copy import deepcopy
 from importlib import import_module
@@ -18,7 +19,6 @@ from pathlib import Path
 from subprocess import check_output
 from typing import Optional, Union, List, Dict
 
-import aiofiles
 import aiohttp
 import disnake
 import requests
@@ -30,6 +30,7 @@ from disnake.http import Route
 from user_agent import generate_user_agent
 
 import empiremuse.wavelink as wavelink
+from empiremuse.serialization.cache import PLAYLIST_MAX_BYTES
 from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
 from empiremuse.rules.git_remote import parse_remote_web_url
@@ -40,6 +41,8 @@ from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
 from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.lastfm_tools import LastFM
+from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
+from empiremuse.utils.music.legacy_reader import discard_legacy_cache
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
 from empiremuse.utils.music.models import (
@@ -52,6 +55,7 @@ from empiremuse.utils.music.models import (
     CustomYTDL,
 )
 from empiremuse.utils.music.remote_lavalink_serverlist import get_lavalink_servers
+from empiremuse.utils.music.saved_queue import migrate_saved_queues
 from empiremuse.utils.others import CustomContext, token_regex, sort_dict_recursively
 from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
@@ -62,6 +66,10 @@ if os.name != "nt":
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 logger = logging.getLogger(__name__)
+
+
+def _playlist_cache_file():
+    return paths.RUNTIME_DIR / "local_database" / "playlist_cache.json"
 
 
 class BotPool:
@@ -164,39 +172,24 @@ class BotPool:
         return self.current_useragent
 
     def load_cache(self):
-        playlist_cache_file = paths.RUNTIME_DIR / "local_database" / "playlist_cache.pkl"
-        if playlist_cache_file.exists():
-            try:
-                with open(playlist_cache_file, "rb") as f:
-                    self.playlist_cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning(f"Cache de playlists incompatível ou corrompido descartado ({playlist_cache_file}): {e}")
+        """Os caches em ``pickle`` não são mais lidos (o arquivo antigo é apagado sem ser aberto); o de playlist volta do JSON."""
+        for name in ("playlist_cache.pkl", "partial_track_cache.pkl", ".lyric_cache_data"):
+            discard_legacy_cache(paths.RUNTIME_DIR / "local_database" / name)
 
-        partial_cache_file = paths.RUNTIME_DIR / "local_database" / "partial_track_cache.pkl"
-        if partial_cache_file.exists():
-            try:
-                with open(partial_cache_file, "rb") as f:
-                    self.partial_track_cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning(
-                    f"Cache de faixas parciais incompatível ou corrompido descartado ({partial_cache_file}): {e}"
-                )
-
-        lyric_cache_file = paths.RUNTIME_DIR / "local_database" / ".lyric_cache_data"
-        if lyric_cache_file.exists():
-            try:
-                with open(lyric_cache_file, "rb") as f:
-                    self.lyric_data_cache.update(pickle.load(f))
-            except (ModuleNotFoundError, AttributeError, pickle.UnpicklingError, EOFError) as e:
-                logger.warning(f"Cache de letras incompatível ou corrompido descartado ({lyric_cache_file}): {e}")
+        self.playlist_cache.update(
+            load_json_cache(_playlist_cache_file(), max_bytes=PLAYLIST_MAX_BYTES, max_age=self.playlist_cache.ttl)
+        )
 
     async def cache_updater(self):
         while True:
             await asyncio.sleep(300)
-            cache_file = paths.RUNTIME_DIR / "local_database" / "playlist_cache.pkl"
-            cache_file.parent.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(str(cache_file), "wb") as f:
-                await f.write(pickle.dumps(self.playlist_cache))
+            items = list(self.playlist_cache.items())  # a cópia sai no laço; a serialização e a escrita, fora dele
+            try:
+                await get_running_loop().run_in_executor(
+                    None, partial(save_json_cache, _playlist_cache_file(), items, max_bytes=PLAYLIST_MAX_BYTES)
+                )
+            except OSError as e:
+                logger.warning("Cache de playlists não gravado: %s", type(e).__name__)
 
     async def connect_lavalink_queue_task(self, identifier: str):
         delay_secs = int(self.config.get("LAVALINK_QUEUE_DELAY", 1.5))
@@ -681,6 +674,7 @@ class BotPool:
             print(traceback.format_exc())
 
     def setup(self):
+        migrate_saved_queues()
         self.load_skins()
 
         if self.config["ENABLE_LOGGER"]:

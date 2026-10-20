@@ -4,24 +4,19 @@ import datetime
 import itertools
 import logging
 import os.path
-import pickle
 import pprint
 import re
 import traceback
-import zlib
-from base64 import b64decode
 from copy import deepcopy
 from io import BytesIO
 from random import shuffle
 from typing import Union, Optional
 from urllib.parse import urlparse, parse_qs, quote
 
-import aiofiles
 import aiohttp
 import disnake
 from async_timeout import timeout
 from disnake.ext import commands
-from pathlib import Path
 from yt_dlp import YoutubeDL
 
 import empiremuse.wavelink as wavelink
@@ -74,6 +69,8 @@ from empiremuse.utils.music.errors import (
     log_unexpected_error,
 )
 from empiremuse.utils.music.user_limits import quota_for, track_fav_error_text
+from empiremuse.utils.music.skin_store import load_custom_skins
+from empiremuse.utils.music.saved_queue import has_saved_queue, load_saved_queue, store_saved_queue
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
     QueueInteraction,
@@ -130,10 +127,6 @@ def is_discord_attachment_url(url: str) -> bool:
     except ValueError:
         return False
     return hostname in DISCORD_CDN_HOSTS and parsed.path.startswith(DISCORD_ATTACHMENT_PATH_PREFIXES)
-
-
-def _user_saved_queue_path(user_id: int | str) -> Path:
-    return paths.RUNTIME_DIR / "local_database" / "saved_queues_v1" / "users" / f"{user_id}.pkl"
 
 
 class Music(commands.Cog):
@@ -1150,7 +1143,7 @@ class Music(commands.Cog):
                 f"### `[💾] Fila Salva [💾]`\n"
             )
 
-            if _user_saved_queue_path(inter.author.id).is_file():
+            if has_saved_queue(inter.author.id):
                 txt += f"`Usar fila de música que você salvou via comando` {savequeue_slashcmd}.\n"
                 opts.append(disnake.SelectOption(label="Usar fila salva", value=">> [💾 Fila Salva 💾] <<", emoji="💾"))
 
@@ -1701,16 +1694,7 @@ class Music(commands.Cog):
             source = False
 
         if query.startswith(">> [💾 Fila Salva 💾] <<"):
-            try:
-                async with aiofiles.open(_user_saved_queue_path(inter.author.id), "rb") as f:
-                    f_content = await f.read()
-                    try:
-                        f_content = zlib.decompress(f_content)
-                    except zlib.error:
-                        pass
-                    data = pickle.loads(f_content)
-            except FileNotFoundError:
-                raise GenericError("**A sua fila salva já foi excluída...**")
+            data = await load_saved_queue(inter.author.id, inter.guild_id)
 
             tracks = await self.check_player_queue(
                 inter.author, bot, guild.id, self.bot.pool.process_track_cls(data["tracks"])[0]
@@ -2391,7 +2375,7 @@ class Music(commands.Cog):
 
         favs = [">> [⭐ Favoritos ⭐] <<", ">> [💠 Integrações 💠] <<", ">> [📌 Favoritos do servidor 📌] <<"]
 
-        if _user_saved_queue_path(inter.author.id).is_file():
+        if has_saved_queue(inter.author.id):
             favs.append(">> [💾 Fila Salva 💾] <<")
 
         if not inter.guild_id:
@@ -4137,15 +4121,7 @@ class Music(commands.Cog):
         if len(tracks) < 3:
             raise GenericError(f"**É necessário ter no mínimo 3 músicas pra salvar (atual e/ou na fila)**")
 
-        queue_path = _user_saved_queue_path(inter.author.id)
-        queue_path.parent.mkdir(parents=True, exist_ok=True)
-
-        async with aiofiles.open(queue_path, "wb") as f:
-            await f.write(
-                zlib.compress(
-                    pickle.dumps({"tracks": tracks, "created_at": disnake.utils.utcnow(), "guild_id": inter.guild_id})
-                )
-            )
+        await store_saved_queue(inter.author.id, tracks, inter.guild_id, disnake.utils.utcnow())
 
         await inter.response.defer(ephemeral=True)
 
@@ -7304,18 +7280,12 @@ class Music(commands.Cog):
                 )
                 await self.bot.update_global_data(inter.guild_id, global_data, db_name=DBModel.guilds)
 
-        for n, s in global_data["custom_skins"].items():
-            if isinstance(s, str):
-                global_data["custom_skins"][n] = pickle.loads(b64decode(s))
-
-        for n, s in global_data["custom_skins_static"].items():
-            if isinstance(s, str):
-                global_data["custom_skins_static"][n] = pickle.loads(b64decode(s))
-
         try:
             guild_id = inter.guild.id
         except AttributeError:
             guild_id = inter.guild_id
+
+        skins = await load_custom_skins(bot, guild_id, global_data)
 
         static_channel = None
 
@@ -7383,8 +7353,8 @@ class Music(commands.Cog):
             static=bool(static_channel),
             skin=bot.pool.check_skin(skin),
             skin_static=bot.pool.check_static_skin(static_skin),
-            custom_skin_data=global_data["custom_skins"],
-            custom_skin_static_data=global_data["custom_skins_static"],
+            custom_skin_data=skins.normal,
+            custom_skin_static_data=skins.static,
             extra_hints=self.extra_hints,
             restrict_mode=guild_data["enable_restrict_mode"],
             listen_along_invite=invite,

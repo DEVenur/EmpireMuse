@@ -577,8 +577,8 @@ class TestCachesSobOutroDiretorio:
 
         lastfm.scrobble_save_cache()
 
-        assert (runtime / ".lastfm_cache").is_file()
-        assert not (Path.cwd() / ".lastfm_cache").exists()
+        assert (runtime / ".lastfm_cache.json").is_file()
+        assert not (Path.cwd() / ".lastfm_cache.json").exists()
 
     def test_constante_legada_do_lastfm_nao_e_um_caminho_relativo(self):
         legado = getattr(lastfm_tools, "cache_file", None)

@@ -2,28 +2,25 @@
 
 # nota: este sistema é totalmente experimental.
 import asyncio
-import os
-import pickle
-import shutil
+import logging
 import traceback
-import zlib
-from base64 import b64decode, b64encode
 from contextlib import suppress
-from pathlib import Path
 from typing import Union
 
-import aiofiles
 import disnake
 from disnake.ext import commands
 
-from empiremuse import paths
+from empiremuse.serialization.schema import SchemaError
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import can_connect, can_send_message
 from empiremuse.utils.music.errors import PoolException
 from empiremuse.utils.music.filters import AudioFilter
+from empiremuse.utils.music import session_store
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import send_idle_embed, CustomContext
+
+logger = logging.getLogger(__name__)
 
 
 class PlayerSession(commands.Cog):
@@ -184,7 +181,6 @@ class PlayerSession(commands.Cog):
             "queue_autoplay": autoqueue,
             "failed_tracks": failed_tracks,
             "prefix_info": player.prefix_info,
-            "voice_state": player._voice_state,
             "time": disnake.utils.utcnow(),
             "lastfm_artists": player.lastfm_artists,
             "start_timestamp": player.start_timestamp,
@@ -196,8 +192,6 @@ class PlayerSession(commands.Cog):
             player._last_channel_id = vc_id
             data["last_voice_channel_id"] = vc_id
 
-        with suppress(AttributeError):
-            data["extra_info"] = player.extra_info
         with suppress(AttributeError):
             data["live_lyrics_status"] = player.live_lyrics_enabled
         with suppress(AttributeError):
@@ -237,6 +231,8 @@ class PlayerSession(commands.Cog):
             return
 
         try:
+            await self.migrate_legacy_sessions()
+
             mongo_sessions = await self.get_player_sessions_mongo()
             local_sessions = await self.get_player_sessions_local()
 
@@ -276,7 +272,7 @@ class PlayerSession(commands.Cog):
                     await asyncio.sleep(1)
 
         except Exception:
-            print(f"{self.bot.user} - Falha ao retomar player {data['_id']}:\n{traceback.format_exc()}")
+            print(f"{self.bot.user} - Falha ao retomar players:\n{traceback.format_exc()}")
 
         self.bot.player_resumed = True
 
@@ -363,11 +359,35 @@ class PlayerSession(commands.Cog):
             except Exception as e:
                 print(f"{self.bot.user} - Falha ao falar no palco do servidor {guild.name}. Erro: {repr(e)}")
 
+    async def _guild_channel(self, guild: disnake.Guild, channel_id, *, fetch: bool = False):
+        """O canal ``channel_id`` SE for do servidor ``guild``; canal de outro servidor (ou sem servidor) vira ``None``."""
+        try:
+            channel_id = int(channel_id)
+            channel = self.bot.get_channel(channel_id)
+
+            if channel is None and fetch:
+                channel = await self.bot.fetch_channel(channel_id)
+        except (disnake.HTTPException, TypeError, ValueError):
+            return None
+
+        if channel is not None and getattr(getattr(channel, "guild", None), "id", None) != guild.id:
+            logger.warning("Canal da sessão ignorado por não ser do servidor da sessão: servidor %s", guild.id)
+            return None
+
+        return channel
+
+    @staticmethod
+    def _to_id(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     async def resume_player(self, data: dict, hints: list = None):
         if hints is None:
             hints = []
 
-        voice_channel = self.bot.get_channel(data["voice_channel"])
+        voice_channel = None
 
         try:
             guild = self.bot.get_guild(data["_id"])
@@ -392,31 +412,23 @@ class PlayerSession(commands.Cog):
 
                 guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)
 
+                voice_channel = await self._guild_channel(guild, data["voice_channel"])
+
                 text_channel = None
 
-                if guild_data["player_controller"]["channel"]:
-                    try:
-                        text_channel = self.bot.get_channel(
-                            int(guild_data["player_controller"]["channel"])
-                        ) or await self.bot.fetch_channel(int(guild_data["player_controller"]["channel"]))
-                    except:
-                        pass
-                    else:
-                        data["message_id"] = int(guild_data["player_controller"]["message_id"])
+                controller = guild_data["player_controller"]
 
-                if not text_channel:
-                    if not data["text_channel_id"]:
-                        pass
-                    elif not isinstance(data["text_channel_id"], disnake.Thread):
-                        text_channel = self.bot.get_channel(data["text_channel_id"])
-                    else:
-                        try:
-                            text_channel = self.bot.get_channel(
-                                int(data["text_channel_id"])
-                            ) or await self.bot.fetch_channel(int(data["text_channel_id"]))
-                        except (disnake.NotFound, TypeError):
-                            text_channel = None
-                            data["message_id"] = None
+                if controller["channel"]:
+                    text_channel = await self._guild_channel(guild, controller["channel"], fetch=True)
+
+                    if text_channel:
+                        data["message_id"] = self._to_id(controller["message_id"])
+
+                if not text_channel and data["text_channel_id"]:
+                    text_channel = await self._guild_channel(guild, data["text_channel_id"], fetch=True)
+
+                    if not text_channel:
+                        data["message_id"] = None
 
                 if not text_channel:
                     data["static"] = False
@@ -480,18 +492,15 @@ class PlayerSession(commands.Cog):
                             message_without_thread = msg
 
                     except Exception as e:
-                        print(
-                            f"{self.bot.user} - Falha ao obter mensagem: {repr(e)}\n"
-                            f"channel_id: {text_channel.id} | message_id {data['message']}"
+                        logger.warning(
+                            "Falha ao obter a mensagem do controller na retomada: servidor %s, motivo %s",
+                            guild.id,
+                            type(e).__name__,
                         )
 
                 if not voice_channel or not voice_channel.permissions_for(guild.me).connect:
                     if data["voice_channel"] != (vc_id := data.get("last_voice_channel_id", data["voice_channel"])):
-                        voice_channel = self.bot.get_channel(int(vc_id))
-                        try:
-                            del data["voice_state"]
-                        except:
-                            pass
+                        voice_channel = await self._guild_channel(guild, vc_id)
 
                 if not voice_channel:
                     print(f"{self.bot.user} - Player Ignorado: {guild.name} [{guild.id}]\nO canal de voz não existe...")
@@ -582,8 +591,8 @@ class PlayerSession(commands.Cog):
                         await self.delete_data(guild.id)
                     return
 
-                player.extra_info = data.get("extra_info", {})
-                player._voice_state = data.get("voice_state")
+                player.extra_info = {}
+                player._voice_state = None
                 player.current_encoded = data.get("current_encoded")
                 player.live_lyrics_enabled = data.get("live_lyrics_status", False)
                 player.mini_queue_enabled = data.get("mini_queue_enabled")
@@ -701,92 +710,57 @@ class PlayerSession(commands.Cog):
         except Exception:
             print(f"{self.bot.user} - Falha Crítica ao retomar players:\n{traceback.format_exc()}")
 
+    def _uses_mongo(self) -> bool:
+        return bool(self.bot.config["PLAYER_SESSIONS_MONGODB"] and self.bot.config["MONGO"])
+
+    async def migrate_legacy_sessions(self):
+        """Converte as sessões antigas (disco e Mongo) para JSON; chamada antes de ler as sessões, na subida."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, session_store.migrate_disk, self.bot.user.id)
+
+        if self.bot.config["MONGO"] and self.bot.pool.mongo_database is not None:
+            await session_store.migrate_mongo(self.bot.pool.mongo_database, str(self.bot.user.id))
+
     async def get_player_sessions_mongo(self):
-        if not self.bot.config["MONGO"]:
+        if not self.bot.config["MONGO"] or self.bot.pool.mongo_database is None:
             return []
 
-        guild_data = []
-
-        for d in await self.bot.pool.mongo_database.query_data(
-            db_name=str(self.bot.user.id), collection="player_sessions"
-        ):
-            try:
-                data = d["data"]
-            except KeyError:
-                await self.delete_data(int(d["_id"]))
-                continue
-            data = b64decode(data)
-            try:
-                data = zlib.decompress(data)
-            except zlib.error:
-                pass
-            guild_data.append(pickle.loads(data))
-
-        return guild_data
-
-    def _player_sessions_dir(self) -> Path:
-        return paths.RUNTIME_DIR / "local_database" / "player_sessions" / str(self.bot.user.id)
+        return await session_store.read_mongo_sessions(self.bot.pool.mongo_database, str(self.bot.user.id))
 
     async def get_player_sessions_local(self):
-        guild_data = []
-        sessions_dir = self._player_sessions_dir()
+        return await asyncio.get_running_loop().run_in_executor(
+            None, session_store.read_local_sessions, self.bot.user.id
+        )
 
+    async def _in_thread(self, id_: Union[int, str], data: dict, function, *leading):
+        """Roda ``function`` (validação e codificação pesadas) numa thread com a cópia dos dados tirada aqui, no laço.
+
+        Devolve o resultado, ou ``None`` (com aviso só com o servidor e o motivo) se os dados não valem.
+        """
         try:
-            files = os.listdir(sessions_dir)
-        except FileNotFoundError:
-            return guild_data
-
-        for file_content in files:
-            if not file_content.endswith(".pkl"):
-                continue
-
-            guild_id = file_content[:-4]
-
-            async with aiofiles.open(sessions_dir / f"{guild_id}.pkl", "rb") as f:
-                file_content = await f.read()
-                try:
-                    file_content = zlib.decompress(file_content)
-                except zlib.error:
-                    pass
-                data = pickle.loads(file_content)
-
-            if data:
-                guild_data.append(data)
-
-        return guild_data
+            copy_of_data = session_store.snapshot(data)
+            return await asyncio.get_running_loop().run_in_executor(None, function, *leading, copy_of_data)
+        except SchemaError as error:
+            logger.warning("Sessão não salva (dados incompatíveis): servidor %s, motivo %s", id_, error.code)
+            return None
 
     async def save_session_mongo(self, id_: Union[int, str], data: dict):
+        document = await self._in_thread(id_, data, session_store.encode_for_mongo)
+        if document is None:
+            return
+
         await self.bot.pool.mongo_database.update_data(
             id_=str(id_),
-            data={"data": b64encode(zlib.compress(pickle.dumps(data))).decode("utf-8")},
-            collection="player_sessions",
+            data=document,
+            collection=session_store.NEW_COLLECTION,
             db_name=str(self.bot.user.id),
         )
 
     async def save_session_local(self, id_: Union[int, str], data: dict):
-        sessions_dir = self._player_sessions_dir()
-        if not sessions_dir.is_dir():
-            sessions_dir.mkdir(parents=True, exist_ok=True)
-
-        path = sessions_dir / str(id_)
-
         try:
-            async with aiofiles.open(f"{path}.pkl", "wb") as f:
-                await f.write(zlib.compress(pickle.dumps(data)))
-        except Exception:
-            traceback.print_exc()
-            try:
-                os.rename(f"{path}.bak", f"{path}.pkl")
-            except:
-                pass
-            return
-
-        try:
-            shutil.copy(f"{path}.pkl", f"{path}.bak")
-        except FileNotFoundError:
-            pass
-        except Exception:
-            traceback.print_exc()
+            await self._in_thread(id_, data, session_store.encode_for_disk, self.bot.user.id, id_)
+        except OSError as error:
+            logger.warning("Sessão não salva (falha ao gravar): servidor %s, motivo %s", id_, type(error).__name__)
 
     async def save_session(self, player: LavalinkPlayer, data: dict):
         try:
@@ -808,19 +782,10 @@ class PlayerSession(commands.Cog):
             print(f"❌ - {self.bot.user} - Salvamento cancelado: {repr(e)}")
 
     async def delete_data_mongo(self, id_: Union[LavalinkPlayer, int]):
-        await self.bot.pool.mongo_database.delete_data(
-            id_=str(id_), db_name=str(self.bot.user.id), collection="player_sessions"
-        )
+        await session_store.delete_mongo_session(self.bot.pool.mongo_database, str(self.bot.user.id), id_)
 
     def delete_data_local(self, id_: Union[LavalinkPlayer, int]):
-        sessions_dir = self._player_sessions_dir()
-        for ext in (".pkl", ".bak"):
-            try:
-                (sessions_dir / f"{id_}{ext}").unlink()
-            except FileNotFoundError:
-                continue
-            except Exception:
-                traceback.print_exc()
+        session_store.delete_local_session(self.bot.user.id, id_)
 
     async def delete_data(self, player: Union[LavalinkPlayer, int]):
         try:
@@ -828,7 +793,7 @@ class PlayerSession(commands.Cog):
         except AttributeError:
             guild_id = int(player)
 
-        if self.bot.config["PLAYER_SESSIONS_MONGODB"] and self.bot.config["MONGO"]:
+        if self._uses_mongo():
             await self.delete_data_mongo(guild_id)
         else:
             self.delete_data_local(guild_id)

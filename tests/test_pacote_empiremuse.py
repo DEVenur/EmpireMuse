@@ -6,20 +6,34 @@ Garante os contratos arquiteturais da reorganização modular:
 3. Importabilidade de todas as 15 skins sob empiremuse.utils.music.skins.{normal,static}_player.<nome>.
 4. Resolução de recursos embutidos (templates, static) via paths.PACKAGE_DIR e de data/ + assets/ via paths.PROJECT_DIR.
 5. Resolução dinâmica de paths.RUNTIME_DIR (padrão CWD, customizável por EMPIREMUSE_HOME).
-6. Retrocompatibilidade de desserialização (pickle) de filas salvas, sessões de player e skins personalizadas.
+6. Retrocompatibilidade de leitura dos formatos legados de filas salvas, sessões de player e skins personalizadas
+   (pelos leitores reais do projeto, não pelo formato em si).
 """
 
 from __future__ import annotations
 
-import base64
 import datetime
 import importlib
 import importlib.util
 from pathlib import Path
 import pickle
+from types import SimpleNamespace
 import zlib
 
 import pytest
+
+
+from tests.helpers_f3_6b import BOT_ID, SERVIDOR, cog_de_sessoes
+from tests.test_f3_6b_formato_fila_salva import caminho_da_fila, ler as ler_fila, tres_faixas
+from tests.test_f3_6b_formato_sessao import gravar as gravar_sessao, jogador_completo
+from tests.test_f3_6b_formato_skin import (
+    dados_globais,
+    editor_sem_tela as _editor_sem_tela,
+    skin_realista,
+    texto_legado,
+)
+
+editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -151,50 +165,42 @@ class TestPathsERecursos:
         assert get_dir().resolve() == custom_home.resolve()
 
 
-class TestRetrocompatibilidadePickle:
-    """Verifica que estruturas persistidas não dependem de classes do projeto e continuam legíveis."""
+class TestRetrocompatibilidadeDoLegado:
+    """Os leitores REAIS continuam lendo o que versões antigas gravaram, sem depender de classes do projeto."""
 
-    def test_saved_queue_pickle_roundtrip(self):
-        sample_queue = {
-            "tracks": ["QAAAjQIAK0FyaWFuYSBHcmFuZGUgLSBldmVyeXRoaW5nIGkgd2FudGVkIChhdWRpbykAAAAAAA=="],
+    @pytest.mark.asyncio
+    async def test_sessao_de_player_legada_e_lida_pelo_leitor_de_sessoes(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+        sessao = await gravar_sessao(cog_de_sessoes(), jogador_completo())
+        pasta = tmp_path / "local_database" / "player_sessions" / str(BOT_ID)
+        pasta.mkdir(parents=True)
+        (pasta / f"{SERVIDOR}.pkl").write_bytes(zlib.compress(pickle.dumps(sessao)))
+        from empiremuse.serialization import session  # sob demanda: o módulo nasce na etapa 5
+
+        cog = cog_de_sessoes()
+        await cog.migrate_legacy_sessions()  # o pickle antigo é lido por load_legacy e vira JSON
+        assert await cog.get_player_sessions_local() == [session.validate_session(sessao)]
+
+    @pytest.mark.asyncio
+    async def test_fila_salva_legada_volta_como_faixas(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+        faixas = tres_faixas()
+        for faixa in faixas:
+            faixa.info["id"] = faixa.id
+        conteudo = {
+            "tracks": [dict(faixa.info) for faixa in faixas],
             "created_at": datetime.datetime.now(datetime.timezone.utc),
-            "guild_id": 123456789,
+            "guild_id": SERVIDOR,
         }
-        dumped = pickle.dumps(sample_queue)
-        loaded = pickle.loads(dumped)
-        assert loaded["guild_id"] == 123456789
-        assert len(loaded["tracks"]) == 1
-        assert isinstance(loaded["created_at"], datetime.datetime)
+        caminho = caminho_da_fila(tmp_path)
+        caminho.parent.mkdir(parents=True)
+        caminho.write_bytes(zlib.compress(pickle.dumps(conteudo)))
+        lidas = await ler_fila(monkeypatch)
+        assert [faixa.info["title"] for faixa in lidas] == [faixa.info["title"] for faixa in faixas]
 
-    def test_player_session_pickle_roundtrip(self):
-        sample_session = {
-            "guild_id": 123456789,
-            "voice_channel": 987654321,
-            "text_channel": 1122334455,
-            "volume": 100,
-            "tracks": ["QAAAjQIAK0FyaWFuYSBHcmFuZGUAAAAAAA=="],
-        }
-        compressed = zlib.compress(pickle.dumps(sample_session))
-        encoded = base64.b64encode(compressed).decode("utf-8")
-
-        decompressed = zlib.decompress(base64.b64decode(encoded))
-        loaded = pickle.loads(decompressed)
-        assert loaded["guild_id"] == 123456789
-        assert loaded["voice_channel"] == 987654321
-        assert loaded["volume"] == 100
-
-    def test_custom_skin_pickle_roundtrip(self):
-        sample_skin = {
-            "content": "Tocando agora",
-            "embeds": [
-                {
-                    "title": "Título da Música",
-                    "description": "Artista",
-                    "color": 0x5865F2,
-                }
-            ],
-        }
-        encoded = base64.b64encode(pickle.dumps(sample_skin)).decode("utf-8")
-        loaded = pickle.loads(base64.b64decode(encoded))
-        assert loaded["content"] == "Tocando agora"
-        assert loaded["embeds"][0]["title"] == "Título da Música"
+    @pytest.mark.asyncio
+    async def test_skin_personalizada_legada_e_lida_pelo_editor(self, editor_sem_tela):
+        skin = skin_realista()
+        menu, _, _ = editor_sem_tela(dados_globais(normais={"Minha": texto_legado(skin)}))
+        await menu.load_skin(SimpleNamespace(values=["> cs: Minha"]))
+        assert menu.message_data == skin

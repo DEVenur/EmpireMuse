@@ -633,7 +633,7 @@ class LastFmCog(commands.Cog):
                     if not result:
                         print(f"⚠️ - Last.FM Scrobble - Sem resultados para a música: {track_query}")
                         self.bot.last_fm.cache[track_query] = {}
-                        self.bot.last_fm.scrobble_save_cache()
+                        await self.bot.last_fm.scrobble_save_cache_async()
                         await self.save_scrobble(query=track_query, track=track, users=users)
                         return
 
@@ -646,7 +646,7 @@ class LastFmCog(commands.Cog):
                     }
 
                     self.bot.last_fm.cache[track_query] = fmdata
-                    self.bot.last_fm.scrobble_save_cache()
+                    await self.bot.last_fm.scrobble_save_cache_async()
 
                 if not fmdata:
                     print(f"⚠️ - Last.FM Scrobble - Ignorado: {track_query}")

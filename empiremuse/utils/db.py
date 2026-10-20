@@ -8,7 +8,7 @@ import shutil
 import traceback
 from copy import deepcopy
 from datetime import datetime
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Union
 from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 
 import disnake
@@ -206,8 +206,16 @@ class LocalDatabase(BaseDB):
 
         return data
 
-    async def query_data(self, db_name: str, collection: str, filter: dict = None, limit=500) -> list:
-        return self._connect[collection][db_name].find(filter or {})
+    async def query_data(self, db_name: str, collection: str, filter: dict = None, limit: Optional[int] = None):
+        """Os documentos que casam com ``filter``; ``limit`` (se informado) é o máximo devolvido. Sem ``limit`` vem tudo."""
+        cursor = self._connect[collection][db_name].find(filter or {})
+        return cursor if limit is None else cursor.limit(limit)
+
+    async def iter_data(self, db_name: str, collection: str, filter: dict = None):
+        """Os documentos, um por vez. O TinyMongo já guarda a coleção na memória; a fotografia da lista evita que quem grava
+        enquanto percorre (como o ``fixfavs``) mexa no que está sendo percorrido."""
+        for document in list(self._connect[collection][db_name].find(filter or {})):
+            yield document
 
     async def delete_data(self, id_, db_name: str, collection: str):
         try:
@@ -308,8 +316,17 @@ class MongoDatabase(BaseDB):
         await self._connect[collection][db_name].update_one({"_id": str(id_)}, {"$set": data}, upsert=True)
         return data
 
-    async def query_data(self, db_name: str, collection: str, filter: dict = None, limit=100) -> list:
-        return [d async for d in self._connect[collection][db_name].find(filter or {})]
+    async def query_data(self, db_name: str, collection: str, filter: dict = None, limit: Optional[int] = None) -> list:
+        """Os documentos que casam com ``filter`` numa lista; ``limit`` (se informado) é o máximo puxado do cursor."""
+        cursor = self._connect[collection][db_name].find(filter or {})
+        if limit is not None:
+            cursor = cursor.limit(limit)
+        return [d async for d in cursor]
+
+    async def iter_data(self, db_name: str, collection: str, filter: dict = None):
+        """O cursor do motor entregue um documento por vez: nada da coleção é guardado na memória."""
+        async for document in self._connect[collection][db_name].find(filter or {}):
+            yield document
 
     async def delete_data(self, id_, db_name: str, collection: str):
         try:

@@ -4,11 +4,9 @@ from __future__ import annotations
 import asyncio
 import datetime
 import os
-import pickle
 import random
 import string
 import traceback
-from base64 import b64decode
 from typing import TYPE_CHECKING, Union, Optional
 
 import disnake
@@ -30,6 +28,7 @@ from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import time_format
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
+from empiremuse.utils.music.skin_store import load_custom_skins
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import (
     send_idle_embed,
@@ -1135,6 +1134,14 @@ class MusicSettings(commands.Cog):
         else:
             txt = f"**A skin do player do servidor foi alterada com sucesso.**\n{changed_skins_txt}"
 
+        skins = await load_custom_skins(bot, guild.id, global_data)
+
+        if skins.rejected:
+            txt += (
+                f"\n\n⚠️ {skins.rejected} skin(s) personalizada(s) do servidor estão em um formato "
+                "incompatível e foram ignoradas (o player usa a skin padrão no lugar)."
+            )
+
         kwargs = {
             "embed": disnake.Embed(description=txt, color=bot.get_color(guild.me)).set_footer(
                 text=f"{bot.user} - [{bot.user.id}]", icon_url=bot.user.display_avatar.with_format("png").url
@@ -1172,16 +1179,8 @@ class MusicSettings(commands.Cog):
             player.skin = select_view.skin_selected
             player.skin_static = select_view.static_skin_selected
 
-            for n, s in global_data["custom_skins"].items():
-                if isinstance(s, str):
-                    global_data["custom_skins"][n] = pickle.loads(b64decode(s))
-
-            for n, s in global_data["custom_skins_static"].items():
-                if isinstance(s, str):
-                    global_data["custom_skins_static"][n] = pickle.loads(b64decode(s))
-
-            player.custom_skin_data = global_data["custom_skins"]
-            player.custom_skin_static_data = global_data["custom_skins_static"]
+            player.custom_skin_data = skins.normal
+            player.custom_skin_static_data = skins.static
             player.setup_features()
 
             player.setup_hints()

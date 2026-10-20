@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import datetime
-import logging
-import pickle
+import json
+import base64
 import subprocess
+import zlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from cachetools import TTLCache
 
 from empiremuse import paths
 from empiremuse.panel.handlers import brand
@@ -17,10 +18,15 @@ from empiremuse.utils import branding
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import LocalDatabase
 from empiremuse.utils.music import lavalink_server_list, local_lavalink as ll
+from tests.helpers_f3_6b import BOT_ID, MongoEmMemoria, cog_de_sessoes
+from tests.test_f3_6b_formato_caches import gravar_o_cache_de_playlist, pool_vazio as pool_de_caches
+from tests.test_f3_6b_formato_fila_salva import salvar as salvar_fila, tres_faixas
+from tests.test_f3_6b_formato_sessao import jogador_completo
+from tests.test_f3_6b_formato_skin import editor_sem_tela as _editor_sem_tela
+from tests.test_f3_6b_formato_skin import BotaoDeModo, InteracaoDoEditor, dados_globais, skin_realista
 
 
-class FakeClassForPickle:
-    pass
+editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
 
 
 class TestCwdDoPopenLavalink:
@@ -54,7 +60,7 @@ class TestCwdDoPopenLavalink:
 
 
 class TestGuardasDeCache:
-    """(b) Teste que cache com classe de módulo inexistente é descartado com aviso, sem travar."""
+    """(b) Cache ilegível (de qualquer formato, inclusive o de uma versão antiga) é descartado sem travar a inicialização."""
 
     @pytest.mark.parametrize(
         "filename,attr_name",
@@ -64,119 +70,107 @@ class TestGuardasDeCache:
             (".lyric_cache_data", "lyric_data_cache"),
         ],
     )
-    def test_cache_with_nonexistent_class_is_discarded_with_warning(
-        self, monkeypatch, tmp_path, caplog, filename, attr_name
-    ):
+    @pytest.mark.parametrize(
+        "conteudo",
+        [
+            b"cnonexistent_module_xyz\nFakeClass\n)\x81}.",  # classe de um módulo que não existe (de uma versão antiga)
+            b"INVALID_CACHE_BYTES",
+            b"",
+        ],
+        ids=["classe-inexistente", "bytes-invalidos", "vazio"],
+    )
+    def test_cache_ilegivel_e_descartado_sem_travar(self, monkeypatch, tmp_path, filename, attr_name, conteudo):
         monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
         db_dir = tmp_path / "local_database"
         db_dir.mkdir(parents=True, exist_ok=True)
-
-        # Cria um pickle serializando uma referência a um módulo inexistente
-        # Formato de pickle para 'from nonexistent_module_xyz import FakeClass'
-        # b"c<module>\n<name>\n"
-        bad_pickle = b"cnonexistent_module_xyz\nFakeClass\n)\x81}."
-        (db_dir / filename).write_bytes(bad_pickle)
+        (db_dir / filename).write_bytes(conteudo)
 
         pool = BotPool.__new__(BotPool)
-        pool.playlist_cache = {}
+        pool.playlist_cache = TTLCache(maxsize=10, ttl=1800)  # o ``load_cache`` lê o TTL do cache de playlist
         pool.partial_track_cache = {}
         pool.lyric_data_cache = {}
 
-        with caplog.at_level(logging.WARNING):
-            pool.load_cache()
+        pool.load_cache()
 
-        # O cache problemático deve ter sido descartado sem levantar exceção
         assert getattr(pool, attr_name) == {}
-        # Deve ter emitido aviso no logger
-        assert any("descartado" in r.getMessage().lower() or "cache" in r.getMessage().lower() for r in caplog.records)
+        assert all(
+            getattr(pool, outro) == {} for outro in ("playlist_cache", "partial_track_cache", "lyric_data_cache")
+        )
 
-    def test_cache_with_corrupted_bytes_is_discarded_with_warning(self, monkeypatch, tmp_path, caplog):
+
+def conteudo_legivel(gravado: bytes | str) -> bytes:
+    """O que o artefato guarda por dentro, seja qual for o envelope (``base64`` e ``zlib`` são desfeitos se houver)."""
+    dados = gravado.encode() if isinstance(gravado, str) else gravado
+    try:
+        dados = base64.b64decode(dados, validate=True)
+    except ValueError:
+        pass
+    try:
+        dados = zlib.decompress(dados)
+    except zlib.error:
+        pass
+    return dados
+
+
+MODULOS_DO_PROJETO = (b"empiremuse", b"utils.", b"modules.")
+
+
+class TestArtefatosSemModulosDoProjeto:
+    """(c) O que o código REAL grava (sessão, fila salva, skin, cache de playlist) não referencia módulos do projeto.
+
+    Formato-neutro: lê os bytes que os gravadores de verdade deixaram no disco ou no banco, desfaz o envelope e confere.
+    """
+
+    @staticmethod
+    def sem_modulos_do_projeto(artefato: bytes | str, rotulo: str) -> None:
+        dados = conteudo_legivel(artefato)
+        assert dados, f"{rotulo}: o gravador não deixou nada"
+        for modulo in MODULOS_DO_PROJETO:
+            assert modulo not in dados, f"{rotulo} não pode referenciar {modulo.decode()}"
+
+    @pytest.mark.asyncio
+    async def test_sessao_do_player_no_disco_e_no_mongo(self, monkeypatch, tmp_path):
         monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
-        db_dir = tmp_path / "local_database"
-        db_dir.mkdir(parents=True, exist_ok=True)
+        await cog_de_sessoes().save_info(jogador_completo())
+        arquivos = list((tmp_path / "local_database" / "player_sessions_json").rglob("*.*"))
+        assert arquivos, "a sessão não foi gravada no disco"
+        for arquivo in arquivos:
+            self.sem_modulos_do_projeto(arquivo.read_bytes(), f"sessão no disco ({arquivo.name})")
 
-        (db_dir / "playlist_cache.pkl").write_bytes(b"INVALID_PICKLE_BYTES")
+        mongo = MongoEmMemoria()
+        await cog_de_sessoes(mongo=mongo).save_info(jogador_completo())
+        (documento,) = mongo.colecao(BOT_ID, "player_sessions_json").values()
+        self.sem_modulos_do_projeto(documento["data"], "sessão no Mongo")
 
-        pool = BotPool.__new__(BotPool)
-        pool.playlist_cache = {}
-        pool.partial_track_cache = {}
-        pool.lyric_data_cache = {}
+    @pytest.mark.asyncio
+    async def test_fila_salva(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+        faixas = tres_faixas()
+        await salvar_fila(faixas[1:], atual=faixas[0])
+        arquivos = list((tmp_path / "local_database" / "saved_queues_json" / "users").iterdir())
+        assert len(arquivos) == 1
+        self.sem_modulos_do_projeto(arquivos[0].read_bytes(), "fila salva")
 
-        with caplog.at_level(logging.WARNING):
-            pool.load_cache()
+    @pytest.mark.asyncio
+    async def test_skin_personalizada(self, editor_sem_tela):
+        menu, bot, _ = editor_sem_tela(dados_globais())
+        menu.message_data = skin_realista()
+        BotaoDeModo.modo = "custom_skins"
+        await menu.modal_handler(InteracaoDoEditor(skin_name="Minha"))
+        gravada = bot.salvos[-1]["custom_skins"]["Minha"]
+        # a skin é dicionário (JSON) desde a etapa 3; o texto ``base64`` de ``pickle`` era o formato antigo
+        artefato = json.dumps(gravada, ensure_ascii=False) if isinstance(gravada, dict) else gravada
+        self.sem_modulos_do_projeto(artefato, "skin personalizada")
 
-        assert pool.playlist_cache == {}
-
-
-class TestPicklesSemModulosDoProjeto:
-    """(c) Os pickles produzidos pelo código real de fila salva e de sessão do player não contêm b'empiremuse', b'utils.' nem b'modules.'."""
-
-    def test_saved_queue_pickle_contains_no_project_modules(self):
-        tracks = [
-            {
-                "title": "Música Teste",
-                "author": "Artista Teste",
-                "uri": "https://example.com/watch?v=123",
-                "length": 180000,
-                "is_stream": False,
-                "playlist": {"name": "Minha Playlist", "url": "https://example.com/playlist?list=456"},
-            }
-        ]
-        queue_payload = {
-            "tracks": tracks,
-            "created_at": datetime.datetime.now(datetime.timezone.utc),
-            "guild_id": 987654321,
-        }
-
-        dumped = pickle.dumps(queue_payload)
-
-        assert b"empiremuse" not in dumped, "Pickle de fila salva não pode referenciar pacote empiremuse"
-        assert b"utils." not in dumped, "Pickle de fila salva não pode referenciar módulo utils."
-        assert b"modules." not in dumped, "Pickle de fila salva não pode referenciar módulo modules."
-
-    def test_player_session_pickle_contains_no_project_modules(self):
-        session_data = {
-            "_id": 123456789,
-            "version": 1,
-            "volume": 100,
-            "nightcore": False,
-            "position": 45000,
-            "voice_channel": 111111111,
-            "dj": None,
-            "player_creator": 222222222,
-            "static": False,
-            "paused": False,
-            "text_channel_id": 333333333,
-            "message_id": 444444444,
-            "keep_connected": True,
-            "loop": False,
-            "autoplay": False,
-            "stage_title_event": False,
-            "stage_title_template": "",
-            "skin": "default",
-            "skin_static": "default",
-            "custom_skin_data": {},
-            "custom_skin_static_data": {},
-            "uptime": 1234567,
-            "restrict_mode": False,
-            "mini_queue_enabled": False,
-            "listen_along_invite": "",
-            "queue": ["track_encoded_base64_1", "track_encoded_base64_2"],
-            "played": ["track_encoded_base64_0"],
-            "queue_autoplay": [],
-            "failed_tracks": [],
-            "prefix_info": "!",
-            "voice_state": {},
-            "time": datetime.datetime.now(datetime.timezone.utc),
-            "lastfm_artists": {},
-            "start_timestamp": 1234567890,
-        }
-
-        dumped = pickle.dumps(session_data)
-
-        assert b"empiremuse" not in dumped, "Pickle de sessão do player não pode referenciar pacote empiremuse"
-        assert b"utils." not in dumped, "Pickle de sessão do player não pode referenciar módulo utils."
-        assert b"modules." not in dumped, "Pickle de sessão do player não pode referenciar módulo modules."
+    @pytest.mark.asyncio
+    async def test_cache_de_playlist_so_referencia_bibliotecas_de_terceiros(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+        pool = pool_de_caches()
+        pool.playlist_cache["https://exemplo.invalid/playlist/1"] = {"loadType": "EMPTY", "tracks": []}
+        await gravar_o_cache_de_playlist(pool)
+        self.sem_modulos_do_projeto(
+            (tmp_path / "local_database" / "playlist_cache.json").read_bytes(), "cache de playlist"
+        )
 
 
 class TestRoteamentoDeCaminhosDeDados:
