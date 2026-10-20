@@ -155,3 +155,149 @@ def decodificar(documento: dict, **kwargs):
 
 def tamanho_do_json(dados: dict) -> int:
     return len(session.encode_session(dados))
+
+
+# ============================================================================ disco, legado e Mongo de mentira (commit 2)
+
+import base64  # noqa: E402
+import copy as _copy  # noqa: E402
+import os  # noqa: E402
+import pickle  # noqa: E402
+import time as _time  # noqa: E402
+import zlib  # noqa: E402
+from collections import deque  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from tests.helpers_f3_6b import BOT_ID, DJ_A, DJ_B, MongoEmMemoria  # noqa: E402
+from tests.helpers_f3_6b_legado import SEGREDO  # noqa: E402
+
+HORAS = 3600
+JANELA_DE_48H = 48 * HORAS
+
+
+def pasta_json(tmp_path) -> Path:
+    return tmp_path / "local_database" / "player_sessions_json" / str(BOT_ID)
+
+
+def pasta_legado(tmp_path) -> Path:
+    return tmp_path / "local_database" / "player_sessions" / str(BOT_ID)
+
+
+def sessao_legada(**mudancas) -> dict:
+    """A sessão como a versão ANTIGA a gravava: com ``voice_state`` e ``extra_info`` (tupla), ``dj`` em ``set`` e log em ``deque``."""
+    log = deque([{"text": f"Comando {n}", "emoji": "▶️", "timestamp": 1760882600.0 + n} for n in range(3)], maxlen=10)
+    dados = sessao_minima(
+        dj={DJ_A, DJ_B},
+        command_log_list=log,
+        queue=[faixa_info(0), faixa_info(1)],
+        played=[faixa_info(2)],
+        **mudancas,
+    )
+    dados["voice_state"] = {"sessionId": SEGREDO, "event": {"token": SEGREDO, "endpoint": "voz.exemplo.invalid"}}
+    dados["extra_info"] = {"guild-yt-oauth": (SEGREDO, 1, (2, 3))}
+    return dados
+
+
+def pkl_bytes(dados, protocolo: int = 4) -> bytes:
+    """O que a versão antiga gravava no disco: ``zlib`` de ``pickle``."""
+    return zlib.compress(pickle.dumps(dados, protocol=protocolo))
+
+
+def envelope_do_mongo(raw: bytes) -> str:
+    """``base64`` de ``zlib`` (o envelope do Mongo, igual para o pickle antigo e para o JSON novo)."""
+    return base64.b64encode(zlib.compress(raw)).decode("ascii")
+
+
+def envelope_antigo_do_mongo(dados, protocolo: int = 4) -> str:
+    return base64.b64encode(pkl_bytes(dados, protocolo)).decode("ascii")
+
+
+def com_idade(caminho: Path, horas: float) -> Path:
+    """Põe a data de modificação de ``caminho`` ``horas`` horas atrás (relógio real)."""
+    quando = _time.time() - horas * HORAS
+    os.utime(caminho, (quando, quando))
+    return caminho
+
+
+def escrever_pkl(tmp_path, guild=SERVIDOR, dados=None, *, ext=".pkl", horas=None, bruto_=None, protocolo=4) -> Path:
+    pasta = pasta_legado(tmp_path)
+    pasta.mkdir(parents=True, exist_ok=True)
+    alvo = pasta / f"{guild}{ext}"
+    alvo.write_bytes(
+        bruto_ if bruto_ is not None else pkl_bytes(sessao_legada(_id=guild) if dados is None else dados, protocolo)
+    )
+    return com_idade(alvo, horas) if horas is not None else alvo
+
+
+def escrever_json(tmp_path, guild=SERVIDOR, *, horas=None, **mudancas) -> Path:
+    pasta = pasta_json(tmp_path)
+    pasta.mkdir(parents=True, exist_ok=True)
+    alvo = pasta / f"{guild}.json"
+    alvo.write_bytes(session.encode_session(sessao_minima(_id=guild, **mudancas)))
+    return com_idade(alvo, horas) if horas is not None else alvo
+
+
+class MongoDeSessoes(MongoEmMemoria):
+    """O Mongo de mentira das sessões: ``$set`` no ``update_data``, leitura em CURSOR preguiçoso (``iter_data``) e um diário.
+
+    * ``eventos``: ``(ação, coleção, id)`` na ordem, com ``ação`` em ``update``, ``leitura`` e ``delete``;
+    * ``consumidos`` / ``consumidos_por[coleção]``: documentos que o ``iter_data`` realmente entregou (o teto por subida é medido na coleção do legado);
+    * ``falhas``: ``{"update:coleção": exceção}`` levantada pela operação (erro transitório de rede, por exemplo);
+    * ``adulterar``: ``{coleção: função(documento) -> documento}`` aplicada ao que o banco GUARDA (corrompe a gravação).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.eventos: list[tuple[str, str, str]] = []
+        self.consumidos = 0
+        self.consumidos_por: dict[str, int] = {}
+        self.falhas: dict[str, Exception] = {}
+        self.adulterar: dict = {}
+
+    def _checar(self, acao: str, colecao: str) -> None:
+        erro = self.falhas.get(f"{acao}:{colecao}")
+        if erro is not None:
+            raise erro
+
+    async def update_data(self, id_, data, *, db_name, collection, default_model=None):
+        self.eventos.append(("update", collection, str(id_)))
+        self._checar("update", collection)
+        atual = self.colecao(db_name, collection).get(str(id_), {})
+        documento = {**atual, **_copy.deepcopy(data), "_id": str(id_)}
+        if collection in self.adulterar:
+            documento = self.adulterar[collection](documento)
+        self.colecao(db_name, collection)[str(id_)] = documento
+
+    async def query_data(self, db_name, collection, filter=None, limit=100):
+        self.eventos.append(("leitura", collection, "*"))
+        self._checar("leitura", collection)
+        return [_copy.deepcopy(d) for d in self.colecao(db_name, collection).values()]
+
+    async def iter_data(self, db_name, collection, filter=None):
+        """Cursor preguiçoso: cada documento só é copiado e contado quando o consumidor o pede (``filter`` = igualdade de campos)."""
+        self.eventos.append(("leitura", collection, "*"))
+        self._checar("leitura", collection)
+        for chave in list(self.colecao(db_name, collection)):
+            documento = self.colecao(db_name, collection).get(chave)
+            if documento is None or any(documento.get(k) != v for k, v in (filter or {}).items()):
+                continue
+            self.consumidos += 1
+            self.consumidos_por[collection] = self.consumidos_por.get(collection, 0) + 1
+            yield _copy.deepcopy(documento)
+
+    async def get_data(self, id_, *, db_name, collection, default_model=None):
+        self.eventos.append(("leitura", collection, str(id_)))
+        self._checar("leitura", collection)
+        documento = self.colecao(db_name, collection).get(str(id_))
+        return _copy.deepcopy(documento) if documento is not None else None
+
+    async def delete_data(self, id_, db_name, collection):
+        self.eventos.append(("delete", collection, str(id_)))
+        self._checar("delete", collection)
+        await super().delete_data(id_, db_name, collection)
+
+    def doc(self, collection: str, id_) -> dict | None:
+        return self.colecao(BOT_ID, collection).get(str(id_))
+
+    def ids(self, collection: str) -> set[str]:
+        return set(self.colecao(BOT_ID, collection))

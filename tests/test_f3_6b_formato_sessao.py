@@ -7,9 +7,8 @@ Dois grupos:
 
 * o que continua valendo depois da migração para JSON (``TestRoundTripDoDisco``, ``TestRoundTripDoMongo``,
   ``TestTiposDaSessao``): os mesmos dados e os mesmos tipos (``datetime`` UTC, ``set``, lista de log) voltam iguais;
-* o que descreve o formato antigo e muda DE PROPÓSITO nas etapas seguintes (``TestFormatoGravadoHoje``,
-  ``TestCamposQueAMigracaoDescarta``): envelope, protocolo e opcodes. ``TestLegadoEmVariosProtocolos`` vale DEPOIS da
-  etapa 2b: só os protocolos 4 e 5, com ``zlib``, são lidos (por ``load_legacy``). Cada um diz na docstring quando deixa de valer.
+* o que descrevia o formato antigo (pickle, protocolos, opcodes, ``voice_state``) saiu na etapa 5: o formato novo está em
+  ``tests/test_f3_6b_etapa5_*.py`` e a migração do legado em ``test_f3_6b_etapa5_migracao_*.py``.
 """
 
 import base64
@@ -121,7 +120,7 @@ def esperado_da_sessao(jogador) -> dict:
         "nightcore": True,
         "position": 45123.5,
         "voice_channel": CANAL_DE_VOZ,
-        "dj": {DJ_A, DJ_B},
+        "dj": sorted([DJ_A, DJ_B]),  # o JSON guarda o conjunto como lista ordenada; o resume_player faz set(...)
         "player_creator": DONO,
         "static": False,
         "paused": True,
@@ -240,8 +239,8 @@ class TestRoundTripDoMongo:
         mongo = MongoEmMemoria()
         cog = cog_de_sessoes(mongo=mongo)
         await cog.save_info(jogador_completo())
-        assert list(mongo.documentos) == [(str(BOT_ID), "player_sessions")]
-        assert list(mongo.colecao(BOT_ID, "player_sessions")) == [str(SERVIDOR)]
+        assert list(mongo.documentos) == [(str(BOT_ID), "player_sessions_json")]
+        assert list(mongo.colecao(BOT_ID, "player_sessions_json")) == [str(SERVIDOR)]
 
     @pytest.mark.asyncio
     async def test_sem_mongo_configurado_nao_le_nada(self, tmp_path):
@@ -257,7 +256,8 @@ class TestRoundTripDoMongo:
 
         no_disco = cog_de_sessoes(mongo=MongoEmMemoria(), PLAYER_SESSIONS_MONGODB=False)
         await no_disco.save_info(jogador_completo())
-        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").is_file()
+        assert (tmp_path / "local_database" / "player_sessions_json" / str(BOT_ID) / f"{SERVIDOR}.json").is_file()
+        assert not pasta_das_sessoes(tmp_path).exists()
 
 
 class TestTiposDaSessao:
@@ -276,8 +276,8 @@ class TestTiposDaSessao:
         assert (INSTANTE - sessao["time"]).total_seconds() == 0  # aritmética de data com fuso, como o resume faz
 
     @pytest.mark.asyncio
-    async def test_dj_e_set_de_inteiros(self, sessao):
-        assert type(sessao["dj"]) is set and sessao["dj"] == {DJ_A, DJ_B}
+    async def test_dj_e_lista_ordenada_de_inteiros(self, sessao):
+        assert type(sessao["dj"]) is list and sessao["dj"] == sorted([DJ_A, DJ_B])
         assert all(type(membro) is int for membro in sessao["dj"])
 
     @pytest.mark.asyncio
@@ -303,175 +303,4 @@ class TestTiposDaSessao:
 
     @pytest.mark.asyncio
     async def test_a_sessao_tem_exatamente_os_campos_do_plano(self, sessao):
-        assert set(sessao) == CAMPOS_DA_SESSAO | CAMPOS_QUE_A_ETAPA_5_REMOVE
-
-
-# ============================================================================ o que o formato de hoje tem e a migração muda
-
-
-class TestFormatoGravadoHoje:
-    """Descreve o artefato gravado hoje. Deixa de valer na etapa 5 (JSON), quando estes testes são reescritos."""
-
-    @pytest_asyncio.fixture
-    async def bytes_do_disco(self, tmp_path):
-        await cog_de_sessoes().save_info(jogador_completo())
-        return (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").read_bytes()
-
-    @pytest.mark.asyncio
-    async def test_o_disco_guarda_pickle_comprimido_com_zlib_e_tira_copia_bak(self, tmp_path, bytes_do_disco):
-        assert bytes_do_disco[:1] == b"x"  # cabeçalho do zlib
-        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.bak").read_bytes() == bytes_do_disco
-        assert protocolo_do_pickle(zlib.decompress(bytes_do_disco)) == pickle.DEFAULT_PROTOCOL
-
-    @pytest.mark.asyncio
-    async def test_o_protocolo_gravado_e_o_4_ou_o_5(self, bytes_do_disco):
-        """Confirma o byte ``PROTO`` do que o código grava de verdade (o leitor restrito só precisa aceitar 4 e 5)."""
-        assert protocolo_do_pickle(zlib.decompress(bytes_do_disco)) in {4, 5}
-
-    @pytest.mark.asyncio
-    async def test_os_opcodes_gravados_cabem_na_lista_fechada(self, bytes_do_disco):
-        usados = set(opcodes_do_pickle(zlib.decompress(bytes_do_disco)))
-        assert usados <= OPCODES_DA_SESSAO, sorted(usados - OPCODES_DA_SESSAO)
-        assert not usados & OPCODES_SEM_LUGAR
-
-    @pytest.mark.asyncio
-    async def test_as_unicas_classes_pedidas_sao_datetime_timezone_timedelta_e_deque(self, bytes_do_disco):
-        assert globais_do_pickle(zlib.decompress(bytes_do_disco)) == GLOBAIS_DA_SESSAO
-
-    @pytest.mark.asyncio
-    async def test_o_set_do_dj_usa_opcodes_proprios_e_nao_uma_classe(self, bytes_do_disco):
-        dados = zlib.decompress(bytes_do_disco)
-        assert ("builtins", "set") not in globais_do_pickle(dados)
-        assert {"EMPTY_SET", "ADDITEMS"} <= set(opcodes_do_pickle(dados))
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_os_protocolos_4_e_5_usam_so_a_lista_fechada_de_opcodes(self, tmp_path, protocolo):
-        dados = pickle.dumps(await gravar(cog_de_sessoes(), jogador_completo()), protocol=protocolo)
-        usados = set(opcodes_do_pickle(dados))
-        assert protocolo_do_pickle(dados) == protocolo
-        assert usados <= OPCODES_DA_SESSAO, sorted(usados - OPCODES_DA_SESSAO)
-        assert not usados & OPCODES_SEM_LUGAR
-        assert globais_do_pickle(dados) == GLOBAIS_DA_SESSAO
-
-    @pytest.mark.asyncio
-    async def test_o_mongo_guarda_base64_de_zlib_de_pickle(self, tmp_path):
-        mongo = MongoEmMemoria()
-        await cog_de_sessoes(mongo=mongo).save_info(jogador_completo())
-        documento = mongo.colecao(BOT_ID, "player_sessions")[str(SERVIDOR)]
-        assert set(documento) == {"_id", "data"} and isinstance(documento["data"], str)
-        dados = zlib.decompress(base64.b64decode(documento["data"]))
-        assert protocolo_do_pickle(dados) in {4, 5} and globais_do_pickle(dados) == GLOBAIS_DA_SESSAO
-
-    @pytest.mark.asyncio
-    async def test_protocolo_3_pede_o_set_como_classe_e_o_4_nao(self, tmp_path):
-        """Por isso o protocolo 3 ou menor não entra no leitor restrito: o ``set`` viria de ``builtins.set``."""
-        cog = cog_de_sessoes()
-        dados = await gravar(cog, jogador_completo())
-        assert ("builtins", "set") in globais_do_pickle(pickle.dumps(dados, protocol=3))
-        assert ("builtins", "set") not in globais_do_pickle(pickle.dumps(dados, protocol=4))
-        assert ("builtins", "set") not in globais_do_pickle(pickle.dumps(dados, protocol=5))
-
-
-class TestLegadoEmVariosProtocolos:
-    """Depois da 2b (``load_legacy``): sessões nos protocolos 4 e 5 com ``zlib``; o resto é PULADO (e fica no disco/Mongo)."""
-
-    @pytest_asyncio.fixture
-    async def sessao_original(self, tmp_path):
-        return await gravar(cog_de_sessoes(), jogador_completo())
-
-    @staticmethod
-    def escrever_no_disco(tmp_path, dados: bytes, nome=f"{SERVIDOR}.pkl"):
-        pasta = pasta_das_sessoes(tmp_path)
-        pasta.mkdir(parents=True, exist_ok=True)
-        (pasta / nome).write_bytes(dados)
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_o_disco_le_a_sessao_nos_protocolos_4_e_5(self, tmp_path, sessao_original, protocolo):
-        self.escrever_no_disco(tmp_path, zlib.compress(pickle.dumps(sessao_original, protocol=protocolo)))
-        lidas = await cog_de_sessoes().get_player_sessions_local()
-        assert lidas == [sessao_original]
-        assert (
-            type(lidas[0]["dj"]) is set and lidas[0]["time"] == INSTANTE and lidas[0]["command_log_list"].maxlen == 10
-        )
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_o_mongo_le_a_sessao_nos_protocolos_4_e_5(self, tmp_path, sessao_original, protocolo):
-        mongo = MongoEmMemoria()
-        cru = zlib.compress(pickle.dumps(sessao_original, protocol=protocolo))
-        await mongo.update_data(
-            SERVIDOR, {"data": base64.b64encode(cru).decode()}, db_name=BOT_ID, collection="player_sessions"
-        )
-        assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == [sessao_original]
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [0, 1, 2, 3])
-    async def test_o_disco_pula_a_sessao_de_protocolo_antigo_e_deixa_o_arquivo(
-        self, tmp_path, sessao_original, protocolo
-    ):
-        self.escrever_no_disco(tmp_path, zlib.compress(pickle.dumps(sessao_original, protocol=protocolo)))
-        assert await cog_de_sessoes().get_player_sessions_local() == []
-        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").is_file()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [0, 1, 2, 3])
-    async def test_o_mongo_pula_a_sessao_de_protocolo_antigo_e_deixa_o_documento(
-        self, tmp_path, sessao_original, protocolo
-    ):
-        mongo = MongoEmMemoria()
-        cru = zlib.compress(pickle.dumps(sessao_original, protocol=protocolo))
-        await mongo.update_data(
-            SERVIDOR, {"data": base64.b64encode(cru).decode()}, db_name=BOT_ID, collection="player_sessions"
-        )
-        assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == []
-        assert str(SERVIDOR) in mongo.colecao(BOT_ID, "player_sessions") and mongo.apagados == []
-
-    @pytest.mark.asyncio
-    async def test_o_disco_pula_pickle_sem_zlib(self, tmp_path, sessao_original):
-        """Sem o antigo "se não for zlib, lê assim mesmo": o envelope é obrigatório."""
-        self.escrever_no_disco(tmp_path, pickle.dumps(sessao_original, protocol=4))
-        assert await cog_de_sessoes().get_player_sessions_local() == []
-
-    @pytest.mark.asyncio
-    async def test_o_mongo_pula_texto_sem_zlib(self, tmp_path, sessao_original):
-        mongo = MongoEmMemoria()
-        cru = base64.b64encode(pickle.dumps(sessao_original, protocol=4)).decode()
-        await mongo.update_data(SERVIDOR, {"data": cru}, db_name=BOT_ID, collection="player_sessions")
-        assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == []
-
-    @pytest.mark.asyncio
-    async def test_so_arquivos_pkl_sao_lidos_e_o_bak_fica_de_fora(self, tmp_path, sessao_original):
-        dados = zlib.compress(pickle.dumps(sessao_original, protocol=4))
-        self.escrever_no_disco(tmp_path, dados, f"{SERVIDOR}.bak")
-        self.escrever_no_disco(tmp_path, dados, f"{SERVIDOR}.json")
-        assert await cog_de_sessoes().get_player_sessions_local() == []
-
-    @pytest.mark.asyncio
-    async def test_o_nome_do_arquivo_nao_e_validado_hoje(self, tmp_path, sessao_original):
-        """Qualquer nome ``*.pkl`` vira caminho e é lido; a etapa 5 passa a exigir só dígitos (1 a 20)."""
-        self.escrever_no_disco(tmp_path, zlib.compress(pickle.dumps(sessao_original)), "nome qualquer.pkl")
-        assert await cog_de_sessoes().get_player_sessions_local() == [sessao_original]
-
-
-class TestCamposQueAMigracaoDescarta:
-    """``voice_state`` e ``extra_info`` são gravados e lidos hoje; o JSON novo não os leva (migração descarta)."""
-
-    @pytest.mark.asyncio
-    async def test_voice_state_e_extra_info_sao_gravados_e_voltam_hoje(self, tmp_path):
-        extra = {"guild-yt-oauth": ("token-de-teste", 1)}
-        jogador = jogador_completo(extra_info=extra)
-        cog = cog_de_sessoes()
-        await cog.save_info(jogador)
-        sessao = (await cog.get_player_sessions_local())[0]
-        assert sessao["voice_state"] == jogador._voice_state
-        assert sessao["extra_info"] == extra and type(sessao["extra_info"]["guild-yt-oauth"]) is tuple
-
-    @pytest.mark.asyncio
-    async def test_o_resto_da_sessao_nao_depende_desses_dois_campos(self, tmp_path):
-        cog = cog_de_sessoes()
-        await cog.save_info(jogador_completo(extra_info={}, _voice_state={}))
-        sessao = (await cog.get_player_sessions_local())[0]
-        assert sessao["voice_state"] == {} and sessao["extra_info"] == {}
-        assert len(sessao["queue"]) == 4 and sessao["dj"] == {DJ_A, DJ_B}
+        assert set(sessao) == CAMPOS_DA_SESSAO

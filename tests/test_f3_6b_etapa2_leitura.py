@@ -26,6 +26,7 @@ import pytest_asyncio
 from empiremuse.utils.music.interactions import base_skin
 from tests.helpers_f3_6b import BOT_ID, SERVIDOR, MongoEmMemoria, cog_de_sessoes
 from tests.helpers_f3_6b_serializacao import schema
+from tests.helpers_f3_6b_sessao import envelope_antigo_do_mongo, sessao_legada
 from tests.helpers_f3_6b_legado import (
     CORRUPT,
     DEPTH,
@@ -104,7 +105,9 @@ class TestLegacyFormatError:
 class TestSessaoReal:
     @pytest_asyncio.fixture
     async def sessao(self):
-        return await gravar(cog_de_sessoes(), jogador_completo())
+        """A sessão como a versão ANTIGA a gravava: o ``save_info`` de hoje já não leva ``voice_state`` nem ``extra_info``."""
+        dados = await gravar(cog_de_sessoes(), jogador_completo())
+        return {**dados, "voice_state": {"sessionId": "sessao-de-voz"}, "extra_info": {}}
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("protocolo", [4, 5])
@@ -117,7 +120,8 @@ class TestSessaoReal:
 
     @pytest.mark.asyncio
     async def test_extra_info_com_tupla_passa(self):
-        sessao = await gravar(cog_de_sessoes(), jogador_completo(extra_info={"guild-yt-oauth": ("token-de-teste", 1)}))
+        sessao = await gravar(cog_de_sessoes(), jogador_completo())
+        sessao["extra_info"] = {"guild-yt-oauth": ("token-de-teste", 1)}  # o que a versão antiga gravava
         lido, _ = igual_ao_pickle_de_hoje(comprimido(pickle.dumps(sessao, protocol=4)), "session")
         assert lido["extra_info"]["guild-yt-oauth"] == ("token-de-teste", 1)
 
@@ -137,21 +141,17 @@ class TestSessaoReal:
         assert lido["queue"][0]["extra"]["lyrics"]["lines"][0]["plugin"]["words"]
 
     @pytest.mark.asyncio
-    async def test_o_arquivo_gravado_pelo_save_info_no_disco_e_lido(self, tmp_path):
-        cog = cog_de_sessoes()
-        await cog.save_info(jogador_completo())
-        raw = (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").read_bytes()
+    async def test_o_pkl_no_formato_que_o_save_info_gravava_antes_da_etapa_5_e_lido(self):
+        """Desde a etapa 5 o ``save_info`` grava JSON; o ``.pkl`` de antes é montado aqui com o mesmo conteúdo (``sessao_legada``)."""
+        raw = comprimido(pickle.dumps(sessao_legada(), protocol=pickle.DEFAULT_PROTOCOL))
         lido, esperado = igual_ao_pickle_de_hoje(raw, "session")
-        assert lido["_id"] == SERVIDOR and type(lido["dj"]) is set
-        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.bak").read_bytes() == raw
+        assert lido["_id"] == SERVIDOR and type(lido["dj"]) is set and lido["command_log_list"].maxlen == 10
 
     @pytest.mark.asyncio
-    async def test_o_documento_gravado_no_mongo_e_lido_como_texto(self):
-        mongo = MongoEmMemoria()
-        await cog_de_sessoes(mongo=mongo).save_info(jogador_completo())
-        documento = mongo.colecao(BOT_ID, "player_sessions")[str(SERVIDOR)]
-        lido = carregar(documento["data"], "session")
-        esperado = pickle.loads(zlib.decompress(base64.b64decode(documento["data"])))
+    async def test_o_documento_do_mongo_antigo_e_lido_como_texto(self):
+        texto = envelope_antigo_do_mongo(sessao_legada())
+        lido = carregar(texto, "session")
+        esperado = pickle.loads(zlib.decompress(base64.b64decode(texto)))
         assert lido == esperado and type(lido["dj"]) is set
 
     @pytest.mark.asyncio

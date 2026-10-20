@@ -58,8 +58,6 @@ PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
 
 # (arquivo relativo a empiremuse/, função qualificada, kind)
 PONTOS = [
-    ("cogs/player_resume.py", "PlayerSession.get_player_sessions_mongo", "session"),
-    ("cogs/player_resume.py", "PlayerSession.get_player_sessions_local", "session"),
     ("cogs/music.py", "Music.play", "queue"),
     ("cogs/music.py", "Music.create_player", "skin"),
     ("cogs/music_settings.py", "MusicSettings.change_skin", "skin"),
@@ -161,9 +159,10 @@ class TestPorAst:
         no = funcao_do_ponto(arquivo, funcao)
         assert kinds_chamados(no, auxiliares_do_projeto()) == {kind}
 
-    def test_sao_7_pontos_2_de_sessao_1_de_fila_e_4_de_skin(self):
+    def test_sao_5_pontos_1_de_fila_e_4_de_skin_e_o_de_sessao_agora_e_a_migracao(self):
+        """Desde a etapa 5 a leitura das sessões vivas é JSON; o ``load_legacy`` de sessão só roda na migração."""
         kinds = [kind for *_, kind in PONTOS]
-        assert (kinds.count("session"), kinds.count("queue"), kinds.count("skin")) == (2, 1, 4)
+        assert (kinds.count("session"), kinds.count("queue"), kinds.count("skin")) == (0, 1, 4)
 
     @pytest.mark.parametrize(("arquivo", "funcao", "kind"), PONTOS, ids=lambda v: str(v).split("/")[-1])
     def test_nenhum_ponto_usa_pickle_para_ler(self, arquivo, funcao, kind):
@@ -183,27 +182,6 @@ class TestPorAst:
 
 
 class TestIdaEVoltaPelosPontosReais:
-    @pytest.mark.asyncio
-    async def test_sessao_no_disco(self, tmp_path, monkeypatch):
-        await cog_de_sessoes().save_info(jogador_completo())
-        arquivo = pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl"
-        esperado = pickle.loads(zlib.decompress(arquivo.read_bytes()))  # a fixture é do próprio teste
-        chamadas = espionar_load_legacy(monkeypatch)
-        lidas = await cog_de_sessoes().get_player_sessions_local()
-        assert chamadas == [("session", "bytes")]
-        assert lidas == [esperado] and type(lidas[0]["dj"]) is set and lidas[0]["command_log_list"].maxlen == 10
-
-    @pytest.mark.asyncio
-    async def test_sessao_no_mongo(self, monkeypatch):
-        mongo = MongoEmMemoria()
-        await cog_de_sessoes(mongo=mongo).save_info(jogador_completo())
-        documento = mongo.colecao(BOT_ID, "player_sessions")[str(SERVIDOR)]
-        chamadas = espionar_load_legacy(monkeypatch)
-        lidas = await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo()
-        assert [kind for kind, _ in chamadas] == ["session"] and chamadas[0][1] in {"str", "bytes"}
-        esperado = pickle.loads(zlib.decompress(base64.b64decode(documento["data"])))
-        assert lidas == [esperado]
-
     @pytest.mark.asyncio
     async def test_fila_salva(self, tmp_path, monkeypatch):
         """Desde a etapa 4 o gravador escreve JSON; o ponto de leitura legado é o ``.pkl`` antigo (migrado ao ser lido)."""
@@ -273,90 +251,6 @@ class TestIdaEVoltaPelosPontosReais:
         assert chamadas and {kind for kind, _ in chamadas} == {"skin"} and {tipo for _, tipo in chamadas} == {"str"}
         assert len(chamadas) in {3, 4}  # A, B e F; a recém-gravada só conta se o editor ainda a gravar como texto
         assert set(jogador.custom_skin_data) == {"A", "B", "Nova"} and set(jogador.custom_skin_static_data) == {"F"}
-
-
-# ============================================================================ recusa tratada: sessão
-
-
-class TestSessaoRecusada:
-    @pytest_asyncio.fixture
-    async def sessao(self):
-        return await gravar(cog_de_sessoes(), jogador_completo())
-
-    def escrever(self, tmp_path, nome, dados):
-        pasta = pasta_das_sessoes(tmp_path)
-        pasta.mkdir(parents=True, exist_ok=True)
-        (pasta / nome).write_bytes(dados)
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "nome", sorted(["execucao", "segredo-no-global", "protocolo-3", "truncada", "raiz-nao-dicionario"])
-    )
-    async def test_disco_pula_a_sessao_hostil_le_as_outras_e_deixa_o_arquivo(
-        self, tmp_path, armadilhas, sessao, caplog, capsys, nome
-    ):
-        carga, codigo = cargas_hostis(armadilhas)[nome]
-        self.escrever(tmp_path, f"{SERVIDOR}.pkl", como_sessao_no_disco(carga))
-        self.escrever(
-            tmp_path, f"{SERVIDOR + 1}.pkl", comprimido(pickle.dumps(dict(sessao, _id=SERVIDOR + 1), protocol=4))
-        )
-        with caplog.at_level(logging.DEBUG):
-            lidas = await cog_de_sessoes().get_player_sessions_local()
-        assert [d["_id"] for d in lidas] == [SERVIDOR + 1]
-        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").is_file()
-        assert armadilhas.intacto()
-        assert registrou(caplog, SERVIDOR, codigo), avisos(caplog)
-        assert log_sem_o_conteudo(caplog, capsys)
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("lixo", [b"", b"lixo qualquer", b"\x00" * 64], ids=["vazio", "texto", "zeros"])
-    async def test_disco_pula_arquivo_que_nem_e_zlib(self, tmp_path, caplog, lixo):
-        self.escrever(tmp_path, f"{SERVIDOR}.pkl", lixo)
-        with caplog.at_level(logging.DEBUG):
-            assert await cog_de_sessoes().get_player_sessions_local() == []
-        assert (pasta_das_sessoes(tmp_path) / f"{SERVIDOR}.pkl").is_file()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "nome", sorted(["execucao", "segredo-no-global", "protocolo-3", "truncada", "raiz-nao-dicionario"])
-    )
-    async def test_mongo_pula_o_documento_hostil_le_os_outros_e_nao_apaga(
-        self, armadilhas, sessao, caplog, capsys, nome
-    ):
-        mongo = MongoEmMemoria()
-        carga, codigo = cargas_hostis(armadilhas)[nome]
-        await mongo.update_data(
-            SERVIDOR, {"data": como_sessao_no_mongo(carga)}, db_name=BOT_ID, collection="player_sessions"
-        )
-        bom = como_sessao_no_mongo(pickle.dumps(dict(sessao, _id=SERVIDOR + 1), protocol=4))
-        await mongo.update_data(SERVIDOR + 1, {"data": bom}, db_name=BOT_ID, collection="player_sessions")
-        with caplog.at_level(logging.DEBUG):
-            lidas = await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo()
-        assert [d["_id"] for d in lidas] == [SERVIDOR + 1]
-        assert (
-            set(mongo.colecao(BOT_ID, "player_sessions")) == {str(SERVIDOR), str(SERVIDOR + 1)} and mongo.apagados == []
-        )
-        assert armadilhas.intacto()
-        assert registrou(caplog, SERVIDOR, codigo), avisos(caplog)
-        assert log_sem_o_conteudo(caplog, capsys)
-
-    @pytest.mark.asyncio
-    async def test_mongo_pula_texto_que_nao_e_base64(self, caplog, capsys):
-        mongo = MongoEmMemoria()
-        await mongo.update_data(SERVIDOR, {"data": SEGREDO + "!!!"}, db_name=BOT_ID, collection="player_sessions")
-        with caplog.at_level(logging.DEBUG):
-            assert await cog_de_sessoes(mongo=mongo).get_player_sessions_mongo() == []
-        assert registrou(caplog, SERVIDOR, "envelope") and log_sem_o_conteudo(caplog, capsys)
-
-    @pytest.mark.asyncio
-    async def test_o_aviso_traz_so_o_guild_id_e_o_tipo_da_falha(self, tmp_path, armadilhas, caplog):
-        carga, _ = cargas_hostis(armadilhas)["segredo-no-global"]
-        self.escrever(tmp_path, f"{SERVIDOR}.pkl", como_sessao_no_disco(carga))
-        with caplog.at_level(logging.DEBUG):
-            await cog_de_sessoes().get_player_sessions_local()
-        mensagens = avisos(caplog)
-        assert mensagens and all(str(SERVIDOR) in m and "global" in m for m in mensagens)
-        assert all(SEGREDO not in m and "posix" not in m and "system" not in m for m in mensagens)
 
 
 # ============================================================================ recusa tratada: fila salva

@@ -22,6 +22,7 @@ import zlib
 
 import pytest
 
+
 from tests.helpers_f3_6b import BOT_ID, SERVIDOR, cog_de_sessoes
 from tests.test_f3_6b_formato_fila_salva import caminho_da_fila, ler as ler_fila, tres_faixas
 from tests.test_f3_6b_formato_sessao import gravar as gravar_sessao, jogador_completo
@@ -174,7 +175,11 @@ class TestRetrocompatibilidadeDoLegado:
         pasta = tmp_path / "local_database" / "player_sessions" / str(BOT_ID)
         pasta.mkdir(parents=True)
         (pasta / f"{SERVIDOR}.pkl").write_bytes(zlib.compress(pickle.dumps(sessao)))
-        assert await cog_de_sessoes().get_player_sessions_local() == [sessao]
+        from empiremuse.serialization import session  # sob demanda: o módulo nasce na etapa 5
+
+        cog = cog_de_sessoes()
+        await cog.migrate_legacy_sessions()  # o pickle antigo é lido por load_legacy e vira JSON
+        assert await cog.get_player_sessions_local() == [session.validate_session(sessao)]
 
     @pytest.mark.asyncio
     async def test_fila_salva_legada_volta_como_faixas(self, monkeypatch, tmp_path):

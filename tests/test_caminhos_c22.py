@@ -132,14 +132,14 @@ class TestArtefatosSemModulosDoProjeto:
     async def test_sessao_do_player_no_disco_e_no_mongo(self, monkeypatch, tmp_path):
         monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
         await cog_de_sessoes().save_info(jogador_completo())
-        arquivos = list((tmp_path / "local_database" / "player_sessions").rglob("*.*"))
+        arquivos = list((tmp_path / "local_database" / "player_sessions_json").rglob("*.*"))
         assert arquivos, "a sessão não foi gravada no disco"
         for arquivo in arquivos:
             self.sem_modulos_do_projeto(arquivo.read_bytes(), f"sessão no disco ({arquivo.name})")
 
         mongo = MongoEmMemoria()
         await cog_de_sessoes(mongo=mongo).save_info(jogador_completo())
-        (documento,) = mongo.colecao(BOT_ID, "player_sessions").values()
+        (documento,) = mongo.colecao(BOT_ID, "player_sessions_json").values()
         self.sem_modulos_do_projeto(documento["data"], "sessão no Mongo")
 
     @pytest.mark.asyncio

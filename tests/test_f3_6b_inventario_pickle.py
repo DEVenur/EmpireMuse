@@ -42,16 +42,11 @@ LEITURAS_ANTES_DA_2B = [
 ]
 # Estado atual (depois da 2b): nenhuma leitura. Quem ler pickle passa por ``legacy_pickle.load_legacy``.
 LEITURAS: list = []
-GRAVACOES = [
-    ("cogs/player_resume.py", "PlayerSession.save_session_mongo", "dumps", 1, "sessao", 1, "5"),
-    ("cogs/player_resume.py", "PlayerSession.save_session_local", "dumps", 1, "sessao", 1, "5"),
-]
+GRAVACOES: list = []  # depois da etapa 5 nenhuma gravação usa pickle
 # Referências que não são chamada de leitura nem de gravação (hoje: as classes de erro dos ``except`` dos caches).
 OUTRAS_REFERENCIAS: list = []  # antes da 2b: o ``pickle.UnpicklingError`` dos ``except`` dos caches (4 referências)
 # Arquivos que fazem ``import pickle`` depois da 2b (só para gravar; ``music_settings.py`` só lia e deixa de importar).
-IMPORTADORES = [
-    "cogs/player_resume.py",
-]
+IMPORTADORES: list = []  # depois da etapa 5 nada fora do leitor legado importa pickle
 
 
 # ============================================================================ o varredor
@@ -209,10 +204,8 @@ class TestNumerosDoInventario:
     def test_depois_da_2b_nao_ha_leitura_nem_referencia_solta_ao_pickle(self):
         assert LEITURAS == [] and OUTRAS_REFERENCIAS == []
 
-    def test_gravacoes_sao_2_depois_das_etapas_3_4_e_6_e_saem_na_etapa_5(self):
-        assert sum(pontos for *_, pontos, _ in GRAVACOES) == 2
-        assert sum(linhas for _, _, _, linhas, *_ in GRAVACOES) == 2
-        assert {etapa for *_, etapa in GRAVACOES} == {"5"}
+    def test_nao_ha_mais_gravacao_de_pickle_depois_da_etapa_5(self):
+        assert GRAVACOES == [] and IMPORTADORES == []
 
     def test_as_tabelas_nao_repetem_chaves(self):
         for tabela in (LEITURAS_ANTES_DA_2B, GRAVACOES):

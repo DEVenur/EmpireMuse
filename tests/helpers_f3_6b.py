@@ -250,6 +250,13 @@ class MongoEmMemoria:
     async def query_data(self, db_name, collection, filter=None, limit=100):
         return [copy.deepcopy(d) for d in self.colecao(db_name, collection).values()]
 
+    async def iter_data(self, db_name, collection, filter=None):
+        """Cursor (gerador assíncrono) sobre uma cópia de cada documento, com filtro de igualdade de campos."""
+        for chave in list(self.colecao(db_name, collection)):
+            documento = self.colecao(db_name, collection).get(chave)
+            if documento is not None and all(documento.get(k) == v for k, v in (filter or {}).items()):
+                yield copy.deepcopy(documento)
+
     async def delete_data(self, id_, db_name, collection):
         self.apagados.append((str(id_), collection))
         self.colecao(db_name, collection).pop(str(id_), None)

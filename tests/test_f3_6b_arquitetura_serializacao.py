@@ -4,10 +4,9 @@
   ``disnake``, ``tornado``, ``motor``, ``cachetools`` nem outro módulo do projeto.
 * ``pickle`` só pode ser importado em ``empiremuse/serialization/legacy_pickle.py`` (o único leitor do formato antigo).
 
-Os dois testes sobre o código de verdade NASCERAM ``xfail(strict=True)``: o pacote ``serialization`` não existia e seis
-arquivos importam o ``pickle`` (o de ``serialization`` já passou; o de IMPORT do pickle segue xfail até as gravações saírem). Cada um vira verde quando a etapa correspondente termina, e o ``strict`` obriga a tirar a
-marca no mesmo commit (um teste que passa sem ninguém notar não protege nada). O que já vale hoje é o resto: o varredor,
-provado com código e pastas sintéticos, e a proibição dos demais formatos binários executáveis.
+Os dois testes sobre o código de verdade nasceram ``xfail(strict=True)`` e viram verdes quando a etapa correspondente termina: o de
+``serialization`` já passou e o de IMPORT do pickle passa na etapa 5 (a marca saiu no RED da etapa 5, que o deixa vermelho de verdade).
+O resto: o varredor, provado com código e pastas sintéticos, e a proibição dos demais formatos binários executáveis.
 
 Conta qualquer ``import``, inclusive dentro de função e de ``if TYPE_CHECKING``, resolve importação relativa e pega
 ``__import__("x")`` e ``importlib.import_module("x")`` com nome literal; import dinâmico de nome não literal, dentro de
@@ -111,12 +110,8 @@ def violacoes_de_formatos(raiz: Path, grupo, *, excecao: str | None = None) -> l
 # ============================================================================ as regras da arquitetura (nascem vermelhas)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="nasce vermelho: é teste de IMPORT e passa quando as etapas 3 a 6 trocarem o último pickle.dumps (a 2b só tira as LEITURAS)",
-)
 def test_pickle_so_e_importado_em_legacy_pickle():
+    """Passa quando a etapa 5 troca as duas últimas gravações (``save_session_*``): é teste de IMPORT."""
     assert violacoes_de_formatos(PACOTE, MODULOS_PICKLE, excecao=LEGADO) == []
 
 
@@ -156,9 +151,9 @@ def test_nenhum_outro_formato_executavel_e_importado():
 
 
 def test_o_varredor_enxerga_os_arquivos_de_verdade():
-    """O varredor acha o ``pickle`` que existe hoje (senão o xfail acima falharia pelo motivo errado)."""
-    achados = violacoes_de_formatos(PACOTE, MODULOS_PICKLE, excecao=LEGADO)
-    assert any("cogs/player_resume.py" in achado and "importa pickle" in achado for achado in achados)
+    """Sem a exceção, o varredor acha o ``pickle`` do próprio leitor legado (senão o teste de import passaria à toa)."""
+    achados = violacoes_de_formatos(PACOTE, MODULOS_PICKLE)
+    assert any("serialization/legacy_pickle.py" in achado and "importa pickle" in achado for achado in achados)
 
 
 # ============================================================================ o detector, provado com código sintético
