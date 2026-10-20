@@ -69,7 +69,7 @@ from empiremuse.utils.music.errors import (
     log_unexpected_error,
 )
 from empiremuse.utils.music.user_limits import quota_for, track_fav_error_text
-from empiremuse.utils.music.legacy_reader import convert_custom_skins
+from empiremuse.utils.music.skin_store import load_custom_skins
 from empiremuse.utils.music.saved_queue import has_saved_queue, load_saved_queue, store_saved_queue
 from empiremuse.utils.music.interactions import (
     VolumeInteraction,
@@ -7285,8 +7285,7 @@ class Music(commands.Cog):
         except AttributeError:
             guild_id = inter.guild_id
 
-        custom_skins, _ = convert_custom_skins(global_data["custom_skins"], guild_id)
-        custom_skins_static, _ = convert_custom_skins(global_data["custom_skins_static"], guild_id)
+        skins = await load_custom_skins(bot, guild_id, global_data)
 
         static_channel = None
 
@@ -7354,8 +7353,8 @@ class Music(commands.Cog):
             static=bool(static_channel),
             skin=bot.pool.check_skin(skin),
             skin_static=bot.pool.check_static_skin(static_skin),
-            custom_skin_data=custom_skins,
-            custom_skin_static_data=custom_skins_static,
+            custom_skin_data=skins.normal,
+            custom_skin_static_data=skins.static,
             extra_hints=self.extra_hints,
             restrict_mode=guild_data["enable_restrict_mode"],
             listen_along_invite=invite,

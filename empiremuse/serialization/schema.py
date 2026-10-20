@@ -50,6 +50,7 @@ STRUCTURE_MAX_NODES = 2_000_000
 
 _SURROGATE = re.compile("[\ud800-\udfff]")
 _CONTROL_CATEGORIES = frozenset({"Cc", "Cf"})
+_CONTROL_ONLY = frozenset({"Cc"})
 _LINE_CONTROLS = frozenset("\n\r\t")
 _LONG_TEXT = 256  # acima disso o texto é verificado uma vez só por objeto durante a varredura
 
@@ -174,9 +175,10 @@ def _join(path: str, name: str) -> str:
     return f"{path}.{name}" if path else name
 
 
-def _has_control(text: str, multiline: bool) -> bool:
+def _has_control(text: str, multiline: bool, allow_format: bool = False) -> bool:
+    categories = _CONTROL_ONLY if allow_format else _CONTROL_CATEGORIES
     for char in text:
-        if unicodedata.category(char) in _CONTROL_CATEGORIES and not (multiline and char in _LINE_CONTROLS):
+        if unicodedata.category(char) in categories and not (multiline and char in _LINE_CONTROLS):
             return True
     return False
 
@@ -185,10 +187,11 @@ class Str(_Schema):
     """Texto: sem surrogate solto nem ``Cc``/``Cf`` (``multiline`` libera só ``\\n``, ``\\r`` e ``\\t``).
 
     ``allow_controls`` aceita ``Cc``/``Cf`` (metadado vindo de fora, como título de faixa com emoji de ZWJ ou marcas
-    bidirecionais); o surrogate solto continua recusado e o escape na exibição fica com quem exibe.
+    bidirecionais); ``allow_format`` aceita só ``Cf`` (texto livre de skin: emoji composto, campo "em branco") e segue
+    recusando ``Cc``. O surrogate solto é sempre recusado e o escape na exibição fica com quem exibe.
     """
 
-    __slots__ = ("max_len", "min_len", "multiline", "allow_controls", "_pattern")
+    __slots__ = ("max_len", "min_len", "multiline", "allow_controls", "allow_format", "_pattern")
 
     def __init__(
         self,
@@ -198,11 +201,13 @@ class Str(_Schema):
         pattern: str | None = None,
         multiline: bool = False,
         allow_controls: bool = False,
+        allow_format: bool = False,
     ):
         self.max_len = max_len
         self.min_len = min_len
         self.multiline = multiline
         self.allow_controls = allow_controls
+        self.allow_format = allow_format
         self._pattern = re.compile(pattern) if pattern is not None else None
 
     def check(self, value: Any, path: str) -> str:
@@ -212,7 +217,7 @@ class Str(_Schema):
             raise SchemaError(path, LENGTH)
         if _SURROGATE.search(value):
             raise SchemaError(path, SURROGATE)
-        if not self.allow_controls and _has_control(value, self.multiline):
+        if not self.allow_controls and _has_control(value, self.multiline, self.allow_format):
             raise SchemaError(path, CONTROL)
         if self._pattern is not None and not self._pattern.fullmatch(value):
             raise SchemaError(path, PATTERN)
@@ -344,11 +349,12 @@ class Any_JSON(_Schema):  # noqa: N801 - nome fixado pelo plano da F3-6b
         return _copy_json(value)
 
 
-_EXTRA_MODES = ("drop", "keep", "error")
+_EXTRA_MODES = ("drop", "keep", "error", "ignore")  # ``ignore``: descarta sem avisar (formatos com muita chave alheia)
 
 
 class Dict(_Schema):
-    """Objeto com campos conhecidos; ``extra`` define o destino dos desconhecidos: ``drop``, ``keep`` ou ``error``."""
+    """Objeto com campos conhecidos; ``extra`` define o destino dos desconhecidos: ``drop`` (descarta e avisa), ``keep``,
+    ``error`` ou ``ignore`` (descarta sem avisar)."""
 
     __slots__ = ("fields", "extra")
 
@@ -364,7 +370,7 @@ class Dict(_Schema):
         for key in value:
             if type(key) is not str:
                 raise SchemaError(path, KEY_NOT_TEXT)
-        unknown = [key for key in value if key not in self.fields]
+        unknown = [] if self.extra == "ignore" else [key for key in value if key not in self.fields]
         if unknown and self.extra == "error":
             raise SchemaError(path, UNKNOWN_FIELD)
         result = {name: self._field(name, field, value, path) for name, field in self.fields.items()}

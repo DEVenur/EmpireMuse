@@ -4,10 +4,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import pickle
 import re
 import traceback
-from base64 import b64encode
 from copy import deepcopy
 from io import BytesIO
 from itertools import islice
@@ -57,7 +55,9 @@ from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
 from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.converters import time_format, fix_characters
 from empiremuse.utils.music.errors import GenericError, error_code_text, log_unexpected_error
-from empiremuse.utils.music.legacy_reader import convert_custom_skins
+from empiremuse.serialization.schema import SchemaError
+from empiremuse.serialization.skins import MAX_SKINS_PER_MODE, validate_skin, validate_skin_name
+from empiremuse.utils.music.skin_store import load_custom_skins
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.music.user_limits import quota_for
@@ -75,6 +75,17 @@ if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
 
 logger = logging.getLogger(__name__)
+
+SKIN_NAME_REFUSED = (
+    "**O nome da skin precisa ter de 1 a 64 caracteres, sem pontos, cifrão nem caracteres invisíveis ou de controle.**"
+)
+SKIN_REFUSED = (
+    "**Não foi possível salvar a skin: algum campo passa dos limites ou tem conteúdo inválido. "
+    "Revise o texto, os embeds e os campos e tente de novo.**"
+)
+SKIN_LIMIT_REFUSED = (
+    "**Não foi possível salvar: cada modo comporta no máximo 25 skins. Exclua uma ou salve por cima de uma existente.**"
+)
 
 
 class VolumeInteraction(disnake.ui.View):
@@ -2695,27 +2706,32 @@ class SkinEditorMenu(disnake.ui.View):
         self.update_components()
         await self.update_message(inter)
 
+    async def _refuse_skin(self, reply, guild_id: int, error: SchemaError, text: str):
+        """Não grava nada: avisa o dono e deixa no log só o servidor e o código da falha."""
+        logger.warning("Skin do editor não salva: servidor %s, motivo %s", guild_id, error.code)
+        await reply.edit_original_message(text, view=None)
+
     async def load_skin(self, inter: disnake.MessageInteraction):
         self.ctx = inter
         selected = inter.values[0]
 
         if selected.startswith("> cs: "):
-            skin_data = self.global_data["custom_skins"][selected[6:]]
+            mode, name = "custom_skins", selected[6:]
         elif selected.startswith("> css: "):
-            skin_data = self.global_data["custom_skins_static"][selected[7:]]
+            mode, name = "custom_skins_static", selected[7:]
         else:
-            skin_data = None
+            mode = name = None
 
-        if not skin_data:
-            message_data = deepcopy(base_skin)
-        elif isinstance(skin_data, str):
-            readable, rejected = convert_custom_skins({"skin": skin_data}, self.guild.id)
-            if rejected:
+        message_data = deepcopy(base_skin)
+
+        if mode:
+            skins = await load_custom_skins(self.bot, self.guild.id, self.global_data)
+            readable = skins.normal if mode == "custom_skins" else skins.static
+            if name in readable:
+                message_data = readable[name]
+            elif self.global_data[mode][name]:
                 await inter.send("**Esta skin está em um formato incompatível e não pôde ser aberta.**", ephemeral=True)
                 return
-            message_data = readable["skin"]
-        else:
-            message_data = skin_data
 
         self.skin_selected = selected
         self.mode = "editor"
@@ -3506,17 +3522,36 @@ class SkinEditorMenu(disnake.ui.View):
 
             self.global_data = await self.bot.get_global_data(self.ctx.guild_id, db_name=DBModel.guilds)
 
-            modal_skin_name = inter.text_values["skin_name"].strip()
-
             skin_name = self.skin_selected.replace("> css: ", "", 1).replace("> cs: ", "", 1)
 
-            if modal_skin_name != skin_name:
-                try:
-                    del self.global_data[view.mode][skin_name]
-                except KeyError:
-                    pass
+            try:
+                modal_skin_name = validate_skin_name(inter.text_values["skin_name"])
+            except SchemaError as error:
+                await self._refuse_skin(view.inter or inter, inter.guild_id, error, SKIN_NAME_REFUSED)
+                return
 
-            self.global_data[view.mode][modal_skin_name] = b64encode(pickle.dumps(self.message_data)).decode("utf-8")
+            try:
+                new_skin = validate_skin(self.message_data)
+            except SchemaError as error:
+                await self._refuse_skin(view.inter or inter, inter.guild_id, error, SKIN_REFUSED)
+                return
+
+            names = set(self.global_data[view.mode])
+            if modal_skin_name != skin_name:
+                names.discard(skin_name)
+            names.add(modal_skin_name)
+            if len(names) > MAX_SKINS_PER_MODE:
+                await self._refuse_skin(
+                    view.inter or inter, inter.guild_id, SchemaError("", "length"), SKIN_LIMIT_REFUSED
+                )
+                return
+
+            await load_custom_skins(self.bot, inter.guild_id, self.global_data)  # migra as legadas antes de gravar
+
+            if modal_skin_name != skin_name:
+                self.global_data[view.mode].pop(skin_name, None)
+
+            self.global_data[view.mode][modal_skin_name] = new_skin
 
             await self.bot.update_global_data(id_=inter.guild_id, data=self.global_data, db_name=DBModel.guilds)
 
@@ -3526,11 +3561,10 @@ class SkinEditorMenu(disnake.ui.View):
                 except KeyError:
                     continue
 
-                custom_skins, _ = convert_custom_skins(self.global_data["custom_skins"], inter.guild_id)
-                custom_skins_static, _ = convert_custom_skins(self.global_data["custom_skins_static"], inter.guild_id)
+                skins = await load_custom_skins(self.bot, inter.guild_id, self.global_data)
 
-                player.custom_skin_data = custom_skins
-                player.custom_skin_static_data = custom_skins_static
+                player.custom_skin_data = skins.normal
+                player.custom_skin_static_data = skins.static
                 player.setup_features()
                 player.setup_hints()
                 player.process_hint()

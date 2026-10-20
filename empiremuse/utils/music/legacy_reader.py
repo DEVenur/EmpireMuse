@@ -28,32 +28,6 @@ async def read_legacy_session(raw: Union[bytes, str], guild_id: Union[int, str])
         return None
 
 
-def convert_custom_skins(skins: dict, guild_id: Union[int, str]) -> tuple[dict, int]:
-    """Converte, no próprio ``skins``, as skins em texto legado para dicionário e devolve ``(legíveis, recusadas)``.
-
-    Skin vazia (``""``, ``None`` ou ``{}``) não vale como skin e fica de fora. Skin recusada continua como texto em ``skins``
-    (o dado do servidor não é alterado) e fica fora do resultado: o player cai na skin padrão.
-    """
-    readable: dict = {}
-    rejected = 0
-    for name, value in skins.items():
-        if not value:
-            continue
-        if not isinstance(value, str):
-            readable[name] = value
-            continue
-        try:
-            skin = load_legacy(value, "skin")
-        except LegacyFormatError as error:
-            rejected += 1
-            logger.warning(
-                "Skin personalizada ignorada (formato incompatível): servidor %s, motivo %s", guild_id, error.code
-            )
-            continue
-        skins[name] = readable[name] = skin
-    return readable, rejected
-
-
 def discard_legacy_cache(path: Path) -> None:
     """Apaga um cache antigo SEM abri-lo (cache não é dado do usuário: recomeça vazio). Falhar não derruba a subida."""
     try:

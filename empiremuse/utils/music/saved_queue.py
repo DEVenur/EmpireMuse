@@ -62,9 +62,11 @@ async def _read_limited(path: Path, limit: int) -> Optional[bytes]:
 
 
 def _read_capped(path: Path, limit: int) -> bytes:
-    """Até ``limit`` bytes do arquivo, sem seguir link simbólico e sem ler um arquivo maior que o teto: ``SchemaError`` (``too_big``).
+    """Até ``limit`` bytes do arquivo; maior que o teto é ``SchemaError`` (``too_big``), sem ler o arquivo todo.
 
-    Regra para toda leitura de arquivo de dados: conferir o tamanho ANTES de ler e nunca pedir mais que ``limit + 1`` bytes.
+    Regra para toda leitura de arquivo de dados: conferir o tamanho (``lstat``) ANTES de ler e nunca pedir mais que
+    ``limit + 1`` bytes. O ``open`` segue link simbólico; quem fecha o caso é o teto no ``read``, e a migração nem chega aqui
+    com link (``migrate_saved_queues`` ignora entradas que não são arquivos comuns).
     """
     if path.lstat().st_size > limit:
         raise SchemaError("", TOO_BIG)

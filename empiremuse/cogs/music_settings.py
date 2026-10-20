@@ -28,7 +28,7 @@ from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import time_format
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
-from empiremuse.utils.music.legacy_reader import convert_custom_skins
+from empiremuse.utils.music.skin_store import load_custom_skins
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import (
     send_idle_embed,
@@ -1134,12 +1134,11 @@ class MusicSettings(commands.Cog):
         else:
             txt = f"**A skin do player do servidor foi alterada com sucesso.**\n{changed_skins_txt}"
 
-        custom_skins, rejected = convert_custom_skins(global_data["custom_skins"], guild.id)
-        custom_skins_static, rejected_static = convert_custom_skins(global_data["custom_skins_static"], guild.id)
+        skins = await load_custom_skins(bot, guild.id, global_data)
 
-        if rejected + rejected_static:
+        if skins.rejected:
             txt += (
-                f"\n\n⚠️ {rejected + rejected_static} skin(s) personalizada(s) do servidor estão em um formato "
+                f"\n\n⚠️ {skins.rejected} skin(s) personalizada(s) do servidor estão em um formato "
                 "incompatível e foram ignoradas (o player usa a skin padrão no lugar)."
             )
 
@@ -1180,8 +1179,8 @@ class MusicSettings(commands.Cog):
             player.skin = select_view.skin_selected
             player.skin_static = select_view.static_skin_selected
 
-            player.custom_skin_data = custom_skins
-            player.custom_skin_static_data = custom_skins_static
+            player.custom_skin_data = skins.normal
+            player.custom_skin_static_data = skins.static
             player.setup_features()
 
             player.setup_hints()
