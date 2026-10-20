@@ -246,9 +246,11 @@ def load_config():
             type(e).__name__,
         )
 
-    # o padrão relativo ao cwd vira o repositório do RUNTIME_DIR; um GIT_DIR configurado pelo usuário é respeitado
+    # o padrão relativo ao cwd vira o repositório do RUNTIME_DIR (na .runtime de desenvolvimento, o do projeto);
+    # um GIT_DIR configurado pelo usuário é respeitado
     if CONFIG["GIT_DIR"] == DEFAULT_CONFIG["GIT_DIR"]:
-        CONFIG["GIT_DIR"] = str(paths.RUNTIME_DIR / ".git")
+        git_base = paths.PROJECT_DIR if paths.dev_runtime_dir() else paths.RUNTIME_DIR
+        CONFIG["GIT_DIR"] = str(git_base / ".git")
 
     CONFIG["EMBED_COLOR"] = parse_embed_color(CONFIG["EMBED_COLOR"])
 
