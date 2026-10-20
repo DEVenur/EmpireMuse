@@ -493,9 +493,10 @@ class PlayerSession(commands.Cog):
                             message_without_thread = msg
 
                     except Exception as e:
-                        print(
-                            f"{self.bot.user} - Falha ao obter mensagem: {repr(e)}\n"
-                            f"channel_id: {text_channel.id} | message_id {data['message']}"
+                        logger.warning(
+                            "Falha ao obter a mensagem do controller na retomada: servidor %s, motivo %s",
+                            guild.id,
+                            type(e).__name__,
                         )
 
                 if not voice_channel or not voice_channel.permissions_for(guild.me).connect:
