@@ -204,3 +204,22 @@ class TestDicionarioHostilNaLeitura:
         with caplog.at_level(logging.DEBUG):
             bot = await rodar(helper, dados)
         assert bot.escritas == [] and not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+# ============================================================================ o aviso do change_skin com um modo só recusado
+
+
+class TestChangeSkinAvisaComUmModoSo:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", ["custom_skins", "custom_skins_static"])
+    async def test_avisa_o_dono_quando_so_um_dos_modos_tem_skin_recusada(self, monkeypatch, modo):
+        from tests.test_f3_6b_etapa2b_pontos import dados_com_skin_ruim, texto_hostil
+        from tests.helpers_f3_6b_corte import criar_armadilhas
+
+        armadilhas = criar_armadilhas(__import__("pathlib").Path("/tmp"), monkeypatch)
+        texto, _ = texto_hostil(armadilhas, "protocolo-3")
+        dados = dados_com_skin_ruim(texto)
+        outro = "custom_skins_static" if modo == "custom_skins" else "custom_skins"
+        dados[outro] = {k: v for k, v in dados[outro].items() if "Ruim" not in k}
+        jogador = await chamar_change_skin(monkeypatch, dados, nova_skin="> custom_skin: Boa")
+        assert "incompatível" in " ".join(jogador.mensagens)
