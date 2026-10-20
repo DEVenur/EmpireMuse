@@ -104,8 +104,8 @@ Para configurar um ambiente local, executar testes e contribuir com o desenvolvi
 
 1. **Guia de Desenvolvimento**: Siga o passo a passo de setup com `uv`, variáveis do `.env`, execução do bot e Lavalink local em [`docs/development.md`](docs/development.md).
 2. **Padrão de Git Worktrees**: O desenvolvimento de novas funcionalidades e correções opera obrigatoriamente através de worktrees isoladas em `worktrees/` a partir da branch `main`. Veja a seção 9 de [`docs/development.md`](docs/development.md).
-3. **Diretrizes de Contribuição**: Padrões de código, formatação com `ruff`, convenções de commits convencionais e fluxo de pull requests estão documentados em [`CONTRIBUTING.md`](CONTRIBUTING.md).
-4. **Política de Segurança**: Recomendações de segurança, reporte responsável de vulnerabilidades e escopo de proteção em [`SECURITY.md`](SECURITY.md).
+3. **Diretrizes de Contribuição**: Padrões de código, formatação com `ruff`, convenções de commits convencionais e fluxo de pull requests estão documentados em [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
+4. **Política de Segurança**: Recomendações de segurança, reporte responsável de vulnerabilidades e escopo de proteção em [`.github/SECURITY.md`](.github/SECURITY.md).
 
 ---
 

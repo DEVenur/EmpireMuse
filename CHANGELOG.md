@@ -137,6 +137,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Organização da Raiz e Pasta de Execução Local `.runtime/` (Fase 3 / F3-7)**:
+  - Diretório de execução local opcional `.runtime/` na raiz do projeto: quando existente, passa a concentrar dados em tempo de execução, caches, logs, binários do Lavalink/JDK e arquivos de configuração (`.env` e `config.json`), mantendo a precedência de `EMPIREMUSE_HOME` quando definido e preservando o comportamento anterior (diretório atual) caso `.runtime/` não exista.
+  - Reorganização de arquivos da raiz: transferência dos documentos de governança comunitária para `.github/` (`.github/CODE_OF_CONDUCT.md`, `.github/CONTRIBUTING.md` e `.github/SECURITY.md`) e do modelo de nós de áudio para `deploy/lavalink.ini.example`, com atualização das referências na documentação.
 - **Migração de Serialização para JSON e Armazenamento Seguro (Fase 3 / F3-6b)**:
   - **Sessões, filas, skins e caches em JSON**: Todos os formatos de persistência local e remota migram da serialização binária para JSON delimitado e auditável, assegurando integridade e isolamento estrutural.
   - **Novas pastas e coleções**: Criação dos diretórios locais em disco `local_database/saved_queues_json/users/<id do usuário>.json` e `local_database/player_sessions_json/<id do bot>/<id do servidor>.json` (com a respectiva cópia `.json.bak`), ambos com permissão restrita `0600` e escrita atômica (`write_private_atomic`), além da nova coleção `player_sessions_json` no MongoDB.
