@@ -261,7 +261,7 @@ O pacote `empiremuse/serialization/` centraliza a validação de esquema, codifi
 - **`session_store.py`**: persistência e migração de sessões do player em formato JSON no disco (`sessions_dir`) e no MongoDB (`NEW_COLLECTION = "player_sessions_json"`), além das rotinas de migração do formato legado (`migrate_disk`, `migrate_mongo`) com leitura via cursor assíncrono (`iter_data`), controle de taxa entre lotes e janela de retenção de 48 horas para itens com falha de conversão. Em `PlayerSession` (`empiremuse/cogs/player_resume.py`), a retomada (`resume_player`) só utiliza canais pertencentes ao servidor da própria sessão (canais de outro servidor são ignorados) e não grava `voice_state` nem `extra_info` (descartados silenciosamente na persistência e na leitura).
 
 **Novas pastas e coleções com sufixo `_json`**:
-- No armazenamento local em disco (`local_database/`): diretórios dedicados `saved_queues_json/users/<id>.json` e `player_sessions_json/<id>.json`, com escrita atômica e permissão restrita `0600` (`write_private_atomic`);
+- No armazenamento local em disco (`local_database/`): diretórios dedicados `saved_queues_json/users/<id do usuário>.json` e `player_sessions_json/<id do bot>/<id do servidor>.json` (com a respectiva cópia de segurança `.json.bak`), ambos com escrita atômica e permissão restrita `0600` (`write_private_atomic`);
 - No MongoDB: coleção `player_sessions_json` sob o banco do bot;
 
 Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos já sincronizados,
