@@ -8,7 +8,7 @@ dicionário pronto; o gravador é o ``modal_handler`` do botão de salvar.
 
 * o que continua valendo depois da migração: os leitores entregam ao player o MESMO dicionário, venha o dado como
   texto legado (protocolos 4 e 5; os mais antigos viram recusa, em ``tests/test_f3_6b_etapa2b_pontos.py``) ou como dicionário (``TestLeitores``, ``TestEditorSalvaESegue``);
-* o que muda de propósito na etapa 3 (``TestFormatoGravadoHoje``): a skin gravada é texto (``base64`` de ``pickle``).
+* a etapa 3 troca o formato GRAVADO (texto → dicionário): os testes dela estão em ``tests/test_f3_6b_etapa3_*.py``.
 """
 
 import base64
@@ -23,14 +23,7 @@ from empiremuse.cogs.music import Music
 from empiremuse.cogs.music_settings import MusicSettings
 from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import SkinEditorMenu, base_skin
-from tests.helpers_f3_6b import SERVIDOR, globais_do_pickle, opcodes_do_pickle, protocolo_do_pickle
-
-# Opcodes de uma skin: só os tipos nativos do JSON (sem ``STACK_GLOBAL`` nem ``REDUCE``: nenhuma classe).
-OPCODES_DE_SKIN = frozenset(
-    "PROTO FRAME STOP MARK NONE NEWTRUE NEWFALSE BININT BININT1 BININT2 LONG1 BINFLOAT SHORT_BINUNICODE BINUNICODE "
-    "SHORT_BINBYTES BINBYTES EMPTY_LIST EMPTY_DICT EMPTY_TUPLE EMPTY_SET APPEND APPENDS SETITEM SETITEMS ADDITEMS "
-    "TUPLE1 TUPLE2 TUPLE3 MEMOIZE BINGET LONG_BINGET".split()
-)
+from tests.helpers_f3_6b import SERVIDOR
 
 
 def skin_realista(**mudancas) -> dict:
@@ -93,8 +86,10 @@ class Jogador:
 
 class BotDeSkins:
     def __init__(self, global_data, jogadores=()):
-        self.global_data = global_data
-        self.salvos = []
+        self.global_data = global_data  # o cache do banco: ``get_global_data`` devolve esta MESMA referência
+        self.salvos = []  # uma cópia de cada documento gravado
+        self.escritas = []  # ``(id_, db_name)`` de cada gravação
+        self.banco = None  # o que foi persistido na última gravação (cópia): é o que sobrevive a um reinício
         self.music = SimpleNamespace(players={SERVIDOR: jogador for jogador in list(jogadores)[:1]})
         self.pool = SimpleNamespace(get_guild_bots=lambda guild_id: [self], guild_prefix_cache={})
         self.config = {"DEFAULT_PREFIX": "!!", "IGNORE_SKINS": "", "IGNORE_STATIC_SKINS": ""}
@@ -109,6 +104,11 @@ class BotDeSkins:
         return self.global_data
 
     async def update_global_data(self, id_, data, *, db_name):
+        self.escritas.append((id_, db_name))
+        self.banco = copy.deepcopy(data)
+        self.global_data = (
+            data  # ``empiremuse/utils/db.py`` faz ``cache[chave] = data``: o cache passa a ser o objeto gravado
+        )
         self.salvos.append(copy.deepcopy(data))
 
     def get_global_command_named(self, *args, **kwargs):
@@ -126,6 +126,10 @@ def dados_globais(normais=None, estaticas=None):
 
 
 class InteracaoDoEditor:
+    author = SimpleNamespace(
+        id=900
+    )  # o editor guarda a última interação como ``ctx`` e o botão de salvar lê ``ctx.author``
+
     def __init__(self, **text_values):
         self.text_values = text_values
         self.custom_id = "skin_editor_save"
@@ -187,9 +191,9 @@ class TestEditorSalvaESegue:
         menu.message_data = skin_realista(content="Outro texto")
         BotaoDeModo.modo = "custom_skins"
         await menu.modal_handler(InteracaoDoEditor(skin_name="  Minha skin  "))
-        assert len(bot.salvos) == 1
-        assert list(bot.salvos[0]["custom_skins"]) == ["Minha skin"]
-        assert list(bot.salvos[0]["custom_skins_static"]) == ["Fixa"]
+        assert 1 <= len(bot.salvos) <= 2  # a migração da skin legada pode gravar antes da skin salva
+        assert list(bot.salvos[-1]["custom_skins"]) == ["Minha skin"]
+        assert list(bot.salvos[-1]["custom_skins_static"]) == ["Fixa"]
 
     @pytest.mark.asyncio
     async def test_a_skin_gravada_volta_igual_pelo_leitor_do_editor(self, editor_sem_tela):
@@ -197,7 +201,7 @@ class TestEditorSalvaESegue:
         menu.message_data = skin_realista()
         BotaoDeModo.modo = "custom_skins_static"
         await menu.modal_handler(InteracaoDoEditor(skin_name="Fixa"))
-        novo, _, _ = editor_sem_tela(bot.salvos[0])
+        novo, _, _ = editor_sem_tela(bot.salvos[-1])
         await novo.load_skin(SimpleNamespace(values=["> css: Fixa"]))
         assert novo.message_data == skin_realista()
 
@@ -208,7 +212,7 @@ class TestEditorSalvaESegue:
         menu.message_data, menu.skin_selected = skin_realista(), "> cs: Antiga"
         BotaoDeModo.modo = "custom_skins"
         await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
-        assert sorted(bot.salvos[0]["custom_skins"]) == ["Nova", "Outra"]
+        assert sorted(bot.salvos[-1]["custom_skins"]) == ["Nova", "Outra"]
 
     @pytest.mark.asyncio
     async def test_o_player_ativo_recebe_as_skins_como_dicionarios_inclusive_as_legadas(self, editor_sem_tela):
@@ -326,48 +330,6 @@ class TestLeitores:
         assert jogador.custom_skin_data is None and jogador.chamadas == []
 
 
-# ============================================================================ o que o formato de hoje tem e a etapa 3 muda
-
-
-class TestFormatoGravadoHoje:
-    """Deixa de valer na etapa 3 (a skin passa a ser gravada como dicionário), quando estes testes são reescritos."""
-
-    @pytest.mark.asyncio
-    async def test_o_editor_grava_a_skin_como_texto_base64_de_pickle_sem_zlib(self, editor_sem_tela):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Minha"))
-        gravada = bot.salvos[0]["custom_skins"]["Minha"]
-        assert isinstance(gravada, str)
-        dados = base64.b64decode(gravada)
-        assert protocolo_do_pickle(dados) in {4, 5} and dados[:1] != b"x"
-
-    @pytest.mark.asyncio
-    async def test_a_skin_gravada_so_usa_tipos_nativos_do_json(self, editor_sem_tela):
-        """Nenhuma classe no pickle de uma skin (lista vazia de classes permitidas) e só opcodes de tipos simples."""
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        BotaoDeModo.modo = "custom_skins_static"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Fixa"))
-        dados = base64.b64decode(bot.salvos[0]["custom_skins_static"]["Fixa"])
-        assert globais_do_pickle(dados) == set()
-        usados = set(opcodes_do_pickle(dados))
-        assert usados <= OPCODES_DE_SKIN, sorted(usados - OPCODES_DE_SKIN)
-        assert not usados & {"STACK_GLOBAL", "REDUCE", "GLOBAL", "BUILD", "NEWOBJ", "PUT", "BINPUT"}
-
-    @pytest.mark.asyncio
-    async def test_depois_de_salvar_a_memoria_guarda_dicionarios_e_o_banco_recebeu_texto(self, editor_sem_tela):
-        """O documento é gravado com texto e só depois o mesmo dicionário em memória é convertido (laço do player)."""
-        dados = dados_globais(normais={"Velha": texto_legado(skin_realista(content="velha"))})
-        menu, bot, _ = editor_sem_tela(dados, [Jogador()])
-        menu.message_data = skin_realista(content="nova")
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
-        assert all(isinstance(s, str) for s in bot.salvos[0]["custom_skins"].values())
-        assert all(isinstance(s, dict) for s in dados["custom_skins"].values())
-
-
 # ============================================================================ os dublês de create_player e change_skin
 
 
@@ -376,8 +338,11 @@ class Parou(Exception):
         self.argumentos = argumentos
 
 
-async def chamar_create_player(global_data) -> dict:
-    """Roda o ``Music.create_player`` REAL até o ``get_player`` e devolve o que ele recebeu."""
+async def chamar_create_player(global_data, escritas: list | None = None) -> dict:
+    """Roda o ``Music.create_player`` REAL até o ``get_player`` e devolve o que ele recebeu.
+
+    ``escritas`` (opcional) recebe ``(id_, cópia do documento, db_name)`` de cada ``update_global_data``.
+    """
 
     def get_player(**kwargs):
         raise Parou(kwargs)
@@ -392,10 +357,15 @@ async def chamar_create_player(global_data) -> dict:
     async def get_global_data(*args, **kwargs):
         return global_data
 
+    async def update_global_data(id_=None, data=None, *, db_name=None, **kwargs):
+        if escritas is not None:
+            escritas.append((id_, copy.deepcopy(data), db_name))
+
     bot = SimpleNamespace(
         music=SimpleNamespace(players={}, get_player=get_player),
         pool=SimpleNamespace(check_skin=lambda skin: skin, check_static_skin=lambda skin: skin),
         get_global_data=get_global_data,
+        update_global_data=update_global_data,
         default_prefix="!!",
     )
     cog = Music.__new__(Music)
@@ -425,6 +395,7 @@ async def chamar_change_skin(monkeypatch, global_data, *, nova_skin, skin_atual=
             mensagens.append(str(embed.description or ""))
 
     bot = BotDeSkins(global_data, [jogador])
+    jogador.bot = bot
     bot.player_skins = {"default": SimpleNamespace(preview="https://exemplo.invalid/p")}
     bot.player_static_skins = {"default": SimpleNamespace(preview="https://exemplo.invalid/p")}
     bot.pool.default_skin = bot.pool.default_static_skin = "default"

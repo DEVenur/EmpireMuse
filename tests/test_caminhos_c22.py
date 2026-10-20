@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import base64
 import subprocess
 import zlib
@@ -156,7 +157,10 @@ class TestArtefatosSemModulosDoProjeto:
         menu.message_data = skin_realista()
         BotaoDeModo.modo = "custom_skins"
         await menu.modal_handler(InteracaoDoEditor(skin_name="Minha"))
-        self.sem_modulos_do_projeto(bot.salvos[0]["custom_skins"]["Minha"], "skin personalizada")
+        gravada = bot.salvos[-1]["custom_skins"]["Minha"]
+        # a skin é dicionário (JSON) desde a etapa 3; o texto ``base64`` de ``pickle`` era o formato antigo
+        artefato = json.dumps(gravada, ensure_ascii=False) if isinstance(gravada, dict) else gravada
+        self.sem_modulos_do_projeto(artefato, "skin personalizada")
 
     @pytest.mark.asyncio
     async def test_cache_de_playlist_so_referencia_bibliotecas_de_terceiros(self, monkeypatch, tmp_path):

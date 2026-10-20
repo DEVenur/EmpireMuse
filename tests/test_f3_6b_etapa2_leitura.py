@@ -198,16 +198,6 @@ class TestFilaReal:
 
 
 class TestSkinReal:
-    @pytest.mark.asyncio
-    async def test_a_skin_gravada_pelo_editor_e_lida_igual(self, editor_sem_tela):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Minha"))
-        gravada = bot.salvos[0]["custom_skins"]["Minha"]
-        assert isinstance(gravada, str)
-        assert carregar(gravada, "skin") == skin_realista()
-
     @pytest.mark.parametrize("protocolo", [4, 5])
     def test_skin_nos_dois_protocolos(self, protocolo):
         assert carregar(texto_legado(skin_realista(), protocolo), "skin") == skin_realista()

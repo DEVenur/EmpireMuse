@@ -120,12 +120,20 @@ def kinds_chamados(no: ast.AST, auxiliares: dict[str, set[str]]) -> set[str]:
 
 
 def auxiliares_do_projeto() -> dict[str, set[str]]:
-    """Funções de QUALQUER módulo do projeto (fora dos pontos) que chamam ``load_legacy`` direto, com os kinds que usam."""
+    """Funções de QUALQUER módulo do projeto (fora dos pontos) que chegam a ``load_legacy`` com um kind literal.
+
+    Direto (``load_legacy(x, "skin")``) ou, só para funções de NÍVEL DE MÓDULO, por outro auxiliar chamado pelo nome simples
+    (``convert_custom_skins(...)``). Métodos e chamadas por atributo (``obj.open()``) não propagam: o nome sozinho colide com
+    métodos de outras classes.
+    """
     achados: dict[str, set[str]] = {}
+    de_modulo = []
     for arquivo in sorted(PACOTE.rglob("*.py")):
         if "__pycache__" in arquivo.parts or arquivo.name == "legacy_pickle.py":
             continue
-        for no in ast.walk(ast.parse(arquivo.read_text(encoding="utf-8"))):
+        arvore = ast.parse(arquivo.read_text(encoding="utf-8"))
+        de_modulo += [n for n in arvore.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        for no in ast.walk(arvore):
             if isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 diretos = {
                     kind_da_chamada(c)
@@ -134,6 +142,16 @@ def auxiliares_do_projeto() -> dict[str, set[str]]:
                 }
                 if diretos:
                     achados.setdefault(no.name, set()).update(diretos)
+    mudou = True
+    while mudou:
+        mudou = False
+        for no in de_modulo:
+            for chamada in ast.walk(no):
+                if isinstance(chamada, ast.Call) and isinstance(chamada.func, ast.Name) and chamada.func.id in achados:
+                    novos = achados[chamada.func.id] - achados.get(no.name, set())
+                    if novos and chamada.func.id != no.name:
+                        achados.setdefault(no.name, set()).update(novos)
+                        mudou = True
     return achados
 
 
@@ -206,13 +224,9 @@ class TestIdaEVoltaPelosPontosReais:
         assert not antigo.exists()
 
     @pytest.mark.asyncio
-    async def test_skin_gravada_pelo_editor_nos_quatro_pontos(self, editor_sem_tela, monkeypatch):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Minha"))
-        texto = bot.salvos[0]["custom_skins"]["Minha"]
-        assert isinstance(texto, str)
+    async def test_skin_em_texto_legado_nos_quatro_pontos(self, editor_sem_tela, monkeypatch):
+        """O texto é o que o gravador ANTIGO punha no documento (``base64`` de ``pickle``); o editor atual não o grava mais."""
+        texto = texto_legado(skin_realista())
         chamadas = espionar_load_legacy(monkeypatch)
 
         novo, _, _ = editor_sem_tela(dados_globais(normais={"Minha": texto}))
@@ -257,7 +271,7 @@ class TestIdaEVoltaPelosPontosReais:
         chamadas = espionar_load_legacy(monkeypatch)
         await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
         assert chamadas and {kind for kind, _ in chamadas} == {"skin"} and {tipo for _, tipo in chamadas} == {"str"}
-        assert len(chamadas) == 4  # A, B, F e a recém-gravada
+        assert len(chamadas) in {3, 4}  # A, B e F; a recém-gravada só conta se o editor ainda a gravar como texto
         assert set(jogador.custom_skin_data) == {"A", "B", "Nova"} and set(jogador.custom_skin_static_data) == {"F"}
 
 
