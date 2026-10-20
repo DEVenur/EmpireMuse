@@ -7,8 +7,7 @@ REAL:
 
 * sem ``voice_state`` (ausente, ``None`` ou ``{}``) o ``resume_player`` reconecta por ``player.connect(voice_channel.id)``,
   no nó v3 e no v4, e o player nasce com ``_voice_state`` ``None``: a reconexão nunca dependeu do campo gravado;
-* com ``voice_state`` o resultado da reconexão é o mesmo (só ``_voice_state`` muda): a etapa 5 reescreve
-  ``TestComVoiceStateGravado`` e ``TestExtraInfo`` de propósito;
+* com ``voice_state`` ou ``extra_info`` na entrada (a etapa 5 não os grava nem lê) o resultado é o mesmo e o player nasce sem eles;
 * o código de hoje já descarta o ``voice_state`` quando o canal de voz muda;
 * ``_wait_for_new_node`` com ``_voice_state`` falso troca de nó (``change_node``) e, fora da voz, conecta
   (``connect``); só com ``_voice_state`` verdadeiro reenvia a atualização de voz.
@@ -154,7 +153,7 @@ class TestSemVoiceState:
     @pytest.mark.parametrize("estado", ["ausente", None, {}], ids=["ausente", "none", "vazio"])
     async def test_no_v4_reconecta_por_connect_e_o_player_nasce_sem_voice_state(self, estado):
         dados = await sessao_gravada()
-        dados.pop("voice_state")
+        dados.pop("voice_state", None)
         if estado != "ausente":
             dados["voice_state"] = estado
         jogador, no = await retomar(4, dados)
@@ -166,7 +165,7 @@ class TestSemVoiceState:
     @pytest.mark.parametrize("estado", ["ausente", None, {}], ids=["ausente", "none", "vazio"])
     async def test_no_v3_reconecta_por_connect_e_segue_para_a_proxima_faixa(self, estado):
         dados = await sessao_gravada()
-        dados.pop("voice_state")
+        dados.pop("voice_state", None)
         if estado != "ausente":
             dados["voice_state"] = estado
         jogador, no = await retomar(3, dados)
@@ -177,7 +176,7 @@ class TestSemVoiceState:
     @pytest.mark.asyncio
     async def test_a_sessao_sem_voice_state_restaura_o_resto_igual(self):
         dados = await sessao_gravada()
-        dados.pop("voice_state")
+        dados.pop("voice_state", None)
         jogador, _ = await retomar(4, dados)
         assert jogador.dj == dados["dj"] and jogador.loop == "queue" and jogador.volume == 80
         assert jogador.nightcore is True and jogador.mini_queue_enabled is True
@@ -188,33 +187,37 @@ class TestSemVoiceState:
     @pytest.mark.asyncio
     async def test_a_retomada_usa_o_canal_de_voz_gravado_e_nao_um_dado_de_voz(self):
         dados = await sessao_gravada()
-        dados.pop("voice_state")
+        dados.pop("voice_state", None)
         dados["voice_channel"] = OUTRO_CANAL_DE_VOZ
         canais = {OUTRO_CANAL_DE_VOZ: canal_de_voz(OUTRO_CANAL_DE_VOZ), CANAL_DE_TEXTO: canal_de_voz(CANAL_DE_TEXTO)}
         jogador, _ = await retomar(4, dados, canais=canais)
         assert jogador.conexoes == [OUTRO_CANAL_DE_VOZ]
 
 
-# ============================================================================ com voice_state: a reconexão é a mesma
+# ============================================================================ com voice_state na entrada: é ignorado
 
 
-class TestComVoiceStateGravado:
-    """Descreve o formato de hoje: ``voice_state`` volta da sessão. A etapa 5 reescreve estes testes."""
+class TestVoiceStateNaEntradaEIgnorado:
+    """Desde a etapa 5 a sessão não leva ``voice_state`` (não é gravado nem lido); se um dicionário o trouxer mesmo assim, o
+    ``resume_player`` o ignora: o player nasce com ``_voice_state`` ``None`` e a reconexão é por ``connect``."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("versao", [3, 4])
-    async def test_o_voice_state_gravado_e_copiado_para_o_player_e_a_reconexao_continua_por_connect(self, versao):
+    async def test_o_voice_state_que_vier_na_entrada_nao_e_copiado_para_o_player(self, versao):
         dados = await sessao_gravada()
-        estado = dict(dados["voice_state"])
+        dados["voice_state"] = {
+            "sessionId": "sessao-de-voz",
+            "event": {"token": "t", "endpoint": "voz.exemplo.invalid"},
+        }
         jogador, _ = await retomar(versao, dados)
-        assert jogador._voice_state == estado and estado
+        assert jogador._voice_state is None
         assert jogador.conexoes == [CANAL_DE_VOZ]
 
     @pytest.mark.asyncio
-    async def test_a_reconexao_e_a_mesma_com_e_sem_voice_state(self):
+    async def test_a_reconexao_e_a_mesma_com_e_sem_voice_state_na_entrada(self):
         com = await sessao_gravada()
+        com["voice_state"] = {"sessionId": "sessao-de-voz", "event": {"token": "t", "endpoint": "e"}}
         sem = await sessao_gravada()
-        sem.pop("voice_state")
         jogador_com, no_com = await retomar(4, com)
         jogador_sem, no_sem = await retomar(4, sem)
         assert jogador_com.conexoes == jogador_sem.conexoes == [CANAL_DE_VOZ]
@@ -224,8 +227,8 @@ class TestComVoiceStateGravado:
         ]
 
     @pytest.mark.asyncio
-    async def test_o_voice_state_e_descartado_quando_o_canal_de_voz_mudou(self):
-        """O ramo de canal alterado (``last_voice_channel_id``) apaga o ``voice_state`` e conecta no canal novo."""
+    async def test_o_player_nasce_sem_voice_state_quando_o_canal_de_voz_mudou(self):
+        """O ramo de canal alterado (``last_voice_channel_id``) conecta no canal novo, também sem ``voice_state``."""
         dados = await sessao_gravada()
         dados["last_voice_channel_id"] = OUTRO_CANAL_DE_VOZ
         canais = {OUTRO_CANAL_DE_VOZ: canal_de_voz(OUTRO_CANAL_DE_VOZ), CANAL_DE_TEXTO: canal_de_voz(CANAL_DE_TEXTO)}
@@ -235,18 +238,19 @@ class TestComVoiceStateGravado:
 
 
 class TestExtraInfo:
-    """``extra_info`` volta da sessão hoje; a etapa 5 faz o player nascer com ``{}``. Reescrito de propósito."""
+    """``extra_info`` não existe mais na sessão (nada o grava; era um segredo OAuth sem uso): o player nasce com ``{}``."""
 
     @pytest.mark.asyncio
-    async def test_extra_info_gravado_e_restaurado_inteiro(self):
-        dados = await sessao_gravada(extra_info={"guild-yt-oauth": ("token-de-teste", 1)})
+    async def test_extra_info_que_vier_na_entrada_nao_e_restaurado(self):
+        dados = await sessao_gravada()
+        dados["extra_info"] = {"guild-yt-oauth": ("token-de-teste", 1)}
         jogador, _ = await retomar(4, dados)
-        assert jogador.extra_info == {"guild-yt-oauth": ("token-de-teste", 1)}
+        assert jogador.extra_info == {}
 
     @pytest.mark.asyncio
     async def test_sem_extra_info_o_player_nasce_com_dicionario_vazio(self):
         dados = await sessao_gravada()
-        dados.pop("extra_info")
+        dados.pop("extra_info", None)
         jogador, _ = await retomar(4, dados)
         assert jogador.extra_info == {}
 
