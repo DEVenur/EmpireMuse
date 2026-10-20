@@ -2,8 +2,7 @@
 
 ``session`` e ``files`` são importados SOB DEMANDA (proxy): sem o módulo cada teste falha de verdade no corpo, nunca na coleta.
 
-DECISÕES DA ETAPA 5 (plano do Backend ``.local/F3-6b-etapa5-plano.md`` + decisões do MAESTRO R1 a R6; para inverter uma, troque
-aqui e na implementação):
+DECISÕES DA ETAPA 5 (plano do Backend e decisões do MAESTRO R1 a R6; para inverter uma, troque aqui e na implementação):
 
 * ``encode_session(dados) -> bytes`` (JSON UTF-8 compacto) recebe o dicionário que o ``save_info`` monta (``time`` ``datetime`` com
   fuso, ``dj`` ``set``, ``command_log_list`` ``deque``); ``decode_session(bruto, expected_id=) -> dict`` devolve o que o

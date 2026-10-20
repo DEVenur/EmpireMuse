@@ -141,7 +141,7 @@ class TestCodificar:
     def test_metadado_externo_pode_ter_emoji_zwj_e_marca_bidi(self):
         """Título de faixa vem de fora: ZWJ de emoji (``Cf``) e marcas bidi não derrubam a fila; surrogate sim."""
         faixas = faixas_validas()
-        faixas[0]["title"] = "Família 👨‍👩‍👧 ‮RLO"
+        faixas[0]["title"] = "Família 👨\u200d👩\u200d👧 \u202eRLO"
         assert lendo(codificar(faixas))["tracks"][0]["title"] == faixas[0]["title"]
         faixas[0]["title"] = "ruim\ud800"
         assert falha(codificar, faixas).code == SURROGATE

@@ -48,8 +48,8 @@ LIMITES = SimpleNamespace(
     nome=64,
 )
 
-ZWJ = "‍"  # junta emojis (Cf)
-ZWSP = "​"  # campo de embed "em branco" (Cf)
+ZWJ = "\u200d"  # junta emojis (Cf)
+ZWSP = "\u200b"  # campo de embed "em branco" (Cf)
 FAMILIA = "👨" + ZWJ + "👩" + ZWJ + "👧"
 
 

@@ -307,7 +307,7 @@ class TestTiposETetos:
 
     def test_texto_da_sessao_com_controle_e_recusado_mas_o_do_log_aceita_emoji(self):
         assert falha(decodificar, bruto(prefix_info="a\x00b")).code == CONTROL
-        assert decodificar(bruto(command_log_list=[{"text": "ok", "emoji": "👨‍👩", "timestamp": 1.0}]))
+        assert decodificar(bruto(command_log_list=[{"text": "ok", "emoji": "👨\u200d👩", "timestamp": 1.0}]))
 
 
 # ============================================================================ _id do conteúdo == o esperado (condição 2 do 5.1)

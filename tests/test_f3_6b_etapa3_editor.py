@@ -233,7 +233,19 @@ class TestNomeEQuantidade:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "nome",
-        ["", "   ", "a" * (LIMITES.nome + 1), "a.b", "$ab", "a$b", "a\x00b", "a\nb", "a​b", "a‮b", "a\ud800b"],
+        [
+            "",
+            "   ",
+            "a" * (LIMITES.nome + 1),
+            "a.b",
+            "$ab",
+            "a$b",
+            "a\x00b",
+            "a\nb",
+            "a\u200bb",
+            "a\u202eb",
+            "a\ud800b",
+        ],
         ids=[
             "vazio",
             "so-espacos",
