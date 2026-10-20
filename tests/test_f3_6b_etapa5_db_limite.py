@@ -6,7 +6,7 @@ do MAESTRO) precisa de um CURSOR que entregue os documentos aos poucos: ``iter_d
 assíncrono nos dois bancos (``async for documento in banco.iter_data(...)``).
 
 * caracterização dos chamadores atuais (passa hoje e tem de continuar passando): sem ``limit`` EXPLÍCITO a consulta devolve tudo
-  (nenhum teto escondido de 100 ou 500), o ``filter`` filtra, e ``misc.fixfavs`` passa o ``limit`` que queria (300 e 500);
+  (nenhum teto escondido de 100 ou 500), o ``filter`` filtra, e ``misc.fixfavs`` percorre as duas coleções por ``iter_data``, sem limite;
 * RED: com ``limit=n`` devolve no máximo ``n`` e puxa do cursor no máximo ``n`` (+1) documentos; ``iter_data`` entrega preguiçosamente.
 """
 
@@ -93,15 +93,17 @@ class TestChamadoresDeHoje:
         pares = list(await banco.query_data(db_name="guilds", collection="global", filter={"par": True}))
         assert len(pares) == 75
 
-    def test_o_fixfavs_passa_o_limit_que_queria(self):
+    def test_o_fixfavs_nao_passa_mais_limit_e_percorre_pelo_cursor(self):
+        """O ``limit`` de 300 e 500 nunca valeu; com ele valendo, o comando corrigiria só uma parte (ver ``test_f3_6b_fixfavs_sem_limite.py``)."""
         arvore = ast.parse((RAIZ / "empiremuse" / "cogs" / "misc.py").read_text(encoding="utf-8"))
-        limites = []
-        for no in ast.walk(arvore):
-            if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) and no.func.attr == "query_data":
-                limites.append(
-                    {k.arg: k.value.value for k in no.keywords if isinstance(k.value, ast.Constant)}.get("limit")
-                )
-        assert sorted(limites) == [300, 500]
+        chamadas = [
+            no.func.attr
+            for no in ast.walk(arvore)
+            if isinstance(no, ast.Call)
+            and isinstance(no.func, ast.Attribute)
+            and no.func.attr in {"query_data", "iter_data"}
+        ]
+        assert sorted(chamadas) == ["iter_data", "iter_data"]
 
 
 # ============================================================================ RED: o limit passa a valer
