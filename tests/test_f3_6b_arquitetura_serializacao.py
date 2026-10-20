@@ -159,7 +159,7 @@ def test_o_varredor_enxerga_os_arquivos_de_verdade():
     """O varredor acha o ``pickle`` que existe hoje (senão o xfail acima falharia pelo motivo errado)."""
     achados = violacoes_de_formatos(PACOTE, MODULOS_PICKLE, excecao=LEGADO)
     assert any("cogs/player_resume.py" in achado and "importa pickle" in achado for achado in achados)
-    assert any("utils/client.py" in achado for achado in achados)
+    assert any("utils/music/interactions.py" in achado for achado in achados)
 
 
 # ============================================================================ o detector, provado com código sintético
