@@ -459,3 +459,44 @@ class TestCursorDoBancoLocal:
 
 def test_o_arquivo_compactado_do_teste_de_bomba_cabe():  # a bomba de 64 MiB comprimida é pequena (sanidade do teste)
     assert len(zlib.compress(b" " * (64 * MIB))) < 200 * 1024 and HORAS == 3600
+
+
+# ============================================================================ resume_player: o id da mensagem do controller
+
+from empiremuse.cogs import player_resume  # noqa: E402
+from tests.helpers_f3_6b import CANAL_DE_TEXTO, CANAL_DE_VOZ, MENSAGEM  # noqa: E402
+from tests.test_f3_6b_etapa5_resume import montar, proprio, retomar, sessao  # noqa: E402
+
+
+@pytest.fixture
+def _resume_sem_discord(monkeypatch):
+    monkeypatch.setattr(player_resume, "can_send_message", lambda *args, **kwargs: None)
+    monkeypatch.setattr(player_resume, "can_connect", lambda *args, **kwargs: None)
+
+
+class TestMensagemDoController:
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("_resume_sem_discord")
+    async def test_id_em_texto_vira_inteiro_na_busca_da_mensagem(self):
+        meu = proprio(CANAL_DE_TEXTO)
+        controller = {"channel": str(CANAL_DE_TEXTO), "message_id": str(MENSAGEM)}
+        cog, _, criados = montar(
+            canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: meu}, controller=controller
+        )
+        await retomar(cog, await sessao())
+        assert len(criados) == 1 and ("fetch_message", MENSAGEM) in meu.chamadas
+        assert not any(type(c[1]) is str for c in meu.chamadas if isinstance(c, tuple))
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("_resume_sem_discord")
+    @pytest.mark.parametrize("lixo", ["abc", None, [], "1.5", {}], ids=repr)
+    async def test_id_que_nao_e_numero_nao_e_buscado_e_a_retomada_segue(self, lixo):
+        meu = proprio(CANAL_DE_TEXTO)
+        controller = {"channel": str(CANAL_DE_TEXTO), "message_id": lixo}
+        dados = await sessao()
+        dados["message_id"] = None  # a sessão não traz mensagem própria: só o controller poderia indicar uma
+        cog, _, criados = montar(
+            canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: meu}, controller=controller
+        )
+        await retomar(cog, dados)
+        assert len(criados) == 1 and not any(c[0] == "fetch_message" for c in meu.chamadas if isinstance(c, tuple))
