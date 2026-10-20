@@ -5,6 +5,7 @@ acrescentar um arquivo ou pasta na raiz exige alterar a lista aqui, de propósit
 Só olham o que o git versiona (``git ls-files``): ``.runtime/``, ``.env``, caches e afins são ignorados e não contam.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -46,13 +47,13 @@ MOVIDOS = {
 
 
 def _versionados() -> list[str]:
-    try:
-        saida = subprocess.run(
-            ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True, timeout=30
-        ).stdout.decode("utf-8")
-    except (OSError, subprocess.SubprocessError):
-        pytest.skip("git indisponível ou fora de um repositório git")
-    return [caminho for caminho in saida.split("\0") if caminho]
+    if not (ROOT / ".git").exists():
+        pytest.skip("fora de um checkout git")
+    # BotPool.setup grava GIT_DIR em os.environ e testes que o chamam vazam isso; o git aqui precisa achar o ROOT sozinho.
+    ambiente = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    resultado = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, timeout=30, env=ambiente)
+    assert resultado.returncode == 0, f"git ls-files falhou: {resultado.stderr.decode('utf-8', 'replace')}"
+    return [caminho for caminho in resultado.stdout.decode("utf-8").split("\0") if caminho]
 
 
 def _entradas_da_raiz() -> tuple[set[str], set[str]]:
