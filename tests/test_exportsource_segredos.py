@@ -44,7 +44,7 @@ def projeto(monkeypatch, tmp_path):
 
 def zipar(lista: list[str]) -> dict[str, str]:
     """Roda o ``zip_dir`` real e devolve ``{nome: conteúdo}`` do ``source.zip``; nomes repetidos falham o teste."""
-    Owner.zip_dir(None, lista)
+    Owner.zip_dir(lista)
     with ZipFile(Path(os.environ["EMPIREMUSE_HOME"]) / "source.zip") as pacote:
         nomes = pacote.namelist()
         assert len(nomes) == len(set(nomes)), f"entradas duplicadas no zip: {nomes}"
