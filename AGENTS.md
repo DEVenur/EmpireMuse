@@ -175,7 +175,7 @@ Uma funcionalidade, correção ou tarefa só é considerada **concluída** após
 
 ## 7. Regras e Precedência de Configurações
 
-- **Claude Code**: Carrega automaticamente `.claude/rules/ecc/{common,python}` e `.claude/rules/empiremuse/*`.
+- **Claude Code**: Carrega automaticamente `.claude/rules/ecc/{common,python,java}` e `.claude/rules/empiremuse/*`.
 - **Antigravity CLI**: Descobre e carrega `AGENTS.md` na raiz do repositório e utiliza o pacote local `.agents/` (não versionado; regenerável via script indicado em `docs/development.md`).
 - **Ordem de Precedência**: As regras específicas do EmpireMuse ([`.claude/rules/empiremuse/*`](.claude/rules/empiremuse/) e este `AGENTS.md`) possuem **precedência absoluta** sobre as diretrizes genéricas do ECC caso haja divergência.
 - **Repositórios Irmãos (`repos/*`)**:
