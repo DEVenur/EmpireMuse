@@ -81,6 +81,17 @@ TEXTOS_HUMANOS = [
 ]
 COM_QUEBRA_DE_LINHA = ["content", "queue_format", "description", "field-value", "footer-text"]
 
+URLS = {"image-url", "thumbnail-url", "footer-icon", "author-url", "author-icon"}  # a régua de rules/urls.py vale nelas
+
+
+def texto_no_teto(local: str) -> str:
+    """O texto de tamanho exato do teto; nos campos de URL, uma URL válida desse tamanho (a régua da URL vale)."""
+    if local in URLS:
+        prefixo = "https://exemplo.invalid/"
+        return prefixo + "x" * (TETO_DE_TEXTO[local] - len(prefixo))
+    return "x" * TETO_DE_TEXTO[local]
+
+
 TETO_DE_TEXTO = {
     "content": LIMITES.content,
     "queue_format": LIMITES.queue_format,
@@ -182,7 +193,7 @@ class TestAceita:
     @pytest.mark.parametrize("local", sorted(LOCAIS))
     def test_cada_texto_no_teto_exato_passa(self, local):
         monta, _ = LOCAIS[local]
-        skin = monta("x" * TETO_DE_TEXTO[local])
+        skin = monta(texto_no_teto(local))
         assert valida(skin) == skin
 
     @pytest.mark.parametrize(
