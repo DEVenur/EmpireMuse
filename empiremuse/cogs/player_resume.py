@@ -2,29 +2,26 @@
 
 # nota: este sistema é totalmente experimental.
 import asyncio
-import os
-import pickle
-import shutil
+import logging
 import traceback
-import zlib
-from base64 import b64encode
 from contextlib import suppress
-from pathlib import Path
 from typing import Union
 
-import aiofiles
 import disnake
 from disnake.ext import commands
 
-from empiremuse import paths
+from empiremuse.serialization.schema import SchemaError
+from empiremuse.serialization.session import encode_session
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import can_connect, can_send_message
 from empiremuse.utils.music.errors import PoolException
 from empiremuse.utils.music.filters import AudioFilter
-from empiremuse.utils.music.legacy_reader import read_legacy_session
+from empiremuse.utils.music import session_store
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import send_idle_embed, CustomContext
+
+logger = logging.getLogger(__name__)
 
 
 class PlayerSession(commands.Cog):
@@ -185,7 +182,6 @@ class PlayerSession(commands.Cog):
             "queue_autoplay": autoqueue,
             "failed_tracks": failed_tracks,
             "prefix_info": player.prefix_info,
-            "voice_state": player._voice_state,
             "time": disnake.utils.utcnow(),
             "lastfm_artists": player.lastfm_artists,
             "start_timestamp": player.start_timestamp,
@@ -197,8 +193,6 @@ class PlayerSession(commands.Cog):
             player._last_channel_id = vc_id
             data["last_voice_channel_id"] = vc_id
 
-        with suppress(AttributeError):
-            data["extra_info"] = player.extra_info
         with suppress(AttributeError):
             data["live_lyrics_status"] = player.live_lyrics_enabled
         with suppress(AttributeError):
@@ -238,6 +232,8 @@ class PlayerSession(commands.Cog):
             return
 
         try:
+            await self.migrate_legacy_sessions()
+
             mongo_sessions = await self.get_player_sessions_mongo()
             local_sessions = await self.get_player_sessions_local()
 
@@ -277,7 +273,7 @@ class PlayerSession(commands.Cog):
                     await asyncio.sleep(1)
 
         except Exception:
-            print(f"{self.bot.user} - Falha ao retomar player {data['_id']}:\n{traceback.format_exc()}")
+            print(f"{self.bot.user} - Falha ao retomar players:\n{traceback.format_exc()}")
 
         self.bot.player_resumed = True
 
@@ -702,86 +698,60 @@ class PlayerSession(commands.Cog):
         except Exception:
             print(f"{self.bot.user} - Falha Crítica ao retomar players:\n{traceback.format_exc()}")
 
+    def _uses_mongo(self) -> bool:
+        return bool(self.bot.config["PLAYER_SESSIONS_MONGODB"] and self.bot.config["MONGO"])
+
+    async def migrate_legacy_sessions(self):
+        """Converte as sessões antigas (disco e Mongo) para JSON; chamada antes de ler as sessões, na subida."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, session_store.migrate_disk, self.bot.user.id)
+
+        if self.bot.config["MONGO"] and self.bot.pool.mongo_database is not None:
+            await session_store.migrate_mongo(self.bot.pool.mongo_database, str(self.bot.user.id))
+
     async def get_player_sessions_mongo(self):
-        if not self.bot.config["MONGO"]:
+        if not self.bot.config["MONGO"] or self.bot.pool.mongo_database is None:
             return []
 
-        guild_data = []
-
-        for d in await self.bot.pool.mongo_database.query_data(
-            db_name=str(self.bot.user.id), collection="player_sessions"
-        ):
-            try:
-                data = d["data"]
-            except KeyError:
-                await self.delete_data(int(d["_id"]))
-                continue
-            session = await read_legacy_session(data, d["_id"])
-            if session is not None:
-                guild_data.append(session)
-
-        return guild_data
-
-    def _player_sessions_dir(self) -> Path:
-        return paths.RUNTIME_DIR / "local_database" / "player_sessions" / str(self.bot.user.id)
+        return await session_store.read_mongo_sessions(self.bot.pool.mongo_database, str(self.bot.user.id))
 
     async def get_player_sessions_local(self):
-        guild_data = []
-        sessions_dir = self._player_sessions_dir()
+        return await asyncio.get_running_loop().run_in_executor(
+            None, session_store.read_local_sessions, self.bot.user.id
+        )
 
+    def _encode(self, id_: Union[int, str], data: dict):
+        """O JSON da sessão, ou ``None`` (com aviso só com o servidor e o motivo) se os dados não valem."""
         try:
-            files = os.listdir(sessions_dir)
-        except FileNotFoundError:
-            return guild_data
-
-        for file_content in files:
-            if not file_content.endswith(".pkl"):
-                continue
-
-            guild_id = file_content[:-4]
-
-            async with aiofiles.open(sessions_dir / f"{guild_id}.pkl", "rb") as f:
-                file_content = await f.read()
-
-            data = await read_legacy_session(file_content, guild_id)
-
-            if data:
-                guild_data.append(data)
-
-        return guild_data
+            return encode_session(data)
+        except SchemaError as error:
+            logger.warning("Sessão não salva (dados incompatíveis): servidor %s, motivo %s", id_, error.code)
+            return None
 
     async def save_session_mongo(self, id_: Union[int, str], data: dict):
+        raw = self._encode(id_, data)
+        if raw is None:
+            return
+
+        document = await asyncio.get_running_loop().run_in_executor(None, session_store.new_document, raw)
         await self.bot.pool.mongo_database.update_data(
             id_=str(id_),
-            data={"data": b64encode(zlib.compress(pickle.dumps(data))).decode("utf-8")},
-            collection="player_sessions",
+            data=document,
+            collection=session_store.NEW_COLLECTION,
             db_name=str(self.bot.user.id),
         )
 
     async def save_session_local(self, id_: Union[int, str], data: dict):
-        sessions_dir = self._player_sessions_dir()
-        if not sessions_dir.is_dir():
-            sessions_dir.mkdir(parents=True, exist_ok=True)
-
-        path = sessions_dir / str(id_)
-
-        try:
-            async with aiofiles.open(f"{path}.pkl", "wb") as f:
-                await f.write(zlib.compress(pickle.dumps(data)))
-        except Exception:
-            traceback.print_exc()
-            try:
-                os.rename(f"{path}.bak", f"{path}.pkl")
-            except:
-                pass
+        raw = self._encode(id_, data)
+        if raw is None:
             return
 
         try:
-            shutil.copy(f"{path}.pkl", f"{path}.bak")
-        except FileNotFoundError:
-            pass
-        except Exception:
-            traceback.print_exc()
+            await asyncio.get_running_loop().run_in_executor(
+                None, session_store.write_session_file, self.bot.user.id, id_, raw
+            )
+        except OSError as error:
+            logger.warning("Sessão não salva (falha ao gravar): servidor %s, motivo %s", id_, type(error).__name__)
 
     async def save_session(self, player: LavalinkPlayer, data: dict):
         try:
@@ -803,19 +773,10 @@ class PlayerSession(commands.Cog):
             print(f"❌ - {self.bot.user} - Salvamento cancelado: {repr(e)}")
 
     async def delete_data_mongo(self, id_: Union[LavalinkPlayer, int]):
-        await self.bot.pool.mongo_database.delete_data(
-            id_=str(id_), db_name=str(self.bot.user.id), collection="player_sessions"
-        )
+        await session_store.delete_mongo_session(self.bot.pool.mongo_database, str(self.bot.user.id), id_)
 
     def delete_data_local(self, id_: Union[LavalinkPlayer, int]):
-        sessions_dir = self._player_sessions_dir()
-        for ext in (".pkl", ".bak"):
-            try:
-                (sessions_dir / f"{id_}{ext}").unlink()
-            except FileNotFoundError:
-                continue
-            except Exception:
-                traceback.print_exc()
+        session_store.delete_local_session(self.bot.user.id, id_)
 
     async def delete_data(self, player: Union[LavalinkPlayer, int]):
         try:
@@ -823,7 +784,7 @@ class PlayerSession(commands.Cog):
         except AttributeError:
             guild_id = int(player)
 
-        if self.bot.config["PLAYER_SESSIONS_MONGODB"] and self.bot.config["MONGO"]:
+        if self._uses_mongo():
             await self.delete_data_mongo(guild_id)
         else:
             self.delete_data_local(guild_id)

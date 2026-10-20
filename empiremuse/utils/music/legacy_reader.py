@@ -1,31 +1,15 @@
-"""Leitura dos dados antigos (sessões, filas salvas e skins em ``pickle``) e descarte dos caches antigos.
+"""Descarte dos caches antigos em ``pickle`` (playlist e Last.fm).
 
-Etapa 2b da F3-6b ("chave de corte"): nenhum ponto do produto lê ``pickle`` sozinho; tudo passa por
-``empiremuse.serialization.legacy_pickle.load_legacy``, que recusa o que não for um dado legado bem formado. A recusa é
-sempre tratada aqui (aviso no log só com o servidor e o motivo, nunca o conteúdo) e o dado recusado fica onde está.
-Sai junto com as etapas 3 a 5, quando os formatos passam a ser JSON.
+Cache não é dado do usuário: o arquivo antigo é apagado sem ser aberto e o cache recomeça vazio em JSON. A leitura das sessões,
+filas salvas e skins antigas fica com a migração de cada formato (``session_store``, ``saved_queue`` e ``skin_store``).
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
-from typing import Optional, Union
-
-from empiremuse.serialization.legacy_pickle import LegacyFormatError, load_legacy
 
 logger = logging.getLogger(__name__)
-
-
-async def read_legacy_session(raw: Union[bytes, str], guild_id: Union[int, str]) -> Optional[dict]:
-    """A sessão do player (``raw`` = bytes do arquivo ou texto base64 do Mongo), ou ``None`` se foi recusada."""
-    loop = asyncio.get_running_loop()
-    try:
-        return await loop.run_in_executor(None, lambda: load_legacy(raw, "session"))
-    except LegacyFormatError as error:
-        logger.warning("Sessão do player ignorada (formato incompatível): servidor %s, motivo %s", guild_id, error.code)
-        return None
 
 
 def discard_legacy_cache(path: Path) -> None:
