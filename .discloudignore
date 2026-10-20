@@ -11,7 +11,7 @@ repos/
 worktrees/
 .arquivo/
 .local/
-.runtime/
+.runtime
 .venv/
 venv/
 .idea/

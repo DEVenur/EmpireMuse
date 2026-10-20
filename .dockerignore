@@ -16,7 +16,7 @@ repos/
 worktrees/
 .arquivo/
 .local/
-.runtime/
+.runtime
 .venv/
 tests/
 docs/

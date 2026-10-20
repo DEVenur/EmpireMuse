@@ -3,7 +3,7 @@
 # ==============================================================================
 
 # --- Ambiente de Execução Local e Desenvolvimento ---
-.runtime/
+.runtime
 .local/
 .arquivo/
 worktrees/
