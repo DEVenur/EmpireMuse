@@ -114,9 +114,11 @@ python -m empiremuse
 
 Para manter a raiz do repositório limpa durante o desenvolvimento local sem precisar definir variáveis de ambiente a cada sessão:
 
-- Crie a pasta `.runtime/` na raiz do repositório (`mkdir .runtime`).
-- Com `.runtime/` presente, o bot passa a gravar ali todos os dados de execução, bancos locais (`local_database/`), caches, logs (`.logs/`), sincronização de comandos e binários do Lavalink e do Java (`.java/`, `plugins/`, `Lavalink.jar`, `application.yml`).
-- Os arquivos `.env` e `config.json` também ficam em `.runtime/` (ex.: `.runtime/.env` e `.runtime/config.json`).
+- Crie a pasta `.runtime/` na raiz do repositório e restrinja as permissões (`mkdir .runtime && chmod 700 .runtime`).
+- Com `.runtime/` presente, o bot passa a gravar ali todos os dados de execução, bancos locais (`local_database/`), caches, logs (`.logs/`), sincronização de comandos e binários do Lavalink e do Java (`.java/`, `plugins/`, `Lavalink.jar`, `application.yml`). Na subida, o bot registra no log qual pasta de execução escolheu.
+- Os arquivos `.env` e `config.json` também ficam em `.runtime/` (ex.: `.runtime/.env` e `.runtime/config.json`). O `docker-compose.yml` é de deploy e continua lendo o `.env` da raiz, enquanto o bot em desenvolvimento lê `.runtime/.env`.
+- No modo `.runtime`, os comandos do bot que atualizam ou exportam o código pelo Git não funcionam; use o `git` direto no terminal.
+- A pasta `.runtime/` nunca vai para a Discloud nem para a imagem Docker, pois está incluída nos arquivos de ignorar (`.gitignore`, `.dockerignore` e `.discloudignore`).
 - A variável `EMPIREMUSE_HOME`, se definida, tem precedência sobre `.runtime/`.
 - Sem a pasta `.runtime/` (e sem `EMPIREMUSE_HOME`), o comportamento antigo continua valendo: o bot utiliza a pasta atual de trabalho.
 
