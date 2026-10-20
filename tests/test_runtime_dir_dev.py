@@ -2,7 +2,9 @@
 
 Sem ``EMPIREMUSE_HOME``, o bot gravava Lavalink.jar, JDK, ``local_database/``, caches e ``.env`` no cwd, que em
 desenvolvimento é a raiz do repositório. Agora, se ``PROJECT_DIR/.runtime`` existir como diretório, ela vira o
-``RUNTIME_DIR``, o cwd do processo e o repositório do ``GIT_DIR`` padrão aponta para ``PROJECT_DIR/.git``.
+``RUNTIME_DIR`` e o cwd do processo. O ``GIT_DIR`` padrão continua ``RUNTIME_DIR/.git`` (AppSec A1): apontá-lo para
+``PROJECT_DIR/.git`` com o cwd na ``.runtime`` faz o git tratar a ``.runtime`` como árvore de trabalho e o
+``exportsource`` listar o ``.env`` e o ``config.json`` reais.
 Produção não muda: Docker e Pterodactyl definem ``EMPIREMUSE_HOME``; a Discloud não recebe ``.runtime/``.
 
 Os testes trocam ``paths.PROJECT_DIR`` por uma pasta do ``tmp_path`` e nunca tocam a ``.runtime`` real.
@@ -128,10 +130,24 @@ class TestEnterRuntimeDir:
 
 
 class TestGitDirPadrao:
-    def test_com_a_runtime_de_desenvolvimento_aponta_para_o_git_do_projeto(self, projeto, runtime_dev):
+    def test_com_a_runtime_de_desenvolvimento_continua_sob_o_runtime_dir(self, projeto, runtime_dev):
+        assert config_loader.load_config()["GIT_DIR"] == str(runtime_dev / ".git")
+
+    def test_com_a_runtime_de_desenvolvimento_nunca_aponta_para_o_git_do_projeto(self, projeto, runtime_dev):
         raiz, _ = projeto
 
-        assert config_loader.load_config()["GIT_DIR"] == str(raiz / ".git")
+        assert config_loader.load_config()["GIT_DIR"] != str(raiz / ".git")
+
+    @pytest.mark.parametrize("cenario", ["runtime_dev", "sem_runtime", "empiremuse_home"])
+    def test_git_dir_padrao_e_sempre_o_runtime_dir(self, monkeypatch, tmp_path, projeto, request, cenario):
+        if cenario == "runtime_dev":
+            request.getfixturevalue("runtime_dev")
+        elif cenario == "empiremuse_home":
+            home = (tmp_path / "container").resolve()
+            home.mkdir()
+            monkeypatch.setenv("EMPIREMUSE_HOME", str(home))
+
+        assert config_loader.load_config()["GIT_DIR"] == str(paths.get_runtime_dir() / ".git")
 
     def test_sem_a_runtime_continua_sob_o_runtime_dir(self, projeto):
         _, cwd = projeto
