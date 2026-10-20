@@ -179,7 +179,9 @@ def migrate_saved_queues() -> int:
         try:
             if _migrate_file(Path(entry.path), saved_queue_path(user_id)):
                 converted += 1
-        except (OSError, SchemaError) as error:  # inclui LegacyFormatError
+        except (
+            Exception
+        ) as error:  # arquivo de fora: defeito nenhum dele pode derrubar a subida (SchemaError inclui o legado)
             logger.warning(
                 "Fila salva antiga não migrada (usuário %s): %s", user_id, getattr(error, "code", type(error).__name__)
             )

@@ -18,6 +18,7 @@ from .schema import (
     LENGTH,
     MISSING,
     PATTERN,
+    RANGE,
     SNOWFLAKE,
     TOO_BIG,
     TYPE,
@@ -99,7 +100,10 @@ def _clean_track(info: Any, index: int) -> dict:
 def _format_date(created_at: Any) -> str:
     if type(created_at) is not datetime or created_at.tzinfo is None:
         raise SchemaError("created_at", TYPE)
-    return created_at.astimezone(timezone.utc).isoformat()
+    try:
+        return created_at.astimezone(timezone.utc).isoformat()
+    except OverflowError:  # perto de 0001-01-01 ou 9999-12-31 com offset: não cabe em UTC
+        raise SchemaError("created_at", RANGE) from None
 
 
 def _parse_date(text: str) -> datetime:
@@ -107,6 +111,8 @@ def _parse_date(text: str) -> datetime:
         return datetime.fromisoformat(text).astimezone(timezone.utc)
     except ValueError:
         raise SchemaError("created_at", PATTERN) from None
+    except OverflowError:
+        raise SchemaError("created_at", RANGE) from None
 
 
 def encode_saved_queue(tracks: list, created_at: datetime, guild_id: int) -> bytes:

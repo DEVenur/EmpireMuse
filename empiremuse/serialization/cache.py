@@ -12,7 +12,7 @@ import time
 from typing import Any, Iterable
 
 from .codec import dumps, loads_bounded
-from .schema import MISSING, TYPE, SchemaError, check_structure
+from .schema import MISSING, RANGE, TYPE, SchemaError, check_structure
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,9 @@ MAX_KEY = 512
 MAX_ITEM_DEPTH = 16
 MAX_ITEM_NODES = 2_000_000
 CLOCK_TOLERANCE = 60  # segundos de folga para um relógio ligeiramente adiantado
+MAX_SAVED_AT = (
+    253_402_300_799  # 9999-12-31T23:59:59Z: acima disso não é um instante (e a conta com ``time.time()`` estoura)
+)
 
 _HEAD = b'{"v":%d,"saved_at":%s,"items":['
 _TAIL = b"]}"
@@ -40,9 +43,19 @@ def _encode_item(key: Any, value: Any) -> bytes | None:
     return piece
 
 
+def _check_saved_at(saved_at: Any) -> None:
+    """Instante entre 0 e 9999-12-31 (a comparação vem ANTES de qualquer conta, que estouraria com um inteiro enorme)."""
+    if type(saved_at) not in (int, float):
+        raise SchemaError("saved_at", TYPE)
+    if not 0 <= saved_at <= MAX_SAVED_AT:
+        raise SchemaError("saved_at", RANGE)
+
+
 def encode_cache(items: Iterable[tuple[Any, Any]], *, max_bytes: int, saved_at: float | None = None) -> bytes:
     """O JSON do cache com até ``max_bytes`` bytes; item inválido é descartado e, ao estourar o teto, os últimos saem."""
-    head = _HEAD % (VERSION, dumps(time.time() if saved_at is None else saved_at))
+    saved_at = time.time() if saved_at is None else saved_at
+    _check_saved_at(saved_at)
+    head = _HEAD % (VERSION, dumps(saved_at))
     budget = max_bytes - len(head) - len(_TAIL)
     pieces: list[bytes] = []
     used = dropped = 0
@@ -82,8 +95,7 @@ def decode_cache(raw: bytes, *, max_bytes: int, max_age: float, now: float | Non
         if name not in document:
             raise SchemaError(name, MISSING)
     saved_at, items = document["saved_at"], document["items"]
-    if type(saved_at) not in (int, float):
-        raise SchemaError("saved_at", TYPE)
+    _check_saved_at(saved_at)
     if type(items) is not list:
         raise SchemaError("items", TYPE)
     now = time.time() if now is None else now
