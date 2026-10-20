@@ -369,7 +369,7 @@ class TestKI13RateLimitSemMatarOProcesso:
 
 @pytest.fixture
 def pool_com_bots_falsos(runtime, monkeypatch):
-    """Roda o BotPool.setup REAL com BotCore dublado e o loop principal neutralizado; o guild_bots.json fica no cwd."""
+    """Roda o BotPool.setup REAL com BotCore dublado e o loop principal neutralizado; o guild_bots.json fica no RUNTIME_DIR."""
     monkeypatch.setenv("RUN_LOCAL_LAVALINK", "false")  # sem Java: o setup não pode subir o Lavalink local
     monkeypatch.setenv("RUN_RPC_SERVER", "false")  # o padrão (True) sobe um servidor tornado na porta do painel
     monkeypatch.setenv("TOKEN", TOKEN_FALSO)  # o setup só reconhece valores com FORMATO de token do Discord
@@ -393,8 +393,8 @@ def pool_com_bots_falsos(runtime, monkeypatch):
 
 
 class TestKI11GuildBots:
-    def test_varios_servidores_do_guild_bots_json_ficam_todos_registrados(self, pool_com_bots_falsos):
-        Path("guild_bots.json").write_text(json.dumps({"111": ["tokA"], "222": ["tokB"], "333": ["tokC"]}))
+    def test_varios_servidores_do_guild_bots_json_ficam_todos_registrados(self, pool_com_bots_falsos, runtime):
+        (runtime / "guild_bots.json").write_text(json.dumps({"111": ["tokA"], "222": ["tokB"], "333": ["tokC"]}))
 
         pool_com_bots_falsos.setup()
 
@@ -403,16 +403,16 @@ class TestKI11GuildBots:
         )
         assert all(len(bots) == 1 for bots in pool_com_bots_falsos.guild_bots.values())
 
-    def test_varios_tokens_do_mesmo_servidor_acumulam(self, pool_com_bots_falsos):
-        Path("guild_bots.json").write_text(json.dumps({"111": ["tokA", "tokB"], "222": ["tokC"]}))
+    def test_varios_tokens_do_mesmo_servidor_acumulam(self, pool_com_bots_falsos, runtime):
+        (runtime / "guild_bots.json").write_text(json.dumps({"111": ["tokA", "tokB"], "222": ["tokC"]}))
 
         pool_com_bots_falsos.setup()
 
         assert [b.identifier for b in pool_com_bots_falsos.guild_bots["111"]] == ["111_0", "111_1"]
         assert [b.identifier for b in pool_com_bots_falsos.guild_bots["222"]] == ["222_0"]
 
-    def test_get_guild_bots_enxerga_os_bots_exclusivos_de_cada_servidor(self, pool_com_bots_falsos):
-        Path("guild_bots.json").write_text(json.dumps({"111": ["tokA"], "222": ["tokB"]}))
+    def test_get_guild_bots_enxerga_os_bots_exclusivos_de_cada_servidor(self, pool_com_bots_falsos, runtime):
+        (runtime / "guild_bots.json").write_text(json.dumps({"111": ["tokA"], "222": ["tokB"]}))
 
         pool_com_bots_falsos.setup()
 

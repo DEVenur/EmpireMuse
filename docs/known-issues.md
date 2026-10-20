@@ -8,7 +8,7 @@ corrigir. Escopo: esta fase é só documentação — nada aqui foi alterado.
 quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorreto com contorno) · *baixo*
 (qualidade, desperdício ou risco futuro).
 
-> **Itens de segurança:** ver `SECURITY.md` (rastreados em privado). Não são listados aqui.
+> **Itens de segurança:** ver [`.github/SECURITY.md`](../.github/SECURITY.md) (rastreados em privado). Não são listados aqui.
 
 ## Resumo
 

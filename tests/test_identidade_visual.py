@@ -216,13 +216,13 @@ def test_readme_logo_path_exists_in_repository():
 
 
 def test_code_of_conduct_has_invite_without_todo():
-    text = _read("CODE_OF_CONDUCT.md")
-    assert INVITE in text, "CODE_OF_CONDUCT.md sem o convite"
-    assert "TODO(dono)" not in text, "CODE_OF_CONDUCT.md ainda tem TODO(dono)"
+    text = _read(".github/CODE_OF_CONDUCT.md")
+    assert INVITE in text, ".github/CODE_OF_CONDUCT.md sem o convite"
+    assert "TODO(dono)" not in text, ".github/CODE_OF_CONDUCT.md ainda tem TODO(dono)"
 
 
 def test_security_md_has_no_pending_maintainers_comment():
-    assert "PENDÊNCIA (mantenedores)" not in _read("SECURITY.md")
+    assert "PENDÊNCIA (mantenedores)" not in _read(".github/SECURITY.md")
 
 
 def test_issue_template_config_links_support_and_security_advisory():
@@ -241,7 +241,6 @@ CODEOWNERS_SENSITIVE_PATHS = [
     "/requirements*.txt",
     "/.github/",
     "/LICENSE",
-    "/SECURITY.md",
     "/empiremuse/config_loader.py",
     "/empiremuse/web_app.py",
     "/empiremuse/cogs/legacy_cmds.py",

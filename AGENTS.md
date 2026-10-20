@@ -14,7 +14,7 @@
   - [Arquitetura do Sistema](docs/architecture.md)
   - [Guia de Desenvolvimento Local](docs/development.md)
   - [Problemas Conhecidos (Backlog Técnico)](docs/known-issues.md)
-  - [Política de Segurança](SECURITY.md)
+  - [Política de Segurança](.github/SECURITY.md)
   - [Registros de Decisão de Arquitetura (ADRs)](docs/adr/README.md)
 
 ---
@@ -188,7 +188,7 @@ Uma funcionalidade, correção ou tarefa só é considerada **concluída** após
 
 - **Segredos**: Nunca versione arquivos `.env`, `config.json`, bancos de dados locais (`local_database/`) ou credenciais reais. Variáveis novas devem ser adicionadas vazias e documentadas em `.example.env`.
 - **Backlog Privado de Vulnerabilidades**: O catálogo detalhado de vulnerabilidades conhecidas é mantido **estritamente em ambiente privado** (nota do canvas do Maestri: *"Segurança — backlog privado"*). Detalhes técnicos exploráveis **nunca** devem ser inseridos em arquivos públicos do repositório, issues ou discussões públicas.
-- **Relato Responsável**: Siga as diretrizes públicas estabelecidas em [`SECURITY.md`](SECURITY.md).
+- **Relato Responsável**: Siga as diretrizes públicas estabelecidas em [`.github/SECURITY.md`](.github/SECURITY.md).
 
 ---
 

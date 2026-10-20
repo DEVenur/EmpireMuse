@@ -246,7 +246,9 @@ def load_config():
             type(e).__name__,
         )
 
-    # o padrão relativo ao cwd vira o repositório do RUNTIME_DIR; um GIT_DIR configurado pelo usuário é respeitado
+    # o padrão relativo ao cwd vira o repositório do RUNTIME_DIR; um GIT_DIR configurado pelo usuário é respeitado.
+    # Nunca o PROJECT_DIR/.git: com o cwd na .runtime o git trataria a .runtime como árvore de trabalho e o exportsource
+    # listaria o .env e o config.json reais.
     if CONFIG["GIT_DIR"] == DEFAULT_CONFIG["GIT_DIR"]:
         CONFIG["GIT_DIR"] = str(paths.RUNTIME_DIR / ".git")
 

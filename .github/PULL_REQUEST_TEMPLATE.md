@@ -43,7 +43,7 @@ Antes de solicitar a revisão, confirme se todos os critérios foram atendidos:
 - [ ] Validação realizada: testes automatizados quando a suíte existir (fase de saneamento); até lá: `python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink` + teste manual descrito no PR.
 - [ ] O arquivo [`CHANGELOG.md`](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/CHANGELOG.md) foi atualizado na seção `[Unreleased]`.
 - [ ] **Segurança**: Confirmo que nenhum segredo, chave de API, credencial ou token (`TOKEN`, `TOKEN_BOT_*`, etc.) foi incluído no repositório.
-- [ ] **Auditoria de Segurança**: Se o PR manipular entrada de dados de usuário, rede/WebSocket, chamadas externas ou banco de dados, foi realizada revisão preventiva contra vulnerabilidades (conforme [`SECURITY.md`](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/SECURITY.md) e [`.claude/rules/empiremuse/security.md`](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/.claude/rules/empiremuse/security.md)).
+- [ ] **Auditoria de Segurança**: Se o PR manipular entrada de dados de usuário, rede/WebSocket, chamadas externas ou banco de dados, foi realizada revisão preventiva contra vulnerabilidades (conforme [`SECURITY.md`](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/.github/SECURITY.md) e [`.claude/rules/empiremuse/security.md`](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/.claude/rules/empiremuse/security.md)).
 - [ ] Os títulos dos commits seguem o padrão [Conventional Commits](https://www.conventionalcommits.org/pt-br/v1.0.0/).
 - [ ] A licença **GPL-2.0** e os créditos de autoria ao projeto original **MuseHeart-MusicBot** e **zRitsu** foram integralmente preservados.
 

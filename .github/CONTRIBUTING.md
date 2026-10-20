@@ -8,9 +8,9 @@ Agradecemos o seu interesse em contribuir para o **EmpireMuse**! Este documento 
 
 Antes de submeter alterações de código, familiarize-se com a documentação do projeto e configure o ambiente local:
 
-- 🏗️ **[Arquitetura do Sistema](docs/architecture.md)**: Visão geral dos componentes, fluxo de áudio com Lavalink, roteamento do `BotPool` e persistência.
-- 🛠️ **[Guia de Desenvolvimento e Setup Local](docs/development.md)**: Requisitos (Python 3.13, `uv`, Java 17+), instalação e execução passo a passo.
-- ⚠️ **[Problemas Conhecidos e Backlog Técnico](docs/known-issues.md)**: Mapeamento de bugs catalogados, débitos e comportamentos sob saneamento.
+- 🏗️ **[Arquitetura do Sistema](../docs/architecture.md)**: Visão geral dos componentes, fluxo de áudio com Lavalink, roteamento do `BotPool` e persistência.
+- 🛠️ **[Guia de Desenvolvimento e Setup Local](../docs/development.md)**: Requisitos (Python 3.13, `uv`, Java 17+), instalação e execução passo a passo.
+- ⚠️ **[Problemas Conhecidos e Backlog Técnico](../docs/known-issues.md)**: Mapeamento de bugs catalogados, débitos e comportamentos sob saneamento.
 
 ---
 
@@ -35,7 +35,7 @@ Adotamos uma estratégia baseada no **GitHub Flow**, garantindo simplicidade e r
 
 - **Proteção da `main`**: A branch principal é protegida no GitHub. Commits diretos são bloqueados para todos os colaboradores (inclusive mantenedores). Não são permitidos *force-pushes* nem exclusão da branch.
 - **Pull Requests obrigatórios**: Toda e qualquer alteração deve passar por um Pull Request. Todas as conversas e comentários de revisão devem estar resolvidos antes do merge.
-- **Caminhos sensíveis (CODEOWNERS)**: Modificações em arquivos críticos de segurança, dependências, dados e atualização (mapeados em [`.github/CODEOWNERS`](.github/CODEOWNERS)) requerem obrigatoriamente a revisão e aprovação do mantenedor (`@Or4cu1o`).
+- **Caminhos sensíveis (CODEOWNERS)**: Modificações em arquivos críticos de segurança, dependências, dados e atualização (mapeados em [`CODEOWNERS`](CODEOWNERS)) requerem obrigatoriamente a revisão e aprovação do mantenedor (`@Or4cu1o`).
 
 ---
 
@@ -70,12 +70,12 @@ Todas as alterações devem utilizar o padrão [Conventional Commits](https://ww
 
 ## 4. Checklist para Pull Requests (PR)
 
-Antes de solicitar a revisão de um Pull Request, certifique-se de preencher o modelo padrão em [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) e verificar os seguintes pontos obrigatórios:
+Antes de solicitar a revisão de um Pull Request, certifique-se de preencher o modelo padrão em [`PULL_REQUEST_TEMPLATE.md`](PULL_REQUEST_TEMPLATE.md) e verificar os seguintes pontos obrigatórios:
 
 - [ ] **Testes e Validação**: Suíte pytest aprovada (`.venv/bin/python -m pytest`), verificação de lint e formatação com ruff (`.venv/bin/ruff check .` e `.venv/bin/ruff format --check .`), compilação de bytecode (`python -m compileall -q main.py empiremuse`) e testes manuais descritos no PR.
-- [ ] **Changelog Atualizado**: Registro resumido das alterações incluído na seção `[Unreleased]` de [`CHANGELOG.md`](CHANGELOG.md).
+- [ ] **Changelog Atualizado**: Registro resumido das alterações incluído na seção `[Unreleased]` de [`CHANGELOG.md`](../CHANGELOG.md).
 - [ ] **Sem Segredos ou Credenciais**: Nenhuma chave de API, token de bot (`TOKEN`, `TOKEN_BOT_*`), senha ou dado sensível foi incluído no histórico ou nos arquivos.
-- [ ] **Revisão de Segurança Obrigatória**: Caso a alteração envolva entrada de dados de usuário, processamento de rede/RPC/WebSocket, leitura/escrita de arquivos ou operações no banco de dados, certifique-se de que foram seguidas as diretrizes de [`SECURITY.md`](SECURITY.md) (política e relato responsável) e o checklist técnico em [`.claude/rules/empiremuse/security.md`](.claude/rules/empiremuse/security.md).
+- [ ] **Revisão de Segurança Obrigatória**: Caso a alteração envolva entrada de dados de usuário, processamento de rede/RPC/WebSocket, leitura/escrita de arquivos ou operações no banco de dados, certifique-se de que foram seguidas as diretrizes de [`SECURITY.md`](SECURITY.md) (política e relato responsável) e o checklist técnico em [`.claude/rules/empiremuse/security.md`](../.claude/rules/empiremuse/security.md).
 - [ ] **Padrão de Código**: Código aderente às regras de formatação, sem criação de blocos `except:` genéricos sem tratamento.
 - [ ] **Commits Padronizados**: Mensagens de commit seguindo o formato Conventional Commits.
 
@@ -98,4 +98,4 @@ O desenvolvimento deste repositório adota uma governança de inteligência arti
 - Funções especializadas (como Especialista de Backend, Caçador de Vulnerabilidades/AppSec, Guardião de Git/Docs e Engenheiro de Tarefas Repetitivas) operam de forma isolada e cooperativa.
 - Para entender as responsabilidades de cada papel, regras operacionais e comandos do ecossistema de agentes, consulte o documento:
 
-👉 **[Governança de Agentes Maestri](AGENTS.md)**
+👉 **[Governança de Agentes Maestri](../AGENTS.md)**

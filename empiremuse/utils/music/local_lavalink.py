@@ -231,18 +231,20 @@ def _verify_preinstalled_files(directory: str, url: Optional[str], configured_sh
 
 
 def prepare_lavalink_files(
-    directory: str = ".",
+    directory: Optional[str] = None,
     *,
     lavalink_file_url: str = None,
     lavalink_file_sha256: str = None,
     lavalink_offline: bool = False,
 ) -> None:
-    """Garante ``Lavalink.jar``, ``application.yml`` e os plugins oficiais em ``directory``, todos verificados (SHA-256).
+    """Garante ``Lavalink.jar``, ``application.yml`` e os plugins oficiais em ``directory`` (padrão: o RUNTIME_DIR).
+
+    Todos verificados (SHA-256).
 
     Levanta ``LavalinkDownloadError`` (``IntegrityError`` se o hash não confere) antes de qualquer processo iniciar.
     Com ``lavalink_offline`` nada é baixado nem criado: os arquivos pré-instalados só são conferidos.
     """
-    directory = str(directory)
+    directory = str(paths.RUNTIME_DIR if directory is None else directory)
     if lavalink_offline:
         _verify_preinstalled_files(directory, lavalink_file_url, lavalink_file_sha256)
         return
@@ -509,10 +511,11 @@ def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool) ->
 
     shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0"), ignore_errors=True)
 
-    download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", "install_jabba.sh")
-    subprocess.call("bash install_jabba.sh", shell=True)
+    jabba_script = str(paths.RUNTIME_DIR / "install_jabba.sh")
+    download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", jabba_script)
+    subprocess.call(["bash", jabba_script])
     subprocess.call(f"{paths.RUNTIME_DIR}/.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
-    os.remove("install_jabba.sh")
+    os.remove(jabba_script)
 
     return os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
 
