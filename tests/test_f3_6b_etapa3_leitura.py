@@ -197,7 +197,7 @@ class TestRecusadasFicamComoTexto:
         [
             ({"embeds": [{"description": SEGREDO + "d" * 5000}]}, "length"),
             ({"embeds": SEGREDO}, "type"),
-            ({"queue_max_entries": 99, "content": SEGREDO}, "range"),
+            ({"queue_max_entries": 100, "content": SEGREDO}, "range"),
             ({"controller_enabled": "sim", "content": SEGREDO}, "type"),
             ({"embeds": [{"fields": [{"value": SEGREDO}]}]}, "missing"),
             ({"embeds": [{"title": SEGREDO + "\x00"}]}, "control"),
