@@ -72,6 +72,18 @@ def _playlist_cache_file():
     return paths.RUNTIME_DIR / "local_database" / "playlist_cache.json"
 
 
+def read_guild_bots() -> Dict[str, List[str]]:
+    """Tokens dos bots exclusivos de servidor (``guild_bots.json`` no RUNTIME_DIR); vazio se o arquivo não existe."""
+    try:
+        with open(paths.RUNTIME_DIR / "guild_bots.json") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        traceback.print_exc()
+        return {}
+
+
 class BotPool:
     killing_state = False
     command_sync_config = commands.CommandSyncFlags(
@@ -1033,18 +1045,10 @@ class BotPool:
             load_bot(k, v, load_modules_log=load_modules_log)
             load_modules_log = False
 
-        try:
-            with open("guild_bots.json") as f:
-                guild_bots = json.load(f)
-        except FileNotFoundError:
-            pass
-        except Exception:
-            traceback.print_exc()
-        else:
-            for guild_id, guildbotsdata in guild_bots.items():
-                for n, guildbottoken in enumerate(guildbotsdata):
-                    load_bot(f"{guild_id}_{n}", guildbottoken, guild_id, load_modules_log=load_modules_log)
-                    load_modules_log = False
+        for guild_id, guildbotsdata in read_guild_bots().items():
+            for n, guildbottoken in enumerate(guildbotsdata):
+                load_bot(f"{guild_id}_{n}", guildbottoken, guild_id, load_modules_log=load_modules_log)
+                load_modules_log = False
 
         message = ""
 

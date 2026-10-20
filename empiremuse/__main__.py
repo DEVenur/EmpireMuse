@@ -22,11 +22,17 @@ def enter_runtime_dir() -> None:
     try:
         os.chdir(runtime_dir)
     except OSError as e:
-        origin = "indicado por EMPIREMUSE_HOME" if home_is_set else "de desenvolvimento (.runtime)"
-        raise SystemExit(
-            f"Não foi possível entrar no diretório {origin} ({runtime_dir}): {e.strerror}. "
-            "Crie a pasta ou corrija a variável EMPIREMUSE_HOME."
-        ) from e
+        if home_is_set:
+            message = (
+                f"Não foi possível entrar no diretório indicado por EMPIREMUSE_HOME ({runtime_dir}): {e.strerror}. "
+                "Crie a pasta ou corrija a variável EMPIREMUSE_HOME."
+            )
+        else:
+            message = (
+                f"Não foi possível entrar na pasta de execução de desenvolvimento ({runtime_dir}): {e.strerror}. "
+                "Ajuste as permissões da pasta .runtime ou remova-a para o bot usar o diretório atual."
+            )
+        raise SystemExit(message) from e
 
     if home_is_set:
         # Se EMPIREMUSE_HOME era relativo, o valor passaria a apontar para outro lugar depois do chdir.
