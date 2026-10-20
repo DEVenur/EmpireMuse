@@ -360,11 +360,35 @@ class PlayerSession(commands.Cog):
             except Exception as e:
                 print(f"{self.bot.user} - Falha ao falar no palco do servidor {guild.name}. Erro: {repr(e)}")
 
+    async def _guild_channel(self, guild: disnake.Guild, channel_id, *, fetch: bool = False):
+        """O canal ``channel_id`` SE for do servidor ``guild``; canal de outro servidor (ou sem servidor) vira ``None``."""
+        try:
+            channel_id = int(channel_id)
+            channel = self.bot.get_channel(channel_id)
+
+            if channel is None and fetch:
+                channel = await self.bot.fetch_channel(channel_id)
+        except (disnake.HTTPException, TypeError, ValueError):
+            return None
+
+        if channel is not None and getattr(getattr(channel, "guild", None), "id", None) != guild.id:
+            logger.warning("Canal da sessão ignorado por não ser do servidor da sessão: servidor %s", guild.id)
+            return None
+
+        return channel
+
+    @staticmethod
+    def _to_id(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     async def resume_player(self, data: dict, hints: list = None):
         if hints is None:
             hints = []
 
-        voice_channel = self.bot.get_channel(data["voice_channel"])
+        voice_channel = None
 
         try:
             guild = self.bot.get_guild(data["_id"])
@@ -389,31 +413,23 @@ class PlayerSession(commands.Cog):
 
                 guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)
 
+                voice_channel = await self._guild_channel(guild, data["voice_channel"])
+
                 text_channel = None
 
-                if guild_data["player_controller"]["channel"]:
-                    try:
-                        text_channel = self.bot.get_channel(
-                            int(guild_data["player_controller"]["channel"])
-                        ) or await self.bot.fetch_channel(int(guild_data["player_controller"]["channel"]))
-                    except:
-                        pass
-                    else:
-                        data["message_id"] = int(guild_data["player_controller"]["message_id"])
+                controller = guild_data["player_controller"]
 
-                if not text_channel:
-                    if not data["text_channel_id"]:
-                        pass
-                    elif not isinstance(data["text_channel_id"], disnake.Thread):
-                        text_channel = self.bot.get_channel(data["text_channel_id"])
-                    else:
-                        try:
-                            text_channel = self.bot.get_channel(
-                                int(data["text_channel_id"])
-                            ) or await self.bot.fetch_channel(int(data["text_channel_id"]))
-                        except (disnake.NotFound, TypeError):
-                            text_channel = None
-                            data["message_id"] = None
+                if controller["channel"]:
+                    text_channel = await self._guild_channel(guild, controller["channel"], fetch=True)
+
+                    if text_channel:
+                        data["message_id"] = self._to_id(controller["message_id"])
+
+                if not text_channel and data["text_channel_id"]:
+                    text_channel = await self._guild_channel(guild, data["text_channel_id"], fetch=True)
+
+                    if not text_channel:
+                        data["message_id"] = None
 
                 if not text_channel:
                     data["static"] = False
@@ -484,11 +500,7 @@ class PlayerSession(commands.Cog):
 
                 if not voice_channel or not voice_channel.permissions_for(guild.me).connect:
                     if data["voice_channel"] != (vc_id := data.get("last_voice_channel_id", data["voice_channel"])):
-                        voice_channel = self.bot.get_channel(int(vc_id))
-                        try:
-                            del data["voice_state"]
-                        except:
-                            pass
+                        voice_channel = await self._guild_channel(guild, vc_id)
 
                 if not voice_channel:
                     print(f"{self.bot.user} - Player Ignorado: {guild.name} [{guild.id}]\nO canal de voz não existe...")
@@ -579,8 +591,8 @@ class PlayerSession(commands.Cog):
                         await self.delete_data(guild.id)
                     return
 
-                player.extra_info = data.get("extra_info", {})
-                player._voice_state = data.get("voice_state")
+                player.extra_info = {}
+                player._voice_state = None
                 player.current_encoded = data.get("current_encoded")
                 player.live_lyrics_enabled = data.get("live_lyrics_status", False)
                 player.mini_queue_enabled = data.get("mini_queue_enabled")
