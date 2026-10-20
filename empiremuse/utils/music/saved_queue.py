@@ -21,7 +21,7 @@ from empiremuse import paths
 from empiremuse.serialization.files import write_private_atomic
 from empiremuse.serialization.legacy_pickle import MAX_RAW, LegacyFormatError, load_legacy
 from empiremuse.serialization.queue import MAX_BYTES, decode_saved_queue, encode_saved_queue, normalize_legacy_queue
-from empiremuse.serialization.schema import SchemaError
+from empiremuse.serialization.schema import TOO_BIG, SchemaError
 from empiremuse.utils.music.errors import GenericError
 
 logger = logging.getLogger(__name__)
@@ -61,9 +61,23 @@ async def _read_limited(path: Path, limit: int) -> Optional[bytes]:
         return None
 
 
+def _read_capped(path: Path, limit: int) -> bytes:
+    """Até ``limit`` bytes do arquivo, sem seguir link simbólico e sem ler um arquivo maior que o teto: ``SchemaError`` (``too_big``).
+
+    Regra para toda leitura de arquivo de dados: conferir o tamanho ANTES de ler e nunca pedir mais que ``limit + 1`` bytes.
+    """
+    if path.lstat().st_size > limit:
+        raise SchemaError("", TOO_BIG)
+    with open(path, "rb") as file:
+        raw = file.read(limit + 1)
+    if len(raw) > limit:
+        raise SchemaError("", TOO_BIG)
+    return raw
+
+
 def _write_and_verify(path: Path, raw: bytes) -> None:
     write_private_atomic(path, raw)
-    decode_saved_queue(path.read_bytes())
+    decode_saved_queue(_read_capped(path, MAX_BYTES))
 
 
 async def _migrate_after_read(user_id: Union[int, str], data: dict) -> None:
@@ -127,7 +141,7 @@ async def store_saved_queue(user_id: Union[int, str], tracks: list, guild_id: in
 
 def _json_is_valid(path: Path) -> bool:
     try:
-        decode_saved_queue(path.read_bytes())
+        decode_saved_queue(_read_capped(path, MAX_BYTES))
     except (OSError, SchemaError):
         return False
     return True
@@ -138,7 +152,7 @@ def _migrate_file(legacy: Path, target: Path) -> bool:
     if target.is_file() and _json_is_valid(target) and legacy.stat().st_mtime <= target.stat().st_mtime:
         legacy.unlink()  # o JSON é mais novo: o ``.pkl`` é só resto
         return False
-    document = load_legacy(legacy.read_bytes(), "queue")
+    document = load_legacy(_read_capped(legacy, MAX_RAW["queue"]), "queue")
     data = normalize_legacy_queue(document)
     _write_and_verify(target, encode_saved_queue(data["tracks"], data["created_at"], data["guild_id"]))
     legacy.unlink()

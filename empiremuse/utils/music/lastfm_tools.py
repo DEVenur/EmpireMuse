@@ -2,6 +2,7 @@ import hashlib
 import logging
 import os
 import time
+from asyncio import get_running_loop
 
 from aiohttp import ClientSession
 from cachetools import TTLCache
@@ -33,12 +34,19 @@ class LastFM:
         cache.update({key: value for key, value in saved.items() if type(value) is dict})
         return cache
 
-    def scrobble_save_cache(self):
-        target = paths.RUNTIME_DIR / ".lastfm_cache.json"
+    @staticmethod
+    def _save_items(items: list) -> None:
         try:
-            save_json_cache(target, list(self.cache.items()), max_bytes=LASTFM_MAX_BYTES)
+            save_json_cache(paths.RUNTIME_DIR / ".lastfm_cache.json", items, max_bytes=LASTFM_MAX_BYTES)
         except OSError as e:
             logger.warning("Cache do Last.fm não gravado: %s", type(e).__name__)
+
+    def scrobble_save_cache(self):
+        self._save_items(list(self.cache.items()))
+
+    async def scrobble_save_cache_async(self):
+        """Para corrotinas: a cópia dos itens sai no laço de eventos; a serialização, o ``fsync`` e a troca, fora dele."""
+        await get_running_loop().run_in_executor(None, self._save_items, list(self.cache.items()))
 
     def generate_api_sig(self, params: dict):
         sig = "".join(f"{key}{params[key]}" for key in sorted(params))
