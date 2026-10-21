@@ -212,17 +212,17 @@ class TestDescricaoDoLink:
         assert import_entry({"url": URL, "description": ""}) == {"url": URL, "description": ""}
         assert import_entry({"url": URL, "description": "   "}) == {"url": URL, "description": ""}
 
-    @pytest.mark.parametrize("descricao", ["a", "ab", "a" * 51])
+    @pytest.mark.parametrize("descricao", ["a", "ab", "a" * 101])
     @pytest.mark.asyncio
-    async def test_modal_do_servidor_recusa_descricao_fora_de_3_a_50(self, descricao):
-        """Mutante: o modal só aparava a descrição e deixava passar 1, 2 ou 51 caracteres."""
+    async def test_modal_do_servidor_recusa_descricao_fora_de_3_a_100(self, descricao):
+        """Mutante: o modal só aparava a descrição e deixava passar 1, 2 ou 101 caracteres."""
         bot = ModalBot()
         await adicionar_link_do_servidor(bot, "Link", URL, descricao)
         assert bot.salvos_servidor == []
 
-    @pytest.mark.parametrize(("descricao", "gravada"), [("", ""), ("abc", "abc"), (" " + "a" * 50 + " ", "a" * 50)])
+    @pytest.mark.parametrize(("descricao", "gravada"), [("", ""), ("abc", "abc"), (" " + "a" * 100 + " ", "a" * 100)])
     @pytest.mark.asyncio
-    async def test_modal_do_servidor_aceita_vazia_ou_de_3_a_50_aparada(self, descricao, gravada):
+    async def test_modal_do_servidor_aceita_vazia_ou_de_3_a_100_aparada(self, descricao, gravada):
         bot = ModalBot()
         await adicionar_link_do_servidor(bot, "Link", URL, descricao)
         assert bot.salvos_servidor[-1]["player_controller"]["fav_links"]["Link"]["description"] == gravada

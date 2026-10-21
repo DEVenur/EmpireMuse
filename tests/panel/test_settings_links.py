@@ -197,7 +197,7 @@ class LinksAddTest(LinksBase):
         browser = self.logged_in()
         long_url = BASE_URL + "a" * (250 - len(BASE_URL))
         assert len(long_url) == 250
-        assert self.add(browser, "N" * 25, long_url, "d" * 50).code == 200, "nome 25, url 250, descrição 50"
+        assert self.add(browser, "N" * 25, long_url, "d" * 100).code == 200, "nome 25, url 250, descrição 100"
         assert self.add(browser, "Ab", "https://example.com/min", "abc").code == 200, "nome 2, descrição 3"
         stored = self.stored()
         assert stored["N" * 25]["url"] == long_url and stored["Ab"]["description"] == "abc"
@@ -218,7 +218,7 @@ class LinksAddTest(LinksBase):
             "url só esquema": ("Ok", "http://", ""),
             "url vazia": ("Ok", "", ""),
             "url 251": ("Ok", BASE_URL + "a" * (251 - len(BASE_URL)), ""),
-            "descrição 51": ("Ok", ok, "d" * 51),
+            "descrição 101": ("Ok", ok, "d" * 101),
             "descrição 2": ("Ok", ok, "ab"),
         }
 
@@ -312,7 +312,7 @@ class LinksEditRemoveTest(LinksBase):
                 ("url javascript", {"url": "javascript:alert(1)"}),
                 ("url vazia", {"url": ""}),
                 ("url 251", {"url": BASE_URL + "a" * 240}),
-                ("descrição 51", {"descricao": "d" * 51}),
+                ("descrição 101", {"descricao": "d" * 101}),
                 ("descrição 2", {"descricao": "ab"}),
             ],
             check,
@@ -320,14 +320,14 @@ class LinksEditRemoveTest(LinksBase):
         self.assert_untouched(before, writes)
 
     def test_edit_still_works_when_the_list_is_full(self):
-        set_links(self.db, "1", 100, full_list())  # descrições gravadas têm 2 caracteres ("d3"): fora de 3–50
+        set_links(self.db, "1", 100, full_list())  # descrições gravadas têm 2 caracteres ("d3"): fora de 3–100
         browser = self.logged_in()
         # só o que MUDOU é validado: reenviar a descrição já gravada (mesmo curta) é aceito
         response = self.act(browser, 100, "editar", alvo="L03", url=BASE_URL + "novo")
         assert response.code == 200 and self.stored()["L03"] == link(BASE_URL + "novo", "d3")
         assert self.act(browser, 100, "editar", alvo="L03", descricao="novo texto").code == 200
         assert self.stored()["L03"]["description"] == "novo texto" and len(self.stored()) == MAX_LINKS
-        assert self.act(browser, 100, "editar", alvo="L03", descricao="x").code == 422, "descrição ALTERADA segue 3–50"
+        assert self.act(browser, 100, "editar", alvo="L03", descricao="x").code == 422, "descrição ALTERADA segue 3–100"
 
     def test_remove_deletes_only_that_entry(self):
         set_links(self.db, "1", 100, {"Fixo": link(), "Outro": link("https://example.com/o", "o")})
@@ -393,7 +393,7 @@ class LinksImportExportTest(LinksBase):
             "url inválida": {"A1": link("ftp://example.com/a")},
             "url javascript": {"A1": link("javascript:alert(1)")},
             "url maior que 250": {"A1": link(BASE_URL + "a" * (251 - len(BASE_URL)))},
-            "descrição 51": {"A1": link(BASE_URL + "a", "d" * 51)},
+            "descrição 101": {"A1": link(BASE_URL + "a", "d" * 101)},
             "descrição 1": {"A1": link(BASE_URL + "a", "d")},
             "descrição 2": {"A1": link(BASE_URL + "a", "dd")},
             "nome 26": {"n" * 26: good},

@@ -711,12 +711,12 @@ class TestA13LimiteDeUrlDosLinksDoServidor:
 
 
 class TestA14DescricaoDoLinkDoServidor:
-    """O importador (bot e painel) só confere ``<= 50``; o modal e a adição do painel exigem vazia ou 3–50."""
+    """O importador (bot e painel) só confere ``<= 100``; o modal e a adição do painel exigem vazia ou 3–100."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("descricao", ["a", "ab", "  ab  "])
     async def test_importadores_recusam_descricao_de_1_ou_2_caracteres(self, descricao):
-        """Etapa 5 (A14): a descrição é vazia ou tem 3 a 50 caracteres também na importação (antes aceitava 1 a 2)."""
+        """Etapa 5 (A14): a descrição é vazia ou tem 3 a 100 caracteres também na importação (antes aceitava 1 a 2)."""
         item = {"Link": {"url": URL, "description": descricao}}
         no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item)
         no_bot, texto = await importar_no_bot(SERVIDOR_MODO, item)
@@ -725,7 +725,7 @@ class TestA14DescricaoDoLinkDoServidor:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("descricao", "esperada"), [("", ""), ("abc", "abc"), ("d" * 50, "d" * 50), ("  abc  ", "abc")]
+        ("descricao", "esperada"), [("", ""), ("abc", "abc"), ("d" * 100, "d" * 100), ("  abc  ", "abc")]
     )
     async def test_importadores_aceitam_descricao_vazia_ou_de_3_a_50_e_apara_as_pontas(self, descricao, esperada):
         item = {"Link": {"url": URL, "description": descricao}}
@@ -734,15 +734,15 @@ class TestA14DescricaoDoLinkDoServidor:
         assert erros == {} and no_painel["Link"]["description"] == no_bot["Link"]["description"] == esperada
 
     @pytest.mark.asyncio
-    async def test_guarda_importadores_recusam_mais_de_50(self):
-        item = {"Link": {"url": URL, "description": "d" * 51}}
+    async def test_guarda_importadores_recusam_mais_de_100(self):
+        item = {"Link": {"url": URL, "description": "d" * 101}}
         no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item)
         no_bot, texto = await importar_no_bot(SERVIDOR_MODO, item)
         assert no_painel is None and erros and no_bot is None and "ultrapassa" in texto
 
-    def test_o_modal_do_bot_pede_de_3_a_50_e_a_descricao_e_opcional(self):
+    def test_o_modal_do_bot_pede_de_3_a_100_e_a_descricao_e_opcional(self):
         campo = campos_do_modal(SERVIDOR_MODO)["guild_fav_description"]
-        assert (campo.min_length, campo.max_length, campo.required) == (3, 50, False)
+        assert (campo.min_length, campo.max_length, campo.required) == (3, 100, False)
 
     def test_o_painel_recusa_descricao_de_2_caracteres_ao_adicionar(self):
         recusado = painel_links(BotDoPainel(), "adicionar", {}, nome="Link", url=URL, descricao="ab")
@@ -919,7 +919,7 @@ class TestLimitesDoPainelSaoLiteraisAquiEConstantesLa:
             limits.GUILD_LINK_NAME_MAX,
             limits.GUILD_LINK_DESCRIPTION_MIN,
             limits.GUILD_LINK_DESCRIPTION_MAX,
-        ) == (2, 25, 3, 50)
+        ) == (2, 25, 3, 100)
 
     def test_o_painel_aceita_url_de_link_com_250_e_recusa_251_ao_adicionar(self):
         for tamanho, aceito in ((LIMITE_DA_URL_DO_LINK, True), (LIMITE_DA_URL_DO_LINK + 1, False)):

@@ -24,7 +24,7 @@ class TestLimites:
         assert limits.MAX_GUILD_LINKS == 25
         assert (limits.GUILD_LINK_NAME_MIN, limits.GUILD_LINK_NAME_MAX) == (2, 25)
         assert (limits.GUILD_LINK_URL_MIN, limits.GUILD_LINK_URL_MAX) == (10, 250)
-        assert (limits.GUILD_LINK_DESCRIPTION_MIN, limits.GUILD_LINK_DESCRIPTION_MAX) == (3, 50)
+        assert (limits.GUILD_LINK_DESCRIPTION_MIN, limits.GUILD_LINK_DESCRIPTION_MAX) == (3, 100)
         assert limits.PREFIX_MAX_LENGTH == 5
         assert limits.VOICE_STATUS_MAX_LENGTH == 496
         assert limits.MAX_DJ_ROLES == 25

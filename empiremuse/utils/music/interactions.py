@@ -36,6 +36,7 @@ from empiremuse.rules.limits import (
     FAV_NAME_MAX,
     FAV_NAME_MIN,
     FAV_URL_MAX,
+    GUILD_LINK_DESCRIPTION_MAX,
     GUILD_LINK_URL_MAX,
     GUILD_LINK_NAME_MAX,
     GUILD_LINK_NAME_MIN,
@@ -760,7 +761,7 @@ def _guild_link_error_text(name, error: RuleError) -> str:
         )
     if error.code == DESCRIPTION_INVALID:
         return (
-            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 50 caracteres, "
+            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 100 caracteres, "
             f"sem caracteres de controle:** {_echo(error.value)}"
         )
     return _url_error_text(error, with_label=True)
@@ -1155,7 +1156,7 @@ class FavModalAdd(disnake.ui.Modal):
                         label="Descrição:",
                         custom_id="guild_fav_description",
                         min_length=3,
-                        max_length=50,
+                        max_length=GUILD_LINK_DESCRIPTION_MAX,
                         value=kwargs.get("description", None),
                         required=False,
                     ),
@@ -1258,7 +1259,7 @@ class FavModalAdd(disnake.ui.Modal):
 
             if isinstance(description, RuleError):
                 await inter.send(
-                    "**A descrição deve ficar vazia ou ter de 3 a 50 caracteres, sem caracteres de controle.**",
+                    "**A descrição deve ficar vazia ou ter de 3 a 100 caracteres, sem caracteres de controle.**",
                     ephemeral=True,
                 )
                 return

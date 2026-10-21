@@ -137,6 +137,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Descrição dos links do servidor até 100 caracteres**: `GUILD_LINK_DESCRIPTION_MAX` sobe de 50 para 100 (`empiremuse/rules/limits.py`), o limite que o Discord aceita na descrição de `SelectOption`, onde o texto aparece. Vale para o modal do bot (`guild_fav_description`), a importação, o painel web (campo, mensagem e validação) e os textos de erro.
 - **Organização da Raiz e Pasta de Execução Local `.runtime/` (Fase 3 / F3-7)**:
   - Diretório de execução local opcional `.runtime/` na raiz do projeto: quando existente, passa a concentrar dados em tempo de execução, caches, logs, binários do Lavalink/JDK e arquivos de configuração (`.env` e `config.json`), mantendo a precedência de `EMPIREMUSE_HOME` quando definido e preservando o comportamento anterior (diretório atual) caso `.runtime/` não exista.
   - Reorganização de arquivos da raiz: transferência dos documentos de governança comunitária para `.github/` (`.github/CODE_OF_CONDUCT.md`, `.github/CONTRIBUTING.md` e `.github/SECURITY.md`) e do modelo de nós de áudio para `deploy/lavalink.ini.example`, com atualização das referências na documentação.
