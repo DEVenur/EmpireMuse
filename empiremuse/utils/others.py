@@ -419,7 +419,7 @@ async def send_idle_embed(
         disnake.SelectOption(
             label=k, value=k, emoji=music_source_emoji_url(v["url"])[0], description=v.get("description")
         )
-        for k, v in sorted(guild_data["player_controller"]["fav_links"].items(), key=lambda k: k)
+        for k, v in guild_data["player_controller"]["fav_links"].items()
     ]
 
     if opts:

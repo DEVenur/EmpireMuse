@@ -708,9 +708,9 @@ class TestKI47ItensMalFormadosNoImportadorDoServidor:
     @pytest.mark.asyncio
     async def test_mensagem_do_limite_de_descricao_cita_o_limite_certo(self):
         bot = ModalBot()
-        conteudo = {"Item": {"url": f"{URL_BASE}/a", "description": "d" * 51}}
+        conteudo = {"Item": {"url": f"{URL_BASE}/a", "description": "d" * 101}}
         inter = await importar(bot, ViewMode.guild_fav_manager, conteudo)
-        assert bot.salvos_servidor == [] and "50" in inter.texto, "KI-47: o limite de descrição é 50"
+        assert bot.salvos_servidor == [] and "100" in inter.texto, "KI-47: o limite de descrição é 100"
         assert str(bot.config["USER_FAV_MAX_URL_LENGTH"]) not in inter.texto, "KI-47: citou o limite da URL"
 
     @pytest.mark.asyncio

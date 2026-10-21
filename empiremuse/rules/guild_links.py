@@ -11,7 +11,7 @@ from empiremuse.rules.urls import check_url
 
 
 def check_description(raw: Any, stored: str = "") -> str | RuleError:
-    """Descrição aparada: vazia ou de 3 a 50 caracteres, sem controle/formatação (``Cc``/``Cf``). Reenviar a que já
+    """Descrição aparada: vazia ou de 3 a 100 caracteres, sem controle/formatação (``Cc``/``Cf``). Reenviar a que já
     estava gravada (``stored``) não é troca."""
     if not isinstance(raw, str):
         return RuleError(DESCRIPTION_INVALID, value=raw)
@@ -26,7 +26,7 @@ def check_description(raw: Any, stored: str = "") -> str | RuleError:
 
 
 def import_entry(value: Any) -> dict[str, str] | RuleError:
-    """Item de importação ``{"url", "description"}``: URL pura de até 250 caracteres e descrição vazia ou de 3 a 50."""
+    """Item de importação ``{"url", "description"}``: URL pura de até 250 caracteres e descrição vazia ou de 3 a 100."""
     if not (
         isinstance(value, Mapping) and isinstance(value.get("url"), str) and isinstance(value.get("description"), str)
     ):

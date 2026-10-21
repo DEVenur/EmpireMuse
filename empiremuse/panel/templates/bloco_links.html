@@ -38,8 +38,8 @@
             <label for="editar-url-{{ indice }}">Endereço (URL)</label>
             <input id="editar-url-{{ indice }}" type="url" name="url" value="{{ valores.get('url') if editando else item.url }}" autocomplete="off"{% if editando and erros.get("url") %} aria-invalid="true" aria-describedby="editar-erro-url-{{ indice }}"{% end %}>
             {% if editando and erros.get("url") %}<small id="editar-erro-url-{{ indice }}" class="erro-campo">{{ erros["url"] }}</small>{% end %}
-            <label for="editar-descricao-{{ indice }}">Descrição (opcional, de 3 a 50 caracteres)</label>
-            <input id="editar-descricao-{{ indice }}" type="text" name="descricao" value="{{ valores.get('descricao') if editando else item.descricao }}" maxlength="50" autocomplete="off"{% if editando and erros.get("descricao") %} aria-invalid="true" aria-describedby="editar-erro-descricao-{{ indice }}"{% end %}>
+            <label for="editar-descricao-{{ indice }}">Descrição (opcional, de 3 a 100 caracteres)</label>
+            <input id="editar-descricao-{{ indice }}" type="text" name="descricao" value="{{ valores.get('descricao') if editando else item.descricao }}" maxlength="100" autocomplete="off"{% if editando and erros.get("descricao") %} aria-invalid="true" aria-describedby="editar-erro-descricao-{{ indice }}"{% end %}>
             {% if editando and erros.get("descricao") %}<small id="editar-erro-descricao-{{ indice }}" class="erro-campo">{{ erros["descricao"] }}</small>{% end %}
             <button type="submit">Salvar alterações</button>
           </form>
@@ -76,8 +76,8 @@
     <label for="adicionar-url">Endereço (URL)</label>
     <input id="adicionar-url" type="url" name="url" value="{{ (valores.get('url') or '') if adicionando else '' }}" autocomplete="off"{% if adicionando and erros.get("url") %} aria-invalid="true" aria-describedby="adicionar-erro-url"{% end %}>
     {% if adicionando and erros.get("url") %}<small id="adicionar-erro-url" class="erro-campo">{{ erros["url"] }}</small>{% end %}
-    <label for="adicionar-descricao">Descrição (opcional, de 3 a 50 caracteres)</label>
-    <input id="adicionar-descricao" type="text" name="descricao" value="{{ (valores.get('descricao') or '') if adicionando else '' }}" maxlength="50" autocomplete="off"{% if adicionando and erros.get("descricao") %} aria-invalid="true" aria-describedby="adicionar-erro-descricao"{% end %}>
+    <label for="adicionar-descricao">Descrição (opcional, de 3 a 100 caracteres)</label>
+    <input id="adicionar-descricao" type="text" name="descricao" value="{{ (valores.get('descricao') or '') if adicionando else '' }}" maxlength="100" autocomplete="off"{% if adicionando and erros.get("descricao") %} aria-invalid="true" aria-describedby="adicionar-erro-descricao"{% end %}>
     {% if adicionando and erros.get("descricao") %}<small id="adicionar-erro-descricao" class="erro-campo">{{ erros["descricao"] }}</small>{% end %}
     <button type="submit">Adicionar</button>
   </form>

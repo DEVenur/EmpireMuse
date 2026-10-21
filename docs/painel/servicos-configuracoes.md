@@ -67,7 +67,7 @@ o navegador mostra a primeira opção e salvar sem reescolher troca a skin. Caso
   "Configurações salvas." sem escrever no banco, sem auditar e sem reaplicar efeitos (por exemplo, o cache de prefixo
   não é reposto).
 - **Links fixos** (`player_controller.fav_links`): versão única da lista inteira do bot; adicionar usa os limites do modal
-  do servidor (nome 2–25, URL 10–250 extraída com `URL_REG`, descrição vazia ou 3–50, máximo 25); importar usa os do
+  do servidor (nome 2–25, URL 10–250 extraída com `URL_REG`, descrição vazia ou 3–100, máximo 25); importar usa os do
   `FavModalImport` (nome ≤ 25, URL ≤ `USER_FAV_MAX_URL_LENGTH`, descrição obrigatória ≤ 50) e valida todos os itens.
   Adicionar, editar e importar exigem canal de pedidos configurado e visível ao bot; remover e exportar não. O efeito é
   `process_idle_embed`, como no comando. Reenviar a descrição já gravada não é troca (aceita mesmo abaixo do mínimo).
