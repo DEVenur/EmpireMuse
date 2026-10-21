@@ -27,7 +27,7 @@ from empiremuse.utils.branding import asset_url
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
-from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
+from empiremuse.utils.music.audio_sources.spotify import spotify_link_regex, spotify_regex_w_user
 from empiremuse.utils.music.checks import (
     check_voice,
     has_player,
@@ -7794,7 +7794,10 @@ class Music(commands.Cog):
 
             if "deezer" not in node.info["sourceManagers"]:
                 self.remove_provider(node.search_providers, ["dzsearch"])
-                self.remove_provider(node.partial_providers, ["dzisrc:{isrc}", "dzsearch:{author} - {title}"])
+                self.remove_provider(
+                    node.partial_providers,
+                    ["dzisrc:{isrc}", "dzsearch:{author} - {title}", "dzsearch:{title} - {author}"],
+                )
                 try:
                     node.native_sources.remove("deezer")
                 except:
@@ -7802,34 +7805,42 @@ class Music(commands.Cog):
             elif "dzsearch" not in node.search_providers:
                 node.native_sources.add("deezer")
                 self.add_provider(node.search_providers, ["dzsearch"])
-                self.add_provider(node.partial_providers, ["dzisrc:{isrc}", "dzsearch:{author} - {title}"])
+                self.add_provider(node.partial_providers, ["dzisrc:{isrc}", "dzsearch:{title} - {author}"])
             else:
                 node.native_sources.add("deezer")
 
             if "tidal" not in node.info["sourceManagers"] or node.only_use_native_search_providers is True:
                 self.remove_provider(node.search_providers, ["tdsearch"])
-                self.remove_provider(node.partial_providers, ["tdsearch:{author} - {title}"])
+                self.remove_provider(
+                    node.partial_providers, ["tdsearch:{author} - {title}", "tdsearch:{title} - {author}"]
+                )
             elif "tdsearch" not in node.search_providers and node.only_use_native_search_providers is False:
                 self.add_provider(node.search_providers, ["tdsearch"])
-                self.add_provider(node.partial_providers, ["tdsearch:{author} - {title}"])
+                self.add_provider(node.partial_providers, ["tdsearch:{title} - {author}"])
 
             if "applemusic" not in node.info["sourceManagers"] or node.only_use_native_search_providers is True:
                 self.remove_provider(node.search_providers, ["amsearch"])
-                self.remove_provider(node.partial_providers, ["amsearch:{author} - {title}"])
+                self.remove_provider(
+                    node.partial_providers, ["amsearch:{author} - {title}", "amsearch:{title} - {author}"]
+                )
             elif "amsearch" not in node.search_providers and node.only_use_native_search_providers is False:
                 self.add_provider(node.search_providers, ["amsearch"])
-                self.add_provider(node.partial_providers, ["amsearch:{author} - {title}"])
+                self.add_provider(node.partial_providers, ["amsearch:{title} - {author}"])
 
             if "bandcamp" not in node.info["sourceManagers"]:
                 self.remove_provider(node.search_providers, ["bcsearch"])
-                self.remove_provider(node.partial_providers, ["bcsearch:{author} - {title}"])
+                self.remove_provider(
+                    node.partial_providers, ["bcsearch:{author} - {title}", "bcsearch:{title} - {author}"]
+                )
 
             if "spotify" not in node.info["sourceManagers"] or node.only_use_native_search_providers is True:
                 self.remove_provider(node.search_providers, ["spsearch"])
-                self.remove_provider(node.partial_providers, ["spsearch:{author} - {title}"])
+                self.remove_provider(
+                    node.partial_providers, ["spsearch:{author} - {title}", "spsearch:{title} - {author}"]
+                )
             elif "spsearch" not in node.search_providers and node.only_use_native_search_providers is False:
                 self.add_provider(node.search_providers, ["spsearch"])
-                self.add_provider(node.partial_providers, ["spsearch:{author} - {title}"])
+                self.add_provider(node.partial_providers, ["spsearch:{title} - {author}"])
 
             if "youtube" not in node.info["sourceManagers"] and "ytsearch" not in node.original_providers:
                 self.remove_provider(node.search_providers, ["ytsearch"])
@@ -7849,10 +7860,12 @@ class Music(commands.Cog):
 
             if "soundcloud" not in node.info["sourceManagers"]:
                 self.remove_provider(node.search_providers, ["scsearch"])
-                self.remove_provider(node.partial_providers, ["scsearch:{author} - {title}"])
+                self.remove_provider(
+                    node.partial_providers, ["scsearch:{author} - {title}", "scsearch:{title} - {author}"]
+                )
             elif "scsearch" not in node.search_providers:
                 self.add_provider(node.search_providers, ["scsearch"])
-                self.add_provider(node.partial_providers, ["scsearch:{author} - {title}"])
+                self.add_provider(node.partial_providers, ["scsearch:{title} - {author}"])
 
             if "jiosaavn" not in node.info["sourceManagers"]:
                 self.remove_provider(node.search_providers, ["jssearch"])
@@ -7996,7 +8009,14 @@ class Music(commands.Cog):
 
         tracks = []
 
+        is_spotify_url = bool(spotify_regex_w_user.match(query) or spotify_link_regex.match(query))
+
         for n in nodes:
+            if is_spotify_url and "spotify" not in n.info.get("sourceManagers", []):
+                if not node:
+                    node = n
+                continue
+
             node_retry = False
 
             if source is False:

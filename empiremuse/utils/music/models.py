@@ -2992,7 +2992,7 @@ class LavalinkPlayer(wavelink.Player):
                             await self.message.edit(allowed_mentions=self.allowed_mentions, **data)
                             await asyncio.sleep(0.5)
                         except asyncio.CancelledError:
-                            traceback.print_exc()
+                            self.updating = False
                             return
                         except:
                             traceback.print_exc()
