@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 spotify_regex = re.compile("https://open.spotify.com?.+(album|playlist|artist|track)/([a-zA-Z0-9]+)")
 spotify_link_regex = re.compile(r"(?i)https?:\/\/spotify\.link\/?(?P<id>[a-zA-Z0-9]+)")
 spotify_regex_w_user = re.compile("https://open.spotify.com?.+(album|playlist|artist|track|user)/([a-zA-Z0-9]+)")
+_NEXT_DATA_REGEX = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.DOTALL)
+_PLAYLIST_ID_REGEX = re.compile(r"^[A-Za-z0-9]+$")
 
 SPOTIFY_CACHE_FILENAME = ".spotify_cache.json"
 SPOTIFY_CACHE_MODE = 0o600
@@ -159,8 +161,98 @@ class SpotifyClient:
     async def get_artist_top(self, artist_id: str):
         return await self.request(path=f"artists/{artist_id}/top-tracks")
 
+    async def _fetch_playlist_embed(self, playlist_id: str) -> Optional[dict]:
+        """Fallback via página de embed pública do Spotify quando a Web API omite 'tracks' ou retorna 403/404."""
+        if not _PLAYLIST_ID_REGEX.match(playlist_id):
+            return None
+
+        embed_url = f"https://open.spotify.com/embed/playlist/{playlist_id}"
+        try:
+            async with ClientSession() as session:
+                async with session.get(embed_url) as response:
+                    if response.status != 200:
+                        return None
+                    html = await response.text()
+        except Exception as e:
+            logger.warning("Spotify: falha ao consultar embed da playlist (%s).", type(e).__name__)
+            return None
+
+        match = _NEXT_DATA_REGEX.search(html)
+        if not match:
+            return None
+
+        try:
+            data = json.loads(match.group(1))
+        except ValueError:
+            return None
+
+        entity = (((data.get("props") or {}).get("pageProps") or {}).get("state") or {}).get("data", {}).get("entity")
+        if not isinstance(entity, dict) or not isinstance(entity.get("trackList"), list):
+            return None
+
+        cover_sources = (entity.get("coverArt") or {}).get("sources") or []
+        images = [{"url": s["url"]} for s in cover_sources if isinstance(s, dict) and s.get("url")]
+
+        items = []
+        for item in entity["trackList"]:
+            if not isinstance(item, dict):
+                continue
+            uri = item.get("uri") or ""
+            track_id = uri.split(":")[-1] if ":" in uri else (item.get("uid") or "")
+            track_url = f"https://open.spotify.com/track/{track_id}" if track_id else ""
+            raw_subtitle = (item.get("subtitle") or "").replace("\xa0", " ").strip()
+            artist_names = [a.strip() for a in raw_subtitle.split(",") if a.strip()] or ["Unknown Artist"]
+            artists = [
+                {"name": name, "external_urls": {"spotify": track_url} if track_url else {}} for name in artist_names
+            ]
+            items.append(
+                {
+                    "track": {
+                        "id": track_id,
+                        "name": item.get("title") or "",
+                        "duration_ms": int(item.get("duration") or 0),
+                        "artists": artists,
+                        "external_urls": {"spotify": track_url} if track_url else {},
+                        "album": {"name": "", "total_tracks": 1, "images": images, "external_urls": {}},
+                    }
+                }
+            )
+
+        if not items:
+            return None
+
+        return {
+            "name": entity.get("name") or entity.get("title") or "Playlist",
+            "images": images,
+            "tracks": {"items": items, "total": len(items)},
+        }
+
     async def get_playlist_info(self, playlist_id: str):
-        result = await self.request(path=f"playlists/{playlist_id}")
+        try:
+            result = await self.request(path=f"playlists/{playlist_id}")
+        except GenericError:
+            embed_result = await self._fetch_playlist_embed(playlist_id)
+            if embed_result is not None:
+                return embed_result
+            raise
+
+        tracks_obj = result.get("tracks") if isinstance(result, dict) else None
+        if not isinstance(tracks_obj, dict) or "items" not in tracks_obj:
+            embed_result = await self._fetch_playlist_embed(playlist_id)
+            if embed_result is not None:
+                result["tracks"] = embed_result["tracks"]
+                if not result.get("name"):
+                    result["name"] = embed_result["name"]
+                if not result.get("images"):
+                    result["images"] = embed_result["images"]
+                elif embed_result["tracks"]["items"]:
+                    for item in result["tracks"]["items"]:
+                        if item.get("track") and not item["track"].get("album", {}).get("images"):
+                            item["track"].setdefault("album", {})["images"] = result["images"]
+                return result
+            raise GenericError(
+                "**O Spotify não retornou as faixas desta playlist (ela pode ser privada ou indisponível para bots).**"
+            )
 
         if len(result["tracks"]["items"]) == PLAYLIST_PAGE_SIZE and self.playlist_extra_page_limit > 0:
             offset = PLAYLIST_PAGE_SIZE
@@ -481,7 +573,7 @@ class SpotifyClient:
                 bot.pool.playlist_cache[cache_key] = result
 
             data["playlistInfo"]["name"] = result["name"]
-            data["playlistInfo"]["thumb"] = result["images"][0]["url"]
+            data["playlistInfo"]["thumb"] = result["images"][0]["url"] if result.get("images") else ""
 
             if result["tracks"]["items"] is None:
                 raise GenericError("**Não houve resultados para o link da playlist informada...**")
