@@ -18,8 +18,6 @@ from packaging import version
 
 from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
-from empiremuse.panel import build_panel_app, make_router
-from empiremuse.panel.settings import PanelConfigError, load_panel_settings
 from empiremuse.rpc_protocol import (
     BOT_OPS,
     BOT_TO_USER_FIELDS,
@@ -574,8 +572,18 @@ class WSClient:
                                 users.remove(i)
 
 
+def make_router(main_app: tornado.web.Application, panel_app: Optional[tornado.web.Application]):
+    """``empiremuse.panel.make_router``, com o painel importado só aqui: importar o bot não carrega o painel."""
+    from empiremuse.panel import make_router as panel_make_router
+
+    return panel_make_router(main_app, panel_app)
+
+
 def _build_panel(pool: BotPool, config: dict):
     """Cria a aplicação do painel (None se desligado ou com configuração inválida; o servidor segue sem ele)."""
+    from empiremuse.panel import build_panel_app
+    from empiremuse.panel.settings import PanelConfigError, load_panel_settings
+
     try:
         settings = load_panel_settings(config)
     except PanelConfigError as e:

@@ -258,3 +258,29 @@ class TestSaidaSemRemoteUtil:
             "https://github.com/org/Repositório",
             pool.config["SOURCE_REPO"].removesuffix(".git"),
         }
+
+
+class TestGitSemRuidoNoConsole:
+    """Fora de um repositório (modo .runtime) o git escreveria "fatal: not a git repository" no stderr do bot."""
+
+    def test_as_duas_consultas_ao_git_descartam_o_stderr(self, monkeypatch, pool):
+        stderrs = {}
+
+        def falso(comando, *args, **kwargs):
+            stderrs[tuple(comando[:2])] = kwargs.get("stderr")
+            raise subprocess.CalledProcessError(128, comando)
+
+        monkeypatch.setattr(client, "check_output", falso)
+        pool.setup()
+
+        assert stderrs == {("git", "rev-parse"): subprocess.DEVNULL, ("git", "remote"): subprocess.DEVNULL}
+
+    def test_sem_repositorio_o_commit_fica_nulo_e_a_url_cai_no_source_repo(self, monkeypatch, pool):
+        def falso(comando, *args, **kwargs):
+            raise subprocess.CalledProcessError(128, comando)
+
+        monkeypatch.setattr(client, "check_output", falso)
+        pool.setup()
+
+        assert pool.commit is None
+        assert pool.remote_git_url == FALLBACK

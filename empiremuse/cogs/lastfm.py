@@ -11,6 +11,7 @@ from disnake.ext import commands
 from rapidfuzz import fuzz
 
 import empiremuse.wavelink as wavelink
+from empiremuse.rules.title_match import title_matches
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, scrobble_model
 from empiremuse.utils.music.errors import GenericError
@@ -20,6 +21,9 @@ from empiremuse.utils.others import CustomContext
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
+
+
+SCROBBLE_TITLE_THRESHOLD = 70  # limiar do texto completo no casamento do scrobble (o mesmo 70 de antes)
 
 
 def check_track_title(t: str):
@@ -573,26 +577,21 @@ class LastFmCog(commands.Cog):
                 if (fmdata := self.bot.last_fm.cache.get(track_query)) is None:
                     result = None
 
+                    def same_track(t) -> bool:
+                        return title_matches(
+                            fuzz.token_set_ratio,
+                            f"{t.authors_string.lower()} - {t.single_title.lower()}",
+                            track.title.lower(),
+                            t.single_title.lower(),
+                            track.title.lower(),
+                            SCROBBLE_TITLE_THRESHOLD,
+                        )
+
                     def filter_result(result):
                         if not [t for t in exclude_tags if t.lower() in track.title]:
-                            result_ = [
-                                t
-                                for t in result
-                                if fuzz.token_sort_ratio(
-                                    f"{t.authors_string.lower()} - {t.single_title.lower()}", track.title.lower()
-                                )
-                                > 70
-                                and check_track_title(t.title)
-                            ]
+                            result_ = [t for t in result if same_track(t) and check_track_title(t.title)]
                         else:
-                            result_ = [
-                                t
-                                for t in result
-                                if fuzz.token_sort_ratio(
-                                    f"{t.authors_string.lower()} - {t.single_title.lower()}", track.title.lower()
-                                )
-                                > 70
-                            ]
+                            result_ = [t for t in result if same_track(t)]
 
                         return result_
 

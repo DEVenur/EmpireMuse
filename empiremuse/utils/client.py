@@ -35,6 +35,7 @@ from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
 from empiremuse.rules.git_remote import parse_remote_web_url
 from empiremuse.utils import branding
+from empiremuse.utils.file_log import build_file_log_handler
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
@@ -690,14 +691,10 @@ class BotPool:
 
         if self.config["ENABLE_LOGGER"]:
             logs_dir = paths.RUNTIME_DIR / ".logs"
-            if not logs_dir.is_dir():
-                logs_dir.mkdir(parents=True, exist_ok=True)
 
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
-            handler = logging.FileHandler(filename=str(logs_dir / "disnake.log"), encoding="utf-8", mode="w")
-            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
-            logger.addHandler(handler)
+            logger.addHandler(build_file_log_handler(logs_dir))
 
         LAVALINK_SERVERS = {}
 
@@ -793,14 +790,16 @@ class BotPool:
             }
         )
 
+        # stderr descartado: fora de um repositório (ex.: modo .runtime) o git imprimiria "fatal: not a git repository".
         try:
-            self.commit = check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
+            self.commit = check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode("ascii").strip()
             print(f"📥 - Commit ver: {self.commit}")
-        except:
+        except (OSError, subprocess.CalledProcessError, UnicodeDecodeError):
             self.commit = None
 
         try:
-            self.remote_git_url = parse_remote_web_url(check_output(["git", "remote", "-v"]).decode("utf-8", "replace"))
+            remotes = check_output(["git", "remote", "-v"], stderr=subprocess.DEVNULL).decode("utf-8", "replace")
+            self.remote_git_url = parse_remote_web_url(remotes)
         except (OSError, subprocess.CalledProcessError):
             pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
