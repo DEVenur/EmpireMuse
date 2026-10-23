@@ -42,7 +42,7 @@ class PlayerSession(commands.Cog):
     async def on_player_destroy(self, player: LavalinkPlayer):
         try:
             player.queue_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         await self.delete_data(player)
@@ -68,7 +68,7 @@ class PlayerSession(commands.Cog):
                 try:
                     await player.process_save_queue()
                     player_count += 1
-                except:
+                except Exception:
                     continue
 
         txt = (
@@ -87,7 +87,7 @@ class PlayerSession(commands.Cog):
 
             try:
                 await self.save_info(player)
-            except:
+            except Exception:
                 traceback.print_exc()
 
     async def save_info(self, player: LavalinkPlayer):
@@ -96,12 +96,12 @@ class PlayerSession(commands.Cog):
 
         try:
             message_id = player.message.id
-        except:
+        except Exception:
             message_id = None
 
         try:
             text_channel_id = player.text_channel.id
-        except:
+        except Exception:
             text_channel_id = None
             message_id = None
 
@@ -119,7 +119,7 @@ class PlayerSession(commands.Cog):
                 }
                 try:
                     player.current.info["playlist"]["thumb"] = player.current.playlist.thumb
-                except:
+                except Exception:
                     pass
             tracks.append(player.current.info)
 
@@ -210,7 +210,7 @@ class PlayerSession(commands.Cog):
 
         try:
             await self.save_session(player, data=data)
-        except:
+        except Exception:
             traceback.print_exc()
 
     async def resume_players(self):
@@ -287,14 +287,14 @@ class PlayerSession(commands.Cog):
         if not player.current:
             try:
                 player.current = player.queue.popleft()
-            except:
+            except IndexError:
                 pass
 
             if not player.current and player.autoplay:
                 try:
                     player.current = await player.get_autoqueue_tracks()
                     position = 0
-                except:
+                except Exception:
                     traceback.print_exc()
 
         data = {
@@ -307,7 +307,7 @@ class PlayerSession(commands.Cog):
 
         try:
             track_id = player.current_encoded or player.current.id
-        except:
+        except Exception:
             track_id = None
 
         if track_id and has_members:
@@ -645,7 +645,7 @@ class PlayerSession(commands.Cog):
                 try:
                     await player.message.delete()
                     player.message = None
-                except:
+                except Exception:
                     pass
 
             if started:
@@ -669,7 +669,7 @@ class PlayerSession(commands.Cog):
                     check = any(
                         m for m in voice_channel.members if not m.bot or not (m.voice.deaf or m.voice.self_deaf)
                     )
-                except:
+                except Exception:
                     check = None
 
                 if not check:
@@ -765,10 +765,10 @@ class PlayerSession(commands.Cog):
     async def save_session(self, player: LavalinkPlayer, data: dict):
         try:
             player = player.bot.music.players[player.guild.id]
-        except:
+        except Exception:
             try:
                 player.queue_updater_task.cancel()
-            except:
+            except Exception:
                 pass
             return
 
@@ -801,13 +801,13 @@ class PlayerSession(commands.Cog):
     def cog_unload(self):
         try:
             self.resume_task.cancel()
-        except:
+        except Exception:
             pass
 
         for guild_id in list(self.bot.players_resumed):
             try:
                 self.bot.players_resumed[guild_id].cancel()
-            except:
+            except Exception:
                 pass
             try:
                 del self.bot.players_resumed[guild_id]

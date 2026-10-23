@@ -254,7 +254,7 @@ class Owner(commands.Cog):
                 continue
             try:
                 del sys.modules[m]
-            except:
+            except KeyError:
                 continue
 
         self.bot.pool.load_skins()
@@ -537,7 +537,7 @@ class Owner(commands.Cog):
     async def exportsource(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, flags: str = ""):
         try:
             env_file = dotenv.dotenv_values(str(paths.RUNTIME_DIR / ".env"))
-        except:
+        except Exception:
             env_file = {}
 
         try:
@@ -631,7 +631,7 @@ class Owner(commands.Cog):
         if (filesize := (os.path.getsize(str(source_zip))) / 1024) > 25600:
             try:
                 os.remove(str(source_zip))
-            except:
+            except Exception:
                 pass
             raise GenericError(
                 f"**O tamanho do arquivo ultrapassou do limite de 25MB (tamanho atual: {humanize.naturalsize(filesize)})**"
@@ -673,7 +673,7 @@ class Owner(commands.Cog):
         env_temp = paths.RUNTIME_DIR / ".env-temp"
         try:
             os.remove(str(source_zip))
-        except:
+        except Exception:
             pass
 
         env_written = False
