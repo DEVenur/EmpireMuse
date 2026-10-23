@@ -19,9 +19,10 @@ from pathlib import Path
 import pytest
 
 from empiremuse import config_loader
+from tests.support.raiz import RAIZ
 
 CHAVES_COM_MINIMO_1 = ["VOTE_SKIP_AMOUNT", "HINT_RATE", "DBCACHE_SIZE", "PLAYLIST_CACHE_SIZE", "MONGO_TIMEOUT"]
-EXAMPLE_ENV = Path(__file__).resolve().parent.parent / ".example.env"
+EXAMPLE_ENV = RAIZ / ".example.env"
 
 
 @pytest.fixture

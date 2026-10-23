@@ -18,8 +18,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
+PACOTE = RAIZ / "empiremuse"
 REGRAS = PACOTE / "rules"
 PAINEL = "empiremuse.panel"
 BIBLIOTECA_PADRAO = set(sys.stdlib_module_names) | {"__future__"}

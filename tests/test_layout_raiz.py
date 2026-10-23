@@ -10,8 +10,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 # Documentos e identidade do projeto. LICENSE e CREDITS.md: atribuição GPL-2.0, exigida pela Discloud e pelo Dockerfile.
 RAIZ_DOCUMENTOS = {"README.md", "LICENSE", "CHANGELOG.md", "CREDITS.md"}

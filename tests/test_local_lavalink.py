@@ -21,8 +21,9 @@ import pytest
 
 from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 OLD_YML_SHA256 = "f93ce9789fb637dc20bd886857a4ed813ad80870b43d268bc0ce80c11f90bfc3"  # application.yml da release 0.0.1
 
 JAR = b"JAR-OFICIAL"

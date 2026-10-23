@@ -36,8 +36,9 @@ from empiremuse import rpc_protocol, web_app
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.web_app import WSClient
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 APP_DESKTOP = ROOT / "repos" / "EmpireMuse-RPC-app" / "rpc_client.py"
 SO_COM_APP_DESKTOP = pytest.mark.skipif(not APP_DESKTOP.is_file(), reason="repos/EmpireMuse-RPC-app ausente")
 

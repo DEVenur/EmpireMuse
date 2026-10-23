@@ -7,8 +7,9 @@ da cobertura e mapeados corretamente no workspace multipasta do VSCode/IDE.
 
 import json
 from pathlib import Path
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 REQUIRED_IGNORES = ("repos/", "worktrees/", ".arquivo/", ".local/")
 

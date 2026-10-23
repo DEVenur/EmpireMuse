@@ -29,8 +29,9 @@ import pytest
 
 from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 # ============================================================================ constantes do contrato
 

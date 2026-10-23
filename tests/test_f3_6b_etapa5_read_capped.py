@@ -16,9 +16,9 @@ import pytest
 
 from tests.helpers_f3_6b_serializacao import TOO_BIG, falha
 from tests.helpers_f3_6b_sessao import files
+from tests.support.raiz import RAIZ
 
 MIB = 1024 * 1024
-RAIZ = Path(__file__).resolve().parents[1]
 
 
 def esparso(caminho: Path, tamanho: int) -> Path:

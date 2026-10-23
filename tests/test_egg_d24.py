@@ -13,8 +13,9 @@ from pathlib import Path
 import pytest
 
 from empiremuse import config_loader
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 EGG = ROOT / "deploy" / "pterodactyl" / "egg-empiremuse.json"
 EXAMPLE_ENV = ROOT / ".example.env"
 PACKAGE = ROOT / "empiremuse"

@@ -16,8 +16,7 @@ from pathlib import Path
 import pytest
 
 from empiremuse.utils.db import LocalDatabase, MongoDatabase
-
-RAIZ = Path(__file__).resolve().parents[1]
+from tests.support.raiz import RAIZ
 
 
 class CursorFalso:

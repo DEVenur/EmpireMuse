@@ -41,8 +41,9 @@ from empiremuse.utils import db as db_module
 from empiremuse.utils.db import DBModel, LocalDatabase, MongoDatabase, db_models, global_db_models, update_values
 from empiremuse.utils.music.audio_sources import spotify
 from empiremuse.utils.music.errors import GenericError
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 REQUIREMENTS = ROOT / "requirements.txt"
 DB_PY = ROOT / "empiremuse" / "utils" / "db.py"
 

@@ -52,9 +52,10 @@ from tests.test_f3_6b_formato_skin import (
     texto_legado,
 )
 from tests.test_f3_6b_formato_skin import editor_sem_tela as _editor_sem_tela
+from tests.support.raiz import RAIZ
 
 editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
-PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
+PACOTE = RAIZ / "empiremuse"
 
 # (arquivo relativo a empiremuse/, função qualificada, kind)
 PONTOS = [

@@ -14,8 +14,9 @@ from types import SimpleNamespace
 
 import disnake
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 
 def run(coro):

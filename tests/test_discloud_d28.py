@@ -18,8 +18,9 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 from empiremuse.utils import branding
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 CONFIG = ROOT / "discloud.config"
 IGNORE = ROOT / ".discloudignore"
 

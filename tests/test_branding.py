@@ -15,8 +15,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 ASSETS_DIR = ROOT / "assets"
 
 # sha256 do LICENSE antes de qualquer mudança da Fase 1 (calculado pelo QA).

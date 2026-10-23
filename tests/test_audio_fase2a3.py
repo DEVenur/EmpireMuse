@@ -19,8 +19,9 @@ import pytest
 
 from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 NEW_REPO = "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download"
 OLD_REPO = "https://github.com/DiscordEmpireHub/LL-binaries/releases/download"

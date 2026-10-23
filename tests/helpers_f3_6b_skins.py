@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tests.helpers_f3_6b_serializacao import _Modulo
+from tests.support.raiz import RAIZ
 
 esquema_de_skins = _Modulo("empiremuse.serialization.skins")
 
@@ -96,7 +97,7 @@ def avisos_com(caplog, texto: str) -> list[str]:
 
 # ============================================================================ o helper único (achado por ``ast``)
 
-PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
+PACOTE = RAIZ / "empiremuse"
 NOME_DO_HELPER = "load_custom_skins"
 
 

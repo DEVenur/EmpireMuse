@@ -13,8 +13,9 @@ from pathlib import Path
 import pytest
 
 from empiremuse.utils import branding
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 

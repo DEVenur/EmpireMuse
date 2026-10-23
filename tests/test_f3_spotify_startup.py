@@ -12,6 +12,7 @@ from aiohttp import ClientError
 
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.music.errors import GenericError
+from tests.support.raiz import RAIZ
 
 SEGREDO_FAKE = "segredo-spotify-fake-123"
 
@@ -54,9 +55,7 @@ async def test_sucesso_nao_registra_erro(caplog):
 
 
 def _chamadas_de_create_task() -> list[ast.Call]:
-    arvore = ast.parse(
-        (Path(__file__).resolve().parent.parent / "empiremuse" / "utils" / "client.py").read_text("utf-8")
-    )
+    arvore = ast.parse((RAIZ / "empiremuse" / "utils" / "client.py").read_text("utf-8"))
     return [
         no
         for no in ast.walk(arvore)

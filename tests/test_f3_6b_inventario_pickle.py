@@ -17,8 +17,9 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
+PACOTE = RAIZ / "empiremuse"
 MODULOS_PICKLE = frozenset({"pickle", "_pickle", "cPickle"})
 CHAMADAS_DE_LEITURA = frozenset({"load", "loads", "Unpickler"})
 CHAMADAS_DE_GRAVACAO = frozenset({"dump", "dumps", "Pickler"})

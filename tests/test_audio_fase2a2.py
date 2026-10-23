@@ -28,8 +28,9 @@ import pytest
 
 from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 STAGING_ENV = os.environ.get("EMPIREMUSE_STAGING")
 RELEASE_003 = Path(STAGING_ENV) / "ll-binaries-0.0.3" if STAGING_ENV else None
 

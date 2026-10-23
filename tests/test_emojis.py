@@ -12,8 +12,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 CUSTOM_EMOJI_RE = re.compile(r"<a?:\w+:\d{15,20}>")
 RUNTIME_DIRS = ("empiremuse/",)
 RUNTIME_FILES = ("main.py",)

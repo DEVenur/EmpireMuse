@@ -14,8 +14,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 DENTRO_DA_RUNTIME = [
     ".runtime/.env",

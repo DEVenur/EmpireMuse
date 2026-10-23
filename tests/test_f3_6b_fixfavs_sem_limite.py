@@ -15,8 +15,8 @@ import pytest
 
 from empiremuse.cogs.misc import Misc
 from empiremuse.utils.db import DBModel
+from tests.support.raiz import RAIZ
 
-RAIZ = Path(__file__).resolve().parents[1]
 GUILDAS, USUARIOS = 700, 900  # acima dos antigos 300 e 500
 
 

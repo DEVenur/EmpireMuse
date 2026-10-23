@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 from tests.test_f3_6b_etapa2b_pontos import kind_da_chamada, nome_chamado
+from tests.support.raiz import RAIZ
 
-RAIZ = Path(__file__).resolve().parents[1]
 PACOTE = RAIZ / "empiremuse"
 STORE = PACOTE / "utils" / "music" / "session_store.py"
 LEITORES_AUTORIZADOS = {"utils/music/session_store.py", "utils/music/legacy_reader.py"}

@@ -18,9 +18,9 @@ from empiremuse.serialization.legacy_pickle import MAX_RAW
 from tests.helpers_f3_6b import DONO
 from tests.test_f3_6b_etapa4_fila import caminho_json, codificar, escrever_pkl, faixas_validas, lendo
 from tests.test_f3_6b_formato_fila_salva import caminho_da_fila
+from tests.support.raiz import RAIZ
 
 MIB = 1024 * 1024
-RAIZ = Path(__file__).resolve().parents[1]
 saved_queue = importlib.import_module("empiremuse.utils.music.saved_queue")
 
 

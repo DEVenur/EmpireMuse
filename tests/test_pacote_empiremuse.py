@@ -32,10 +32,11 @@ from tests.test_f3_6b_formato_skin import (
     skin_realista,
     texto_legado,
 )
+from tests.support.raiz import RAIZ
 
 editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 
 COGS = [
     "music",

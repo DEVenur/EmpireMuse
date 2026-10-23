@@ -36,8 +36,9 @@ import pytest
 from empiremuse import config_loader, paths
 from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 NOVAS_CHAVES = ("LAVALINK_JAVA_PATH", "LAVALINK_HOME", "LAVALINK_OFFLINE")
 JANELA_DE_OBSERVACAO = 2.5  # segundos observando que algo NÃO acontece (cobre um polling de ~1 s do vigia)
 LIMITE_DE_ESPERA = 6.0  # segundos esperando que algo aconteça

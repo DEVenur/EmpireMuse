@@ -12,9 +12,10 @@ ausente nas consultas de existência (``Path`` e ``os.path``), seja qual for o p
 
 import os
 from pathlib import Path
+from tests.support.raiz import RAIZ
 
 DEV_RUNTIME_DIRNAME = ".runtime"
-REAL_PROJECT_DIR = Path(__file__).resolve().parent.parent
+REAL_PROJECT_DIR = RAIZ
 
 
 def hide_path(monkeypatch, hidden: Path) -> None:

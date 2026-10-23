@@ -49,10 +49,10 @@ from tests.test_f3_6b_formato_fila_salva import (
     salvar,
     tres_faixas,
 )
+from tests.support.raiz import RAIZ
 
 UTC = timezone.utc
 MIB = 1024 * 1024
-RAIZ = Path(__file__).resolve().parents[1]
 
 
 class _Modulo:

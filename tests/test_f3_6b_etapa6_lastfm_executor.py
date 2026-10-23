@@ -14,8 +14,8 @@ import pytest
 
 from empiremuse.utils.music import lastfm_tools
 from empiremuse.utils.music.lastfm_tools import LastFM
+from tests.support.raiz import RAIZ
 
-RAIZ = Path(__file__).resolve().parents[1]
 ENTRADA = {"name": "Música", "artist": "Artista", "album": "Álbum"}
 
 

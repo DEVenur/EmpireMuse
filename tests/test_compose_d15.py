@@ -20,8 +20,9 @@ from pathlib import Path
 
 import pytest
 from ruamel.yaml import YAML
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 COMPOSE = ROOT / "docker-compose.yml"
 
 PORTA_DO_PAINEL = "${EMPIREMUSE_PORT:-8080}:8080"

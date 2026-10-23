@@ -20,8 +20,9 @@ from tests.helpers_f3_6b_serializacao import PATTERN, falha
 from tests.helpers_f3_6b_skins import carregar_helper, com_embed, valida
 from tests.test_f3_6b_etapa3_leitura import documento, rodar
 from tests.test_f3_6b_formato_skin import skin_realista, texto_legado
+from tests.support.raiz import RAIZ
 
-PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
+PACOTE = RAIZ / "empiremuse"
 
 CAMPOS = {
     "image.url": (lambda t: com_embed(image={"url": t}), "embeds[0].image.url"),

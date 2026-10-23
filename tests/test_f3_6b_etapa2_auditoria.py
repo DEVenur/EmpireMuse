@@ -31,8 +31,8 @@ from tests.helpers_f3_6b_legado import (
     proto,
     texto,
 )
+from tests.support.raiz import RAIZ
 
-RAIZ = Path(__file__).resolve().parents[1]
 LIMITE_DE_TEMPO = 30  # segundos que o filho pode levar (os casos recusados levam milissegundos)
 LIMITE_DE_MEMORIA = 3 * 1024**3
 DEPTH = "depth"

@@ -33,10 +33,10 @@ from tests.helpers_f3_6b import (
 from tests.helpers_f3_6b_sessao import codificar, session, sessao_minima
 from tests.test_f3_6b_formato_sessao import gravar, jogador_completo
 from tests.test_f3_6b_resume_sem_voice_state import JogadorRetomado, No
+from tests.support.raiz import RAIZ
 
 OUTRO_SERVIDOR = 1100000000000000555
 CANAL_ALHEIO = 1100000000000000777
-RAIZ = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(autouse=True)

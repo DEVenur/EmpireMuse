@@ -30,8 +30,9 @@ from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import BaseDB, DBModel, LocalDatabase, MongoDatabase
 from empiremuse.utils.music import lastfm_tools
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 PACOTE = ROOT / "empiremuse"
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"  # só o formato; não é um token real
 

@@ -41,9 +41,9 @@ from tests.test_f3_6b_formato_caches import (
     pasta_dos_caches,
     pool_vazio,
 )
+from tests.support.raiz import RAIZ
 
 MIB = 1024 * 1024
-RAIZ = Path(__file__).resolve().parents[1]
 
 
 class _Modulo:

@@ -10,8 +10,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 INVITE = "https://discord.gg/KgtyNg9U6H"
 PALETTE = ("#0B0A1F", "#3B82F6", "#8B5CF6", "#C026D3", "#E11D48")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"

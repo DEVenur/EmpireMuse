@@ -19,8 +19,9 @@ from pathlib import Path
 import pytest
 
 from tests.test_f3_5b_arquitetura import BIBLIOTECA_PADRAO, importados
+from tests.support.raiz import RAIZ
 
-PACOTE = Path(__file__).resolve().parents[1] / "empiremuse"
+PACOTE = RAIZ / "empiremuse"
 LEGADO = "serialization/legacy_pickle.py"
 MODULOS_PICKLE = frozenset({"pickle", "_pickle", "cPickle"})
 OUTROS_FORMATOS_EXECUTAVEIS = frozenset({"marshal", "shelve", "dill", "jsonpickle", "cloudpickle"})

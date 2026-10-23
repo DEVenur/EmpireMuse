@@ -4,8 +4,9 @@ import configparser
 from pathlib import Path
 
 import pytest
+from tests.support.raiz import RAIZ
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = RAIZ
 VALID_INI = (
     b"[node1]\nhost = lavalink.example\nport = 443\npassword = secret\n\n"
     b"[node2]\nhost = other.example\nport = 2333\npassword = youshallnotpass\n"
