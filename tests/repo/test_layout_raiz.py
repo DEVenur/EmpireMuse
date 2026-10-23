@@ -34,12 +34,13 @@ RAIZ_FERRAMENTAS = {
     ".gitattributes",
     ".gitignore",
     ".git-blame-ignore-revs",
+    ".gitmodules",
     ".example.env",
     "EmpireMuse.code-workspace",
 }
 ARQUIVOS_PERMITIDOS_NA_RAIZ = RAIZ_DOCUMENTOS | RAIZ_AGENTES | RAIZ_EXECUCAO | RAIZ_FERRAMENTAS
 
-PASTAS_PERMITIDAS_NA_RAIZ = {".claude", ".github", "assets", "data", "deploy", "docs", "empiremuse", "tests"}
+PASTAS_PERMITIDAS_NA_RAIZ = {".claude", ".github", "assets", "data", "deploy", "docs", "empiremuse", "repos", "tests"}
 
 # Movidos na F3-7 (D6): não podem voltar para a raiz e precisam existir no destino.
 MOVIDOS = {
