@@ -500,7 +500,7 @@ class SpotifyClient:
 
             try:
                 thumb = result["tracks"][0]["album"]["images"][0]["url"]
-            except:
+            except (KeyError, IndexError, TypeError):
                 thumb = ""
 
             if result["tracks"] is None:

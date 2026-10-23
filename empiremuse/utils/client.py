@@ -385,7 +385,7 @@ class BotPool:
             self.failed_bots[bot.identifier] = e
             try:
                 self.bots.remove(bot)
-            except:
+            except Exception:
                 pass
 
     async def run_bots(self, bots: List[BotCore]):
@@ -589,7 +589,7 @@ class BotPool:
                 self.emoji_data = json.load(f)
         except FileNotFoundError:
             pass
-        except:
+        except Exception:
             traceback.print_exc()
 
         if not config["DEFAULT_PREFIX"]:
@@ -849,7 +849,7 @@ class BotPool:
         def load_bot(bot_name: str, token: str, guild_id: str = None, load_modules_log: bool = False):
             try:
                 token = token.split().pop()
-            except:
+            except (AttributeError, IndexError):
                 pass
 
             if not token:
@@ -858,7 +858,7 @@ class BotPool:
 
             try:
                 test_guilds = list([int(i) for i in self.config[f"TEST_GUILDS_{bot_name}"].split("||")])
-            except:
+            except Exception:
                 test_guilds = None
 
             bot = BotCore(
@@ -935,7 +935,7 @@ class BotPool:
                             f" - [cmd: {inter.data.name}] {datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y - %H:%M:%S')} (UTC) - {inter.filled_options}\n"
                             + ("-" * 15)
                         )
-                    except:
+                    except Exception:
                         traceback.print_exc()
 
                 if not inter.guild_id:
@@ -1222,7 +1222,7 @@ class BotCore(commands.AutoShardedBot):
             with open(sync_dir / f"{self.user.id}-old.json", "w", encoding="utf-8") as f:
                 await self.loop.run_in_executor(None, lambda: json.dump(synced_cmds, f, indent=4))
 
-        except:
+        except Exception:
             traceback.print_exc()
 
     def sync_command_cooldowns(self, force=False):
@@ -1358,7 +1358,7 @@ class BotCore(commands.AutoShardedBot):
 
         try:
             ctx.player = self.music.players[message.guild.id]
-        except:
+        except Exception:
             pass
 
         if (

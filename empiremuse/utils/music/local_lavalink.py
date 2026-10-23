@@ -112,7 +112,7 @@ def download_file(url, filename):
                     print(
                         f"Download do arquivo {filename} {current_progress}% concluído ({download_speed:.2f} {speed_txt} / {total_txt})"
                     )
-                except:
+                except Exception:
                     print(f"Download do arquivo {filename} {current_progress}% concluído")
 
     r.close()
