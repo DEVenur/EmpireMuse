@@ -249,3 +249,63 @@ class TestPerfilDoSpotifyOutrasLacunas:
         dados, inter = await consulta_spotify(perfil(images=imagens))
         assert dados is not None, inter.texto
         assert not dados.get("avatar")
+
+
+URL_DEEZER = "https://www.deezer.com/br/profile/123456"
+
+
+async def consulta_deezer(resultado):
+    """Roda o ``_lookup_deezer`` REAL com a resposta devolvida pelo cliente falso; devolve ``(dict | None, interação)``."""
+    bot = ModalBot()
+    bot.deezer = SimpleNamespace(get_user_info=_devolve(resultado))
+    auto = SimpleNamespace(view=modal_view(bot, ViewMode.integrations_manager), _profile_error=None)
+    auto._profile_error = lambda inter, code="": FavModalAdd._profile_error(auto, inter, code)
+    inter = ModalInteraction()
+    return await FavModalAdd._lookup_deezer(auto, inter, URL_DEEZER), inter
+
+
+class TestRespostaMalformadaDoPerfil:
+    """N-9: resposta fora do formato esperado vira mensagem genérica com código, nunca exceção nem ``repr(e)``."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "resposta",
+        [
+            {"error": {"type": "DataException"}},
+            {"name": "Ana"},
+            {"name": "Ana", "link": "https://x.invalid"},
+            [],
+            "texto",
+        ],
+        ids=["erro-da-api", "sem-link", "sem-picture", "lista", "texto"],
+    )
+    async def test_deezer_com_resposta_incompleta(self, resposta):
+        dados, inter = await consulta_deezer(resposta)
+
+        assert dados is None
+        assert "Ocorreu um erro ao obter as informações do perfil" in inter.texto
+        sem_vazamento(inter.texto)
+        assert "KeyError" not in inter.texto and "TypeError" not in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_deezer_completo_continua_funcionando(self):
+        resposta = {"name": "Ana", "link": "https://www.deezer.com/profile/1", "picture": "https://x.invalid/a.png"}
+
+        dados, _ = await consulta_deezer(resposta)
+
+        assert dados == {"title": "[DZ]: Ana", "url": resposta["link"], "avatar": resposta["picture"]}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("resposta", [["lista"], "texto", 42], ids=["lista", "texto", "numero"])
+    async def test_spotify_com_resposta_que_nao_e_um_dict(self, resposta):
+        bot = ModalBot()
+        bot.spotify = SimpleNamespace(get_user_info=_devolve(resposta))
+        auto = SimpleNamespace(view=modal_view(bot, ViewMode.integrations_manager))
+        auto._profile_error = lambda inter, code="": FavModalAdd._profile_error(auto, inter, code)
+        inter = ModalInteraction()
+
+        dados = await FavModalAdd._lookup_spotify(auto, inter, URL_PERFIL)
+
+        assert dados is None
+        assert "Ocorreu um erro ao obter as informações do perfil" in inter.texto
+        sem_vazamento(inter.texto)

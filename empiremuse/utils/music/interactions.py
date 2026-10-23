@@ -1435,12 +1435,13 @@ class FavModalAdd(disnake.ui.Modal):
 
         try:
             result = await self.view.bot.spotify.get_user_info(user_id)
-        except Exception as e:
+            profile = _spotify_profile(result, user_id, url) if result else None
+        except Exception as e:  # inclui resposta que não é um dict: mensagem genérica, o detalhe só vai para o log
             code = log_unexpected_error(logger, e, "integração: consulta do perfil (spotify)")
             await self._profile_error(inter, code)
             return None
 
-        if not result:
+        if not profile:
             await inter.edit_original_message(
                 embed=disnake.Embed(
                     description="**O usuário do link informado não possui playlists públicas...**",
@@ -1449,7 +1450,7 @@ class FavModalAdd(disnake.ui.Modal):
             )
             return None
 
-        return _spotify_profile(result, user_id, url)
+        return profile
 
     async def _lookup_deezer(self, inter: disnake.ModalInteraction, url: str) -> Optional[dict]:
         url_type, url_id = deezer_regex.match(url).groups()[-2:]
@@ -1465,12 +1466,11 @@ class FavModalAdd(disnake.ui.Modal):
 
         try:
             result = await self.view.bot.deezer.get_user_info(int(url_id))
-        except Exception as e:
+            return {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
+        except Exception as e:  # inclui resposta sem name/link/picture ou que não é um dict (ex.: erro da API)
             code = log_unexpected_error(logger, e, "integração: consulta do perfil (deezer)")
             await self._profile_error(inter, code)
             return None
-
-        return {"title": f"[DZ]: {result['name'][:90]}", "url": result["link"], "avatar": result["picture"]}
 
     async def _lookup_ytdl(self, inter: disnake.ModalInteraction, url: str, source: str) -> Optional[dict]:
         if source == "youtube":
