@@ -29,7 +29,9 @@ uv pip install --no-deps -r requirements-git.txt
 Observações:
 
 - As dependências via Git (`disnake` e `jishaku`) são fixadas por SHA completo de commit em `requirements-git.txt` (`requirements-git.txt:3` e `requirements-git.txt:4`).
-- As dependências do PyPI são travadas com hashes SHA-256 no arquivo de lock `requirements-lock.txt` (compilado via `uv pip compile --generate-hashes`), garantindo integridade criptográfica da cadeia de suprimentos (conforme `.claude/rules/empiremuse/security.md` §8).
+- As dependências do PyPI são travadas com hashes SHA-256 no arquivo de lock universal `requirements-lock.txt` (compilado via `uv pip compile --generate-hashes --universal --exclude-newer <corte>`), garantindo integridade criptográfica da cadeia de suprimentos (conforme `.claude/rules/empiremuse/security.md` §8).
+- **Suporte universal multiplataforma (Windows/Linux)**: os lockfiles utilizam resolução universal (`--universal`), preservando marcadores de ambiente como `uvloop==... ; sys_platform != 'win32'`. Isso viabiliza a instalação nativa tanto em ambientes Linux/Docker quanto no Windows (onde `uvloop` é automaticamente ignorado sem quebrar o processo).
+- **Janela de corte temporal (`--exclude-newer`)**: a compilação dos lockfiles adota corte temporal de segurança de aproximadamente 7 dias para mitigar riscos de supply chain de pacotes recém-publicados.
 - O arquivo `requirements.txt` permanece como especificação de alto nível do projeto e ponto de entrada para plataformas gerenciadas (como a Discloud).
 - O `disnake` está fixado em um commit Git anterior à 2.12.0 (`requirements-git.txt:3`); a atualização para a
   versão estável está planejada para fases futuras.
@@ -178,14 +180,27 @@ uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-as
 | `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
 | `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q main.py empiremuse`). |
 | `mypy` | **Ativo** | Checagem estática de tipos configurada em `pyproject.toml` (target Python 3.13, baseline gradual com checagem ativa em `empiremuse.rules.*`). |
-| `uv` | **Ativo** | Gerenciamento de dependências e arquivos de lock com integridade estrita via hash (`requirements-lock.txt` e `requirements-dev-lock.txt`). |
+| `uv` | **Ativo** | Gerenciamento de dependências e arquivos de lock universais com integridade estrita via hash (`requirements-lock.txt` e `requirements-dev-lock.txt`). |
+
+### Regeneração e sincronia dos lockfiles
+
+Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.txt`, os lockfiles devem ser regerados a partir da raiz com resolução universal e corte temporal de segurança:
+
+```bash
+# Lock universal de produção
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
+
+# Lock universal de desenvolvimento
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
+```
 
 A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa automaticamente em todos os pushes e PRs para a branch `main`:
-1. `ruff check .` (linting);
-2. `ruff format --check .` (formatação);
-3. `python -m compileall -q main.py empiremuse` (validação de compilação de bytecode);
-4. `mypy` (verificação estática de tipos, não-bloqueante via `continue-on-error`);
-5. `pytest -q` (execução da suíte de testes).
+1. `Verificar integridade e sincronia dos lockfiles` (regera os locks e valida com `git diff --exit-code`);
+2. `ruff check .` (linting);
+3. `ruff format --check .` (formatação);
+4. `python -m compileall -q main.py empiremuse` (validação de compilação de bytecode);
+5. `mypy` (verificação estática de tipos, não-bloqueante via `continue-on-error`);
+6. `pytest -q` (execução da suíte de testes).
 
 Convenções de código adicionais: `.claude/rules/empiremuse/python-disnake.md`.
 
