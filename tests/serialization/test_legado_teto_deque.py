@@ -36,6 +36,9 @@ from tests.persistence.test_formato_sessao import gravar, jogador_completo
 
 OPCODE_LIMIT = "opcode_limit"
 
+PISO_DE_SEGUNDOS = 2.0
+FOLGA_SOBRE_A_LEITURA = 3.0  # recusar custa, no máximo, algumas leituras da lista (sem nenhuma cópia a mais)
+
 
 def ler(dados: bytes):
     return legacy_pickle.load_legacy(zlib.compress(dados), "session")
@@ -90,6 +93,17 @@ class TestTetoContaAsChamadas:
         )  # a classe solta na lista é recusada pelo validador, não pelo teto
 
 
+def limite_relativo_a_leitura_da_lista() -> float:
+    """Limite de tempo para a recusa, proporcional ao custo de apenas LER a lista de 200 mil itens (zero ``deque``).
+
+    O leitor é Python puro: sob ``coverage``/``tracemalloc`` a leitura da lista sozinha leva várias vezes o tempo normal.
+    Um teto absoluto mede o tracing, não o leitor; a linha de base mede nas mesmas condições da recusa.
+    """
+    leitura = medir(ler, deques_sobre_lista_grande(0))
+    assert leitura.erro is None, leitura.erro
+    return max(PISO_DE_SEGUNDOS, FOLGA_SOBRE_A_LEITURA * leitura.segundos)
+
+
 class TestCustoQueOTetoEvita:
     def test_dois_deques_sobre_a_lista_grande_passam(self):
         medida = medir(ler, deques_sobre_lista_grande(2), memoria=False)
@@ -98,10 +112,12 @@ class TestCustoQueOTetoEvita:
         assert medida.segundos < 8.0
 
     def test_o_terceiro_e_recusado_antes_de_copiar_a_lista(self):
-        recusado(medir(ler, deques_sobre_lista_grande(3)), OPCODE_LIMIT, segundos=2.0, pico=16 * MIB)
+        limite = limite_relativo_a_leitura_da_lista()
+        recusado(medir(ler, deques_sobre_lista_grande(3)), OPCODE_LIMIT, segundos=limite, pico=16 * MIB)
 
     def test_milhares_de_copias_da_lista_grande_sao_recusadas_sem_o_custo_quadratico(self):
-        recusado(medir(ler, deques_sobre_lista_grande(5_000)), OPCODE_LIMIT, segundos=3.0, pico=32 * MIB)
+        limite = limite_relativo_a_leitura_da_lista()
+        recusado(medir(ler, deques_sobre_lista_grande(5_000)), OPCODE_LIMIT, segundos=limite, pico=32 * MIB)
 
 
 class TestASessaoRealTemUmDeque:
