@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
 
 
-SCROBBLE_TITLE_THRESHOLD = 70  # limiar do texto completo no casamento do scrobble (antes: token_sort_ratio > 70)
+SCROBBLE_TITLE_THRESHOLD = 70  # limiar do texto completo no casamento do scrobble (o mesmo 70 de antes)
 
 
 def check_track_title(t: str):
