@@ -19,8 +19,8 @@ from tests.persistence.test_chave_de_corte_load_legacy import funcao_do_ponto, k
 PONTOS_DE_SKIN = [
     ("cogs/music.py", "Music.create_player"),
     ("cogs/music_settings.py", "MusicSettings.change_skin"),
-    ("utils/music/interactions.py", "SkinEditorMenu.load_skin"),
-    ("utils/music/interactions.py", "SkinEditorMenu.modal_handler"),
+    ("utils/music/interactions", "SkinEditorMenu.load_skin"),
+    ("utils/music/interactions", "SkinEditorMenu.modal_handler"),
 ]
 PROIBIDOS_NOS_PONTOS = {"load_legacy", "b64decode", "b64encode", "pickle", "_pickle"}
 

@@ -57,13 +57,13 @@ from tests.support.raiz import RAIZ
 editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/test_formato_skin.py
 PACOTE = RAIZ / "empiremuse"
 
-# (arquivo relativo a empiremuse/, função qualificada, kind)
+# (arquivo ou pasta relativo a empiremuse/, função qualificada, kind); pasta = a classe pode estar em qualquer .py dela
 PONTOS = [
     ("cogs/music.py", "Music.play", "queue"),
     ("cogs/music.py", "Music.create_player", "skin"),
     ("cogs/music_settings.py", "MusicSettings.change_skin", "skin"),
-    ("utils/music/interactions.py", "SkinEditorMenu.load_skin", "skin"),
-    ("utils/music/interactions.py", "SkinEditorMenu.modal_handler", "skin"),
+    ("utils/music/interactions", "SkinEditorMenu.load_skin", "skin"),
+    ("utils/music/interactions", "SkinEditorMenu.modal_handler", "skin"),
 ]
 
 
@@ -82,12 +82,15 @@ def armadilhas(tmp_path, monkeypatch):
 
 def funcao_do_ponto(arquivo: str, qualificada: str) -> ast.AST:
     classe, metodo = qualificada.split(".")
-    arvore = ast.parse((PACOTE / arquivo).read_text(encoding="utf-8"))
-    for no in ast.walk(arvore):
-        if isinstance(no, ast.ClassDef) and no.name == classe:
-            for filho in no.body:
-                if isinstance(filho, (ast.FunctionDef, ast.AsyncFunctionDef)) and filho.name == metodo:
-                    return filho
+    alvo = PACOTE / arquivo
+    fontes = sorted(alvo.rglob("*.py")) if alvo.is_dir() else [alvo]
+    for fonte in fontes:
+        arvore = ast.parse(fonte.read_text(encoding="utf-8"))
+        for no in ast.walk(arvore):
+            if isinstance(no, ast.ClassDef) and no.name == classe:
+                for filho in no.body:
+                    if isinstance(filho, (ast.FunctionDef, ast.AsyncFunctionDef)) and filho.name == metodo:
+                        return filho
     raise AssertionError(f"{qualificada} não existe em {arquivo}")
 
 
