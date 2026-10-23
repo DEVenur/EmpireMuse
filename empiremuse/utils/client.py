@@ -6,6 +6,7 @@ import datetime
 import gc
 import json
 import logging
+import logging.handlers
 import os
 import subprocess
 import threading
@@ -66,6 +67,22 @@ if os.name != "nt":
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 logger = logging.getLogger(__name__)
+
+LOG_FILE_NAME = "disnake.log"
+LOG_FILE_MAX_BYTES = 5 * 1024 * 1024
+LOG_FILE_BACKUPS = 3
+
+
+def build_file_log_handler(logs_dir: Path) -> logging.Handler:
+    """Log em arquivo com rotação (5 MB x 3) e em append: os códigos ERR-... sobrevivem a um reinício."""
+    handler = logging.handlers.RotatingFileHandler(
+        filename=str(logs_dir / LOG_FILE_NAME),
+        maxBytes=LOG_FILE_MAX_BYTES,
+        backupCount=LOG_FILE_BACKUPS,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    return handler
 
 
 def _playlist_cache_file():
@@ -696,9 +713,7 @@ class BotPool:
 
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
-            handler = logging.FileHandler(filename=str(logs_dir / "disnake.log"), encoding="utf-8", mode="w")
-            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
-            logger.addHandler(handler)
+            logger.addHandler(build_file_log_handler(logs_dir))
 
         LAVALINK_SERVERS = {}
 
