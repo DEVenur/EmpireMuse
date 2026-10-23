@@ -27,6 +27,7 @@ from tests.support.leitor_legado import (
     global_,
     legacy_pickle,
     medir,
+    teto_de_tempo,
     pickle_de,
     recusado,
     texto,
@@ -101,7 +102,7 @@ def limite_relativo_a_leitura_da_lista() -> float:
     """
     leitura = medir(ler, deques_sobre_lista_grande(0))
     assert leitura.erro is None, leitura.erro
-    return max(PISO_DE_SEGUNDOS, FOLGA_SOBRE_A_LEITURA * leitura.segundos)
+    return max(teto_de_tempo(PISO_DE_SEGUNDOS), FOLGA_SOBRE_A_LEITURA * leitura.segundos)
 
 
 class TestCustoQueOTetoEvita:
@@ -109,7 +110,7 @@ class TestCustoQueOTetoEvita:
         medida = medir(ler, deques_sobre_lista_grande(2), memoria=False)
         assert medida.erro is None, medida.erro
         assert len(medida.resultado["a"]) == 3 and len(medida.resultado["a"][1]) == 200_000
-        assert medida.segundos < 8.0
+        assert medida.segundos < teto_de_tempo(8.0)
 
     def test_o_terceiro_e_recusado_antes_de_copiar_a_lista(self):
         limite = limite_relativo_a_leitura_da_lista()

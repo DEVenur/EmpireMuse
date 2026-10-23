@@ -241,6 +241,31 @@ def medir(funcao, *args, memoria: bool = True, **kwargs) -> Medida:
     return Medida(resultado, erro, segundos, pico)
 
 
+CALIBRACAO_OPCODES = 150_000  # tamanho do pickle que calibra o fator (o leitor leva ~0,15 s sem tracing)
+REFERENCIA_DE_LEITURA = 0.15  # segundos que a calibração leva sem ``coverage`` nem carga (máquina de referência)
+_FATOR_DE_LENTIDAO: list[float] = []
+
+
+def fator_de_lentidao() -> float:
+    """Quantas vezes esta execução está mais lenta que a de referência, medido no PRÓPRIO leitor legado.
+
+    O leitor é Python puro e fica de 5 a 6 vezes mais lento sob ``coverage``; em CI ou com a máquina ocupada, também. Um
+    teto absoluto de segundos mede o tracing, não o leitor. Calibrado uma vez por sessão (melhor de duas leituras) e nunca
+    abaixo de 1: sem tracing o teto é o do plano. O que os testes provam, "recusa em milissegundos em vez de horas ou
+    custo quadrático", segue valendo: o fator aproxima o teto, não o afrouxa em ordens de grandeza.
+    """
+    if not _FATOR_DE_LENTIDAO:
+        dados = envelope(pickle_de_n_opcodes(CALIBRACAO_OPCODES), "session")
+        melhor = min(medir(legacy_pickle.load_legacy, dados, "session", memoria=False).segundos for _ in range(2))
+        _FATOR_DE_LENTIDAO.append(max(1.0, melhor / REFERENCIA_DE_LEITURA))
+    return _FATOR_DE_LENTIDAO[0]
+
+
+def teto_de_tempo(segundos: float) -> float:
+    """O teto de ``segundos`` do plano, ajustado ao quão lenta está esta execução (ver ``fator_de_lentidao``)."""
+    return segundos * fator_de_lentidao()
+
+
 def recusado(medida: Medida, codigos, *, segundos: float = LIMITE_DE_TEMPO, pico: int = 64 * MIB) -> None:
     """Confere que ``medida`` terminou em ``LegacyFormatError`` com um dos ``codigos``, dentro do tempo e da memória."""
     codigos = {codigos} if isinstance(codigos, str) else set(codigos)
@@ -248,5 +273,6 @@ def recusado(medida: Medida, codigos, *, segundos: float = LIMITE_DE_TEMPO, pico
     assert isinstance(medida.erro, legacy_pickle.LegacyFormatError), f"escapou {type(medida.erro).__name__}"
     assert medida.erro.code in codigos, f"código {medida.erro.code!r}, esperado {sorted(codigos)}"
     assert medida.erro.path == ""
-    assert medida.segundos < segundos, f"levou {medida.segundos:.1f} s"
+    teto = teto_de_tempo(segundos)
+    assert medida.segundos < teto, f"levou {medida.segundos:.1f} s (teto {teto:.1f} s = {segundos} s x fator)"
     assert medida.pico < pico, f"usou {medida.pico / MIB:.0f} MiB"

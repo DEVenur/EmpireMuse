@@ -57,4 +57,4 @@ jobs:
         run: mypy
 
       - name: Execução dos testes automatizados (pytest)
-        run: pytest -q
+        run: pytest -q --cov --cov-report=term-missing:skip-covered
