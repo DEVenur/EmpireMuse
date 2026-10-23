@@ -24,6 +24,9 @@ RAIZ_EXECUCAO = {"main.py", "requirements.txt", "discloud.config", ".discloudign
 RAIZ_FERRAMENTAS = {
     "pyproject.toml",
     "requirements-dev.txt",
+    "requirements-dev-lock.txt",
+    "requirements-git.txt",
+    "requirements-lock.txt",
     "Dockerfile",
     "docker-compose.yml",
     ".dockerignore",
