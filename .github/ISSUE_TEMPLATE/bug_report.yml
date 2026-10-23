@@ -8,7 +8,7 @@ body:
       value: |
         Obrigado por dedicar seu tempo para relatar um problema!
         Antes de prosseguir, certifique-se de pesquisar por issues existentes antes de abrir uma nova.
-        **Atenção**: Caso este problema seja uma vulnerabilidade de segurança, consulte nossa política em [SECURITY.md](https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/.github/SECURITY.md) para reporte responsável. Não poste falhas de segurança em issues públicas.
+        **Atenção**: Caso este problema seja uma vulnerabilidade de segurança, consulte nossa política em [SECURITY.md](https://github.com/EmpireCommunity/EmpireMuse/blob/main/.github/SECURITY.md) para reporte responsável. Não poste falhas de segurança em issues públicas.
 
   - type: textarea
     id: description
