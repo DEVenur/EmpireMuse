@@ -12,7 +12,7 @@
   <a href="https://discord.gg/KgtyNg9U6H"><img src="https://img.shields.io/badge/Discord-EmpireHUB-8B5CF6?logo=discord&logoColor=white" alt="Discord EmpireHUB"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Licen%C3%A7a-GPL--2.0-blue.svg" alt="Licença GPL-2.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13"></a>
-  <a href="https://github.com/DiscordEmpireHub/EmpireMuse/actions/workflows/ci.yml"><img src="https://github.com/DiscordEmpireHub/EmpireMuse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/EmpireCommunity/EmpireMuse/actions/workflows/ci.yml"><img src="https://github.com/EmpireCommunity/EmpireMuse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 ---
@@ -34,7 +34,7 @@ Participe do nosso servidor oficial [Discord EmpireHUB](https://discord.gg/KgtyN
 - 🌐 **Painel Web Integrado (`panel/`)**: Interface web moderna orientada a hipertexto (Tornado + htmx + Pico CSS) com autenticação Discord OAuth2 e PKCE para gerenciamento de configurações de servidores e preferências pessoais.
 - 🎧 **Múltiplas Fontes de Áudio**: Suporte a YouTube (com cliente TV, cifra remota e autenticação OAuth opcional contra bloqueios anti-bot), Spotify, Deezer e servidores Lavalink locais ou remotos.
 - 💬 **Canais e Fóruns de Pedidos**: Modos dedicados de song-request em canais de texto ou fóruns com sincronização automática de status de voz e palco.
-- 📊 **Integrações e Presença**: Suporte a scrobble no [Last.fm](https://www.last.fm/) e integração via WebSocket com aplicativo desktop de [Rich Presence (RPC)](https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app).
+- 📊 **Integrações e Presença**: Suporte a scrobble no [Last.fm](https://www.last.fm/) e integração via WebSocket com aplicativo desktop de [Rich Presence (RPC)](https://github.com/EmpireCommunity/EmpireMuse-RPC-app).
 - 🛡️ **Segurança e Resiliência**: Isolamento estrito de variáveis de ambiente do subprocesso Lavalink por allowlist, download de binários verificado por SHA-256 e políticas de cookies seguros (`__Host-`).
 
 ---

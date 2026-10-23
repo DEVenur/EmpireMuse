@@ -23,7 +23,8 @@ from tests.support.raiz import RAIZ
 
 ROOT = RAIZ
 
-NEW_REPO = "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download"
+NEW_REPO = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download"
+OLD_EMPIREMUSE_REPO = "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download"
 OLD_REPO = "https://github.com/DiscordEmpireHub/LL-binaries/releases/download"
 UPSTREAM_REPO = "https://github.com/zRitsu/LL-binaries/releases/download"
 
@@ -202,6 +203,9 @@ ALL_KNOWN_OFFICIAL_URLS = [
     f"{NEW_REPO}/0.0.1/Lavalink.jar",
     f"{NEW_REPO}/0.0.2/Lavalink.jar",
     f"{NEW_REPO}/0.0.3/Lavalink.jar",
+    f"{OLD_EMPIREMUSE_REPO}/0.0.1/Lavalink.jar",
+    f"{OLD_EMPIREMUSE_REPO}/0.0.2/Lavalink.jar",
+    f"{OLD_EMPIREMUSE_REPO}/0.0.3/Lavalink.jar",
     f"{OLD_REPO}/0.0.1/Lavalink.jar",
     f"{OLD_REPO}/0.0.2/Lavalink.jar",
 ]
@@ -272,10 +276,10 @@ class TestLegacyOfficialUrlsFollowTheCurrentRelease:
 NEED_HASH_URLS = [
     "https://example.test/Lavalink.jar",
     f"{UPSTREAM_REPO}/0.0.2/Lavalink.jar",  # upstream zRitsu
-    "https://github.com.evil.test/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    "https://evil.test/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    "https://github.com@evil.test/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
-    "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries-fork/releases/download/0.0.2/Lavalink.jar",
+    "https://github.com.evil.test/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
+    "https://evil.test/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
+    "https://github.com@evil.test/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
+    "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries-fork/releases/download/0.0.2/Lavalink.jar",
     "https://github.com/OutraOrg/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
     f"{NEW_REPO}/0.0.2/application.yml",  # outro arquivo do espelho
     f"{NEW_REPO}/0.0.2/Lavalink.jar?arquivo=outro",  # parâmetros mudam a URL
@@ -321,7 +325,8 @@ class TestEveryOtherUrlStaysStrict:
         "url",
         [
             "http://example.test/Lavalink.jar",
-            f"http://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",  # oficial, mas HTTP
+            f"http://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",  # oficial, mas HTTP
+            f"http://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
             f"http://github.com/DiscordEmpireHub/LL-binaries/releases/download/0.0.1/Lavalink.jar",
             "ftp://example.test/Lavalink.jar",
             "file:///etc/passwd",

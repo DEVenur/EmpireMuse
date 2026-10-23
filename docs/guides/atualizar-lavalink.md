@@ -21,7 +21,7 @@ O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins es
 | **Lyrics** | **2.6.1** | Plugin oficial de letras de músicas (`dev.schlaubi.lyrics`). |
 
 Os artefatos homologados são distribuídos no espelho oficial da organização:
-- **Repositório de Binários**: [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/tag/0.0.3)
+- **Repositório de Binários**: [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/tag/0.0.3)
 
 ---
 
@@ -127,7 +127,7 @@ Quando for necessário atualizar a versão ou a release dos pacotes portáteis d
 
 ## 5. Checklist de Release do Espelho (`EmpireMuse-LL-binaries`)
 
-Ao publicar uma nova versão dos binários homologados no repositório [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries), execute rigorosamente a checklist de integridade e governança abaixo:
+Ao publicar uma nova versão dos binários homologados no repositório [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries), execute rigorosamente a checklist de integridade e governança abaixo:
 
 1. **Publicação dos Artefatos**:
    - Compilar ou obter os artefatos oficiais homologados (`Lavalink.jar`, `application.yml` e jars dos plugins).

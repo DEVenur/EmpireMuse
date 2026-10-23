@@ -84,7 +84,7 @@ def remote(nome, url, *, push=True):
     return "\n".join(linhas) + "\n"
 
 
-WEB = "https://github.com/DiscordEmpireHub/EmpireMuse"
+WEB = "https://github.com/EmpireCommunity/EmpireMuse"
 
 
 class TestGuardaDoFormatoAtual:
@@ -138,12 +138,12 @@ class TestFormatosDeUrl:
     @pytest.mark.parametrize(
         ("url", "esperado"),
         [
-            ("git@github.com:DiscordEmpireHub/EmpireMuse.git", WEB),
-            ("git@github.com:DiscordEmpireHub/EmpireMuse", WEB),
-            ("ssh://git@github.com/DiscordEmpireHub/EmpireMuse.git", WEB),
-            ("ssh://git@github.com:22/DiscordEmpireHub/EmpireMuse.git", WEB),
+            ("git@github.com:EmpireCommunity/EmpireMuse.git", WEB),
+            ("git@github.com:EmpireCommunity/EmpireMuse", WEB),
+            ("ssh://git@github.com/EmpireCommunity/EmpireMuse.git", WEB),
+            ("ssh://git@github.com:22/EmpireCommunity/EmpireMuse.git", WEB),
             ("git@gitlab.com:grupo/sub/projeto.git", "https://gitlab.com/grupo/sub/projeto"),
-            ("git://github.com/DiscordEmpireHub/EmpireMuse.git", WEB),
+            ("git://github.com/EmpireCommunity/EmpireMuse.git", WEB),
         ],
         ids=["scp_com_git", "scp_sem_git", "ssh_url", "ssh_com_porta", "gitlab_subgrupo", "protocolo_git"],
     )
@@ -162,8 +162,8 @@ class TestFormatosDeUrl:
     @pytest.mark.parametrize(
         "url",
         [
-            "https://usuario:ghp_segredo123@github.com/DiscordEmpireHub/EmpireMuse.git",
-            "https://token@github.com/DiscordEmpireHub/EmpireMuse.git",
+            "https://usuario:ghp_segredo123@github.com/EmpireCommunity/EmpireMuse.git",
+            "https://token@github.com/EmpireCommunity/EmpireMuse.git",
         ],
         ids=["usuario_e_senha", "so_token"],
     )
@@ -189,8 +189,8 @@ class TestFormatosDeUrl:
             ("http://git.exemplo.invalid/equipe/projeto.git", "http://git.exemplo.invalid/equipe/projeto"),
             ("https://[::1]:8443/equipe/projeto.git", "https://[::1]:8443/equipe/projeto"),
             ("ssh://git@[2001:db8::1]/equipe/projeto.git", "https://[2001:db8::1]/equipe/projeto"),
-            ("github.com:DiscordEmpireHub/EmpireMuse.git", WEB),
-            ("git+ssh://git@github.com/DiscordEmpireHub/EmpireMuse.git", WEB),
+            ("github.com:EmpireCommunity/EmpireMuse.git", WEB),
+            ("git+ssh://git@github.com/EmpireCommunity/EmpireMuse.git", WEB),
         ],
         ids=["http_mantido", "ipv6_http_com_porta", "ipv6_ssh", "scp_sem_usuario", "git_mais_ssh"],
     )

@@ -18,7 +18,7 @@ O arquivo [`discloud.config`](../../discloud.config) na raiz do repositório def
 
 ```ini
 NAME=EmpireMuse
-AVATAR=https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/assets/brand/avatar.png
+AVATAR=https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main/assets/brand/avatar.png
 TYPE=bot
 MAIN=main.py
 RAM=1024
