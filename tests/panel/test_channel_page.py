@@ -314,6 +314,8 @@ class CanalSetupValidationTest(CanalBase):
             self.world.j.clear()
             response = self.configure(self.logged_in(), modo="existente", canal="55", titulo_forum=title)
             assert response.code == status, f"{len(title)} caracteres: {response.code}"
+            if status == 202:
+                self.settle()  # drena a tarefa em segundo plano antes do caso seguinte
             if status == 422:
                 self.assert_nothing_happened(response)
             self.world.forum.thread_list.clear()
