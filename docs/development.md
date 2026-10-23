@@ -200,7 +200,7 @@ A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa a
 3. `ruff format --check .` (formatação);
 4. `python -m compileall -q main.py empiremuse` (validação de compilação de bytecode);
 5. `mypy` (verificação estática de tipos, não-bloqueante via `continue-on-error`);
-6. `pytest -q` (execução da suíte de testes).
+6. `pytest -q --cov --cov-report=term-missing:skip-covered` (execução da suíte de testes com validação de cobertura mínima configurada no `pyproject.toml`).
 
 Convenções de código adicionais: `.claude/rules/empiremuse/python-disnake.md`.
 
