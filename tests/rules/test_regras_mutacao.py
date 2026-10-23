@@ -44,6 +44,7 @@ from tests.support.drivers_de_regras import (
     status_no_comando,
 )
 from tests.support.modais import (
+    trocar_process_idle_embed,
     URL_BASE,
     ModalBot,
     adicionar_favorito,
@@ -62,7 +63,7 @@ def _sem_idle_embed(monkeypatch):
     async def nada(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(interactions, "process_idle_embed", nada)
+    trocar_process_idle_embed(monkeypatch, nada)
 
 
 def url_com_tamanho(tamanho, base=f"{URL_BASE}/"):

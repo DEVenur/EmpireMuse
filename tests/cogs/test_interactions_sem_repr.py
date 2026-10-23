@@ -14,7 +14,7 @@ import pytest
 
 from empiremuse.utils.music.interactions import SkinEditorMenu, ViewMode
 from tests.support.drivers_de_regras import InteracaoFalsa
-from tests.support.modais import ModalBot, ModalInteraction, adicionar_integracao, importar
+from tests.support.modais import ModalBot, ModalInteraction, adicionar_integracao, importar, trocar_process_idle_embed
 
 MARCADORES_DE_DETALHE_INTERNO = ("```py", "Traceback", "Error(", "Exception", "repr(")
 
@@ -38,7 +38,7 @@ def _sem_idle_embed(monkeypatch):
     async def nada(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(interactions, "process_idle_embed", nada)
+    trocar_process_idle_embed(monkeypatch, nada)
 
 
 def explode(segredo, tipo=RuntimeError):

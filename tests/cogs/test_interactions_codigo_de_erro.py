@@ -19,7 +19,14 @@ from empiremuse.utils.music import interactions
 from empiremuse.utils.music.converters import fix_characters
 from empiremuse.utils.music.interactions import FavModalAdd, SkinEditorMenu, ViewMode
 from tests.support.drivers_de_regras import InteracaoFalsa
-from tests.support.modais import ModalBot, ModalInteraction, adicionar_integracao, importar, modal_view
+from tests.support.modais import (
+    ModalBot,
+    ModalInteraction,
+    adicionar_integracao,
+    importar,
+    modal_view,
+    trocar_process_idle_embed,
+)
 
 CODIGO = "ERR-7F3A2C"
 SEGREDO = "detalhe-interno /srv/empiremuse/segredo.json"
@@ -32,7 +39,7 @@ def _ambiente(monkeypatch):
     async def nada(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(interactions, "process_idle_embed", nada)
+    trocar_process_idle_embed(monkeypatch, nada)
     monkeypatch.setattr(secrets, "token_hex", lambda nbytes=None: "7f3a2c")
 
 

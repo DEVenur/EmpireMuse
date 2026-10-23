@@ -31,7 +31,15 @@ from tests.support.drivers_de_regras import (
     painel_links,
     status_no_comando,
 )
-from tests.support.modais import URL_BASE, ModalBot, adicionar_favorito, adicionar_integracao, arquivo_com, importar
+from tests.support.modais import (
+    URL_BASE,
+    ModalBot,
+    adicionar_favorito,
+    adicionar_integracao,
+    arquivo_com,
+    importar,
+    trocar_process_idle_embed,
+)
 
 FAVORITOS, SERVIDOR, INTEGRACOES = ViewMode.fav_manager, ViewMode.guild_fav_manager, ViewMode.integrations_manager
 MODOS = [
@@ -50,7 +58,7 @@ def _sem_idle_embed(monkeypatch):
     async def nada(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(interactions, "process_idle_embed", nada)
+    trocar_process_idle_embed(monkeypatch, nada)
 
 
 # ============================================================================ A-1 e I-1 — userinfo e caracteres perigosos
