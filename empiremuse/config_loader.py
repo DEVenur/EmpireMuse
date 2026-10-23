@@ -129,7 +129,6 @@ DEFAULT_CONFIG = {
     ##################################################
     "RUN_LOCAL_LAVALINK": False,
     "CONNECT_LOCAL_LAVALINK": True,
-    "USE_JABBA": False,
     "LAVALINK_JAVA_PATH": "",
     "LAVALINK_HOME": "",
     "LAVALINK_OFFLINE": False,
@@ -301,7 +300,6 @@ def load_config():
         "AUTO_SYNC_COMMANDS",
         "INTERACTION_COMMAND_ONLY",
         "RUN_LOCAL_LAVALINK",
-        "USE_JABBA",
         "LAVALINK_OFFLINE",
         "CONNECT_LOCAL_LAVALINK",
         "COMMAND_LOG",

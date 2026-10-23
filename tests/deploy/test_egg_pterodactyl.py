@@ -45,7 +45,6 @@ NAO_SE_APLICA = {
     "LAVALINK_JAVA_PATH": "vem do ENV da imagem (JRE 21 em /opt/java/openjdk): vazia, o bot tentaria instalar um JDK",
     "LAVALINK_FILE_URL": "o Lavalink.jar vem na imagem; em modo offline não há download, então a URL não tem efeito",
     "LAVALINK_FILE_SHA256": "par da LAVALINK_FILE_URL: sem download de jar próprio, o hash não tem uso",
-    "USE_JABBA": "instalaria o Java por um script baixado (jabba); a imagem já traz o JRE e roda offline",
     "GIT_DIR": "só serve a comandos de git; o container não tem repositório e a atualização por git foi removida (D1)",
 }
 

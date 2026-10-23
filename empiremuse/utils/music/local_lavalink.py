@@ -465,7 +465,7 @@ def _lavalink_home(configured: Optional[str]) -> str:
     return configured
 
 
-def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool, allow_install: bool) -> str:
+def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, allow_install: bool) -> str:
     """Java 17+ do sistema, de JAVA_HOME ou já instalado pelo bot; só instala o JDK se ``allow_install``."""
     if java_cmd := validate_java("java"):
         return java_cmd
@@ -479,16 +479,9 @@ def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba:
 
     if os.name == "nt":
         dirs.append(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
-        shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)
-
-    elif use_jabba:
-        jabba_java = str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java")
-        dirs.extend([os.path.realpath(jabba_java), os.path.expanduser(jabba_java)])
-        shutil.rmtree(f"{tmp_dir}/.java", ignore_errors=True)
-
     else:
         dirs.append(os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java"))
-        shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)
+    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)  # resto de instalação antiga (jabba removido)
 
     for cmd in dirs:
         if validate_java(cmd):
@@ -499,25 +492,13 @@ def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba:
             "LAVALINK_OFFLINE=true: nenhum Java 17+ foi encontrado e o JDK não será baixado no modo offline; "
             "defina LAVALINK_JAVA_PATH com o executável do Java instalado."
         )
-    return _install_jdk(tmp_dir, jdk_platform, arch, use_jabba)
+    return _install_jdk(tmp_dir, jdk_platform, arch)
 
 
-def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool) -> str:
+def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str) -> str:
     if os.name == "nt":
         return _install_jdk_windows(tmp_dir, jdk_platform, arch)
-
-    if not use_jabba:
-        return _install_jdk_linux(tmp_dir, jdk_platform, arch)
-
-    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0"), ignore_errors=True)
-
-    jabba_script = str(paths.RUNTIME_DIR / "install_jabba.sh")
-    download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", jabba_script)
-    subprocess.call(["bash", jabba_script])
-    subprocess.call(f"{paths.RUNTIME_DIR}/.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
-    os.remove(jabba_script)
-
-    return os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
+    return _install_jdk_linux(tmp_dir, jdk_platform, arch)
 
 
 def _has_override_content(path: str) -> bool:
@@ -603,7 +584,6 @@ def run_lavalink(
     lavalink_ram_limit: int = 100,
     lavalink_additional_sleep: int = 0,
     lavalink_cpu_cores: int = 1,
-    use_jabba: bool = False,
     *,
     lavalink_file_sha256: str = None,
     youtube_oauth_refresh_token: str = None,
@@ -621,7 +601,7 @@ def run_lavalink(
     if configured_java := (lavalink_java_path or "").strip():
         java_cmd = _configured_java(configured_java)
     else:
-        java_cmd = _find_or_install_java(tmp_dir, jdk_platform, arch, use_jabba, allow_install=not lavalink_offline)
+        java_cmd = _find_or_install_java(tmp_dir, jdk_platform, arch, allow_install=not lavalink_offline)
 
     prepare_lavalink_files(
         home,

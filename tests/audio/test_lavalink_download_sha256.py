@@ -426,13 +426,12 @@ class TestRunLavalinkSignature:
         import inspect
 
         names = [p.name for p in inspect.signature(ll.run_lavalink).parameters.values()]
-        assert names[:6] == [
+        assert names[:5] == [
             "lavalink_file_url",
             "lavalink_initial_ram",
             "lavalink_ram_limit",
             "lavalink_additional_sleep",
             "lavalink_cpu_cores",
-            "use_jabba",
         ]
 
     def test_client_still_calls_by_keyword_with_the_sha256(self):
