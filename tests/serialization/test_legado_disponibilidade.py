@@ -516,5 +516,14 @@ class TestFolgaDoQueECorreto:
         assert medida.resultado == sessao
 
     def test_pre_varredura_de_um_milhao_e_meio_de_opcodes_leva_poucos_segundos(self):
-        medida = medir(carregar, envelope(pickle_de_n_opcodes(MAX_OPCODES["session"])), memoria=False)
-        assert medida.erro is None and medida.segundos < 8.0
+        """Poucos segundos E custo linear: o tempo de 1/10 dos opcodes, medido nas mesmas condições, calibra o limite.
+
+        Sob ``coverage`` a varredura (Python puro) leva ~5x o normal; um teto absoluto mediria o tracing. Um custo
+        quadrático daria ~100x o tempo de 1/10, muito acima de ``folga_linear`` (o custo linear dá ~10x).
+        """
+        folga_linear = 15
+        total = MAX_OPCODES["session"]
+        calibracao = medir(carregar, envelope(pickle_de_n_opcodes(total // 10)), memoria=False)
+        assert calibracao.erro is None, calibracao.erro
+        medida = medir(carregar, envelope(pickle_de_n_opcodes(total)), memoria=False)
+        assert medida.erro is None and medida.segundos < max(8.0, folga_linear * calibracao.segundos)
