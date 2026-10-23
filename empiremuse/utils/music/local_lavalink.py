@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -24,6 +25,8 @@ DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um serv
 HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
 VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
+JDK_STAGING_MAX_AGE = 3600  # segundos sem mudança para um staging do JDK ser tido como órfão (extração leva segundos)
+JDK_STAGING_NAME = re.compile(r"[\w-]+\.\w{8}\.tmp")  # <plataforma>.<8 caracteres do mkdtemp>.tmp, nunca a pasta final
 JDK_EXECUTABLES = ("java", "java.exe")  # bin/<nome> de um JDK instalado (Linux e Windows)
 LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
 PLUGINS_OVERRIDE_RELATIVE = ".lavalink/plugins-override.yml"
@@ -436,7 +439,8 @@ def _install_extracted_jdk(
 ) -> None:
     """Extrai num diretório temporário irmão e só o promove a ``java_dir`` (os.replace) se tudo deu certo.
 
-    Qualquer falha (inclusive Ctrl+C) apaga o temporário e não mexe em outras instalações de ``java_root``.
+    Qualquer falha (inclusive Ctrl+C) apaga o temporário e não mexe em outras instalações de ``java_root``. Um ``kill -9``
+    não passa pelo ``finally``: a sobra é apagada na próxima subida por ``remove_orphan_jdk_staging``.
     """
     extract = extract or _extract_tar_without_top_dir
     os.makedirs(java_root, exist_ok=True)
@@ -448,6 +452,46 @@ def _install_extracted_jdk(
         os.replace(staging, java_dir)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _newest_mtime(directory: str) -> float:
+    """Última modificação do diretório ou de qualquer entrada direta dele (a extração cria entradas em sequência)."""
+    newest = os.stat(directory).st_mtime
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            newest = max(newest, entry.stat(follow_symlinks=False).st_mtime)
+    return newest
+
+
+def remove_orphan_jdk_staging(java_root: str, max_age: float = JDK_STAGING_MAX_AGE, now: Optional[float] = None) -> int:
+    """Apaga os staging do JDK que sobraram de um processo morto no meio da extração (cerca de 150 MB cada).
+
+    Só apaga diretório real (nunca link) cujo nome é o do ``mkdtemp`` de ``_install_extracted_jdk`` e que não muda há mais
+    de ``max_age`` segundos: a instalação válida (``<plataforma>`` sem ``.tmp``) e uma extração em curso em outro processo
+    ficam intactas. Falhas de leitura ou de remoção não derrubam a subida. Devolve quantos foram apagados.
+    """
+    now = time.time() if now is None else now
+    removed = 0
+    try:
+        names = os.listdir(java_root)
+    except OSError:
+        return 0
+    for name in names:
+        path = os.path.join(java_root, name)
+        if not JDK_STAGING_NAME.fullmatch(name) or os.path.islink(path) or not os.path.isdir(path):
+            continue
+        try:
+            idle = now - _newest_mtime(path)
+        except OSError:
+            continue
+        if idle < max_age:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        if not os.path.exists(path):
+            removed += 1
+    if removed:
+        logger.info("Removidos %d diretório(s) temporário(s) órfão(s) de instalação do JDK em %s.", removed, java_root)
+    return removed
 
 
 def _configured_java(java_path: str) -> str:
@@ -604,6 +648,8 @@ def run_lavalink(
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
 
     tmp_dir = tempfile.gettempdir() if os.name == "nt" else str(paths.RUNTIME_DIR)
+
+    remove_orphan_jdk_staging(f"{tmp_dir}/.java")
 
     home = _lavalink_home(lavalink_home)
 
