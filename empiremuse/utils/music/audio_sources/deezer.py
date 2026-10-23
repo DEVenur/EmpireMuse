@@ -9,6 +9,7 @@ from aiohttp import ClientSession
 from cachetools import TTLCache
 from rapidfuzz import fuzz
 
+from empiremuse.rules.title_match import title_matches
 from empiremuse.utils.music.converters import fix_characters, URL_REG
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, LavalinkPlaylist
@@ -91,10 +92,13 @@ class DeezerClient:
 
                     t.info["extra"]["authors"] = [a["name"] for a in artists]
 
-                    if (
-                        check_title
-                        and fuzz.token_sort_ratio(url.lower(), f"{t.authors_string} - {t.single_title}".lower())
-                        < check_title
+                    if check_title and not title_matches(
+                        fuzz.token_set_ratio,
+                        f"{t.authors_string} - {t.single_title}".lower(),
+                        url.lower(),
+                        t.single_title.lower(),
+                        url.lower(),
+                        check_title,
                     ):
                         continue
 

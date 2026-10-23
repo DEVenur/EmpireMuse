@@ -34,6 +34,7 @@ from urllib.parse import quote
 
 from rapidfuzz import fuzz
 
+from empiremuse.rules.title_match import title_matches
 from empiremuse.utils.music.youtube_trusted_session_generator import Browser
 from .backoff import ExponentialBackoff
 from .errors import *
@@ -542,13 +543,24 @@ class Node:
                     else:
                         return t.title.lower()
 
-                tracks_ = [t for t in tracks_ if fuzz.token_sort_ratio(chk(t), search) >= check_title]
+                tracks_ = [
+                    t
+                    for t in tracks_
+                    if title_matches(fuzz.token_set_ratio, chk(t), search, t.title.lower(), search, check_title)
+                ]
 
             else:
                 tracks_ = [
                     t
                     for t in tracks_
-                    if fuzz.token_sort_ratio(f"{t.author} - {t.title}".lower(), search) >= check_title
+                    if title_matches(
+                        fuzz.token_set_ratio,
+                        f"{t.author} - {t.title}".lower(),
+                        search,
+                        t.title.lower(),
+                        search,
+                        check_title,
+                    )
                 ]
 
             if not any(tag for tag in exclude_tags if tag in search.lower()):
