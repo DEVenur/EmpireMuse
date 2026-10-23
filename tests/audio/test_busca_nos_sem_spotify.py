@@ -1,0 +1,96 @@
+"""PR #31 (7ad9366c) — `Music.get_lavalink_tracks` ignora nós sem o source manager do Spotify quando a consulta é um link do Spotify.
+
+Sem rede e sem Discord reais: nós e cog são dublês simples (SimpleNamespace / AsyncMock).
+"""
+
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+SPOTIFY_TRACK = "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"
+SPOTIFY_SHORT = "https://spotify.link/AbC123xYz"
+YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+
+def run(coro):
+    return asyncio.run(coro)
+
+
+def make_node(identifier, source_managers, players=0, tracks=("faixa",)):
+    return SimpleNamespace(
+        identifier=identifier,
+        is_available=True,
+        available=True,
+        players=[None] * players,
+        info={"sourceManagers": list(source_managers)},
+        search_providers=["ytsearch"],
+        get_tracks=AsyncMock(return_value=list(tracks)),
+    )
+
+
+def search(nodes, query, node=None):
+    from empiremuse.cogs.music import Music
+
+    cog = SimpleNamespace(
+        bot=SimpleNamespace(music=SimpleNamespace(nodes={n.identifier: n for n in nodes}), pool=SimpleNamespace())
+    )
+    return run(Music.get_lavalink_tracks(cog, query, ctx=None, user=SimpleNamespace(id=1), node=node, source=False))
+
+
+@pytest.mark.parametrize("query", [SPOTIFY_TRACK, SPOTIFY_SHORT])
+class TestSpotifyUrlSkipsNodesWithoutSpotify:
+    def test_node_without_spotify_is_not_queried(self, query):
+        sem = make_node("sem", ["youtube"], players=0)
+        com = make_node("com", ["youtube", "spotify"], players=5)
+
+        tracks, node, exceptions = search([sem, com], query)
+
+        sem.get_tracks.assert_not_awaited()
+        com.get_tracks.assert_awaited_once()
+        assert tracks == ["faixa"]
+        assert node is com
+        assert exceptions == set()
+
+    def test_no_node_has_spotify_returns_empty_without_querying(self, query):
+        a = make_node("a", ["youtube"], players=1)
+        b = make_node("b", ["youtube"], players=2)
+
+        tracks, node, exceptions = search([a, b], query)
+
+        a.get_tracks.assert_not_awaited()
+        b.get_tracks.assert_not_awaited()
+        assert not tracks
+        assert node is a  # menos ocupado: vira o nó devolvido para o chamador seguir com o fallback
+        assert exceptions == set()
+
+    def test_requested_node_without_spotify_is_skipped_and_the_resolving_node_is_returned(self, query):
+        pedido = make_node("pedido", ["youtube"])
+        outro = make_node("outro", ["youtube", "spotify"], players=3)
+
+        tracks, node, _ = search([pedido, outro], query, node=pedido)
+
+        pedido.get_tracks.assert_not_awaited()
+        outro.get_tracks.assert_awaited_once()
+        assert tracks == ["faixa"]
+        assert node is outro
+
+
+class TestNonSpotifyQueryUsesAnyNode:
+    def test_youtube_url_is_resolved_by_node_without_spotify(self):
+        sem = make_node("sem", ["youtube"])
+
+        tracks, node, _ = search([sem], YOUTUBE_URL)
+
+        sem.get_tracks.assert_awaited_once()
+        assert tracks == ["faixa"]
+        assert node is sem
+
+    def test_plain_text_query_is_resolved_by_node_without_spotify(self):
+        sem = make_node("sem", ["youtube"])
+
+        tracks, _, _ = search([sem], "uma música qualquer")
+
+        sem.get_tracks.assert_awaited_once()
+        assert tracks == ["faixa"]
