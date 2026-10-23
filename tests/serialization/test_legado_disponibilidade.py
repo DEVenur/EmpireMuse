@@ -44,6 +44,7 @@ from tests.support.leitor_legado import (
     inteiro,
     legacy_pickle,
     medir,
+    teto_de_tempo,
     pickle_de,
     pickle_de_n_opcodes,
     pickle_de_tamanho,
@@ -110,7 +111,7 @@ class TestSetColidente:
 
     def test_mil_itens_colidentes_passam_rapido(self):
         medida = medir(carregar, envelope(conjunto_colidente(1000)))
-        assert medida.erro is None and medida.segundos < 2.0
+        assert medida.erro is None and medida.segundos < teto_de_tempo(2.0)
         assert len(medida.resultado["s0"]) == 1000
 
     def test_mil_e_um_itens_sao_recusados(self):
@@ -218,7 +219,7 @@ class TestTetoDeOpcodes:
         dados = pickle_de_n_opcodes(teto)
         assert sum(1 for _ in pickletools.genops(dados)) == teto
         passou = medir(carregar, envelope(dados, kind), kind, memoria=False)
-        assert passou.erro is None and passou.segundos < 8.0 and passou.resultado == {"a": None}
+        assert passou.erro is None and passou.segundos < teto_de_tempo(8.0) and passou.resultado == {"a": None}
         a_mais = pickle_de_n_opcodes(teto + 1)
         assert sum(1 for _ in pickletools.genops(a_mais)) == teto + 1
         recusado(medir(carregar, envelope(a_mais, kind), kind, memoria=False), OPCODE_LIMIT, segundos=8.0)
@@ -485,7 +486,7 @@ class TestBombaDeMemo:
     def test_nenhum_json_dumps_nem_repr_nem_comparacao_toca_o_objeto_antes_da_validacao(self):
         """Se o leitor fizesse ``==``, ``repr`` ou ``json.dumps`` na bomba, o teste não terminaria no tempo."""
         dados = bomba_de_memo(niveis=9, largura=100)
-        assert medir(carregar, envelope(dados), memoria=False).segundos < 8.0
+        assert medir(carregar, envelope(dados), memoria=False).segundos < teto_de_tempo(8.0)
 
 
 # ============================================================================ o que o gravador real gera cabe nos tetos, com folga
@@ -512,7 +513,7 @@ class TestFolgaDoQueECorreto:
         sessao = {"_id": 1, "queue": [dict(faixa, identifier=f"yt{n}") for n in range(5000)], "dj": {1, 2}}
         bruto_ = comprimido(pickle.dumps(sessao, protocol=4))
         medida = medir(carregar, bruto_, memoria=False)
-        assert medida.erro is None and medida.segundos < 3.0
+        assert medida.erro is None and medida.segundos < teto_de_tempo(3.0)
         assert medida.resultado == sessao
 
     def test_pre_varredura_de_um_milhao_e_meio_de_opcodes_leva_poucos_segundos(self):
@@ -526,4 +527,4 @@ class TestFolgaDoQueECorreto:
         calibracao = medir(carregar, envelope(pickle_de_n_opcodes(total // 10)), memoria=False)
         assert calibracao.erro is None, calibracao.erro
         medida = medir(carregar, envelope(pickle_de_n_opcodes(total)), memoria=False)
-        assert medida.erro is None and medida.segundos < max(8.0, folga_linear * calibracao.segundos)
+        assert medida.erro is None and medida.segundos < max(teto_de_tempo(8.0), folga_linear * calibracao.segundos)
