@@ -184,15 +184,24 @@ uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-as
 
 ### Regeneração e sincronia dos lockfiles
 
-Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.txt`, os lockfiles devem ser regerados a partir da raiz com resolução universal e corte temporal de segurança:
+Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.txt`, os lockfiles devem ser regerados a partir da raiz com resolução universal e corte temporal de segurança utilizando `uv==0.13.1`:
 
 ```bash
 # Lock universal de produção
-uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-24T00:00:00Z --exclude-newer-package certifi=2026-10-24T00:00:00Z --exclude-newer-package brotli=2026-10-24T00:00:00Z --exclude-newer-package brotlicffi=2026-10-24T00:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
 
 # Lock universal de desenvolvimento
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
 ```
+
+#### Justificativa das isenções pontuais de corte temporal
+
+A regra padrão de corte temporal (`--exclude-newer 2026-10-16T00:00:00Z`) previne ataques de supply chain exigindo que pacotes tenham pelo menos 7 dias de maturação pública no PyPI. Quatro exceções temporárias com datas fixas no passado foram homologadas:
+- **`yt-dlp` (2026.10.21, corte `2026-10-21T22:00:00Z`)**: exceção temporária necessária para acompanhar atualizações contínuas de cifragem e contorno anti-bot do YouTube;
+- **`certifi` (2026.10.23, corte `2026-10-23T12:00:00Z`)**: versão atualizada exigida como requisito estrito de dependência do `yt-dlp`;
+- **`brotli` (1.2.1, corte `2026-10-22T15:00:00Z`)** e **`brotlicffi` (1.2.1.0, corte `2026-10-22T17:00:00Z`)**: versões anteriores continham vulnerabilidades conhecidas em rotinas de descompressão; a versão 1.2.1 corrige falhas de segurança prévias.
+- **Timestamps fixos no passado**: cada isenção é fixada exatamente no instante passado do release travado, evitando o risco de que datas futuras quebrem a sincronia da CI caso novos releases saiam antes da virada do corte.
+- **Versão do `uv`**: os lockfiles são regerados compulsoriamente com `uv==0.13.1` (versão fixada na esteira de CI), garantindo estabilidade e determinação dos hashes em qualquer plataforma.
 
 A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa automaticamente em todos os pushes e PRs para a branch `main`:
 1. `Verificar integridade e sincronia dos lockfiles` (regera os locks e valida com `git diff --exit-code`);
