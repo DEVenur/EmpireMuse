@@ -152,7 +152,9 @@ ser commitados.
 
 ## 6. Testes e ferramentas
 
-Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/test_branding.py`, `tests/test_identidade_visual.py`), validação de listas de servidores Lavalink, filtros de URLs, a suíte completa do painel web (`tests/panel/`) e caracterização de canais de pedidos (`tests/test_request_channel_*.py`). O `pyproject.toml` define a configuração do pytest, da medição de cobertura (`pytest-cov`) e do linter/formatador `ruff`.
+Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/brand/test_branding.py`, `tests/brand/test_identidade_visual.py`), validação de listas de servidores Lavalink, filtros de URLs, a suíte completa do painel web (`tests/panel/`) e caracterização de canais de pedidos (`tests/cogs/test_canal_de_pedidos_*.py`). O `pyproject.toml` define a configuração do pytest, da medição de cobertura (`pytest-cov`) e do linter/formatador `ruff`.
+
+As subpastas são organizadas por domínio: `audio/` (Lavalink, JDK, YouTube, Spotify), `brand/`, `cogs/`, `config/`, `deploy/`, `panel/`, `persistence/` (sessões, fila salva, skins, caches, db.py), `pool/`, `repo/` (layout da raiz e ignores), `rules/`, `runtime/` (paths e .runtime/), `serialization/`, `web/` (RPC/WebSocket) e `support/` (helpers compartilhados e raiz.py). O arquivo vai para a pasta do módulo de produção que ele testa e o nome de arquivo não leva fase nem etapa.
 
 ```bash
 uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio, pytest-cov e ruff

@@ -13,7 +13,7 @@ worktrees, então a suíte se comportaria de um jeito num lugar e de outro no ou
 
 import pytest
 
-from tests.helpers_runtime_guard import DEV_RUNTIME_DIRNAME, REAL_PROJECT_DIR, hide_path
+from tests.support.runtime_guard import DEV_RUNTIME_DIRNAME, REAL_PROJECT_DIR, hide_path
 
 
 @pytest.fixture(autouse=True)

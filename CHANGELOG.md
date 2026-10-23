@@ -137,6 +137,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Testes organizados por domínio (Fase 3 / F3-7)**: `tests/` ganhou 13 subpastas por domínio (`audio/`, `brand/`, `cogs/`, `config/`, `deploy/`, `persistence/`, `pool/`, `repo/`, `rules/`, `runtime/`, `serialization/`, `web/` e `support/`), ao lado de `panel/`, e os nomes de arquivo perderam o prefixo de fase. A raiz do projeto nos testes é calculada só em `tests/support/raiz.py`.
 - **Descrição dos links do servidor até 100 caracteres**: `GUILD_LINK_DESCRIPTION_MAX` sobe de 50 para 100 (`empiremuse/rules/limits.py`), o limite que o Discord aceita na descrição de `SelectOption`, onde o texto aparece. Vale para o modal do bot (`guild_fav_description`), a importação, o painel web (campo, mensagem e validação) e os textos de erro.
 - **Menu de links do servidor na ordem de gravação**: o menu "Músicas/Playlists do servidor" do player ocioso (`send_idle_embed` em `empiremuse/utils/others.py`) deixou de ordenar os links por ordem alfabética e passou a listá-los na ordem em que foram gravados.
 - **Organização da Raiz e Pasta de Execução Local `.runtime/` (Fase 3 / F3-7)**:

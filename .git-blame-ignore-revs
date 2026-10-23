@@ -1,2 +1,5 @@
 # Formatação em massa inicial com ruff format (Task C-04 / Bloco C1)
 fc4b7f8f034071ccb08803c153511afbe5a2c9e9
+
+# refactor(tests): reorganiza por domínio, sem prefixo de fase
+3255e4f9f5f4013ff7551ecaa186aac68873aae3
