@@ -320,7 +320,7 @@ class TestTrocaDeNoSemVoiceState:
 
     @pytest.mark.asyncio
     async def test_fora_da_voz_e_sem_voice_state_conecta_no_ultimo_canal(self, monkeypatch):
-        monkeypatch.setattr(models, "can_connect", lambda *args, **kwargs: None)
+        monkeypatch.setattr(models.player, "can_connect", lambda *args, **kwargs: None)
         jogador = jogador_em_troca_de_no(voice_state=None, na_voz=False)
         await jogador._wait_for_new_node()
         assert ("connect", CANAL_DE_VOZ) in jogador.registros

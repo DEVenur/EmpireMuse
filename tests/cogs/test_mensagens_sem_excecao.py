@@ -496,7 +496,7 @@ def jogador(monkeypatch, **extra):
     p.process_next = AsyncMock()
     for nome, valor in extra.items():
         setattr(p, nome, valor)
-    monkeypatch.setattr(models.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
     return p
 
 
@@ -532,7 +532,7 @@ def enfileirar_e_encerrar(p, monkeypatch, evento):
     async def dormir(segundos):
         p.is_closing = True
 
-    monkeypatch.setattr("empiremuse.utils.music.models.asyncio.sleep", dormir)
+    monkeypatch.setattr("asyncio.sleep", dormir)
     p.event_queue = asyncio.Queue()
     p.event_queue.put_nowait(evento)
     p.event_queue.put_nowait(object())
@@ -646,7 +646,7 @@ class TestOutrasFalhasDoPlayer:
         p.change_node = AsyncMock()
         p.destroy = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
+        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
 
         with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
             await p._wait_for_new_node()
@@ -668,7 +668,9 @@ class TestOutrasFalhasDoPlayer:
         p.change_node = AsyncMock()
         p.destroy = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=GenericError("**Sem permissão no canal.**")))
+        monkeypatch.setattr(
+            models.player, "can_connect", MagicMock(side_effect=GenericError("**Sem permissão no canal.**"))
+        )
 
         await p._wait_for_new_node()
 
@@ -683,12 +685,12 @@ class TestOutrasFalhasDoPlayer:
         p = jogador(monkeypatch)
         p.bot.get_channel = lambda cid: SimpleNamespace(id=7)
         p.bot.music = SimpleNamespace(players={9: p})
-        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
+        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
 
         async def dormir(segundos):
             raise Fim
 
-        monkeypatch.setattr(models.asyncio, "sleep", dormir)
+        monkeypatch.setattr(asyncio, "sleep", dormir)
 
         with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
             with pytest.raises(Fim):
@@ -1067,7 +1069,7 @@ class TestLacunasDaMutacao:
         p.destroy = AsyncMock()
         p.connect = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=erro))
+        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=erro))
 
         await p._wait_for_new_node()
 
@@ -1086,7 +1088,7 @@ class TestLacunasDaMutacao:
         p.change_node = AsyncMock()
         p.destroy = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models, "can_connect", MagicMock(side_effect=PoolException("nenhum bot livre")))
+        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=PoolException("nenhum bot livre")))
 
         await p._wait_for_new_node()
 

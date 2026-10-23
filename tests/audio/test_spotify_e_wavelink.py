@@ -8,6 +8,7 @@ Convenção: ``test_guarda_*`` são testes de caracterização que PASSAM hoje e
 correções; os demais falham hoje pelo motivo descrito na docstring.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -893,7 +894,7 @@ async def test_guarda_change_node_com_node_indisponivel_mantem_a_mensagem_de_ind
 def sem_espera(monkeypatch):
     """``_process_next`` dorme 3 s antes de pular a faixa; os testes não esperam."""
     espera = AsyncMock()
-    monkeypatch.setattr(models.asyncio, "sleep", espera)
+    monkeypatch.setattr(asyncio, "sleep", espera)
     return espera
 
 
