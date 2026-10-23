@@ -228,6 +228,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
 
 ### Removido
+- **Código morto `ytdl_tools.py`**: `empiremuse/utils/music/ytdl_tools.py` (classe `YTDLTools`) foi removido; nenhum módulo o importava. A extração via yt-dlp continua em `CustomYTDL` (`empiremuse/utils/music/models.py`).
 - **Expurgo de Artefatos Legados de Deploy e Plataformas Descontinuadas (Bloco D1 / Fase D)**:
   - Remoção de scripts legados de ciclo de vida e instalação rápida (`source_setup.sh`, `source_quick_setup.sh`, `source_update.sh`, `source_quick_update.sh`, `source_start.sh`, `source_start_windows.bat`, `source_cleanup.sh`, `source_cleanup_windows.bat`).
   - Remoção de modelos e configurações de deploy de terceiros descontinuados ou incompatíveis (`.Dockerfile`, `.gitpod.yml`, `.replit`, `replit.nix`, `deploy_handlers/`, `render.yaml`, `squarecloud.config.example`, `discloud.config.example`).
