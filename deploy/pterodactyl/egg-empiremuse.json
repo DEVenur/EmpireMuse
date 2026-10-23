@@ -6,7 +6,7 @@
     },
     "exported_at": "2026-10-17T18:00:00-03:00",
     "name": "EmpireMuse",
-    "author": "DiscordEmpireHub",
+    "author": "EmpireCommunity",
     "description": "Bot de música multi-instância para Discord em Python 3.13 com suporte a nós Lavalink externos e servidor local embutido. Não verificado num painel real (teste pendente). Memória mínima: 768 MB, recomendada: 1 GB.",
     "features": null,
     "docker_images": {
@@ -348,7 +348,7 @@
             "name": "Repositório do código fonte",
             "description": "Endereço do repositório Git utilizado em comandos informativos de versão.",
             "env_variable": "SOURCE_REPO",
-            "default_value": "https://github.com/DiscordEmpireHub/EmpireMuse.git",
+            "default_value": "https://github.com/EmpireCommunity/EmpireMuse.git",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|string"
@@ -411,7 +411,7 @@
             "name": "Endereço da lista de nós Lavalink",
             "description": "URL com lista de servidores Lavalink remotos caso a busca externa esteja ativada.",
             "env_variable": "LAVALINK_SERVER_LIST",
-            "default_value": "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/data/lavalink_servers.ini",
+            "default_value": "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main/data/lavalink_servers.ini",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|string"
