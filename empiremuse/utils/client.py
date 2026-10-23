@@ -6,7 +6,6 @@ import datetime
 import gc
 import json
 import logging
-import logging.handlers
 import os
 import subprocess
 import threading
@@ -36,6 +35,7 @@ from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
 from empiremuse.rules.git_remote import parse_remote_web_url
 from empiremuse.utils import branding
+from empiremuse.utils.file_log import build_file_log_handler
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
@@ -67,22 +67,6 @@ if os.name != "nt":
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 logger = logging.getLogger(__name__)
-
-LOG_FILE_NAME = "disnake.log"
-LOG_FILE_MAX_BYTES = 5 * 1024 * 1024
-LOG_FILE_BACKUPS = 3
-
-
-def build_file_log_handler(logs_dir: Path) -> logging.Handler:
-    """Log em arquivo com rotação (5 MB x 3) e em append: os códigos ERR-... sobrevivem a um reinício."""
-    handler = logging.handlers.RotatingFileHandler(
-        filename=str(logs_dir / LOG_FILE_NAME),
-        maxBytes=LOG_FILE_MAX_BYTES,
-        backupCount=LOG_FILE_BACKUPS,
-        encoding="utf-8",
-    )
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
-    return handler
 
 
 def _playlist_cache_file():
@@ -708,8 +692,6 @@ class BotPool:
 
         if self.config["ENABLE_LOGGER"]:
             logs_dir = paths.RUNTIME_DIR / ".logs"
-            if not logs_dir.is_dir():
-                logs_dir.mkdir(parents=True, exist_ok=True)
 
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
