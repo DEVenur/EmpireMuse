@@ -1,0 +1,2311 @@
+{
+ "comandos": {
+  "Command:favmanager": {
+   "aliases": [
+    "favlist",
+    "favoritos",
+    "favs",
+    "fvmgr",
+    "integrationlist",
+    "integrationmanager",
+    "integrations",
+    "itg",
+    "itglist",
+    "itgmgr",
+    "serverplaylist",
+    "spl",
+    "svp",
+    "svpl"
+   ],
+   "autocompletes": [],
+   "checks": 0,
+   "concorrencia": null,
+   "cooldown": [
+    3,
+    15.0,
+    "member"
+   ],
+   "descricao": "Gerenciar seus favoritos/integrações e links do server.",
+   "extras": {},
+   "filhos": [],
+   "nome": "favmanager",
+   "opcoes": [],
+   "tipo": "Command"
+  },
+  "Command:nowplaying": {
+   "aliases": [
+    "current",
+    "np",
+    "npl",
+    "playing",
+    "tocando"
+   ],
+   "autocompletes": [],
+   "checks": 0,
+   "concorrencia": null,
+   "cooldown": [
+    1,
+    7.0,
+    "member"
+   ],
+   "descricao": "Exibir informações da música que você está ouvindo no momento.",
+   "extras": {},
+   "filhos": [],
+   "nome": "nowplaying",
+   "opcoes": [],
+   "tipo": "Command"
+  },
+  "Command:playeruptime": {
+   "aliases": [
+    "puptime"
+   ],
+   "autocompletes": [],
+   "checks": 0,
+   "concorrencia": null,
+   "cooldown": [
+    1,
+    5.0,
+    "guild"
+   ],
+   "descricao": "Ver informações de tempo que o player está ativo no servidor.",
+   "extras": {},
+   "filhos": [],
+   "nome": "playeruptime",
+   "opcoes": [],
+   "tipo": "Command"
+  },
+  "InvokableMessageCommand:add to queue": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "",
+   "extras": {
+    "check_player": "False"
+   },
+   "filhos": [],
+   "nome": "add to queue",
+   "opcoes": [],
+   "tipo": "InvokableMessageCommand"
+  },
+  "InvokableSlashCommand:247": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Ativar/Desativar o modo 24/7 do player (Em testes).",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "247",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:add_dj": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Adicionar um membro à lista de DJ's na sessão atual do player.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "add_dj",
+   "opcoes": [
+    [
+     "membro",
+     "user",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:autoplay": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Ativar/Desativar a reprodução automática ao acabar as músicas da fila.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "autoplay",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:back": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 5,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    4,
+    13.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Voltar para a música anterior.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "back",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:change_node": {
+   "aliases": [],
+   "autocompletes": [
+    "servidor"
+   ],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": [
+    1,
+    10.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Migrar o player para outro servidor de música.",
+   "extras": {},
+   "filhos": [],
+   "nome": "change_node",
+   "opcoes": [
+    [
+     "servidor",
+     "string",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:command_log": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Ver o log de uso dos comandos.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "command_log",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:connect": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Me conectar em um canal de voz (ou me mover para um).",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "connect",
+   "opcoes": [
+    [
+     "canal",
+     "channel",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:controller": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    1,
+    10.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Enviar player controller para um canal específico/atual.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "controller",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:fav_manager": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 0,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    15.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Gerenciar seus favoritos/integrações e links do server.",
+   "extras": {
+    "allow_private": "True"
+   },
+   "filhos": [],
+   "nome": "fav_manager",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:loop_amount": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    5.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Definir quantidade de repetições da música atual.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "loop_amount",
+   "opcoes": [
+    [
+     "valor",
+     "integer",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:loop_mode": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    5.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Selecionar modo de repetição entre: atual / fila ou desativar.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "loop_mode",
+   "opcoes": [
+    [
+     "modo",
+     "string",
+     true,
+     [
+      [
+       "Current",
+       "current"
+      ],
+      [
+       "Off",
+       "off"
+      ],
+      [
+       "Queue",
+       "queue"
+      ]
+     ]
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:move": {
+   "aliases": [],
+   "autocompletes": [
+    "nome",
+    "playlist",
+    "uploader"
+   ],
+   "checks": 4,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Mover músicas da fila.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "move",
+   "opcoes": [
+    [
+     "nome",
+     "string",
+     false,
+     []
+    ],
+    [
+     "posição",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "uploader",
+     "string",
+     false,
+     []
+    ],
+    [
+     "membro",
+     "user",
+     false,
+     []
+    ],
+    [
+     "duplicados",
+     "boolean",
+     false,
+     []
+    ],
+    [
+     "playlist",
+     "string",
+     false,
+     []
+    ],
+    [
+     "duração_inicial",
+     "string",
+     false,
+     []
+    ],
+    [
+     "duração_máxima",
+     "string",
+     false,
+     []
+    ],
+    [
+     "quantidade",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "posição_inicial",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "posição_final",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "membros_ausentes",
+     "boolean",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:nightcore": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    1,
+    7.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Ativar/Desativar o efeito nightcore (Música acelerada com tom mais agudo).",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "nightcore",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:now_playing": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 0,
+   "concorrencia": null,
+   "cooldown": [
+    1,
+    7.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Exibir info da música que que você está ouvindo (em qualquer servidor).",
+   "extras": {
+    "allow_private": "True"
+   },
+   "filhos": [],
+   "nome": "now_playing",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:pause": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    7.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Pausar a música.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "pause",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:play": {
+   "aliases": [],
+   "autocompletes": [
+    "busca",
+    "server"
+   ],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Tocar música em um canal de voz.",
+   "extras": {
+    "check_player": "False"
+   },
+   "filhos": [],
+   "nome": "play",
+   "opcoes": [
+    [
+     "busca",
+     "string",
+     true,
+     []
+    ],
+    [
+     "posição",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "tocar_agora",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ],
+    [
+     "recomendadas",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ],
+    [
+     "selecionar_manualmente",
+     "boolean",
+     false,
+     []
+    ],
+    [
+     "opções",
+     "string",
+     false,
+     [
+      [
+       "Inverter Playlist",
+       "reversed"
+      ],
+      [
+       "Misturar Playlist",
+       "shuffle"
+      ]
+     ]
+    ],
+    [
+     "server",
+     "string",
+     false,
+     []
+    ],
+    [
+     "selecionar_bot",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:play_music_file": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Tocar arquivo de música em um canal de voz.",
+   "extras": {
+    "check_player": "False"
+   },
+   "filhos": [],
+   "nome": "play_music_file",
+   "opcoes": [
+    [
+     "arquivo",
+     "attachment",
+     true,
+     []
+    ],
+    [
+     "posição",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "tocar_agora",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ],
+    [
+     "server",
+     "string",
+     false,
+     []
+    ],
+    [
+     "selecionar_bot",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:queue": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "-",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [
+    "clear",
+    "display",
+    "reverse",
+    "shuffle"
+   ],
+   "nome": "queue",
+   "opcoes": [
+    [
+     "shuffle",
+     "sub_command",
+     false,
+     []
+    ],
+    [
+     "reverse",
+     "sub_command",
+     false,
+     []
+    ],
+    [
+     "display",
+     "sub_command",
+     false,
+     []
+    ],
+    [
+     "clear",
+     "sub_command",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:readd_songs": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Readicionar as músicas tocadas na fila.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "readd_songs",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:remove": {
+   "aliases": [],
+   "autocompletes": [
+    "nome"
+   ],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Remover uma música específica da fila.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "remove",
+   "opcoes": [
+    [
+     "nome",
+     "string",
+     true,
+     []
+    ],
+    [
+     "nome_exato",
+     "boolean",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:remove_dj": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Remover um membro da lista de DJ's na sessão atual do player.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "remove_dj",
+   "opcoes": [
+    [
+     "membro",
+     "user",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:restrict_mode": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    7.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Ativar/Desativar o modo restrito de comandos que requer DJ/Staff.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "restrict_mode",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:resume": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    7.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Retomar/Despausar a música.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "resume",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:rotate": {
+   "aliases": [],
+   "autocompletes": [
+    "nome"
+   ],
+   "checks": 4,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Rotacionar a fila para a música especificada.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "rotate",
+   "opcoes": [
+    [
+     "nome",
+     "string",
+     true,
+     []
+    ],
+    [
+     "nome_exato",
+     "boolean",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:save_queue": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Experimental: Salvar a música e fila atual pra reusá-los a qualquer momento.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "save_queue",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:search": {
+   "aliases": [],
+   "autocompletes": [
+    "busca",
+    "server"
+   ],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Buscar música e escolher uma entre os resultados para tocar.",
+   "extras": {
+    "check_player": "False"
+   },
+   "filhos": [],
+   "nome": "search",
+   "opcoes": [
+    [
+     "busca",
+     "string",
+     true,
+     []
+    ],
+    [
+     "posição",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "tocar_agora",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ],
+    [
+     "opções",
+     "string",
+     false,
+     [
+      [
+       "Inverter Playlist",
+       "reversed"
+      ],
+      [
+       "Misturar Playlist",
+       "shuffle"
+      ]
+     ]
+    ],
+    [
+     "server",
+     "string",
+     false,
+     []
+    ],
+    [
+     "selecionar_bot",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:seek": {
+   "aliases": [],
+   "autocompletes": [
+    "tempo"
+   ],
+   "checks": 5,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    10.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Avançar/Retomar a música para um tempo específico.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "seek",
+   "opcoes": [
+    [
+     "tempo",
+     "string",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:set_voice_status": {
+   "aliases": [],
+   "autocompletes": [
+    "modelo"
+   ],
+   "checks": 0,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    45.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Ativar/editar o sistema de anúncio/status automático do canal com o nome da música.",
+   "extras": {
+    "exclusive_cooldown": "True",
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "set_voice_status",
+   "opcoes": [
+    [
+     "modelo",
+     "string",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:skip": {
+   "aliases": [],
+   "autocompletes": [
+    "nome"
+   ],
+   "checks": 6,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    4,
+    13.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Pular a música atual que está tocando.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "skip",
+   "opcoes": [
+    [
+     "nome",
+     "string",
+     false,
+     []
+    ],
+    [
+     "play_only",
+     "string",
+     false,
+     [
+      [
+       "Yes",
+       "yes"
+      ]
+     ]
+    ],
+    [
+     "nome_exato",
+     "boolean",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:skipto": {
+   "aliases": [],
+   "autocompletes": [
+    "nome"
+   ],
+   "checks": 6,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    4,
+    13.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Pular para uma música específica da fila.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "skipto",
+   "opcoes": [
+    [
+     "nome",
+     "string",
+     true,
+     []
+    ],
+    [
+     "nome_exato",
+     "boolean",
+     false,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:song_request_thread": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": [
+    1,
+    120.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Criar uma thread/conversa temporária para song-request (pedido de música)",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "song_request_thread",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:stop": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Parar o player e me desconectar do canal de voz.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "stop",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:volume": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    1,
+    7.0,
+    "member"
+   ],
+   "descricao": "[🎶 Música] | Ajustar volume da música.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "volume",
+   "opcoes": [
+    [
+     "nível",
+     "integer",
+     true,
+     []
+    ]
+   ],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableSlashCommand:voteskip": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 4,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Votar para pular a música atual.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "voteskip",
+   "opcoes": [],
+   "tipo": "InvokableSlashCommand"
+  },
+  "InvokableUserCommand:Add DJ": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "Add DJ",
+   "opcoes": [],
+   "tipo": "InvokableUserCommand"
+  },
+  "PoolCommand:247": {
+   "aliases": [
+    "nonstop"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "member"
+   ],
+   "descricao": "Ativar/Desativar o modo 24/7 do player (Em testes).",
+   "extras": {},
+   "filhos": [],
+   "nome": "247",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:adddj": {
+   "aliases": [
+    "adj"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "Adicionar um membro à lista de DJ's na sessão atual do player.",
+   "extras": {},
+   "filhos": [],
+   "nome": "adddj",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:addposition": {
+   "aliases": [
+    "addpos",
+    "adp"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "Adicionar música em uma posição especifica da fila.",
+   "extras": {},
+   "filhos": [],
+   "nome": "addposition",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:autoplay": {
+   "aliases": [
+    "ap",
+    "aplay"
+   ],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "member"
+   ],
+   "descricao": "Ativar/Desativar a reprodução automática ao acabar as músicas da fila.",
+   "extras": {},
+   "filhos": [],
+   "nome": "autoplay",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:back": {
+   "aliases": [
+    "b",
+    "voltar"
+   ],
+   "autocompletes": [],
+   "checks": 6,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    4,
+    13.0,
+    "member"
+   ],
+   "descricao": "Voltar para a música anterior.",
+   "extras": {},
+   "filhos": [],
+   "nome": "back",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:clear": {
+   "aliases": [
+    "clearqueue",
+    "limpar"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Limpar a fila de música.",
+   "extras": {
+    "flags": "argparse:-absentmembers/-absent/-abs,-amount/-counter/-count/-c,-duplicates/-dupes/-duplicate,-endposition/-endpos/-end,-maxduration/-maxtime/-max,-member/-user/-u,-minimaltime/-mintime/-min/-minduration/-minduration,-playlist/-list/-pl,-songtitle/-name/-title/-songname,-startposition/-startpos/-start,-uploader/-author/-artist"
+   },
+   "filhos": [],
+   "nome": "clear",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:commandlog": {
+   "aliases": [
+    "cl",
+    "clog",
+    "cmdlog"
+   ],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "Ver o log de uso dos comandos.",
+   "extras": {},
+   "filhos": [],
+   "nome": "commandlog",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:controller": {
+   "aliases": [
+    "ctl"
+   ],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    1,
+    10.0,
+    "member"
+   ],
+   "descricao": "Enviar player controller para um canal específico/atual.",
+   "extras": {},
+   "filhos": [],
+   "nome": "controller",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:loop": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    5.0,
+    "member"
+   ],
+   "descricao": "Selecionar modo de repetição entre: música atual / fila / desativar / quantidade (usando números).",
+   "extras": {},
+   "filhos": [],
+   "nome": "loop",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:move": {
+   "aliases": [
+    "moveadv",
+    "moveadvanced",
+    "moveq",
+    "movequeue",
+    "mover",
+    "mq",
+    "mv"
+   ],
+   "autocompletes": [],
+   "checks": 4,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Mover músicas da fila.",
+   "extras": {
+    "flags": "argparse:-absentmembers/-absent/-abs,-amount/-counter/-count/-c,-casesensitive/-cs,-duplicates/-dupes/-duplicate,-endposition/-endpos/-end,-maxduration/-maxtime/-max,-member/-user/-u,-minimaltime/-mintime/-min/-minduration/-minduration,-playlist/-list/-pl,-position/-pos,-songtitle/-name/-title/-songname,-startposition/-startpos/-start,-uploader/-author/-artist"
+   },
+   "filhos": [],
+   "nome": "move",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:nightcore": {
+   "aliases": [
+    "nc"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    1,
+    7.0,
+    "guild"
+   ],
+   "descricao": "Ativar/Desativar o efeito nightcore (Música acelerada com tom mais agudo).",
+   "extras": {},
+   "filhos": [],
+   "nome": "nightcore",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:pause": {
+   "aliases": [
+    "pausar"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    7.0,
+    "member"
+   ],
+   "descricao": "Pausar a música.",
+   "extras": {},
+   "filhos": [],
+   "nome": "pause",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:play": {
+   "aliases": [
+    "p"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "Tocar música em um canal de voz.",
+   "extras": {
+    "flags": "argparse:-force/-now/-n/-f,-mix/-rec/-recommended,-next/-proximo,-position/-pos/-p,-reverse/-r,-select/-s,-selectbot/-sb,-server/-sv,-shuffle/-sl,query"
+   },
+   "filhos": [],
+   "nome": "play",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:queue": {
+   "aliases": [
+    "fila",
+    "q"
+   ],
+   "autocompletes": [],
+   "checks": 2,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": null,
+   "descricao": "Exibir as músicas que estão na fila.",
+   "extras": {},
+   "filhos": [],
+   "nome": "queue",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:readd": {
+   "aliases": [
+    "rdd",
+    "readicionar"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Readicionar as músicas tocadas na fila.",
+   "extras": {},
+   "filhos": [],
+   "nome": "readd",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:remove": {
+   "aliases": [
+    "del",
+    "r"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": null,
+   "descricao": "Remover uma música específica da fila.",
+   "extras": {
+    "flags": "argparse:-casesensitive/-cs"
+   },
+   "filhos": [],
+   "nome": "remove",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:restrictmode": {
+   "aliases": [
+    "modorestrito",
+    "restrict",
+    "restrito",
+    "rstc"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    7.0,
+    "member"
+   ],
+   "descricao": "Ativar/Desativar o modo restrito de comandos que requer DJ/Staff.",
+   "extras": {},
+   "filhos": [],
+   "nome": "restrictmode",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:resume": {
+   "aliases": [
+    "unpause"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    7.0,
+    "member"
+   ],
+   "descricao": "Retomar/Despausar a música.",
+   "extras": {},
+   "filhos": [],
+   "nome": "resume",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:reverse": {
+   "aliases": [
+    "invert",
+    "inverter",
+    "rv"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Inverter a ordem das músicas na fila",
+   "extras": {},
+   "filhos": [],
+   "nome": "reverse",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:rotate": {
+   "aliases": [
+    "rotacionar",
+    "rt"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Rotacionar a fila para a música especificada.",
+   "extras": {
+    "flags": "argparse:-casesensitive/-cs"
+   },
+   "filhos": [],
+   "nome": "rotate",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:savequeue": {
+   "aliases": [
+    "sq",
+    "svq"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Experimental: Salvar a música e fila atual pra reusá-los a qualquer momento.",
+   "extras": {},
+   "filhos": [],
+   "nome": "savequeue",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:search": {
+   "aliases": [
+    "sc"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    3,
+    12.0,
+    "member"
+   ],
+   "descricao": "Pesquisar por músicas e escolher uma entre os resultados para tocar.",
+   "extras": {},
+   "filhos": [],
+   "nome": "search",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:seek": {
+   "aliases": [
+    "sk"
+   ],
+   "autocompletes": [],
+   "checks": 5,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    2,
+    10.0,
+    "member"
+   ],
+   "descricao": "Avançar/Retomar a música para um tempo específico.",
+   "extras": {},
+   "filhos": [],
+   "nome": "seek",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:setvoicestatus": {
+   "aliases": [
+    "announce",
+    "setstatus",
+    "setvcstatus",
+    "stageannounce",
+    "stagevc",
+    "statusvc",
+    "togglestageannounce",
+    "vcannounce",
+    "vcstatus",
+    "voicestatus"
+   ],
+   "autocompletes": [],
+   "checks": 1,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    45.0,
+    "guild"
+   ],
+   "descricao": "Ativar o sistema de anuncio/status automático do canal com o nome da música.",
+   "extras": {
+    "exclusive_cooldown": "True"
+   },
+   "filhos": [],
+   "nome": "setvoicestatus",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:shuffle": {
+   "aliases": [
+    "misturar",
+    "sf",
+    "sff",
+    "shf"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "Misturar as músicas da fila",
+   "extras": {},
+   "filhos": [],
+   "nome": "shuffle",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:skip": {
+   "aliases": [
+    "n",
+    "next",
+    "pular",
+    "s",
+    "skipto"
+   ],
+   "autocompletes": [],
+   "checks": 5,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    4,
+    13.0,
+    "member"
+   ],
+   "descricao": "Pular a música atual que está tocando.",
+   "extras": {
+    "flags": "argparse:-casesensitive/-cs"
+   },
+   "filhos": [],
+   "nome": "skip",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:songrequestthread": {
+   "aliases": [
+    "songrequest",
+    "srt"
+   ],
+   "autocompletes": [],
+   "checks": 4,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "Criar uma thread/conversa temporária para song-request (pedido de música)",
+   "extras": {},
+   "filhos": [],
+   "nome": "songrequestthread",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:stop": {
+   "aliases": [
+    "leave",
+    "parar"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": null,
+   "cooldown": null,
+   "descricao": "Parar o player e me desconectar do canal de voz.",
+   "extras": {},
+   "filhos": [],
+   "nome": "stop",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "PoolCommand:volume": {
+   "aliases": [
+    "v",
+    "vol"
+   ],
+   "autocompletes": [],
+   "checks": 3,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": [
+    1,
+    7.0,
+    "member"
+   ],
+   "descricao": "Ajustar volume da música.",
+   "extras": {},
+   "filhos": [],
+   "nome": "volume",
+   "opcoes": [],
+   "tipo": "PoolCommand"
+  },
+  "SubCommand:queue clear": {
+   "aliases": [],
+   "autocompletes": [
+    "playlist",
+    "uploader"
+   ],
+   "checks": 4,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Limpar a fila de música.",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "queue clear",
+   "opcoes": [
+    [
+     "nome",
+     "string",
+     false,
+     []
+    ],
+    [
+     "uploader",
+     "string",
+     false,
+     []
+    ],
+    [
+     "membro",
+     "user",
+     false,
+     []
+    ],
+    [
+     "duplicados",
+     "boolean",
+     false,
+     []
+    ],
+    [
+     "playlist",
+     "string",
+     false,
+     []
+    ],
+    [
+     "duração_inicial",
+     "string",
+     false,
+     []
+    ],
+    [
+     "duração_máxima",
+     "string",
+     false,
+     []
+    ],
+    [
+     "quantidade",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "posição_inicial",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "posição_final",
+     "integer",
+     false,
+     []
+    ],
+    [
+     "membros_ausentes",
+     "boolean",
+     false,
+     []
+    ]
+   ],
+   "tipo": "SubCommand"
+  },
+  "SubCommand:queue display": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 0,
+   "concorrencia": [
+    1,
+    "member",
+    false
+   ],
+   "cooldown": null,
+   "descricao": "[🎶 Música] | Exibir as músicas que estão na fila.",
+   "extras": {},
+   "filhos": [],
+   "nome": "queue display",
+   "opcoes": [],
+   "tipo": "SubCommand"
+  },
+  "SubCommand:queue reverse": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 1,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Inverter a ordem das músicas na fila",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "queue reverse",
+   "opcoes": [],
+   "tipo": "SubCommand"
+  },
+  "SubCommand:queue shuffle": {
+   "aliases": [],
+   "autocompletes": [],
+   "checks": 1,
+   "concorrencia": [
+    1,
+    "guild",
+    false
+   ],
+   "cooldown": [
+    2,
+    15.0,
+    "guild"
+   ],
+   "descricao": "[🎶 Música] | Misturar as músicas da fila",
+   "extras": {
+    "only_voiced": "True"
+   },
+   "filhos": [],
+   "nome": "queue shuffle",
+   "opcoes": [],
+   "tipo": "SubCommand"
+  }
+ },
+ "listeners": [
+  [
+   "on_button_click",
+   "player_button_event"
+  ],
+  [
+   "on_button_click",
+   "reload_np"
+  ],
+  [
+   "on_dropdown",
+   "guild_pin"
+  ],
+  [
+   "on_dropdown",
+   "player_dropdown_event"
+  ],
+  [
+   "on_message_delete",
+   "player_message_delete"
+  ],
+  [
+   "on_modal_submit",
+   "song_request_modal"
+  ],
+  [
+   "on_ready",
+   "resume_players_ready"
+  ],
+  [
+   "on_song_request",
+   "song_requests"
+  ],
+  [
+   "on_thread_create",
+   "thread_song_request"
+  ],
+  [
+   "on_voice_state_update",
+   "player_vc_disconnect"
+  ],
+  [
+   "on_wavelink_node_connection_closed",
+   "node_connection_closed"
+  ],
+  [
+   "on_wavelink_node_ready",
+   "node_ready"
+  ]
+ ],
+ "membros": [
+  "add_dj",
+  "add_dj_legacy",
+  "add_provider",
+  "adddj_u",
+  "addpos_legacy",
+  "adv_queue_flags",
+  "audio_formats",
+  "autoplay",
+  "autoplay_cd",
+  "autoplay_legacy",
+  "autoplay_mc",
+  "back",
+  "back_legacy",
+  "case_sensitive_args",
+  "change_node",
+  "check_available_bot",
+  "check_channel",
+  "check_player_queue",
+  "check_stage_title",
+  "clear",
+  "clear_flags",
+  "clear_legacy",
+  "command_log",
+  "command_log_legacy",
+  "connect",
+  "connect_node",
+  "controller",
+  "controller_cd",
+  "controller_legacy",
+  "controller_mc",
+  "create_player",
+  "default_models",
+  "delete_message",
+  "desc_prefix",
+  "display",
+  "do_connect",
+  "do_move",
+  "emoji",
+  "error_report_loop",
+  "fav_add_autocomplete",
+  "fav_cd",
+  "fav_import_export_cd",
+  "fav_manager",
+  "fav_manager_legacy",
+  "get_best_node",
+  "get_lavalink_tracks",
+  "get_partial_tracks",
+  "get_tracks",
+  "guild_pin",
+  "interaction_message",
+  "is_request_channel",
+  "loop",
+  "loop_amount",
+  "loop_cd",
+  "loop_mc",
+  "loop_mode",
+  "message_play",
+  "move",
+  "move_legacy",
+  "move_queue_flags",
+  "name",
+  "nightcore",
+  "nightcore_cd",
+  "nightcore_legacy",
+  "nightcore_mc",
+  "node_connection_closed",
+  "node_ready",
+  "node_reconnect",
+  "node_suggestions",
+  "nonstop",
+  "nonstop_cd",
+  "nonstop_legacy",
+  "nonstop_mc",
+  "now_playing",
+  "now_playing_legacy",
+  "np_cd",
+  "parse_song_request",
+  "pause",
+  "pause_legacy",
+  "pause_resume_cd",
+  "pause_resume_mc",
+  "play",
+  "play_cd",
+  "play_file",
+  "play_legacy",
+  "play_mc",
+  "player_button_event",
+  "player_controller",
+  "player_dropdown_event",
+  "player_message_delete",
+  "player_vc_disconnect",
+  "playeruptime",
+  "playlist_opts",
+  "process_music",
+  "process_player_interaction",
+  "providers_info",
+  "q",
+  "queue_author",
+  "queue_manipulation_cd",
+  "queue_playlist",
+  "queue_show_legacy",
+  "queue_show_mc",
+  "queue_tracks",
+  "readd_legacy",
+  "readd_songs",
+  "reload_np",
+  "remove",
+  "remove_dj",
+  "remove_legacy",
+  "remove_mc",
+  "remove_provider",
+  "reset_controller_db",
+  "restrict_cd",
+  "restrict_mc",
+  "restrict_mode",
+  "restrict_mode_legacy",
+  "resume",
+  "resume_legacy",
+  "resume_players_ready",
+  "reverse",
+  "reverse_legacy",
+  "rotate",
+  "rotate_legacy",
+  "save_queue",
+  "savequeue_legacy",
+  "search",
+  "search_autocomplete",
+  "search_legacy",
+  "seek",
+  "seek_cd",
+  "seek_legacy",
+  "seek_mc",
+  "seek_suggestions",
+  "set_voice_status",
+  "setvoicestatus_legacy",
+  "shuffle_",
+  "shuffle_legacy",
+  "skip",
+  "skip_back_cd",
+  "skip_back_mc",
+  "skip_legacy",
+  "skipto",
+  "song_request_modal",
+  "song_request_thread",
+  "song_request_thread_cd",
+  "song_request_thread_legacy",
+  "song_requests",
+  "stage_cd",
+  "stage_flags",
+  "stage_mc",
+  "stop",
+  "stop_legacy",
+  "thread_song_request",
+  "volume",
+  "volume_cd",
+  "volume_legacy",
+  "volume_mc",
+  "voteskip"
+ ]
+}
