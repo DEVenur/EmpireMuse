@@ -34,7 +34,7 @@ from tests.persistence.test_formato_skin import (
 )
 from tests.support.raiz import RAIZ
 
-editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/persistence/test_formato_skin.py
+editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/test_formato_skin.py
 
 ROOT = RAIZ
 

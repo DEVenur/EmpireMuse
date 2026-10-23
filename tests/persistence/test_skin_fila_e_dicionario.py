@@ -31,7 +31,7 @@ from tests.persistence.test_formato_skin import (
 )
 from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 
-editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/persistence/test_formato_skin.py
+editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/test_formato_skin.py
 
 
 @pytest.fixture
