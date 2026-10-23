@@ -342,12 +342,7 @@ class TestPlaylists:
         url = "https://www.youtube.com/watch?v=zzzzzzzzzzz&list=PLabc"
         result = run(node.get_tracks(url))
         assert isinstance(result, TrackPlaylist)
-        assert (
-            node.session.chamadas[-1][1].endswith(
-                "identifier=https%3A//www.youtube.com/playlist%3Flist%3DPLabc".replace("%3A//", "%3A//")
-            )
-            or "playlist%3Flist%3DPLabc" in node.session.chamadas[-1][1]
-        )
+        assert "playlist%3Flist%3DPLabc" in node.session.chamadas[-1][1]
 
     def test_youtube_music_album_playlist_is_renamed(self):
         data = self.playlist()
