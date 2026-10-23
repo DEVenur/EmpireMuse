@@ -1,7 +1,7 @@
 """KI-29 — guardas da divisão de ``music.py``, ``models.py`` e ``interactions.py``: API de módulo e ``custom_id``.
 
 A divisão é só movimentação de código. Estas guardas comparam o estado atual com as listas douradas de
-``tests/repo/ki29_golden/`` (geradas do ``main`` antes da divisão; ver ``tests/support/ki29.py``):
+``tests/repo/golden/`` (geradas do ``main`` antes da divisão; ver ``tests/support/api_publica.py``):
 
 * todo nome de nível superior que os módulos originais definiam segue acessível por ``getattr`` no mesmo caminho de
   import (reexportação), porque o resto do bot e os testes importam por ele;
@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from tests.support.ki29 import FAMILIAS, GOLDEN, custom_ids_da_familia
+from tests.support.api_publica import FAMILIAS, GOLDEN, custom_ids_da_familia
 
 
 def dourado(nome: str) -> dict:

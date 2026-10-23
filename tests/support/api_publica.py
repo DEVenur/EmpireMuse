@@ -1,7 +1,7 @@
 """KI-29 — extratores das guardas de equivalência da divisão de ``music.py``, ``models.py`` e ``interactions.py``.
 
 A divisão desses três arquivos é só movimentação de código. As guardas comparam o estado atual com listas douradas
-geradas do ``main`` ANTES de qualquer movimentação (``tests/repo/ki29_golden/``):
+geradas do ``main`` ANTES de qualquer movimentação (``tests/repo/golden/``):
 
 * ``nomes.json``: nomes de nível superior (classes, funções e constantes) de cada módulo, que seguem acessíveis por
   ``getattr(modulo, nome)`` (reexportação) depois da divisão;
@@ -14,7 +14,7 @@ Cada "família" é o arquivo original MAIS o que ele virar (``cogs/music.py`` + 
 
 Regerar (só se o comportamento mudar de propósito, nunca em PR de movimentação)::
 
-    python -m tests.support.ki29
+    python -m tests.support.api_publica
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from pathlib import Path
 from tests.support.raiz import RAIZ
 
 PACOTE = RAIZ / "empiremuse"
-GOLDEN = RAIZ / "tests" / "repo" / "ki29_golden"
+GOLDEN = RAIZ / "tests" / "repo" / "golden"
 
 # Família -> (módulo importável, arquivos que formam o código dela, relativos a ``empiremuse/``).
 FAMILIAS: dict[str, tuple[str, tuple[str, ...]]] = {

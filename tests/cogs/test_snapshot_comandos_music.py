@@ -1,6 +1,6 @@
 """KI-29 — guarda do que o ``disnake`` registra para a Cog ``Music`` e do estado de classe por bot.
 
-* Snapshot (``tests/repo/ki29_golden/comandos_music.json``, gerado do ``main`` antes da divisão): nome, tipo, descrição,
+* Snapshot (``tests/repo/golden/comandos_music.json``, gerado do ``main`` antes da divisão): nome, tipo, descrição,
   opções, ``extras``, aliases, cooldown, concorrência máxima, quantidade de checks, autocompletes, subcomandos,
   listeners e membros da Cog. Dividir ``Music`` em mixins não pode mudar nada disso.
 * Estado por bot: o ``disnake`` carrega cada extensão com ``module_from_spec`` + ``exec_module`` (sem o cache de
@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from tests.support.ki29 import GOLDEN, descreve_comando, snapshot_music
+from tests.support.api_publica import GOLDEN, descreve_comando, snapshot_music
 
 NOME_DA_EXTENSAO = "empiremuse.cogs.music"
 PREFIXO_DOS_MIXINS = "empiremuse.music_cog"

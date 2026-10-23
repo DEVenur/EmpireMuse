@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.support.ki29 import FAMILIAS
+from tests.support.api_publica import FAMILIAS
 from tests.support.raiz import RAIZ
 
 MODULOS_ALVO = {modulo for modulo, _ in FAMILIAS.values()}

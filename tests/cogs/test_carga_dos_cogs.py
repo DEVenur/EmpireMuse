@@ -12,7 +12,7 @@ import pkgutil
 
 import pytest
 
-from tests.support.ki29 import PACOTE
+from tests.support.api_publica import PACOTE
 
 COGS = PACOTE / "cogs"
 
