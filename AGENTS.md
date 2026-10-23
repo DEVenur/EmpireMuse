@@ -61,7 +61,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `docs/guides/`: Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web e Spotify).
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
-- `tests/`: Testes automatizados (pytest).
+- `tests/`: Testes automatizados (pytest), organizados por domínio em subpastas (ver docs/development.md, seção 6).
 - `repos/`: Repositórios irmãos clonados (`EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app`), ignorados pelo git do repositório principal.
 
 ---

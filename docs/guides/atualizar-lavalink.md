@@ -120,7 +120,7 @@ Quando for necessário atualizar a versão ou a release dos pacotes portáteis d
 5. **Rodar os testes**:
    Execute os testes automatizados para certificar a conformidade dos metadados e das rotinas de verificação:
    ```bash
-   .venv/bin/python -m pytest tests/test_branding.py tests/test_audio_fase2_1.py tests/test_audio_fase2_1_instalacao.py
+   .venv/bin/python -m pytest tests/brand/test_branding.py tests/audio/test_jdk_sha256_e_ambiente.py tests/audio/test_jdk_instalacao.py
    ```
 
 ---
@@ -142,7 +142,7 @@ Ao publicar uma nova versão dos binários homologados no repositório [DiscordE
    - Adicionar a nova URL oficial do `Lavalink.jar` ao conjunto `LAVALINK_JAR_OFFICIAL_URLS`.
    - **Manter compulsoriamente todas as URLs oficiais anteriores** (inclusive tags antigas como `0.0.1`, `0.0.2` e versões sob o nome antigo `LL-binaries`). Isso assegura que instalações antigas que tenham copiado a URL no `.env` sejam migradas de forma suave e automática, sem falhas de integridade no boot.
 5. **Validação e Documentação**:
-   - Atualizar as constantes correspondentes no teste de guarda `tests/test_branding.py` e executar a suíte com `pytest`.
+   - Atualizar as constantes correspondentes no teste de guarda `tests/brand/test_branding.py` e executar a suíte com `pytest`.
    - Atualizar as referências da release na documentação técnica: `CREDITS.md`, `docs/architecture.md`, `docs/development.md` e `docs/guides/atualizar-lavalink.md`.
    - Registrar as alterações na seção `[Unreleased]` de `CHANGELOG.md`.
 
