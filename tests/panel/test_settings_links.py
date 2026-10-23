@@ -19,6 +19,7 @@ from tests.panel.helpers_settings import (
     parse_forms,
 )
 from tests.panel.test_settings_http import Each, HttpBase, external_change
+from tests.support.modais import trocar_process_idle_embed
 
 HEX16 = re.compile(r"^[0-9a-f]{16}$")
 MAX_LINKS = 25
@@ -621,7 +622,7 @@ class LinksEffectsTest(LinksBase):
         async def fake(bot, guild, guild_data):
             calls.append((bot, guild, copy.deepcopy(guild_data)))
 
-        self.monkeypatch.setattr(interactions, "process_idle_embed", fake)
+        trocar_process_idle_embed(self.monkeypatch, fake)
         return calls
 
     def run_action(self, action):

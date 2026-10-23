@@ -1,0 +1,1644 @@
+{
+ "Command:favmanager": {
+  "checks": [],
+  "payload": null
+ },
+ "Command:nowplaying": {
+  "checks": [],
+  "payload": null
+ },
+ "Command:playeruptime": {
+  "checks": [],
+  "payload": null
+ },
+ "InvokableMessageCommand:add to queue": {
+  "checks": [
+   "can_send_message_check.<locals>.predicate",
+   "check_voice.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": null,
+   "default_member_permissions": null,
+   "default_permission": true,
+   "dm_permission": true,
+   "integration_types": [
+    0
+   ],
+   "name": "add to queue",
+   "nsfw": false,
+   "type": 3
+  }
+ },
+ "InvokableSlashCommand:247": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": "32",
+   "default_permission": true,
+   "description": "[🎶 Música] | Ativar/Desativar o modo 24/7 do player (Em testes).",
+   "integration_types": [
+    0
+   ],
+   "name": "247",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:add_dj": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Adicionar um membro à lista de DJ's na sessão atual do player.",
+   "integration_types": [
+    0
+   ],
+   "name": "add_dj",
+   "nsfw": false,
+   "options": [
+    {
+     "description": "Membro a ser adicionado.",
+     "name": "membro",
+     "required": true,
+     "type": 6
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:autoplay": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Ativar/Desativar a reprodução automática ao acabar as músicas da fila.",
+   "integration_types": [
+    0
+   ],
+   "name": "autoplay",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:back": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Voltar para a música anterior.",
+   "integration_types": [
+    0
+   ],
+   "name": "back",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:change_node": {
+  "checks": [
+   "is_dj.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "check_voice.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Migrar o player para outro servidor de música.",
+   "integration_types": [
+    0
+   ],
+   "name": "change_node",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Servidor de música",
+     "name": "servidor",
+     "required": true,
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:command_log": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Ver o log de uso dos comandos.",
+   "integration_types": [
+    0
+   ],
+   "name": "command_log",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:connect": {
+  "checks": [
+   "can_send_message_check.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Me conectar em um canal de voz (ou me mover para um).",
+   "integration_types": [
+    0
+   ],
+   "name": "connect",
+   "nsfw": false,
+   "options": [
+    {
+     "channel_types": [
+      2,
+      13
+     ],
+     "description": "Canal para me conectar",
+     "name": "canal",
+     "required": true,
+     "type": 7
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:controller": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Enviar player controller para um canal específico/atual.",
+   "integration_types": [
+    0
+   ],
+   "name": "controller",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:fav_manager": {
+  "checks": [],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Gerenciar seus favoritos/integrações e links do server.",
+   "integration_types": [
+    0
+   ],
+   "name": "fav_manager",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:loop_amount": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Definir quantidade de repetições da música atual.",
+   "integration_types": [
+    0
+   ],
+   "name": "loop_amount",
+   "nsfw": false,
+   "options": [
+    {
+     "description": "número de repetições.",
+     "name": "valor",
+     "required": true,
+     "type": 4
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:loop_mode": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Selecionar modo de repetição entre: atual / fila ou desativar.",
+   "integration_types": [
+    0
+   ],
+   "name": "loop_mode",
+   "nsfw": false,
+   "options": [
+    {
+     "choices": [
+      {
+       "name": "Current",
+       "name_localizations": {
+        "pt-BR": "Música Atual"
+       },
+       "value": "current"
+      },
+      {
+       "name": "Queue",
+       "name_localizations": {
+        "pt-BR": "Fila"
+       },
+       "value": "queue"
+      },
+      {
+       "name": "Off",
+       "name_localizations": {
+        "pt-BR": "Desativar"
+       },
+       "value": "off"
+      }
+     ],
+     "description": "-",
+     "name": "modo",
+     "required": true,
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:move": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Mover músicas da fila.",
+   "integration_types": [
+    0
+   ],
+   "name": "move",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Incluir um nome que tiver na música.",
+     "name": "nome",
+     "type": 3
+    },
+    {
+     "description": "Posição de destino na fila (Opcional).",
+     "max_value": 900,
+     "min_value": 1,
+     "name": "posição",
+     "type": 4
+    },
+    {
+     "autocomplete": true,
+     "description": "Incluir um nome que tiver no autor/artista/uploader da música.",
+     "name": "uploader",
+     "type": 3
+    },
+    {
+     "description": "Incluir músicas pedidas pelo membro selecionado.",
+     "name": "membro",
+     "type": 6
+    },
+    {
+     "description": "Incluir músicas duplicadas",
+     "name": "duplicados",
+     "type": 5
+    },
+    {
+     "autocomplete": true,
+     "description": "Incluir nome que tiver na playlist.",
+     "name": "playlist",
+     "type": 3
+    },
+    {
+     "description": "incluir músicas com duração acima/igual (ex. 1:23).",
+     "name": "duração_inicial",
+     "type": 3
+    },
+    {
+     "description": "Incluir músicas com duração máxima especificada (ex. 1:45).",
+     "name": "duração_máxima",
+     "type": 3
+    },
+    {
+     "description": "Quantidade de músicas para mover.",
+     "max_value": 99,
+     "min_value": 0,
+     "name": "quantidade",
+     "type": 4
+    },
+    {
+     "description": "incluir músicas da fila a partir da posição específicada.",
+     "max_value": 500,
+     "min_value": 1,
+     "name": "posição_inicial",
+     "type": 4
+    },
+    {
+     "description": "incluir músicas da fila até a posição especificada.",
+     "max_value": 500,
+     "min_value": 1,
+     "name": "posição_final",
+     "type": 4
+    },
+    {
+     "description": "Incluir músicas adicionads por membros que saíram do canal.",
+     "name": "membros_ausentes",
+     "type": 5
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:nightcore": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Ativar/Desativar o efeito nightcore (Música acelerada com tom mais agudo).",
+   "integration_types": [
+    0
+   ],
+   "name": "nightcore",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:now_playing": {
+  "checks": [],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Exibir info da música que que você está ouvindo (em qualquer servidor).",
+   "integration_types": [
+    0
+   ],
+   "name": "now_playing",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:pause": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Pausar a música.",
+   "integration_types": [
+    0
+   ],
+   "name": "pause",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:play": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "can_send_message_check.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Tocar música em um canal de voz.",
+   "integration_types": [
+    0
+   ],
+   "name": "play",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Nome ou link da música.",
+     "name": "busca",
+     "required": true,
+     "type": 3
+    },
+    {
+     "description": "Colocar a música em uma posição específica",
+     "name": "posição",
+     "type": 4
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Tocar a música imediatamente (ao invés de adicionar na fila).",
+     "name": "tocar_agora",
+     "type": 3
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Tocar músicas recomendadas com base no nome do artista - música informado",
+     "name": "recomendadas",
+     "type": 3
+    },
+    {
+     "description": "Escolher uma música manualmente entre os resultados encontrados",
+     "name": "selecionar_manualmente",
+     "type": 5
+    },
+    {
+     "choices": [
+      {
+       "name": "Misturar Playlist",
+       "value": "shuffle"
+      },
+      {
+       "name": "Inverter Playlist",
+       "value": "reversed"
+      }
+     ],
+     "description": "Opções para processar playlist",
+     "name": "opções",
+     "type": 3
+    },
+    {
+     "autocomplete": true,
+     "description": "Usar um servidor de música específico na busca.",
+     "name": "server",
+     "type": 3
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Selecionar um bot disponível manualmente.",
+     "name": "selecionar_bot",
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:play_music_file": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "can_send_message_check.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Tocar arquivo de música em um canal de voz.",
+   "integration_types": [
+    0
+   ],
+   "name": "play_music_file",
+   "nsfw": false,
+   "options": [
+    {
+     "description": "arquivo de audio para tocar ou adicionar na fila",
+     "name": "arquivo",
+     "required": true,
+     "type": 11
+    },
+    {
+     "description": "Colocar a música em uma posição específica",
+     "name": "posição",
+     "type": 4
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Tocar a música imediatamente (ao invés de adicionar na fila).",
+     "name": "tocar_agora",
+     "type": 3
+    },
+    {
+     "description": "Usar um servidor de música específico na busca.",
+     "name": "server",
+     "type": 3
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Selecionar um bot disponível manualmente.",
+     "name": "selecionar_bot",
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:queue": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "-",
+   "integration_types": [
+    0
+   ],
+   "name": "queue",
+   "nsfw": false,
+   "options": [
+    {
+     "description": "[🎶 Música] | Misturar as músicas da fila",
+     "name": "shuffle",
+     "type": 1
+    },
+    {
+     "description": "[🎶 Música] | Inverter a ordem das músicas na fila",
+     "name": "reverse",
+     "type": 1
+    },
+    {
+     "description": "[🎶 Música] | Exibir as músicas que estão na fila.",
+     "name": "display",
+     "type": 1
+    },
+    {
+     "description": "[🎶 Música] | Limpar a fila de música.",
+     "name": "clear",
+     "options": [
+      {
+       "description": "Incluir um nome que tiver na música.",
+       "name": "nome",
+       "type": 3
+      },
+      {
+       "autocomplete": true,
+       "description": "Incluir um nome que tiver no autor/artista/uploader da música.",
+       "name": "uploader",
+       "type": 3
+      },
+      {
+       "description": "Incluir músicas pedidas pelo membro selecionado.",
+       "name": "membro",
+       "type": 6
+      },
+      {
+       "description": "Incluir músicas duplicadas",
+       "name": "duplicados",
+       "type": 5
+      },
+      {
+       "autocomplete": true,
+       "description": "Incluir nome que tiver na playlist.",
+       "name": "playlist",
+       "type": 3
+      },
+      {
+       "description": "incluir músicas com duração acima/igual (ex. 1:23).",
+       "name": "duração_inicial",
+       "type": 3
+      },
+      {
+       "description": "Incluir músicas com duração máxima especificada (ex. 1:45).",
+       "name": "duração_máxima",
+       "type": 3
+      },
+      {
+       "description": "Quantidade de músicas para mover.",
+       "max_value": 99,
+       "min_value": 0,
+       "name": "quantidade",
+       "type": 4
+      },
+      {
+       "description": "incluir músicas da fila a partir da posição específicada.",
+       "max_value": 500,
+       "min_value": 1,
+       "name": "posição_inicial",
+       "type": 4
+      },
+      {
+       "description": "incluir músicas da fila até a posição especificada.",
+       "max_value": 500,
+       "min_value": 1,
+       "name": "posição_final",
+       "type": 4
+      },
+      {
+       "description": "Incluir músicas adicionads por membros que saíram do canal.",
+       "name": "membros_ausentes",
+       "type": 5
+      }
+     ],
+     "type": 1
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:readd_songs": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Readicionar as músicas tocadas na fila.",
+   "integration_types": [
+    0
+   ],
+   "name": "readd_songs",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:remove": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Remover uma música específica da fila.",
+   "integration_types": [
+    0
+   ],
+   "name": "remove",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Nome da música completo.",
+     "name": "nome",
+     "required": true,
+     "type": 3
+    },
+    {
+     "description": "Buscar por músicas com a frase exata no nome da música ao invés de buscar palavra por palavra.",
+     "name": "nome_exato",
+     "type": 5
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:remove_dj": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Remover um membro da lista de DJ's na sessão atual do player.",
+   "integration_types": [
+    0
+   ],
+   "name": "remove_dj",
+   "nsfw": false,
+   "options": [
+    {
+     "description": "Membro a ser adicionado.",
+     "name": "membro",
+     "required": true,
+     "type": 6
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:restrict_mode": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Ativar/Desativar o modo restrito de comandos que requer DJ/Staff.",
+   "integration_types": [
+    0
+   ],
+   "name": "restrict_mode",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:resume": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Retomar/Despausar a música.",
+   "integration_types": [
+    0
+   ],
+   "name": "resume",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:rotate": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Rotacionar a fila para a música especificada.",
+   "integration_types": [
+    0
+   ],
+   "name": "rotate",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Nome da música completo.",
+     "name": "nome",
+     "required": true,
+     "type": 3
+    },
+    {
+     "description": "Buscar por músicas com a frase exata no nome da música ao invés de buscar palavra por palavra.",
+     "name": "nome_exato",
+     "type": 5
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:save_queue": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Experimental: Salvar a música e fila atual pra reusá-los a qualquer momento.",
+   "integration_types": [
+    0
+   ],
+   "name": "save_queue",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:search": {
+  "checks": [
+   "can_send_message_check.<locals>.predicate",
+   "check_voice.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Buscar música e escolher uma entre os resultados para tocar.",
+   "integration_types": [
+    0
+   ],
+   "name": "search",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Nome ou link da música.",
+     "name": "busca",
+     "required": true,
+     "type": 3
+    },
+    {
+     "description": "Colocar a música em uma posição específica",
+     "name": "posição",
+     "type": 4
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Tocar a música imediatamente (ao invés de adicionar na fila).",
+     "name": "tocar_agora",
+     "type": 3
+    },
+    {
+     "choices": [
+      {
+       "name": "Misturar Playlist",
+       "value": "shuffle"
+      },
+      {
+       "name": "Inverter Playlist",
+       "value": "reversed"
+      }
+     ],
+     "description": "Opções para processar playlist",
+     "name": "opções",
+     "type": 3
+    },
+    {
+     "autocomplete": true,
+     "description": "Usar um servidor de música específico na busca.",
+     "name": "server",
+     "type": 3
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Selecionar um bot disponível manualmente.",
+     "name": "selecionar_bot",
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:seek": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Avançar/Retomar a música para um tempo específico.",
+   "integration_types": [
+    0
+   ],
+   "name": "seek",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Tempo para avançar/voltar (ex: 1:45 / 40 / 0:30)",
+     "name": "tempo",
+     "required": true,
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:set_voice_status": {
+  "checks": [],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": "32",
+   "default_permission": true,
+   "description": "[🎶 Música] | Ativar/editar o sistema de anúncio/status automático do canal com o nome da música.",
+   "integration_types": [
+    0
+   ],
+   "name": "set_voice_status",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Especifique manualmente um modelo de status (inclua placeholders).",
+     "name": "modelo",
+     "type": 3
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:skip": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_requester.<locals>.predicate",
+   "check_yt_cooldown.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Pular a música atual que está tocando.",
+   "integration_types": [
+    0
+   ],
+   "name": "skip",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Nome da música (completa ou parte dela).",
+     "name": "nome",
+     "type": 3
+    },
+    {
+     "choices": [
+      {
+       "name": "Yes",
+       "name_localizations": {
+        "pt-BR": "Sim"
+       },
+       "value": "yes"
+      }
+     ],
+     "description": "Apenas tocar a música imediatamente (sem rotacionar a flia)",
+     "name": "play_only",
+     "name_localizations": {
+      "pt-BR": "tocar_apenas"
+     },
+     "type": 3
+    },
+    {
+     "description": "Buscar por músicas com a frase exata no nome da música ao invés de buscar palavra por palavra.",
+     "name": "nome_exato",
+     "type": 5
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:skipto": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_requester.<locals>.predicate",
+   "check_yt_cooldown.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Pular para uma música específica da fila.",
+   "integration_types": [
+    0
+   ],
+   "name": "skipto",
+   "nsfw": false,
+   "options": [
+    {
+     "autocomplete": true,
+     "description": "Nome da música (completa ou parte dela).",
+     "name": "nome",
+     "required": true,
+     "type": 3
+    },
+    {
+     "description": "Buscar por músicas com a frase exata no nome da música ao invés de buscar palavra por palavra.",
+     "name": "nome_exato",
+     "type": 5
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:song_request_thread": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Criar uma thread/conversa temporária para song-request (pedido de música)",
+   "integration_types": [
+    0
+   ],
+   "name": "song_request_thread",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:stop": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Parar o player e me desconectar do canal de voz.",
+   "integration_types": [
+    0
+   ],
+   "name": "stop",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:volume": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Ajustar volume da música.",
+   "integration_types": [
+    0
+   ],
+   "name": "volume",
+   "nsfw": false,
+   "options": [
+    {
+     "description": "nível entre 5 a 150",
+     "max_value": 150,
+     "min_value": 5,
+     "name": "nível",
+     "required": true,
+     "type": 4
+    }
+   ],
+   "type": 1
+  }
+ },
+ "InvokableSlashCommand:voteskip": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": [
+    0
+   ],
+   "default_member_permissions": null,
+   "default_permission": true,
+   "description": "[🎶 Música] | Votar para pular a música atual.",
+   "integration_types": [
+    0
+   ],
+   "name": "voteskip",
+   "nsfw": false,
+   "options": [],
+   "type": 1
+  }
+ },
+ "InvokableUserCommand:Add DJ": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "contexts": null,
+   "default_member_permissions": null,
+   "default_permission": true,
+   "dm_permission": true,
+   "integration_types": [
+    0
+   ],
+   "name": "Add DJ",
+   "name_localizations": {
+    "pt-BR": "Adicionar DJ"
+   },
+   "nsfw": false,
+   "type": 2
+  }
+ },
+ "PoolCommand:247": {
+  "checks": [
+   "has_guild_permissions.<locals>.predicate",
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:adddj": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:addposition": {
+  "checks": [
+   "bot_has_guild_permissions.<locals>.predicate",
+   "check_voice.<locals>.predicate",
+   "can_send_message_check.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:autoplay": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:back": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate",
+   "check_yt_cooldown.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:clear": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:commandlog": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:controller": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:loop": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:move": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:nightcore": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:pause": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:play": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "bot_has_guild_permissions.<locals>.predicate",
+   "can_send_message_check.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:queue": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:readd": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:remove": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:restrictmode": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:resume": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:reverse": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:rotate": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:savequeue": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:search": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "bot_has_guild_permissions.<locals>.predicate",
+   "can_send_message_check.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:seek": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:setvoicestatus": {
+  "checks": [
+   "has_guild_permissions.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:shuffle": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:skip": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate",
+   "is_requester.<locals>.predicate",
+   "check_yt_cooldown.<locals>.predicate",
+   "check_stage_topic.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:songrequestthread": {
+  "checks": [
+   "bot_has_guild_permissions.<locals>.predicate",
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:stop": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "PoolCommand:volume": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_source.<locals>.predicate",
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": null
+ },
+ "SubCommand:queue clear": {
+  "checks": [
+   "check_voice.<locals>.predicate",
+   "has_player.<locals>.predicate",
+   "is_dj.<locals>.predicate",
+   "check_queue_loading.<locals>.predicate"
+  ],
+  "payload": {
+   "description": "[🎶 Música] | Limpar a fila de música.",
+   "name": "clear",
+   "options": [
+    {
+     "description": "Incluir um nome que tiver na música.",
+     "name": "nome",
+     "type": 3
+    },
+    {
+     "autocomplete": true,
+     "description": "Incluir um nome que tiver no autor/artista/uploader da música.",
+     "name": "uploader",
+     "type": 3
+    },
+    {
+     "description": "Incluir músicas pedidas pelo membro selecionado.",
+     "name": "membro",
+     "type": 6
+    },
+    {
+     "description": "Incluir músicas duplicadas",
+     "name": "duplicados",
+     "type": 5
+    },
+    {
+     "autocomplete": true,
+     "description": "Incluir nome que tiver na playlist.",
+     "name": "playlist",
+     "type": 3
+    },
+    {
+     "description": "incluir músicas com duração acima/igual (ex. 1:23).",
+     "name": "duração_inicial",
+     "type": 3
+    },
+    {
+     "description": "Incluir músicas com duração máxima especificada (ex. 1:45).",
+     "name": "duração_máxima",
+     "type": 3
+    },
+    {
+     "description": "Quantidade de músicas para mover.",
+     "max_value": 99,
+     "min_value": 0,
+     "name": "quantidade",
+     "type": 4
+    },
+    {
+     "description": "incluir músicas da fila a partir da posição específicada.",
+     "max_value": 500,
+     "min_value": 1,
+     "name": "posição_inicial",
+     "type": 4
+    },
+    {
+     "description": "incluir músicas da fila até a posição especificada.",
+     "max_value": 500,
+     "min_value": 1,
+     "name": "posição_final",
+     "type": 4
+    },
+    {
+     "description": "Incluir músicas adicionads por membros que saíram do canal.",
+     "name": "membros_ausentes",
+     "type": 5
+    }
+   ],
+   "type": 1
+  }
+ },
+ "SubCommand:queue display": {
+  "checks": [],
+  "payload": {
+   "description": "[🎶 Música] | Exibir as músicas que estão na fila.",
+   "name": "display",
+   "type": 1
+  }
+ },
+ "SubCommand:queue reverse": {
+  "checks": [
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "description": "[🎶 Música] | Inverter a ordem das músicas na fila",
+   "name": "reverse",
+   "type": 1
+  }
+ },
+ "SubCommand:queue shuffle": {
+  "checks": [
+   "is_dj.<locals>.predicate"
+  ],
+  "payload": {
+   "description": "[🎶 Música] | Misturar as músicas da fila",
+   "name": "shuffle",
+   "type": 1
+  }
+ }
+}

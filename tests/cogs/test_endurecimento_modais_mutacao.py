@@ -18,7 +18,14 @@ from empiremuse.rules.settings import validate_voice_status
 from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import FavModalAdd, ViewMode
 from tests.support.drivers_de_regras import adicionar_link_do_servidor, importar_no_bot
-from tests.support.modais import URL_BASE, ModalBot, ModalInteraction, adicionar_integracao, modal_view
+from tests.support.modais import (
+    URL_BASE,
+    ModalBot,
+    ModalInteraction,
+    adicionar_integracao,
+    modal_view,
+    trocar_process_idle_embed,
+)
 from tests.cogs.test_endurecimento_modais import CANAL_YOUTUBE, PERFIL_DEEZER, PERFIL_SPOTIFY, BotEspiao
 
 URL = f"{URL_BASE}/a"
@@ -30,7 +37,7 @@ def _sem_idle_embed(monkeypatch):
     async def nada(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(interactions, "process_idle_embed", nada)
+    trocar_process_idle_embed(monkeypatch, nada)
 
 
 def url_com_tamanho(tamanho, base="https://exemplo.invalid/"):

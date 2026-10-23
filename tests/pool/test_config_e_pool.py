@@ -30,6 +30,7 @@ from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import BaseDB, DBModel, LocalDatabase, MongoDatabase
 from empiremuse.utils.music import lastfm_tools
+from tests.support.api_publica import arvore_da_familia
 from tests.support.raiz import RAIZ
 
 ROOT = RAIZ
@@ -543,22 +544,24 @@ class TestKI31DatetimesCientesDeFuso:
 
 class TestCachesSobOutroDiretorio:
     def test_cachedir_do_ytdl_nao_e_caminho_relativo(self):
-        arvore = ast.parse((PACOTE / "cogs" / "music.py").read_text(encoding="utf-8"))
-        relativos = []
+        arvore = arvore_da_familia("music")  # cogs/music.py e, depois da divisão, music_cog/
+        relativos, vistos = [], 0
         for no in ast.walk(arvore):
             if isinstance(no, ast.Dict):
                 for chave, valor in zip(no.keys, no.values):
                     if isinstance(chave, ast.Constant) and chave.value == "cachedir":
+                        vistos += 1
                         if (
                             isinstance(valor, ast.Constant)
                             and isinstance(valor.value, str)
                             and not Path(valor.value).is_absolute()
                         ):
                             relativos.append(f"linha {valor.lineno}: {valor.value!r}")
+        assert vistos, "sentinela: nenhum 'cachedir' encontrado; a varredura não leu o código da Cog"
         assert not relativos, f"'cachedir' do yt-dlp relativo ao cwd: {relativos} (use paths.RUNTIME_DIR)"
 
     def test_cachedir_do_ytdl_aponta_para_o_runtime_dir(self):
-        arvore = ast.parse((PACOTE / "cogs" / "music.py").read_text(encoding="utf-8"))
+        arvore = arvore_da_familia("music")
         valores = [
             ast.unparse(valor)
             for no in ast.walk(arvore)

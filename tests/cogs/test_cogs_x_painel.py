@@ -38,6 +38,7 @@ from tests.support.canal_de_pedidos import (
     perms,
 )
 from tests.support.modais import (
+    trocar_process_idle_embed,
     SERVIDOR_ALVO,
     SERVIDOR_DO_COMANDO,
     URL_BASE,
@@ -388,7 +389,7 @@ def _sem_idle_embed(monkeypatch):
     async def nada(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(interactions, "process_idle_embed", nada)
+    trocar_process_idle_embed(monkeypatch, nada)
 
 
 class TestKI39ModalDeFavorito:

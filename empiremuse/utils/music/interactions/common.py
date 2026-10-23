@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING
 
@@ -10,6 +11,9 @@ from empiremuse.utils.others import send_idle_embed
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
+
+# O logger leva o nome do pacote (e não o de common.py), como quando tudo morava em interactions.py.
+logger = logging.getLogger(__package__)
 
 youtube_regex = re.compile(r"https?://www\.youtube\.com/(?:channel/|@)[^/]+")
 soundcloud_regex = re.compile(r"^(?:https?:\/\/)?(?:www\.)?soundcloud\.com\/([a-zA-Z0-9_-]+)")
