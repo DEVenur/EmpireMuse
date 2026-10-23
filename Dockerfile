@@ -65,8 +65,9 @@ COPY --from=uv-stage /uv /uvx /bin/
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt /tmp/requirements.txt
-RUN uv pip install --no-cache -r /tmp/requirements.txt "tinymongo[serialization]"
+COPY requirements-lock.txt requirements-git.txt /tmp/
+RUN uv pip install --no-cache --require-hashes -r /tmp/requirements-lock.txt && \
+    uv pip install --no-cache --no-deps -r /tmp/requirements-git.txt
 
 # -----------------------------------------------------------------------------
 # Estágio 3: Imagem final de runtime (não-root, enxuta, código somente leitura)
@@ -107,6 +108,8 @@ COPY main.py ./
 COPY assets/ ./assets/
 COPY data/ ./data/
 COPY requirements.txt ./
+COPY requirements-git.txt ./
+COPY requirements-lock.txt ./
 COPY LICENSE ./
 COPY CREDITS.md ./
 RUN chmod -R a+rX /app
@@ -132,7 +135,10 @@ VOLUME ["/data"]
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/', timeout=4)" || exit 1
+    CMD python -c "import os, sys, urllib.request, psutil; \
+run_rpc = os.environ.get('RUN_RPC_SERVER', '').lower() in ('true', '1', 'yes'); \
+(sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/', timeout=4).status < 500 else 1) if run_rpc else None); \
+sys.exit(0 if any('empiremuse' in ' '.join(p.cmdline()) for p in psutil.process_iter(['cmdline']) if p.info.get('cmdline')) else 1)"
 
 ENTRYPOINT ["tini", "--"]
 CMD ["python", "-m", "empiremuse"]
