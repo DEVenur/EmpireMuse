@@ -24,6 +24,7 @@ DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um serv
 HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
 VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
+JDK_EXECUTABLES = ("java", "java.exe")  # bin/<nome> de um JDK instalado (Linux e Windows)
 LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
 PLUGINS_OVERRIDE_RELATIVE = ".lavalink/plugins-override.yml"
 PLUGINS_OVERRIDE_CONTENT = "lavalink:\n  plugins: []\n"  # constante: sem hash, é regravada se divergir
@@ -371,42 +372,43 @@ def _extract_tar_without_top_dir(archive_path: str, destination: str) -> None:
 
 
 def _jdk_is_usable(java_dir: str) -> bool:
-    """Um JDK instalado só vale se ``bin/java`` existir, for arquivo (symlink válido serve) e executável."""
-    java = os.path.join(java_dir, "bin", "java")
-    return os.path.isfile(java) and os.access(java, os.X_OK)
+    """Um JDK instalado só vale se ``bin/java`` (ou ``bin/java.exe``) existir, for arquivo (symlink válido serve) e executável."""
+    for name in JDK_EXECUTABLES:
+        java = os.path.join(java_dir, "bin", name)
+        if os.path.isfile(java) and os.access(java, os.X_OK):
+            return True
+    return False
+
+
+def _extract_zip_without_top_dir(archive_path: str, destination: str) -> None:
+    """Extrai o .zip (já verificado) em ``destination`` e sobe o conteúdo da pasta raiz do JDK (a que tem ``bin/java.exe``)."""
+    with zipfile.ZipFile(archive_path, "r") as zip_ref:
+        zip_ref.extractall(destination)
+
+    roots = [d for d in os.listdir(destination) if os.path.isfile(os.path.join(destination, d, "bin", "java.exe"))]
+    if len(roots) != 1:
+        raise LavalinkDownloadError("O arquivo do JDK não contém uma única pasta com bin/java.exe.")
+
+    root = os.path.join(destination, roots[0])
+    for item in os.listdir(root):
+        os.rename(os.path.join(root, item), os.path.join(destination, item))
+    os.rmdir(root)
 
 
 def _install_jdk_windows(tmp_dir: str, jdk_platform: str, arch: str) -> str:
+    java_dir = f"{tmp_dir}/.java/{jdk_platform}"
     url, sha256 = _jdk_download("windows", arch)
     archive_path = f"{tmp_dir}/java.zip"
     _fetch_verified_jdk(archive_path, url, sha256)
-
-    shutil.rmtree(f"{tmp_dir}/.java", ignore_errors=True)
-    os.makedirs(f"{tmp_dir}/.java/{jdk_platform}", exist_ok=True)
-
     try:
-        with zipfile.ZipFile(archive_path, "r") as zip_ref:
-            zip_ref.extractall(f"{tmp_dir}/.java")
+        _install_extracted_jdk(
+            archive_path, f"{tmp_dir}/.java", java_dir, jdk_platform, extract=_extract_zip_without_top_dir
+        )
     finally:
         with suppress(FileNotFoundError):
             os.remove(archive_path)
 
-    extracted_folder = None
-    java_dirs = os.listdir(f"{tmp_dir}/.java")
-
-    for d in java_dirs:
-        if d != jdk_platform and os.path.isfile(f"{tmp_dir}/.java/{d}/bin/java.exe"):
-            extracted_folder = f"{tmp_dir}/.java/{d}"
-
-    if not extracted_folder:
-        raise Exception(f"JDK não encontrando no diretório: {tmp_dir}/.java\n" + "\n".join(java_dirs))
-
-    for item in os.listdir(extracted_folder):
-        os.rename(os.path.join(extracted_folder, item), os.path.join(f"{tmp_dir}/.java/{jdk_platform}", item))
-
-    shutil.rmtree(extracted_folder, ignore_errors=True)
-
-    return os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
+    return os.path.realpath(f"{java_dir}/bin/java")
 
 
 def _install_jdk_linux(tmp_dir: str, jdk_platform: str, arch: str) -> str:
@@ -425,16 +427,23 @@ def _install_jdk_linux(tmp_dir: str, jdk_platform: str, arch: str) -> str:
     return os.path.realpath(f"{java_dir}/bin/java")
 
 
-def _install_extracted_jdk(archive_path: str, java_root: str, java_dir: str, jdk_platform: str) -> None:
+def _install_extracted_jdk(
+    archive_path: str,
+    java_root: str,
+    java_dir: str,
+    jdk_platform: str,
+    extract: Optional[Callable[[str, str], None]] = None,
+) -> None:
     """Extrai num diretório temporário irmão e só o promove a ``java_dir`` (os.replace) se tudo deu certo.
 
     Qualquer falha (inclusive Ctrl+C) apaga o temporário e não mexe em outras instalações de ``java_root``.
     """
+    extract = extract or _extract_tar_without_top_dir
     os.makedirs(java_root, exist_ok=True)
     staging = tempfile.mkdtemp(prefix=f"{jdk_platform}.", suffix=".tmp", dir=java_root)
     try:
         os.chmod(staging, 0o755)
-        _extract_tar_without_top_dir(archive_path, staging)
+        extract(archive_path, staging)
         shutil.rmtree(java_dir, ignore_errors=True)  # instalação quebrada: é trocada por inteiro
         os.replace(staging, java_dir)
     finally:
