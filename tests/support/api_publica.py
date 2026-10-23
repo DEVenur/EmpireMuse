@@ -56,6 +56,23 @@ def arquivos_da_familia(familia: str) -> list[Path]:
     return sorted(achados)
 
 
+def fonte_da_familia(familia: str) -> str:
+    """O texto de TODOS os arquivos da família, concatenado.
+
+    Os testes que leem o código-fonte (``Path(modulo.__file__).read_text()``) passam a ler só o ``__init__`` fino depois
+    da divisão: uma asserção negativa ("não há ``repr(e)``") passaria no vazio. Eles devem ler a família inteira.
+    """
+    return "\n".join(arquivo.read_text(encoding="utf-8") for arquivo in arquivos_da_familia(familia))
+
+
+def arvore_da_familia(familia: str) -> ast.Module:
+    """Um ``ast.Module`` com o corpo de todos os arquivos da família (para ``ast.walk`` sobre a família toda)."""
+    corpo: list[ast.stmt] = []
+    for arquivo in arquivos_da_familia(familia):
+        corpo.extend(ast.parse(arquivo.read_text(encoding="utf-8")).body)
+    return ast.Module(body=corpo, type_ignores=[])
+
+
 def _alvos(no: ast.stmt) -> list[str]:
     if isinstance(no, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
         return [no.name]

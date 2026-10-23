@@ -25,6 +25,7 @@ import disnake
 import pytest
 
 from empiremuse.utils.music.errors import GenericError
+from tests.support.api_publica import arvore_da_familia, fonte_da_familia
 from tests.support.formatos_reais import DONO, INSTANTE, SERVIDOR, faixa_youtube
 from tests.support.chave_de_corte import espionar_load_legacy
 from tests.support.leitor_legado import SEGREDO
@@ -591,10 +592,13 @@ class TestExistenciaDaFila:
         assert saved_queue.has_saved_queue(DONO) is True
 
     def test_music_usa_o_auxiliar_e_nao_conhece_mais_o_caminho_nem_o_pickle(self):
-        codigo = (RAIZ / "empiremuse" / "cogs" / "music.py").read_text(encoding="utf-8")
+        codigo = fonte_da_familia("music")  # cogs/music.py e, depois da divisão, os mixins de music_cog/
         assert "saved_queues_v1" not in codigo and "has_saved_queue" in codigo
-        arvore = ast.parse(codigo)
         importados = {
-            alias.name.split(".")[0] for no in ast.walk(arvore) if isinstance(no, ast.Import) for alias in no.names
+            alias.name.split(".")[0]
+            for no in ast.walk(arvore_da_familia("music"))
+            if isinstance(no, ast.Import)
+            for alias in no.names
         }
+        assert {"asyncio", "disnake"} <= importados, "sentinela: a varredura não leu o código da Cog"
         assert "pickle" not in importados
