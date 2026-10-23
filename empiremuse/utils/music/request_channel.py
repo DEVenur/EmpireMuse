@@ -123,7 +123,7 @@ async def find_current_request_message(bot: BotCore, guild: disnake.Guild, guild
                 int(guild_data["player_controller"]["channel"])
             )
             original_message = await channel_db.fetch_message(int(guild_data["player_controller"]["message_id"]))
-        except:
+        except Exception:
             pass
 
     return player, original_message
@@ -162,12 +162,12 @@ async def _archive_previous_message(original_message, target, actor, embed_archi
 
         try:
             await original_message.edit(content=None, embed=embed_archived, view=None)
-        except:
+        except Exception:
             pass
 
         try:
             await original_message.thread.edit(archived=True, locked=True, reason=f"Player reconfigurado por {actor}.")
-        except:
+        except Exception:
             pass
 
     else:
@@ -323,7 +323,7 @@ async def apply_request_channel(
     if existing_channel and channel_kwargs:
         try:
             await target.edit(**channel_kwargs)
-        except:
+        except Exception:
             traceback.print_exc()
 
     channel = target
@@ -346,12 +346,12 @@ async def _switch_player_and_thread(bot, guild, actor, channel, message, player,
                 await player.message.thread.edit(
                     archived=True, locked=True, reason=f"Player reconfigurado por {actor}."
                 )
-            except:
+            except Exception:
                 pass
         else:
             try:
                 await player.message.delete()
-            except:
+            except Exception:
                 pass
         if not message or message.channel.id != channel.id:
             message = await send_idle_embed(channel, bot=bot, force=True, guild_data=guild_data)
@@ -401,7 +401,7 @@ async def find_request_channel(bot: BotCore, guild_id: int, guild_data: dict):
         channel = bot.get_channel(int(guild_data["player_controller"]["channel"])) or await bot.fetch_channel(
             int(guild_data["player_controller"]["channel"])
         )
-    except:
+    except Exception:
         channel = None
 
     if not channel or channel.guild.id != guild_id:

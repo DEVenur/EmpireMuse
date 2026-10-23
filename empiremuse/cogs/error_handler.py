@@ -75,7 +75,7 @@ class ErrorHandler(commands.Cog):
         if not isinstance(error, commands.MaxConcurrencyReached):
             try:
                 await inter.application_command._max_concurrency.release(inter)
-            except:
+            except Exception:
                 pass
 
         await self.process_interaction_error(inter=inter, error=error)
@@ -87,7 +87,7 @@ class ErrorHandler(commands.Cog):
 
         try:
             await inter.application_command._max_concurrency.release(inter)
-        except:
+        except Exception:
             pass
 
 
@@ -96,7 +96,7 @@ class ErrorHandler(commands.Cog):
 
         try:
             await ctx.command._max_concurrency.release(ctx.message)
-        except:
+        except Exception:
             pass"""
 
     @commands.Cog.listener("on_custom_error")
@@ -167,7 +167,7 @@ class ErrorHandler(commands.Cog):
         if resp_msg:
             try:
                 await send_message(inter, components=components, **kwargs)
-            except:
+            except Exception:
                 print(("-" * 50) + f"\n{error_msg}\n" + ("-" * 50))
                 traceback.print_exc()
         else:
@@ -192,7 +192,7 @@ class ErrorHandler(commands.Cog):
 
             await self.webhook_max_concurrency.release(inter)
 
-        except:
+        except Exception:
             traceback.print_exc()
 
     async def do_playcmd(self, ctx: CustomContext):
@@ -233,7 +233,7 @@ class ErrorHandler(commands.Cog):
         """if not isinstance(error, commands.MaxConcurrencyReached):
         try:
             await ctx.command._max_concurrency.release(ctx.message)
-        except:
+        except Exception:
             pass"""
 
         if isinstance(error, PoolException):
@@ -267,7 +267,7 @@ class ErrorHandler(commands.Cog):
                 if ctx.cog:
                     try:
                         ctx.args.remove(ctx.cog)
-                    except:
+                    except Exception:
                         pass
                 try:
                     await ctx.command(*ctx.args, **ctx.kwargs)
@@ -317,7 +317,7 @@ class ErrorHandler(commands.Cog):
         try:
             if error.self_delete and ctx.channel.permissions_for(ctx.guild.me).manage_messages:
                 await ctx.message.delete()
-        except:
+        except Exception:
             pass
 
         if resp_msg:
@@ -330,7 +330,7 @@ class ErrorHandler(commands.Cog):
             else:
                 try:
                     func = ctx.store_message.edit
-                except:
+                except Exception:
                     func = ctx.send
 
             await func(components=components, **kwargs)
@@ -357,7 +357,7 @@ class ErrorHandler(commands.Cog):
 
             await self.webhook_max_concurrency.release(ctx)
 
-        except:
+        except Exception:
             traceback.print_exc()
 
     @commands.Cog.listener("on_button_click")

@@ -68,7 +68,7 @@ class DefaultStaticSkin:
         else:
             try:
                 mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
-            except:
+            except Exception:
                 mode = "`Recomendação`"
             txt += f"\n> -# 👍 **⠂Adicionado via:** {mode}"
 

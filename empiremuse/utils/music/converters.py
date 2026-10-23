@@ -43,7 +43,7 @@ async def google_search(bot, query: str, *, max_entries: int = 20) -> list:
             text = await r.text()
             json_text = text[text.find("(") + 1 : text.rfind(")")]
             return [result[0] for result in json.loads(json_text)[1][:max_entries]]
-    except:
+    except Exception:
         traceback.print_exc()
         return []
 
@@ -117,7 +117,7 @@ def string_to_seconds(time):
 
         return datetime.timedelta(**time_dict).total_seconds()
 
-    except:
+    except Exception:
         return
 
 

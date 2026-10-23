@@ -351,7 +351,7 @@ class LastFmCog(commands.Cog):
                         embed.set_thumbnail(url=thumb)
 
                     embeds.append(embed)
-            except:
+            except Exception:
                 traceback.print_exc()
 
         else:
@@ -604,7 +604,7 @@ class LastFmCog(commands.Cog):
                                 check_title=False,
                             )
                         )
-                    except:
+                    except Exception:
                         traceback.print_exc()
 
                     if not result:
@@ -616,7 +616,7 @@ class LastFmCog(commands.Cog):
                                     check_title=False,
                                 )
                             )
-                        except:
+                        except Exception:
                             traceback.print_exc()
 
                     if not result:

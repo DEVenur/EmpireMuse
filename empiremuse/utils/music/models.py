@@ -155,7 +155,7 @@ class PartialPlaylist:
             pass
         try:
             return self.tracks[0].thumb
-        except:
+        except Exception:
             return ""
 
 
@@ -405,7 +405,7 @@ class LavalinkPlaylist:
             pass
         try:
             return self.tracks[0].thumb
-        except:
+        except Exception:
             return ""
 
 
@@ -424,7 +424,7 @@ class LavalinkTrack(wavelink.Track):
 
         try:
             self.info["sourceName"]
-        except:
+        except Exception:
             self.info["sourceName"] = "LavalinkTrack"
 
         try:
@@ -469,7 +469,7 @@ class LavalinkTrack(wavelink.Track):
             if "?in=" not in self.uri:
                 try:
                     self.info["uri"] = f"{self.uri}?in=" + self.playlist_url.split("soundcloud.com/")[1]
-                except:
+                except Exception:
                     pass
 
         elif thumb := kwargs.get("thumb"):
@@ -706,7 +706,7 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             self.initial_hints.extend(kwargs.pop("extra_hints"))
-        except:
+        except Exception:
             pass
 
         self.lastfm_users = {}
@@ -799,7 +799,7 @@ class LavalinkPlayer(wavelink.Player):
 
             try:
                 embed.description += f"\n**Canal:** `{disnake.utils.escape_markdown(self.guild.me.voice.channel.name)} [{self.guild.me.voice.channel.id}]`\n"
-            except:
+            except Exception:
                 pass
 
             embed.description += f"**Data:** <t:{int(disnake.utils.utcnow().timestamp())}:F>"
@@ -853,7 +853,7 @@ class LavalinkPlayer(wavelink.Player):
                                     delete_after=7,
                                 )
                             )
-                        except:
+                        except Exception:
                             traceback.print_exc()
                     await self.destroy()
                     return
@@ -1043,7 +1043,7 @@ class LavalinkPlayer(wavelink.Player):
 
                     try:
                         self.message_updater_task.cancel()
-                    except:
+                    except Exception:
                         pass
 
                     await self.track_end()
@@ -1180,7 +1180,7 @@ class LavalinkPlayer(wavelink.Player):
                         ):
                             try:
                                 self._new_node_task.cancel()
-                            except:
+                            except Exception:
                                 pass
                             self._new_node_task = self.bot.loop.create_task(
                                 self._wait_for_new_node(ignore_node=self.node)
@@ -1206,7 +1206,7 @@ class LavalinkPlayer(wavelink.Player):
                         self.queue.appendleft(track)
                         try:
                             self._new_node_task.cancel()
-                        except:
+                        except Exception:
                             pass
                         self._new_node_task = self.bot.loop.create_task(self._wait_for_new_node())
                         await send_report()
@@ -1224,7 +1224,7 @@ class LavalinkPlayer(wavelink.Player):
                                 for n in self.bot.music.nodes.values()
                                 if n != self.node and n.is_available and "ytsearch" in n.search_providers
                             ][0]
-                        except:
+                        except Exception:
                             new_node = None
 
                         if new_node:
@@ -1240,7 +1240,7 @@ class LavalinkPlayer(wavelink.Player):
                                         ),
                                         delete_after=10,
                                     )
-                                except:
+                                except Exception:
                                     traceback.print_exc()
                             await asyncio.sleep(5)
                             await self.change_node(new_node.identifier)
@@ -1261,7 +1261,7 @@ class LavalinkPlayer(wavelink.Player):
                                     embed=disnake.Embed(description=txt, color=self.bot.get_color(self.guild.me)),
                                     delete_after=30,
                                 )
-                            except:
+                            except Exception:
                                 self.set_command_log(text=txt, emoji="⚠️", controller=True)
                             self.yt_warn = True
                             await send_report()
@@ -1309,7 +1309,7 @@ class LavalinkPlayer(wavelink.Player):
                 if isinstance(event, wavelink.TrackStuck):
                     try:
                         self.message_updater_task.cancel()
-                    except:
+                    except Exception:
                         pass
 
                     await self.track_end()
@@ -1322,7 +1322,7 @@ class LavalinkPlayer(wavelink.Player):
                             emoji="⚠️",
                             controller=True,
                         )
-                    except:
+                    except Exception:
                         pass
 
                     await self.process_next()
@@ -1352,7 +1352,7 @@ class LavalinkPlayer(wavelink.Player):
                     await self.text_channel.purge(
                         check=lambda m: m.channel.id != m.id and (not m.pinned or not m.is_system())
                     )
-                except:
+                except Exception:
                     pass
                 self.channel_purged = True
                 return
@@ -1407,7 +1407,7 @@ class LavalinkPlayer(wavelink.Player):
             (
                 self.bot.player_static_skins[self.skin_static] if self.static else self.bot.player_skins[self.skin]
             ).setup_features(self)
-        except:
+        except Exception:
             # linha temporária para resolver possíveis problemas com skins custom criadas por usuarios antes desse commit.
             self.auto_update = 0
             self.controller_mode = True
@@ -1489,7 +1489,7 @@ class LavalinkPlayer(wavelink.Player):
     def start_members_timeout(self, check: bool, force: bool = False, idle_timeout=None):
         try:
             self.members_timeout_task.cancel()
-        except:
+        except Exception:
             pass
         self.members_timeout_task = self.bot.loop.create_task(
             self.members_timeout(check=check, force=force, idle_timeout=idle_timeout)
@@ -1499,7 +1499,7 @@ class LavalinkPlayer(wavelink.Player):
         if check:
             try:
                 self.auto_skip_track_task.cancel()
-            except:
+            except Exception:
                 pass
 
             self.auto_skip_track_task = None
@@ -1529,7 +1529,7 @@ class LavalinkPlayer(wavelink.Player):
             if vc and [m for m in vc.members if not m.bot and not (m.voice.deaf or m.voice.self_deaf)]:
                 try:
                     self.auto_skip_track_task.cancel()
-                except:
+                except Exception:
                     pass
                 return
 
@@ -1549,7 +1549,7 @@ class LavalinkPlayer(wavelink.Player):
             if vc and [m for m in vc.members if not m.bot and not (m.voice.deaf or m.voice.self_deaf)]:
                 try:
                     self.auto_skip_track_task.cancel()
-                except:
+                except Exception:
                     pass
                 return
 
@@ -1564,7 +1564,7 @@ class LavalinkPlayer(wavelink.Player):
             self.current = track
             try:
                 self.auto_skip_track_task.cancel()
-            except:
+            except Exception:
                 pass
             self.set_command_log(
                 emoji="🪫",
@@ -1596,7 +1596,7 @@ class LavalinkPlayer(wavelink.Player):
                 embed = disnake.Embed(description=f"**{msg}**", color=self.bot.get_color(self.guild.me))
                 try:
                     await self.text_channel.send(embed=embed, allowed_mentions=self.allowed_mentions)
-                except:
+                except Exception:
                     pass
 
             await self.destroy()
@@ -1604,7 +1604,7 @@ class LavalinkPlayer(wavelink.Player):
     async def get_autoqueue_tracks(self):
         try:
             return self.queue_autoplay.popleft()
-        except:
+        except Exception:
             pass
 
         if self.locked:
@@ -1794,12 +1794,12 @@ class LavalinkPlayer(wavelink.Player):
                             self.lastfm_artists.insert(0, track_data.author)
                         except LastFmException as e:
                             print(f"Last.FM recommendations error: {repr(e)}")
-                        except:
+                        except Exception:
                             traceback.print_exc()
 
                     try:
                         author = self.lastfm_artists.pop(0)
-                    except:
+                    except Exception:
                         author = track_data.author
 
                     if track_data.info["sourceName"] == "youtube" and self.native_yt:
@@ -1868,7 +1868,7 @@ class LavalinkPlayer(wavelink.Player):
 
                         try:
                             tracks = tracks.tracks
-                        except:
+                        except Exception:
                             pass
 
                         if not tracks:
@@ -1923,7 +1923,7 @@ class LavalinkPlayer(wavelink.Player):
                         description=f"**Falha ao obter dados do autoplay:**\n{error_msg}", color=disnake.Colour.red()
                     )
                     await self.text_channel.send(embed=embed, delete_after=10)
-                except:
+                except Exception:
                     traceback.print_exc()
                 await asyncio.sleep(7)
                 return
@@ -1935,7 +1935,7 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             tracks = [t for t in tracks if not [u for u in tracks_search if t.uri.startswith(u.uri)]]
-        except:
+        except Exception:
             pass
 
         if track:
@@ -1967,16 +1967,16 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             return self.queue_autoplay.popleft()
-        except:
+        except Exception:
             try:
                 return self.played.popleft()
-            except:
+            except Exception:
                 return None
 
     def start_auto_skip(self):
         try:
             self.auto_skip_track_task.cancel()
-        except:
+        except Exception:
             pass
         self.auto_skip_track_task = self.bot.loop.create_task(self.auto_skip_track())
 
@@ -1985,7 +1985,7 @@ class LavalinkPlayer(wavelink.Player):
     ):
         try:
             self.lyric_task.cancel()
-        except:
+        except Exception:
             pass
 
         if self.locked or self.is_closing:
@@ -1998,14 +1998,14 @@ class LavalinkPlayer(wavelink.Player):
         if not self.node or not self.node.is_available:
             try:
                 self._new_node_task.cancel()
-            except:
+            except Exception:
                 pass
             self._new_node_task = self.bot.loop.create_task(self._wait_for_new_node())
             return
 
         try:
             self.track_load_task.cancel()
-        except:
+        except Exception:
             pass
         self.track_load_task = self.bot.loop.create_task(
             self._process_next(start_position=start_position, inter=inter, force_np=force_np)
@@ -2035,7 +2035,7 @@ class LavalinkPlayer(wavelink.Player):
 
             try:
                 self.idle_task.cancel()
-            except:
+            except Exception:
                 pass
 
             if not self.controller_mode and self.idle_task:
@@ -2046,14 +2046,14 @@ class LavalinkPlayer(wavelink.Player):
             try:
                 track = self.queue.popleft()
 
-            except:
+            except Exception:
                 try:
                     track = None
 
                     if self.autoplay or self.keep_connected:
                         try:
                             track = await self.get_autoqueue_tracks()
-                        except:
+                        except Exception:
                             print(traceback.format_exc())
                             self.locked = False
                             await asyncio.sleep(60)
@@ -2103,7 +2103,7 @@ class LavalinkPlayer(wavelink.Player):
                                         color=self.bot.get_color(),
                                     )
                                 )
-                            except:
+                            except Exception:
                                 print(traceback.format_exc())
 
                             self.locked = False
@@ -2122,7 +2122,7 @@ class LavalinkPlayer(wavelink.Player):
                                     ),
                                     delete_after=10,
                                 )
-                            except:
+                            except Exception:
                                 print(traceback.format_exc())
 
                             await asyncio.sleep(10)
@@ -2150,7 +2150,7 @@ class LavalinkPlayer(wavelink.Player):
 
                             try:
                                 encoded_track = partial_data[0].id
-                            except:
+                            except Exception:
                                 pass
 
                         else:
@@ -2175,7 +2175,7 @@ class LavalinkPlayer(wavelink.Player):
                                             tracks = await self.node.get_tracks(
                                                 query, track_cls=LavalinkTrack, playlist_cls=LavalinkPlaylist
                                             )
-                                        except:
+                                        except Exception:
                                             exceptions += f"{traceback.format_exc()}\n"
                                             await asyncio.sleep(1)
                                             continue
@@ -2259,7 +2259,7 @@ class LavalinkPlayer(wavelink.Player):
                                 ),
                                 delete_after=10,
                             )
-                        except:
+                        except Exception:
                             print(traceback.format_exc())
 
                         await asyncio.sleep(10)
@@ -2421,7 +2421,7 @@ class LavalinkPlayer(wavelink.Player):
         if (played := len(self.played)) or self.last_track:
             try:
                 play_txt = self.played[-1].title
-            except:
+            except Exception:
                 play_txt = self.last_track.title
 
             controller_opts.extend(
@@ -2504,14 +2504,14 @@ class LavalinkPlayer(wavelink.Player):
         try:
             if isinstance(self.text_channel.parent, disnake.ForumChannel) and self.static:
                 kwargs["content"] = "💤 Aguardando por novas músicas..."
-        except:
+        except Exception:
             pass
 
         try:
             if self.has_thread or self.static or self.text_channel.last_message_id == self.message.id:
                 try:
                     await self.message.edit(**kwargs)
-                except:
+                except Exception:
                     print(traceback.format_exc())
                     if self.text_channel and not self.static:
                         self.message = await self.text_channel.send(**kwargs)
@@ -2524,7 +2524,7 @@ class LavalinkPlayer(wavelink.Player):
         if send_message:
             try:
                 await self.message.delete()
-            except:
+            except Exception:
                 pass
             self.message = await self.text_channel.send(**kwargs)
 
@@ -2536,17 +2536,17 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             await self.process_rpc(vc)
-        except:
+        except Exception:
             print(traceback.format_exc())
 
         try:
             await self.process_idle_message()
-        except:
+        except Exception:
             print(traceback.format_exc())
 
         try:
             await self.update_stage_topic()
-        except:
+        except Exception:
             pass
 
         if self.keep_connected:
@@ -2565,7 +2565,7 @@ class LavalinkPlayer(wavelink.Player):
                     self.bot.loop.create_task(
                         self.text_channel.send(embed=embed, delete_after=120, allowed_mentions=self.allowed_mentions)
                     )
-        except:
+        except Exception:
             print(traceback.format_exc())
 
         await self.destroy()
@@ -2695,7 +2695,7 @@ class LavalinkPlayer(wavelink.Player):
             try:
                 if not interaction.response.is_done():
                     await interaction.response.defer()
-            except:
+            except Exception:
                 pass
             return
 
@@ -2704,7 +2704,7 @@ class LavalinkPlayer(wavelink.Player):
                 try:
                     if not interaction.response.is_done():
                         await interaction.response.defer()
-                except:
+                except Exception:
                     pass
             else:
                 await self.process_idle_message()
@@ -2714,7 +2714,7 @@ class LavalinkPlayer(wavelink.Player):
             try:
                 if not interaction.response.is_done():
                     await interaction.response.defer()
-            except:
+            except Exception:
                 pass
             return
 
@@ -2724,7 +2724,7 @@ class LavalinkPlayer(wavelink.Player):
         if rpc_update:
             try:
                 await self.process_rpc()
-            except:
+            except Exception:
                 traceback.print_exc()
 
         if self.retry_setup_hints:
@@ -2753,7 +2753,7 @@ class LavalinkPlayer(wavelink.Player):
             try:
                 if not interaction.response.is_done():
                     await interaction.response.defer()
-            except:
+            except Exception:
                 pass
             return
 
@@ -2766,7 +2766,7 @@ class LavalinkPlayer(wavelink.Player):
                         f"`{'▶️' if not self.paused else '⏸️'} {fix_characters(self.current.title, 50)}` |\n\n"
                         + (data.get("content") or "")
                     )
-            except:
+            except Exception:
                 pass
 
         if not self.controller_mode:
@@ -2789,13 +2789,13 @@ class LavalinkPlayer(wavelink.Player):
                         except disnake.Forbidden:
                             self.message = None
                             self.text_channel = None
-                        except:
+                        except Exception:
                             self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
 
             else:
                 try:
                     self.message_updater_task.cancel()
-                except:
+                except Exception:
                     pass
                 self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
 
@@ -2972,7 +2972,7 @@ class LavalinkPlayer(wavelink.Player):
                     else:
                         await interaction.response.edit_message(allowed_mentions=self.allowed_mentions, **data)
                     self.updating = False
-                except:
+                except Exception:
                     traceback.print_exc()
                 else:
                     self.start_message_updater_task()
@@ -2994,7 +2994,7 @@ class LavalinkPlayer(wavelink.Player):
                         except asyncio.CancelledError:
                             self.updating = False
                             return
-                        except:
+                        except Exception:
                             traceback.print_exc()
 
                             try:
@@ -3064,7 +3064,7 @@ class LavalinkPlayer(wavelink.Player):
             if not self.message:
                 try:
                     self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
-                except:
+                except Exception:
                     traceback.print_exc()
                 else:
                     if self.static:
@@ -3086,7 +3086,7 @@ class LavalinkPlayer(wavelink.Player):
     async def destroy_message(self):
         try:
             self.message_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         if self.static:
@@ -3095,7 +3095,7 @@ class LavalinkPlayer(wavelink.Player):
         try:
             if self.guild.me:
                 await self.message.delete()
-        except:
+        except Exception:
             pass
 
         self.message = None
@@ -3116,7 +3116,7 @@ class LavalinkPlayer(wavelink.Player):
 
                 try:
                     await self.invoke_np()
-                except:
+                except Exception:
                     traceback.print_exc()
 
                 continue
@@ -3124,7 +3124,7 @@ class LavalinkPlayer(wavelink.Player):
             elif self.update:
                 try:
                     await self.invoke_np()
-                except:
+                except Exception:
                     traceback.print_exc()
 
                 self.update = False
@@ -3180,39 +3180,39 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             self.reconnect_voice_channel_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self.members_timeout_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self.auto_skip_track_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self._queue_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self.message_updater_task.cancel()
-        except:
+        except Exception:
             pass
         self.message_updater_task = None
 
         try:
             self._new_node_task.cancel()
-        except:
+        except Exception:
             pass
         self._new_node_task = None
 
         try:
             self.idle_task.cancel()
-        except:
+        except Exception:
             pass
         self.idle_task = None
 
@@ -3221,18 +3221,18 @@ class LavalinkPlayer(wavelink.Player):
 
             try:
                 vc = self.guild.voice_client.channel
-            except:
+            except Exception:
                 vc = self.last_channel
 
             try:
                 await self.process_rpc(vc, close=True)
-            except:
+            except Exception:
                 traceback.print_exc()
 
             if self.static:
                 try:
                     await send_idle_embed(inter or self.message, self.command_log, bot=self.bot)
-                except:
+                except Exception:
                     traceback.print_exc()
                     pass
 
@@ -3281,7 +3281,7 @@ class LavalinkPlayer(wavelink.Player):
                                                 description="**A sessão de pedido de música da conversa atual foi encerrada.**",
                                             )
                                         )
-                                    except:
+                                    except Exception:
                                         pass
 
                                 if (
@@ -3330,12 +3330,12 @@ class LavalinkPlayer(wavelink.Player):
                                 kw = self.get_skin(disable=True)
                                 try:
                                     del kw["flags"]
-                                except:
+                                except Exception:
                                     pass
                         else:
                             try:
                                 func = self.message.edit
-                            except:
+                            except Exception:
                                 func = None
 
                         if func:
@@ -3518,7 +3518,7 @@ class LavalinkPlayer(wavelink.Player):
                 try:
                     if result[0].info["sourceName"] == "bandcamp":
                         check_duration = False
-                except:
+                except Exception:
                     pass
 
                 has_exclude_tags = any(tag for tag in exclude_tags if tag.lower() in track.title.lower())
@@ -3544,7 +3544,7 @@ class LavalinkPlayer(wavelink.Player):
             if not selected_track:
                 try:
                     selected_track = tracks[0]
-                except:
+                except Exception:
                     if exceptions:
                         print("Falha ao resolver PartialTrack:\n" + "\n".join(repr(e) for e in exceptions))
                     return
@@ -3587,7 +3587,7 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             self.auto_skip_track_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
@@ -3620,7 +3620,7 @@ class LavalinkPlayer(wavelink.Player):
                         await self._dispatch_voice_update()
                     else:
                         await self.change_node(node.identifier)
-                except:
+                except Exception:
                     await asyncio.sleep(5)
                     continue
 
@@ -3661,7 +3661,7 @@ class LavalinkPlayer(wavelink.Player):
                             txt = f"O player foi reconectado no servidor de músca **{self.node.identifier}**"
                         self.set_command_log(emoji="📶", text=txt, controller=True)
                         self.update = True
-                except:
+                except Exception:
                     print(traceback.format_exc())
                 self._new_node_task = None
                 return
@@ -3725,7 +3725,7 @@ class LavalinkPlayer(wavelink.Player):
                 else:
                     try:
                         self._rpc_update_task.cancel()
-                    except:
+                    except Exception:
                         pass
                     self._rpc_update_task = self.bot.loop.create_task(self._send_rpc_data(users, stats))
                 return
@@ -3764,7 +3764,7 @@ class LavalinkPlayer(wavelink.Player):
                 try:
                     stats["idle_endtime"] = int(self.idle_endtime.timestamp())
                     stats["idle_starttime"] = self.idle_start_timestamp
-                except:
+                except Exception:
                     pass
 
             else:
@@ -3814,7 +3814,7 @@ class LavalinkPlayer(wavelink.Player):
             else:
                 try:
                     self._rpc_update_task.cancel()
-                except:
+                except Exception:
                     pass
 
                 self._rpc_update_task = self.bot.loop.create_task(self._send_rpc_data(users, stats))
@@ -3838,7 +3838,7 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             self._queue_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         await cog.save_info(self)
@@ -3890,17 +3890,17 @@ class LavalinkPlayer(wavelink.Player):
 
         try:
             self.track_load_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self.event_queue_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self.lyric_task.cancel()
-        except:
+        except Exception:
             pass
 
         await self.cleanup(inter)

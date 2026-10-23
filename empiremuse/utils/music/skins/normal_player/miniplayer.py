@@ -47,7 +47,7 @@ class MiniPlayer:
                 embed.description += (
                     f"-# **Adicionado via:** [`[Recomendação]`]({player.current.info['extra']['related']['uri']})\n"
                 )
-            except:
+            except Exception:
                 embed.description += "-# **Adicionado via:** `[Recomendação]`\n"
 
         embed.set_author(name="Tocando Agora:", icon_url=music_source_image(player.current.info["sourceName"]))

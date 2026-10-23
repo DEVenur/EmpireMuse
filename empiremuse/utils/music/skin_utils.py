@@ -57,7 +57,7 @@ def replaces(
                 requester_display_name = "Recomendação"
                 requester_mention = "Recomendação"
                 requester_avatar = guild.me.display_avatar.replace(static_format="png", size=512).url
-        except:
+        except Exception:
             requester_global_name = "Desconhecido..."
             requester_display_name = "Desconhecido..."
             requester_mention = f"<@{player.current.requester}>"
@@ -149,7 +149,7 @@ def skin_converter(
     try:
         if len(str(info["queue_max_entries"])) > 2:
             info["queue_max_entries"] = 7
-    except:
+    except Exception:
         pass
 
     queue_max_entries = info.pop("queue_max_entries", 7)
