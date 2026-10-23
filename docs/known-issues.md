@@ -114,7 +114,7 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 | KI-32 | `docs/guides/*.md` | Os guias ainda usam capturas de tela hospedadas no CDN do Discord e no GitHub do upstream. | As imagens podem expirar ou sumir. Migrar para `assets/` ou arte própria. | baixo |
 | KI-33 | `empiremuse/utils/client.py` (`BotPool.setup`), `empiremuse/rules/git_remote.py` | [Resolvido] A URL do remote é extraída por fatiamento fixo da saída de `git remote -v`. | Resolvido na Fase 3 (F3-6): URL do remote lida por parsing de campos, sem credenciais de usuário ou senha no link do commit e com normalização de protocolos. | baixo |
 | KI-34 | `tests/brand/test_branding.py` | [Resolvido] As varreduras estáticas dependem de `git ls-files` e usam correspondência por substring. | Resolvido na Fase 3 (F3-6): varredura estática funciona fora de um clone git usando .gitignore e casando palavras inteiras. | baixo |
-| KI-35 | `empiremuse/utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Assets e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com` da branch `main`. | Forks de terceiros continuam apontando para a DiscordEmpireHub até ajustarem `empiremuse/utils/branding.py` (informativo). | baixo |
+| KI-35 | `empiremuse/utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Assets e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com` da branch `main`. | Forks de terceiros continuam apontando para a EmpireCommunity até ajustarem `empiremuse/utils/branding.py` (informativo). | baixo |
 
 ## Painel web e comandos relacionados (saneamento)
 

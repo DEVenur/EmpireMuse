@@ -24,7 +24,7 @@ RUN apt-get update && \
 
 WORKDIR /opt/lavalink
 
-ARG LL_BINARIES_URL="https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3"
+ARG LL_BINARIES_URL="https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3"
 ARG LAVALINK_JAR_SHA256="8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a"
 ARG LAVALINK_APPLICATION_YML_SHA256="a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95"
 ARG YT_PLUGIN_NAME="youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar"
@@ -74,11 +74,11 @@ RUN uv pip install --no-cache --require-hashes -r /tmp/requirements-lock.txt && 
 # -----------------------------------------------------------------------------
 FROM ${PYTHON_IMAGE} AS runtime
 
-LABEL org.opencontainers.image.source="https://github.com/DiscordEmpireHub/EmpireMuse" \
-      org.opencontainers.image.documentation="https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/CREDITS.md" \
+LABEL org.opencontainers.image.source="https://github.com/EmpireCommunity/EmpireMuse" \
+      org.opencontainers.image.documentation="https://github.com/EmpireCommunity/EmpireMuse/blob/main/CREDITS.md" \
       org.opencontainers.image.licenses="GPL-2.0-only" \
       org.opencontainers.image.title="EmpireMuse" \
-      org.opencontainers.image.authors="DiscordEmpireHub"
+      org.opencontainers.image.authors="EmpireCommunity"
 
 # Instalar tini do repositório Debian e ca-certificates
 RUN apt-get update && \

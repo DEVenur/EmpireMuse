@@ -10,15 +10,15 @@ from pathlib import Path
 from empiremuse.paths import PROJECT_DIR
 
 BOT_NAME = "EmpireMuse"
-REPO_URL = "https://github.com/DiscordEmpireHub/EmpireMuse"
+REPO_URL = "https://github.com/EmpireCommunity/EmpireMuse"
 SOURCE_REPO_GIT = REPO_URL + ".git"
-RAW_BASE_URL = "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main"
+RAW_BASE_URL = "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main"
 ASSETS_BASE_URL = RAW_BASE_URL + "/assets"
 LICENSE_URL = REPO_URL + "/blob/main/LICENSE"
 GUIDES_URL = REPO_URL + "/blob/main/docs/guides"
-RPC_APP_URL = "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app"
+RPC_APP_URL = "https://github.com/EmpireCommunity/EmpireMuse-RPC-app"
 RPC_APP_RELEASES_URL = RPC_APP_URL + "/releases"
-LAVALINK_BINARIES_URL = "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3"
+LAVALINK_BINARIES_URL = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3"
 LAVALINK_JAR_URL = LAVALINK_BINARIES_URL + "/Lavalink.jar"
 LAVALINK_APPLICATION_YML_URL = LAVALINK_BINARIES_URL + "/application.yml"
 # SHA-256 fixos dos binários da release 0.0.3 (conferem com o SHA256SUMS publicado); lidos em tempo de chamada.
@@ -33,6 +33,9 @@ LAVALINK_JAR_OFFICIAL_URLS = frozenset(
         "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.1/Lavalink.jar",
         "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
         "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
+        "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.1/Lavalink.jar",
+        "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
+        "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
     }
 )
 # Versões oficiais do application.yml que o bot pode substituir (a 0.0.1, a 0.0.2 e a atual); qualquer outra é do dono.

@@ -16,7 +16,7 @@ Como preparar o ambiente para desenvolver e testar o EmpireMuse. Para entender o
 ## 2. Ambiente virtual e instalação
 
 ```bash
-git clone https://github.com/DiscordEmpireHub/EmpireMuse.git
+git clone https://github.com/EmpireCommunity/EmpireMuse.git
 cd EmpireMuse
 
 uv venv --python 3.13
@@ -147,7 +147,7 @@ de nodes são somadas (`BotPool.setup` em `empiremuse/utils/client.py`):
 |---|---|
 | **`lavalink.ini`** | Copie [`deploy/lavalink.ini.example`](../deploy/lavalink.ini.example) para `lavalink.ini` na pasta de execução (`.runtime/lavalink.ini` ou raiz, ignorado pelo Git). Cada seção é um node (`host`, `port`, `password`, `secure`, `region`, `search_providers`, …). Use `%%` para escrever `%` em valores. Só é lido quando `AUTO_DOWNLOAD_LAVALINK_SERVERLIST` é falso (`BotPool.setup` em `empiremuse/utils/client.py`). |
 | **`LAVALINK_NODE_<N>`** | Variável (ou chave do `.env`) com um JSON por node, p.ex. `LAVALINK_NODE_1='{"identifier": "meu", "host": "...", "port": 443, "password": "...", "secure": true}'`. O JSON é usado como está, sem valores padrão: informe `identifier`, `host`, `port` e `password` (`BotPool.setup` e `BotPool.check_node` em `empiremuse/utils/client.py`). |
-| **Lavalink local** | `RUN_LOCAL_LAVALINK=true`, ou nenhum node configurado (`BotPool.setup` em `empiremuse/utils/client.py`). Baixa `Lavalink.jar`, `application.yml` e plugins com verificação rigorosa de integridade via SHA-256 no download. Por padrão, `LAVALINK_FILE_URL` fica vazio no `.env`, o que seleciona automaticamente o espelho oficial correspondente à versão do código ([DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) release `0.0.3` com Lavalink oficial 4.2.2 e plugins espelhados; constantes em `empiremuse/utils/branding.py`; o `application.yml` traz o cliente TV, OAuth desligado por padrão e log de `YoutubeOauth2Handler` em WARN). Se `LAVALINK_FILE_URL` contiver uma URL oficial de versão anterior do espelho, o bot atualiza sozinho para a versão atual com aviso no log. Para usar um jar próprio ou hospedagem customizada, o endereço exige obrigatoriamente HTTPS (`https://`) e a definição de `LAVALINK_FILE_SHA256`. Preserva `application.yml` personalizado existente (substituindo apenas versões oficiais conhecidas como 0.0.1 e 0.0.2). Baixa o JDK se não houver Java 17+. Requer rede e a RAM definida em `LAVALINK_RAM_LIMIT` (MB). O node se chama `LOCAL` e escuta em `127.0.0.1:${SERVER_PORT:-8090}`. |
+| **Lavalink local** | `RUN_LOCAL_LAVALINK=true`, ou nenhum node configurado (`BotPool.setup` em `empiremuse/utils/client.py`). Baixa `Lavalink.jar`, `application.yml` e plugins com verificação rigorosa de integridade via SHA-256 no download. Por padrão, `LAVALINK_FILE_URL` fica vazio no `.env`, o que seleciona automaticamente o espelho oficial correspondente à versão do código ([EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) release `0.0.3` com Lavalink oficial 4.2.2 e plugins espelhados; constantes em `empiremuse/utils/branding.py`; o `application.yml` traz o cliente TV, OAuth desligado por padrão e log de `YoutubeOauth2Handler` em WARN). Se `LAVALINK_FILE_URL` contiver uma URL oficial de versão anterior do espelho, o bot atualiza sozinho para a versão atual com aviso no log. Para usar um jar próprio ou hospedagem customizada, o endereço exige obrigatoriamente HTTPS (`https://`) e a definição de `LAVALINK_FILE_SHA256`. Preserva `application.yml` personalizado existente (substituindo apenas versões oficiais conhecidas como 0.0.1 e 0.0.2). Baixa o JDK se não houver Java 17+. Requer rede e a RAM definida em `LAVALINK_RAM_LIMIT` (MB). O node se chama `LOCAL` e escuta em `127.0.0.1:${SERVER_PORT:-8090}`. |
 | **Lista pública** | `AUTO_DOWNLOAD_LAVALINK_SERVERLIST=true` baixa a lista de nodes públicos (`get_lavalink_servers`, com `LAVALINK_SERVER_LIST` como alternativa; o padrão é `data/lavalink_servers.ini` do repositório, `LAVALINK_SERVER_LIST_URL` em `empiremuse/utils/branding.py`). Nodes públicos são instáveis e não devem ser usados com dados sensíveis. |
 
 A lista baixada é validada (status 200 e formato INI com `host`, `port` e `password` em cada seção; `empiremuse/utils/music/lavalink_server_list.py`). Se o download falhar ou a resposta for inválida, o bot usa o arquivo local `data/lavalink_servers.ini`.
@@ -184,15 +184,24 @@ uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-as
 
 ### Regeneração e sincronia dos lockfiles
 
-Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.txt`, os lockfiles devem ser regerados a partir da raiz com resolução universal e corte temporal de segurança:
+Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.txt`, os lockfiles devem ser regerados a partir da raiz com resolução universal e corte temporal de segurança utilizando `uv==0.13.1`:
 
 ```bash
 # Lock universal de produção
-uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-24T00:00:00Z --exclude-newer-package certifi=2026-10-24T00:00:00Z --exclude-newer-package brotli=2026-10-24T00:00:00Z --exclude-newer-package brotlicffi=2026-10-24T00:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
 
 # Lock universal de desenvolvimento
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
 ```
+
+#### Justificativa das isenções pontuais de corte temporal
+
+A regra padrão de corte temporal (`--exclude-newer 2026-10-16T00:00:00Z`) previne ataques de supply chain exigindo que pacotes tenham pelo menos 7 dias de maturação pública no PyPI. Quatro exceções temporárias com datas fixas no passado foram homologadas:
+- **`yt-dlp` (2026.10.21, corte `2026-10-21T22:00:00Z`)**: exceção temporária necessária para acompanhar atualizações contínuas de cifragem e contorno anti-bot do YouTube;
+- **`certifi` (2026.10.23, corte `2026-10-23T12:00:00Z`)**: versão atualizada exigida como requisito estrito de dependência do `yt-dlp`;
+- **`brotli` (1.2.1, corte `2026-10-22T15:00:00Z`)** e **`brotlicffi` (1.2.1.0, corte `2026-10-22T17:00:00Z`)**: versões anteriores continham vulnerabilidades conhecidas em rotinas de descompressão; a versão 1.2.1 corrige falhas de segurança prévias.
+- **Timestamps fixos no passado**: cada isenção é fixada exatamente no instante passado do release travado, evitando o risco de que datas futuras quebrem a sincronia da CI caso novos releases saiam antes da virada do corte.
+- **Versão do `uv`**: os lockfiles são regerados compulsoriamente com `uv==0.13.1` (versão fixada na esteira de CI), garantindo estabilidade e determinação dos hashes em qualquer plataforma.
 
 A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa automaticamente em todos os pushes e PRs para a branch `main`:
 1. `Verificar integridade e sincronia dos lockfiles` (regera os locks e valida com `git diff --exit-code`);
@@ -233,8 +242,8 @@ Para facilitar o desenvolvimento integrado entre o bot principal e seus ecossist
 - **Clonagem dos irmãos**: para clonar ou atualizar os repositórios irmãos em `repos/`:
   ```bash
   mkdir -p repos
-  git clone https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries repos/EmpireMuse-LL-binaries
-  git clone https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app repos/EmpireMuse-RPC-app
+  git clone https://github.com/EmpireCommunity/EmpireMuse-LL-binaries repos/EmpireMuse-LL-binaries
+  git clone https://github.com/EmpireCommunity/EmpireMuse-RPC-app repos/EmpireMuse-RPC-app
   ```
 
 ## 9. Padrão de Git Worktrees e Isolamento de Branches
