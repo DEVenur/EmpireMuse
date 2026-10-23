@@ -188,7 +188,7 @@ Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.tx
 
 ```bash
 # Lock universal de produção
-uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-24T00:00:00Z --exclude-newer-package certifi=2026-10-24T00:00:00Z --exclude-newer-package brotli=2026-10-24T00:00:00Z --exclude-newer-package brotlicffi=2026-10-24T00:00:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
 
 # Lock universal de desenvolvimento
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
