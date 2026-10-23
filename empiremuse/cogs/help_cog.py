@@ -133,7 +133,7 @@ async def check_perms(ctx: CustomContext, cmd: commands.Command):
     try:
         if cmd.hidden and not await ctx.bot.is_owner(ctx.author):
             return False
-    except:
+    except Exception:
         return False
 
     return True
@@ -368,7 +368,7 @@ class HelpCog(commands.Cog, name="Ajuda"):
             ]
             try:
                 index = cmds.index(cmd)
-            except:
+            except Exception:
                 cmds = [cmd]
                 index = 0
         else:
@@ -383,7 +383,7 @@ class HelpCog(commands.Cog, name="Ajuda"):
             ]
             try:
                 index = cmds.index(cmd)
-            except:
+            except Exception:
                 cmds = [cmd]
                 index = 0
 

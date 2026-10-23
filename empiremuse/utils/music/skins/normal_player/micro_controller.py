@@ -42,7 +42,7 @@ class MicroController:
         else:
             try:
                 embed.description += f"[`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
-            except:
+            except Exception:
                 embed.description += "`[Recomendada]`"
 
         embed.set_author(name="Tocando Agora:", icon_url=music_source_image(player.current.info["sourceName"]))

@@ -84,12 +84,12 @@ class CustomContext(commands.Context):
     async def send(self, content: Optional[str] = None, **kwargs):
         try:
             kwargs.pop("ephemeral")
-        except:
+        except Exception:
             pass
 
         try:
             kwargs.pop("fail_if_not_exists")
-        except:
+        except Exception:
             pass
 
         try:
@@ -106,11 +106,11 @@ class CustomContext(commands.Context):
     async def reply(self, content: Optional[str] = None, **kwargs):
         try:
             kwargs.pop("ephemeral")
-        except:
+        except Exception:
             pass
         try:
             kwargs.pop("fail_if_not_exists")
-        except:
+        except Exception:
             pass
 
         try:
@@ -222,7 +222,7 @@ class EmbedPaginator(disnake.ui.View):
     async def on_timeout(self):
         try:
             await self.message.delete()
-        except:
+        except Exception:
             pass
 
         self.stop()
@@ -395,7 +395,7 @@ async def send_idle_embed(
                 elif p == "http":
                     continue
                 providers.add(p)
-        except:
+        except Exception:
             continue
 
     embed = disnake.Embed(
@@ -622,7 +622,7 @@ def get_source_emoji_cfg(bot: BotCore, url: str):
 
     try:
         return bot.pool.emoji_data["music_sources"][source]
-    except:
+    except Exception:
         return None
 
 
@@ -688,7 +688,7 @@ async def select_bot_pool(
     if not bots:
         try:
             allow_private = inter.application_command.extras["allow_private"]
-        except:
+        except Exception:
             allow_private = False
 
         if allow_private:
@@ -742,7 +742,7 @@ async def select_bot_pool(
         except asyncio.TimeoutError:
             try:
                 await msg.edit(conent="Tempo de seleção esgotado!", embed=None, view=None)
-            except:
+            except Exception:
                 pass
             return None, None
 
@@ -782,7 +782,7 @@ def queue_track_index(
 
     try:
         query, unique_id = query.split(" || ID > ")
-    except:
+    except Exception:
         unique_id = None
 
     query_split = query.lower().split()

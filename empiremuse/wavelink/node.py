@@ -273,7 +273,7 @@ class Node:
 
         try:
             ytid = self._client.bot.config["POTOKEN_YTID"]
-        except:
+        except Exception:
             ytid = "jNQXAC9IVRw"
 
         try:
@@ -297,7 +297,7 @@ class Node:
                 player = self._client.bot.music.players[guild_id]
                 player._new_node_task = player.bot.loop.create_task(player._wait_for_new_node())
                 return
-            except:
+            except Exception:
                 pass
             raise MissingSessionID(self)
 
@@ -311,7 +311,7 @@ class Node:
             async with self.session.patch(url=uri, json=data, headers=self._websocket.headers) as resp:
                 try:
                     resp_data = await resp.json()
-                except:
+                except Exception:
                     resp_data = await resp.text()
 
                 if resp.status == 200:
@@ -364,7 +364,7 @@ class Node:
                 cache_key = f"youtube:{yt_id}"
             try:
                 ytid = yt_video_regex.search(query).group(1)
-            except:
+            except Exception:
                 pass
 
         elif sp_match := spotify_regex.match(query):

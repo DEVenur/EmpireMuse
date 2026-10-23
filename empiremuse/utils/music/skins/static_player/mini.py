@@ -63,7 +63,7 @@ class MiniStaticSkin:
         else:
             try:
                 embed.description += f" [`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
-            except:
+            except Exception:
                 embed.description += "` [Recomendada]`"
 
         duration = "🔴 Livestream" if player.current.is_stream else time_format(player.current.duration)

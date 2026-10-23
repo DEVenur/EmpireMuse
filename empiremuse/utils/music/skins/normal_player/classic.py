@@ -63,7 +63,7 @@ class ClassicSkin:
         else:
             try:
                 mode = f" [`Recomendada`]({player.current.info['extra']['related']['uri']})"
-            except:
+            except Exception:
                 mode = "`Recomendada`"
             txt += f"> 👍 **⠂** {mode}\n"
 

@@ -695,12 +695,12 @@ async def process_idle_embed(bot: BotCore, guild: disnake.Guild, guild_data: dic
 
     try:
         channel = bot.get_channel(int(guild_data["player_controller"]["channel"]))
-    except:
+    except Exception:
         return
 
     try:
         message = await channel.fetch_message(int(guild_data["player_controller"]["message_id"]))
-    except:
+    except Exception:
         message = None
 
     await send_idle_embed(message or channel, bot=bot, guild_data=guild_data)
@@ -1772,13 +1772,13 @@ class FavMenuView(disnake.ui.View):
     async def on_timeout(self):
         try:
             self.components_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             for i in self.children[1].options:
                 i.default = self.current == i.value
-        except:
+        except Exception:
             pass
 
         for c in self.children:
@@ -1787,13 +1787,13 @@ class FavMenuView(disnake.ui.View):
         if isinstance(self.ctx, CustomContext):
             try:
                 await self.message.edit(view=self)
-            except:
+            except Exception:
                 pass
 
         else:
             try:
                 await self.ctx.edit_original_message(view=self)
-            except:
+            except Exception:
                 pass
 
         self.stop()
@@ -1996,7 +1996,7 @@ class FavMenuView(disnake.ui.View):
             try:
                 url = f"[`{self.current}`]({self.data['fav_links'][self.current]})"
                 del self.data["fav_links"][self.current]
-            except:
+            except Exception:
                 await inter.edit_original_message(f"**Não há favorito na lista com o nome:** {self.current}")
                 return
 
@@ -2036,7 +2036,7 @@ class FavMenuView(disnake.ui.View):
             try:
                 url = f"[`{self.current}`]({item})"
                 del self.data["integration_links"][self.current]
-            except:
+            except Exception:
                 await inter.send(f"**Não há integração na lista com o nome:** {self.current}", ephemeral=True)
                 return
 
@@ -2114,7 +2114,7 @@ class FavMenuView(disnake.ui.View):
 
             try:
                 await process_idle_embed(self.bot, guild, guild_data=self.guild_data)
-            except:
+            except Exception:
                 traceback.print_exc()
 
             self.log = "Lista de favoritos do server foi limpa com sucesso!"
@@ -2252,7 +2252,7 @@ class FavMenuView(disnake.ui.View):
     async def cancel_callback(self, inter: disnake.MessageInteraction):
         try:
             self.components_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         await inter.response.edit_message(content="**Gerenciador fechado.**", view=None)
@@ -2263,7 +2263,7 @@ class FavMenuView(disnake.ui.View):
 
         try:
             self.components_updater_task.cancel()
-        except:
+        except Exception:
             pass
 
         if self.mode == ViewMode.fav_manager:
@@ -2657,12 +2657,12 @@ class SetStageTitle(disnake.ui.View):
         if isinstance(self.ctx, CustomContext):
             try:
                 await self.message.edit(view=self)
-            except:
+            except Exception:
                 pass
         else:
             try:
                 await self.ctx.edit_original_message(view=self)
-            except:
+            except Exception:
                 pass
 
     async def interaction_check(self, inter: disnake.MessageInteraction) -> bool:
@@ -2922,12 +2922,12 @@ class SkinEditorMenu(disnake.ui.View):
         if isinstance(self.ctx, CustomContext):
             try:
                 await self.message.edit(view=self)
-            except:
+            except Exception:
                 pass
         else:
             try:
                 await self.ctx.edit_original_message(view=self)
-            except:
+            except Exception:
                 pass
 
     def build_embeds(self) -> dict:
@@ -3477,7 +3477,7 @@ class SkinEditorMenu(disnake.ui.View):
             try:
                 if len(str(info["queue_max_entries"])) > 2:
                     info["queue_max_entries"] = 7
-            except:
+            except Exception:
                 pass
 
             try:
