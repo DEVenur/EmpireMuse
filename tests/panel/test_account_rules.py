@@ -16,7 +16,7 @@ import empiremuse.cogs.legacy_cmds as legacy_cmds
 import empiremuse.cogs.music_settings as music_settings
 from empiremuse.utils.db import DBModel, get_prefix
 from empiremuse.utils.music.interactions import FavMenuView, ViewMode
-from tests.helpers_f3_5b import (
+from tests.support.drivers_de_regras import (
     AUTOR,
     BotDeComandos,
     BotDoPlayer,
@@ -29,7 +29,7 @@ from tests.helpers_f3_5b import (
     jogador_no_canal_de_voz,
     montar_rpc,
 )
-from tests.helpers_modais import (
+from tests.support.modais import (
     SERVIDOR_DO_COMANDO,
     URL_BASE,
     ModalBot,

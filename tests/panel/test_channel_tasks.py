@@ -16,7 +16,7 @@ import logging
 import re
 from urllib.parse import urlencode
 
-from tests.helpers_request_channel import FakePlayer, FakeThreadInfo
+from tests.support.canal_de_pedidos import FakePlayer, FakeThreadInfo
 from tests.panel.helpers import COOKIE_SECRET, OAUTH_SECRET, require
 from tests.panel.helpers_channel import GID, PANEL_USER, TASK_ID
 from tests.panel.helpers_login import DEFAULT_USER

@@ -9,7 +9,7 @@ import pytest
 
 import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.utils.db import DBModel
-from tests.helpers_f3_5b import (
+from tests.support.drivers_de_regras import (
     BotDeComandos,
     CargoFalso,
     GuildaFalsa,
@@ -21,7 +21,7 @@ from tests.helpers_f3_5b import (
     skins_do_bot,
     status_no_comando,
 )
-from tests.helpers_modais import SERVIDOR_DO_COMANDO
+from tests.support.modais import SERVIDOR_DO_COMANDO
 from tests.panel.helpers_settings import (
     SettingsWorld,
     command_allowed_volumes,
