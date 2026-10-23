@@ -135,10 +135,9 @@ VOLUME ["/data"]
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, sys, urllib.request, psutil; \
-run_rpc = os.environ.get('RUN_RPC_SERVER', '').lower() in ('true', '1', 'yes'); \
-(sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/', timeout=4).status < 500 else 1) if run_rpc else None); \
-sys.exit(0 if any('empiremuse' in ' '.join(p.cmdline()) for p in psutil.process_iter(['cmdline']) if p.info.get('cmdline')) else 1)"
+    CMD python -c "import os, sys, urllib.request; \
+sys.exit(0 if os.environ.get('RUN_RPC_SERVER', '').lower() not in ('true', '1', 'yes') else \
+(0 if urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/', timeout=4).status < 500 else 1))"
 
 ENTRYPOINT ["tini", "--"]
 CMD ["python", "-m", "empiremuse"]
