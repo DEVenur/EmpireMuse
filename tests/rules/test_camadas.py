@@ -255,10 +255,12 @@ def modulos_carregados(modulo: str, teste: str) -> list[str]:
     return [linha for linha in resultado.stdout.splitlines() if linha]
 
 
-# Fora da lista de propósito: ``cogs.legacy_cmds`` (e tudo que importa ``utils.client``) chega ao painel por
-# ``utils/client.py -> web_app.py -> empiremuse.panel``. É a raiz de composição (o processo do bot sobe o servidor web),
-# não uma regra de negócio; o critério da F3-5b é a camada de regras e de interações.
+# ``cogs.legacy_cmds`` chega a ``utils.client`` e a ``web_app``, que só importa o painel ao subir o servidor web
+# (``_build_panel`` e ``make_router``): importar o bot não carrega o painel.
 MODULOS_DO_BOT = [
+    "empiremuse.cogs.legacy_cmds",
+    "empiremuse.utils.client",
+    "empiremuse.web_app",
     "empiremuse.utils.music.interactions",
     "empiremuse.utils.music.converters",
     "empiremuse.cogs.music_settings",
@@ -299,3 +301,27 @@ class TestImportarOBotNaoCarregaOPainel:
             modulo = nome_do_modulo(arquivo)
             carregados = modulos_carregados(modulo, "nome.split('.')[0] in ('disnake', 'tornado', 'motor')")
             assert carregados == [], (modulo, carregados)
+
+
+class TestWebAppImportaOPainelSoAoSubir:
+    def test_make_router_sem_painel_envia_tudo_ao_app_principal(self):
+        import tornado.web
+
+        from empiremuse import web_app
+
+        principal = tornado.web.Application([])
+
+        roteador = web_app.make_router(principal, None)
+
+        assert [regra.target for regra in roteador.rules] == [principal]
+
+    def test_o_painel_so_e_importado_dentro_de_funcoes_do_web_app(self):
+        arvore = ast.parse((PACOTE / "web_app.py").read_text(encoding="utf-8"))
+        no_topo = [
+            no
+            for no in arvore.body
+            if (isinstance(no, ast.ImportFrom) and importa_o_painel(no.module or ""))
+            or (isinstance(no, ast.Import) and any(importa_o_painel(alias.name) for alias in no.names))
+        ]
+
+        assert no_topo == []
