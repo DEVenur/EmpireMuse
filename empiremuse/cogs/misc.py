@@ -473,7 +473,7 @@ class Misc(commands.Cog):
 
         try:
             lavalink_ram = psutil.Process(self.bot.pool.lavalink_instance.pid).memory_info().rss
-        except:
+        except Exception:
             lavalink_ram = 0
 
         python_ram = psutil.Process(getpid()).memory_info().rss
@@ -490,7 +490,7 @@ class Misc(commands.Cog):
 
         try:
             color = bot.get_color(inter.guild.me if inter.guild else guild.me)
-        except:
+        except Exception:
             color = bot.get_color()
 
         embed = disnake.Embed(description="", color=color)
@@ -710,7 +710,7 @@ class Misc(commands.Cog):
         except (AttributeError, disnake.InteractionNotEditable):
             try:
                 await inter.response.edit_message(embed=embed, components=components)
-            except:
+            except Exception:
                 await inter.send(embed=embed, ephemeral=True, components=components)
 
     @commands.Cog.listener("on_button_click")
@@ -734,7 +734,7 @@ class Misc(commands.Cog):
             try:
                 if not bot.appinfo.bot_public and not await bot.is_owner(inter.author):
                     continue
-            except:
+            except Exception:
                 continue
 
             kwargs = {}
@@ -948,7 +948,7 @@ class Misc(commands.Cog):
     def cog_unload(self):
         try:
             self.task.cancel()
-        except:
+        except Exception:
             pass
 
 
@@ -971,7 +971,7 @@ class GuildLog(commands.Cog):
             await self.bot.music.players[guild.id].destroy()
         except KeyError:
             pass
-        except:
+        except Exception:
             traceback.print_exc()
 
         if not self.hook_url:
@@ -979,7 +979,7 @@ class GuildLog(commands.Cog):
 
         try:
             await self.send_hook(guild, title="Me removeram do servidor", color=disnake.Color.red())
-        except:
+        except Exception:
             traceback.print_exc()
 
         await self.bot.update_appinfo()
@@ -992,7 +992,7 @@ class GuildLog(commands.Cog):
             guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)
             guild_data["player_controller"] = deepcopy(db_models[DBModel.guilds]["player_controller"])
             await self.bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
-        except:
+        except Exception:
             traceback.print_exc()
 
         if not self.hook_url:
@@ -1000,7 +1000,7 @@ class GuildLog(commands.Cog):
 
         try:
             await self.send_hook(guild, title="Me adicionaram em um novo servidor", color=disnake.Color.green())
-        except:
+        except Exception:
             traceback.print_exc()
 
         await self.bot.update_appinfo()

@@ -408,7 +408,7 @@ def can_send_message_check():
 
         try:
             bot = inter.music_bot
-        except:
+        except Exception:
             bot = inter.bot
 
         # TODO: tempfix para canal de forum (thread arquivada)
@@ -423,7 +423,7 @@ def can_send_message_check():
                     thread_kw["archived"] = False
                 if thread_kw:
                     await inter.channel.edit(**thread_kw)
-            except:
+            except Exception:
                 pass
 
         can_send_message(inter.channel, inter.guild.me)
@@ -809,5 +809,5 @@ async def check_deafen(me: disnake.Member = None):
         try:
             await me.edit(deafen=True)
             return True
-        except:
+        except Exception:
             traceback.print_exc()

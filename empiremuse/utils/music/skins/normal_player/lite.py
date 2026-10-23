@@ -39,7 +39,7 @@ class LiteSkin:
         else:
             try:
                 embed.description = f"[`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
-            except:
+            except Exception:
                 embed.description = "`[Recomendada]`"
 
         if player.current.playlist_name:

@@ -369,11 +369,11 @@ class Player:
         elif not guild.me.voice:
             try:
                 guild.voice_client.cleanup()
-            except:
+            except Exception:
                 pass
             try:
                 await channel.connect(cls=WavelinkVoiceClient, reconnect=False)
-            except:
+            except Exception:
                 traceback.print_exc()
 
         elif guild.voice_client.channel.id != channel_id:
@@ -499,12 +499,12 @@ class Player:
 
         try:
             await guild.voice_client.disconnect(force=True)
-        except:
+        except Exception:
             pass
 
         try:
             guild.voice_client.cleanup()
-        except:
+        except Exception:
             pass
 
         if self.node.version == 3:
@@ -518,7 +518,7 @@ class Player:
                     if resp.status != 204:
                         try:
                             data = await resp.json()
-                        except:
+                        except Exception:
                             data = await resp.text()
 
                         raise WavelinkException(f"Ocorreu um erro ao destruir player: {resp.status} | {data}")
@@ -653,7 +653,7 @@ class Player:
                         if resp.status != 204:
                             try:
                                 data = await resp.json()
-                            except:
+                            except Exception:
                                 data = await resp.text()
                             print(f"Ocorreu um erro ao finalizar player: {data}")
                 except Exception:

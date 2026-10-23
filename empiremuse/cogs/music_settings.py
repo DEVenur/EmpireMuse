@@ -445,14 +445,14 @@ class MusicSettings(commands.Cog):
                 if isinstance(inter, disnake.MessageInteraction):
                     try:
                         await inter.delete_original_message()
-                    except:
+                    except Exception:
                         pass
                 return
 
             if isinstance(inter, disnake.MessageInteraction):
                 try:
                     await inter.delete_original_message()
-                except:
+                except Exception:
                     pass
 
             update_inter(interaction, modal_inter)
@@ -478,13 +478,13 @@ class MusicSettings(commands.Cog):
             kwargs_msg = {}
             try:
                 func = inter.edit_original_message
-            except:
+            except Exception:
                 try:
                     func = inter.store_message.edit
-                except:
+                except Exception:
                     try:
                         func = inter.response.edit_message
-                    except:
+                    except Exception:
                         func = inter.send
                         kwargs_msg = {"ephemeral": True}
 
@@ -589,7 +589,7 @@ class MusicSettings(commands.Cog):
                 except AttributeError:
                     try:
                         inter.command.reset_cooldown(inter)
-                    except:
+                    except Exception:
                         pass
 
                 if msg_select:
@@ -597,7 +597,7 @@ class MusicSettings(commands.Cog):
                 else:
                     try:
                         func = (await inter.original_message()).edit
-                    except:
+                    except Exception:
                         func = inter.message.edit
 
                 try:
@@ -692,7 +692,7 @@ class MusicSettings(commands.Cog):
 
                 try:
                     await msg_select.delete()
-                except:
+                except Exception:
                     pass
 
                 update_inter(interaction, modal_inter)
@@ -745,7 +745,7 @@ class MusicSettings(commands.Cog):
         except (AttributeError, disnake.InteractionNotEditable):
             try:
                 await inter.response.edit_message(embed=embed, components=None)
-            except:
+            except Exception:
                 await inter.send(embed=embed, ephemeral=True)
 
     @commands.has_guild_permissions(manage_guild=True)
@@ -1046,7 +1046,7 @@ class MusicSettings(commands.Cog):
 
         try:
             func = inter.store_message.edit
-        except:
+        except Exception:
             try:
                 func = inter.edit_original_message
             except AttributeError:
@@ -1080,7 +1080,7 @@ class MusicSettings(commands.Cog):
 
         try:
             global_data.update({"global_skin": select_view.global_mode})
-        except:
+        except Exception:
             pass
 
         changed_skins_txt = ""
@@ -1090,7 +1090,7 @@ class MusicSettings(commands.Cog):
                 global_data.update(
                     {"player_skin": select_view.skin_selected, "player_skin_static": select_view.static_skin_selected}
                 )
-            except:
+            except Exception:
                 pass
             else:
                 await bot.update_global_data(inter.guild_id, global_data, db_name=DBModel.guilds)
@@ -1098,13 +1098,13 @@ class MusicSettings(commands.Cog):
             if global_selected != select_view.skin_selected:
                 try:
                     changed_skins_txt += f"Global - Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
-                except:
+                except Exception:
                     changed_skins_txt += f"Global - Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
             if global_static_selected != select_view.static_skin_selected:
                 try:
                     changed_skins_txt += f"Global - Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
-                except:
+                except Exception:
                     changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
         else:
@@ -1115,7 +1115,7 @@ class MusicSettings(commands.Cog):
             if selected != select_view.skin_selected:
                 try:
                     changed_skins_txt += f"Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
-                except:
+                except Exception:
                     changed_skins_txt += (
                         f"Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
                     )
@@ -1123,7 +1123,7 @@ class MusicSettings(commands.Cog):
             if static_selected != select_view.static_skin_selected:
                 try:
                     changed_skins_txt += f"Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
-                except:
+                except Exception:
                     changed_skins_txt += f"Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
         if global_mode != select_view.global_mode:
@@ -1173,7 +1173,7 @@ class MusicSettings(commands.Cog):
 
             try:
                 await player.destroy_message()
-            except:
+            except Exception:
                 traceback.print_exc()
 
             player.skin = select_view.skin_selected
@@ -1190,7 +1190,7 @@ class MusicSettings(commands.Cog):
             try:
                 if player.controller_mode and not [m for m in player.guild.me.voice.channel.members if not m.bot]:
                     player.start_auto_skip()
-            except:
+            except Exception:
                 traceback.print_exc()
 
             await player.invoke_np(force=True)
@@ -1769,7 +1769,7 @@ class RPCCog(commands.Cog):
 
                 if len(data["token"]) == 50:
                     kwargs["value"] = data["token"]
-            except:
+            except Exception:
                 pass
 
             await inter.response.send_modal(

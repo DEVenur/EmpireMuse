@@ -389,7 +389,7 @@ class Music(commands.Cog):
             bot, guild = await check_pool_bots(inter, only_voiced=True)
         except GenericError:
             return [current[:99]]
-        except:
+        except Exception:
             bot = inter.bot
 
         try:
@@ -442,7 +442,7 @@ class Music(commands.Cog):
             except AttributeError:
                 try:
                     bot = ctx.bot
-                except:
+                except Exception:
                     bot = self.bot
 
         if not me:
@@ -497,7 +497,7 @@ class Music(commands.Cog):
 
         try:
             player.members_timeout_task.cancel()
-        except:
+        except Exception:
             pass
 
         if deafen_check and bot.config["GUILD_DEAFEN_WARN"]:
@@ -726,7 +726,7 @@ class Music(commands.Cog):
 
         try:
             thread = inter.message.thread
-        except:
+        except Exception:
             thread = None
         inter.message = DummyMessage()
         inter.message.thread = thread
@@ -878,7 +878,7 @@ class Music(commands.Cog):
             except asyncio.TimeoutError:
                 try:
                     func = msg.edit
-                except:
+                except Exception:
                     func = inter.edit_original_message
                 await func(
                     embed=disnake.Embed(
@@ -942,7 +942,7 @@ class Music(commands.Cog):
                                 ),
                                 view=None,
                             )
-                        except:
+                        except Exception:
                             traceback.print_exc()
                         return
 
@@ -984,7 +984,7 @@ class Music(commands.Cog):
                 else:
                     try:
                         current_bot = free_bots.pop(0)
-                    except:
+                    except Exception:
                         return
 
                 if bot != current_bot:
@@ -1019,7 +1019,7 @@ class Music(commands.Cog):
 
         try:
             modal_message_id = int(inter.data.custom_id[15:])
-        except:
+        except Exception:
             modal_message_id = None
 
         attachment: Optional[disnake.Attachment] = None
@@ -1518,7 +1518,7 @@ class Music(commands.Cog):
             if url_type == "user":
                 try:
                     await inter.response.defer(ephemeral=True)
-                except:
+                except Exception:
                     pass
 
                 cache_key = f"partial:spotify:{url_type}:{user_id}"
@@ -1538,7 +1538,7 @@ class Music(commands.Cog):
             if url_type == "profile":
                 try:
                     await inter.response.defer(ephemeral=True)
-                except:
+                except Exception:
                     pass
 
                 cache_key = f"partial:deezer:{url_type}:{user_id}"
@@ -1558,7 +1558,7 @@ class Music(commands.Cog):
 
             try:
                 await inter.response.defer(ephemeral=True)
-            except:
+            except Exception:
                 pass
 
             if not (info := self.bot.pool.integration_cache.get(query)):
@@ -1635,7 +1635,7 @@ class Music(commands.Cog):
                         try:
                             if len(info["thumbnails"]) > 2:
                                 embed.set_image(info["thumbnails"][0]["url"])
-                        except:
+                        except Exception:
                             pass
 
                     embeds.append(embed)
@@ -1663,12 +1663,12 @@ class Music(commands.Cog):
                 if not view.inter or view.selected is False:
                     try:
                         func = msg.edit
-                    except:
+                    except Exception:
                         func = view.inter.response.edit_message
 
                     try:
                         embed = view.embeds[view.current_page]
-                    except:
+                    except Exception:
                         embed = embeds[0]
 
                     embed.description = "\n".join(embed.description.split("\n")[:-3])
@@ -1678,7 +1678,7 @@ class Music(commands.Cog):
 
                     try:
                         await func(embed=embed, components=song_request_buttons)
-                    except:
+                    except Exception:
                         traceback.print_exc()
                     return
 
@@ -1720,7 +1720,7 @@ class Music(commands.Cog):
                 if query.startswith("https://www.youtube.com/results"):
                     try:
                         query = f"ytsearch:{parse_qs(urlparse(query).query)['search_query'][0]}"
-                    except:
+                    except Exception:
                         raise GenericError(f"**Não há suporte para o link informado:** {query}")
                     manual_selection = True
 
@@ -1773,7 +1773,7 @@ class Music(commands.Cog):
 
                         try:
                             await func(embed=embed, components=song_request_buttons)
-                        except:
+                        except Exception:
                             traceback.print_exc()
                         return
 
@@ -2186,7 +2186,7 @@ class Music(commands.Cog):
             if tracks.tracks[0].info["sourceName"] == "youtube":
                 try:
                     q = f"https://www.youtube.com/playlist?list={query.split('&list=')[1]}"
-                except:
+                except Exception:
                     q = query
 
                 if not await bot.is_owner(inter.author):
@@ -2194,7 +2194,7 @@ class Music(commands.Cog):
                         async with bot.session.get((oembed_url := f"https://www.youtube.com/oembed?url={q}")) as r:
                             try:
                                 playlist_data = await r.json()
-                            except:
+                            except Exception:
                                 raise Exception(f"{r.status} | {await r.text()}")
                             else:
                                 tracks.data["playlistInfo"]["thumb"] = playlist_data["thumbnail_url"]
@@ -2323,7 +2323,7 @@ class Music(commands.Cog):
             elif loadtype == "playlist":
                 try:
                     self.bot.pool.enqueue_playlist_embed_cooldown.get_bucket(inter).update_rate_limit()
-                except:
+                except Exception:
                     pass
                 components = [
                     disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
@@ -2381,7 +2381,7 @@ class Music(commands.Cog):
         if not inter.guild_id:
             try:
                 await check_pool_bots(inter, return_first=True)
-            except:
+            except Exception:
                 return [query] if len(query) < 100 else []
 
         try:
@@ -2577,7 +2577,7 @@ class Music(commands.Cog):
                 if not inter.response.is_done():
                     try:
                         await inter.response.defer()
-                    except:
+                    except Exception:
                         pass
                 interaction = inter
             else:
@@ -2657,13 +2657,13 @@ class Music(commands.Cog):
 
         try:
             track = player.played.pop()
-        except:
+        except Exception:
             track = player.queue.pop()
 
         if not track and player.autoplay:
             try:
                 track = player.queue_autoplay.pop()
-            except:
+            except Exception:
                 pass
 
         if player.current:
@@ -3011,7 +3011,7 @@ class Music(commands.Cog):
         try:
             await check_pool_bots(inter, only_voiced=True)
             bot = inter.music_bot
-        except:
+        except Exception:
             return
 
         try:
@@ -3078,7 +3078,7 @@ class Music(commands.Cog):
                 embed.description = "Tempo de seleção esgotado!"
                 try:
                     await msg.edit(embed=embed, view=None)
-                except:
+                except Exception:
                     pass
                 return
 
@@ -3641,7 +3641,7 @@ class Music(commands.Cog):
         else:
             try:
                 mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
-            except:
+            except Exception:
                 mode = "`Recomendação`"
             txt += f"> 👍 **⠂Adicionado via:** {mode}\n"
 
@@ -3831,7 +3831,7 @@ class Music(commands.Cog):
 
                 await player.text_channel.send(embed=embed)
 
-            except:
+            except Exception:
                 pass
 
         await player.destroy_message()
@@ -4061,7 +4061,7 @@ class Music(commands.Cog):
 
             try:
                 ephemeral = player.text_channel.id == inter.channel_id and player.static
-            except:
+            except Exception:
                 ephemeral = player.static
 
             await inter.send(embed=embed, ephemeral=ephemeral)
@@ -4630,49 +4630,49 @@ class Music(commands.Cog):
             try:
                 final_filters.remove("song_name")
                 txt.append(f"**Inclui nome:** `{fix_characters(song_name)}`")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("song_author")
                 txt.append(f"**Inclui nome no uploader/artista:** `{fix_characters(song_author)}`")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("user")
                 txt.append(f"**Pedido pelo membro:** {user.mention}")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("playlist")
                 txt.append(f"**Playlist:** {' | '.join(playlist_hyperlink)}")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("time_below")
                 txt.append(f"**Com duração inicial/igual:** `{time_format(min_duration)}`")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("time_above")
                 txt.append(f"**Com duração máxima:** `{time_format(max_duration)}`")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("duplicates")
                 txt.append(f"**Músicas duplicadas**")
-            except:
+            except Exception:
                 pass
 
             try:
                 final_filters.remove("absent_members")
                 txt.append("`Músicas pedidas por membros que saíram do canal.`")
-            except:
+            except Exception:
                 pass
 
             msg_txt = (
@@ -4888,7 +4888,7 @@ class Music(commands.Cog):
 
         try:
             has_id = song_name.split(" || ID > ")[1]
-        except:
+        except Exception:
             has_id = isinstance(inter, CustomContext)
 
         insert_func = player.queue.insert
@@ -5010,49 +5010,49 @@ class Music(commands.Cog):
         try:
             final_filters.remove("song_name")
             txt.append(f"**Inclui nome:** `{fix_characters(song_name)}`")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("song_author")
             txt.append(f"**Inclui nome no uploader/artista:** `{fix_characters(song_author)}`")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("user")
             txt.append(f"**Pedido pelo membro:** {user.mention}")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("playlist")
             txt.append(f"**Playlist:** {' | '.join(playlist_hyperlink)}")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("time_below")
             txt.append(f"**Com duração inicial/igual:** `{time_format(min_duration)}`")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("time_above")
             txt.append(f"**Com duração máxima:** `{time_format(max_duration)}`")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("duplicates")
             txt.append(f"**Músicas duplicadas**")
-        except:
+        except Exception:
             pass
 
         try:
             final_filters.remove("absent_members")
             txt.append("`Músicas pedidas por membros que saíram do canal.`")
-        except:
+        except Exception:
             pass
 
         components = [
@@ -5102,7 +5102,7 @@ class Music(commands.Cog):
         try:
             if not inter.author.voice:
                 return
-        except:
+        except Exception:
             pass
 
         if not self.bot.bot_ready or not self.bot.is_ready():
@@ -5111,7 +5111,7 @@ class Music(commands.Cog):
         try:
             await check_pool_bots(inter, only_voiced=True)
             bot = inter.music_bot
-        except:
+        except Exception:
             traceback.print_exc()
             return
 
@@ -5150,7 +5150,7 @@ class Music(commands.Cog):
                 return
         except PoolException:
             pass
-        except:
+        except Exception:
             return
 
         try:
@@ -5201,7 +5201,7 @@ class Music(commands.Cog):
         try:
             await check_pool_bots(inter, only_voiced=True)
             bot = inter.music_bot
-        except:
+        except Exception:
             return
 
         if not inter.author.voice:
@@ -5436,7 +5436,7 @@ class Music(commands.Cog):
             bot = inter.music_bot
         except GenericError:
             return
-        except:
+        except Exception:
             bot = inter.bot
 
         try:
@@ -5627,7 +5627,7 @@ class Music(commands.Cog):
 
                 try:
                     player.guild.voice_client.cleanup()
-                except:
+                except Exception:
                     pass
 
                 if not vc:
@@ -5636,7 +5636,7 @@ class Music(commands.Cog):
                     )
                     try:
                         await player.destroy()
-                    except:
+                    except Exception:
                         traceback.print_exc()
                     continue
 
@@ -5645,7 +5645,7 @@ class Music(commands.Cog):
                 if not player.is_paused and not player.is_playing:
                     await player.process_next()
                 print(f"{self.bot.user} - {player.guild.name} [{guild_id}] - Player Reconectado no canal de voz")
-            except:
+            except Exception:
                 traceback.print_exc()
 
     async def is_request_channel(
@@ -5685,7 +5685,7 @@ class Music(commands.Cog):
 
             try:
                 channel = bot.get_channel(int(data["player_controller"]["channel"]))
-            except:
+            except Exception:
                 channel = None
 
             if not channel:
@@ -5848,7 +5848,7 @@ class Music(commands.Cog):
 
         try:
             await command._max_concurrency.release(interaction)
-        except:
+        except Exception:
             pass
 
         try:
@@ -5964,12 +5964,12 @@ class Music(commands.Cog):
                         if not (matches := URL_REG.findall(interaction.message.embeds[0].description)):
                             return
                         url = matches[0].split(">")[0]
-                except:
+                except Exception:
                     return
 
                 try:
                     await self.player_interaction_concurrency.acquire(interaction)
-                except:
+                except Exception:
                     raise GenericError("Há uma música sendo processada no momento...")
 
                 bot: Optional[BotCore] = None
@@ -6010,7 +6010,7 @@ class Music(commands.Cog):
 
                 try:
                     node = player.node
-                except:
+                except Exception:
                     node: Optional[wavelink.Node] = None
 
                 try:
@@ -6186,7 +6186,7 @@ class Music(commands.Cog):
                     await asyncio.sleep(5)
             try:
                 await self.player_interaction_concurrency.release(interaction)
-            except:
+            except Exception:
                 pass
             return
 
@@ -6496,7 +6496,7 @@ class Music(commands.Cog):
                 if not choices:
                     try:
                         await self.player_interaction_concurrency.release(interaction)
-                    except:
+                    except Exception:
                         pass
                     await interaction.send(
                         embed=disnake.Embed(
@@ -6537,7 +6537,7 @@ class Music(commands.Cog):
                     if not select_interaction or view.selected is False:
                         try:
                             await self.player_interaction_concurrency.release(interaction)
-                        except:
+                        except Exception:
                             pass
                         await interaction.edit_original_message(
                             embed=disnake.Embed(
@@ -6605,7 +6605,7 @@ class Music(commands.Cog):
 
                 try:
                     await self.player_interaction_concurrency.release(interaction)
-                except:
+                except Exception:
                     pass
 
                 return
@@ -6614,7 +6614,7 @@ class Music(commands.Cog):
                 if not player.current:
                     try:
                         await self.player_interaction_concurrency.release(interaction)
-                    except:
+                    except Exception:
                         pass
                     await interaction.send("**Não estou tocando algo no momento...**", ephemeral=True)
                     return
@@ -6622,7 +6622,7 @@ class Music(commands.Cog):
                 if not player.current.ytid:
                     try:
                         await self.player_interaction_concurrency.release(interaction)
-                    except:
+                    except Exception:
                         pass
                     await interaction.send("No momento apenas músicas do youtube são suportadas.", ephemeral=True)
                     return
@@ -6638,7 +6638,7 @@ class Music(commands.Cog):
                 elif not player.current.info["extra"]["lyrics"]:
                     try:
                         await self.player_interaction_concurrency.release(interaction)
-                    except:
+                    except Exception:
                         pass
                     await interaction.edit_original_message(f"**{not_found_msg}**")
                     return
@@ -6646,7 +6646,7 @@ class Music(commands.Cog):
                 if not player.current.info["extra"]["lyrics"]:
                     try:
                         await self.player_interaction_concurrency.release(interaction)
-                    except:
+                    except Exception:
                         pass
                     await interaction.edit_original_message(f"**{not_found_msg}**")
                     return
@@ -6662,7 +6662,7 @@ class Music(commands.Cog):
 
                 try:
                     await self.player_interaction_concurrency.release(interaction)
-                except:
+                except Exception:
                     pass
 
                 await interaction.edit_original_message(
@@ -6707,13 +6707,13 @@ class Music(commands.Cog):
 
             try:
                 await self.player_interaction_concurrency.release(interaction)
-            except:
+            except Exception:
                 pass
 
         except Exception as e:
             try:
                 await self.player_interaction_concurrency.release(interaction)
-            except:
+            except Exception:
                 pass
             self.bot.dispatch("interaction_player_error", interaction, e)
 
@@ -6837,7 +6837,7 @@ class Music(commands.Cog):
         if message.channel.permissions_for(message.guild.me).manage_messages or message.author.id == self.bot.user.id:
             try:
                 await message.delete(delay=delay)
-            except:
+            except Exception:
                 traceback.print_exc()
 
     @commands.Cog.listener("on_song_request")
@@ -6976,7 +6976,7 @@ class Music(commands.Cog):
 
             try:
                 await self.song_request_concurrency.acquire(message)
-            except:
+            except Exception:
                 await message.channel.send(
                     f"{message.author.mention} você deve aguardar seu pedido de música anterior carregar...",
                 )
@@ -7018,7 +7018,7 @@ class Music(commands.Cog):
 
                     try:
                         await view.inter.response.defer()
-                    except:
+                    except Exception:
                         pass
 
                     if view.selected == "music":
@@ -7056,7 +7056,7 @@ class Music(commands.Cog):
                     await msg.edit(content=error, embed=None, view=None)
                 else:
                     await message.channel.send(error, delete_after=9)
-            except:
+            except Exception:
                 traceback.print_exc()
 
         await self.song_request_concurrency.release(message)
@@ -7141,14 +7141,14 @@ class Music(commands.Cog):
                     ),
                 )
 
-            except:
+            except Exception:
                 traceback.print_exc()
 
             await asyncio.sleep(20)
 
             try:
                 await max_concurrency.release(message)
-            except:
+            except Exception:
                 pass
 
     async def process_music(
@@ -7194,7 +7194,7 @@ class Music(commands.Cog):
 
             try:
                 user_data["last_tracks"].remove(reg_query)
-            except:
+            except Exception:
                 pass
 
             if len(user_data["last_tracks"]) > 6:
@@ -7388,7 +7388,7 @@ class Music(commands.Cog):
             elif modal_message_id:
                 try:
                     player.message = await player.text_channel.fetch_message(modal_message_id)
-                except:
+                except Exception:
                     pass
 
             if not player.has_thread:
@@ -7447,7 +7447,7 @@ class Music(commands.Cog):
         if not player.message:
             try:
                 cached_message = await text_channel.fetch_message(message_id)
-            except:
+            except Exception:
                 cached_message = await send_idle_embed(message, bot=self.bot, guild_data=data)
                 data["player_controller"]["message_id"] = str(cached_message.id)
                 await self.bot.update_data(message.guild.id, data, db_name=DBModel.guilds)
@@ -7485,7 +7485,7 @@ class Music(commands.Cog):
 
                 try:
                     self.bot.pool.enqueue_playlist_embed_cooldown.get_bucket(message).update_rate_limit()
-                except:
+                except Exception:
                     pass
 
                 components.extend(
@@ -7542,7 +7542,7 @@ class Music(commands.Cog):
 
                 try:
                     self.bot.pool.enqueue_track_embed_cooldown.get_bucket(message).update_rate_limit()
-                except:
+                except Exception:
                     pass
 
                 components.extend(
@@ -7599,7 +7599,7 @@ class Music(commands.Cog):
     def cog_unload(self):
         try:
             self.error_report_task.cancel()
-        except:
+        except Exception:
             pass
 
     async def interaction_message(
@@ -7617,7 +7617,7 @@ class Music(commands.Cog):
     ):
         try:
             txt, txt_ephemeral = txt
-        except:
+        except Exception:
             txt_ephemeral = False
 
         try:
@@ -7698,7 +7698,7 @@ class Music(commands.Cog):
     async def node_connection_closed(self, node: wavelink.Node):
         try:
             self.bot.wavelink_node_reconnect_tasks[node.identifier].cancel()
-        except:
+        except Exception:
             pass
 
         self.bot.wavelink_node_reconnect_tasks[node.identifier] = self.bot.loop.create_task(self.node_reconnect(node))
@@ -7727,7 +7727,7 @@ class Music(commands.Cog):
             for player in list(node.players.values()):
                 try:
                     player._new_node_task.cancel()
-                except:
+                except Exception:
                     pass
 
                 player._new_node_task = player.bot.loop.create_task(player._wait_for_new_node())
@@ -7770,7 +7770,7 @@ class Music(commands.Cog):
         for q in queries:
             try:
                 lst.remove(q)
-            except:
+            except Exception:
                 continue
 
     def add_provider(self, lst, queries: list):
@@ -7800,7 +7800,7 @@ class Music(commands.Cog):
                 )
                 try:
                     node.native_sources.remove("deezer")
-                except:
+                except Exception:
                     pass
             elif "dzsearch" not in node.search_providers:
                 node.native_sources.add("deezer")
@@ -8032,7 +8032,7 @@ class Music(commands.Cog):
                         if p in query:
                             try:
                                 query = f"https://www.youtube.com/watch?v={re.search(r'v=([a-zA-Z0-9_-]+)', query).group(1)}"
-                            except:
+                            except Exception:
                                 pass
                             break
             elif source:
@@ -8122,10 +8122,10 @@ class Music(commands.Cog):
 
             try:
                 artist, track = query.split(" - ", 1)
-            except:
+            except Exception:
                 try:
                     artist, track = query.split(" ", 1)
-                except:
+                except Exception:
                     raise GenericError("Você deve informar sua busca dessa forma: nome do artista - nome da música")
 
             current = None
@@ -8307,7 +8307,7 @@ class Music(commands.Cog):
 
                 try:
                     player.reconnect_voice_channel_task.cancel()
-                except:
+                except Exception:
                     pass
                 player.reconnect_voice_channel_task = player.bot.loop.create_task(player.reconnect_voice_channel())
 
@@ -8324,11 +8324,11 @@ class Music(commands.Cog):
                 if after.channel == vc:
                     try:
                         player.members_timeout_task.cancel()
-                    except:
+                    except Exception:
                         pass
                     try:
                         check = (m for m in vc.members if not m.bot and not (m.voice.deaf or m.voice.self_deaf))
-                    except:
+                    except Exception:
                         check = None
                     player.start_members_timeout(check=bool(check))
             return
@@ -8381,7 +8381,7 @@ class Music(commands.Cog):
                 for m in player.guild.me.voice.channel.members
                 if not m.bot and not (m.voice.deaf or m.voice.self_deaf)
             ]
-        except:
+        except Exception:
             check = None
 
         if player.stage_title_event and member.bot and not player.is_closing:
@@ -8390,7 +8390,7 @@ class Music(commands.Cog):
                     if before.channel.instance and member not in before.channel.members:
                         try:
                             await before.channel.instance.edit(topic="atualização automática desativada")
-                        except:
+                        except Exception:
                             traceback.print_exc()
                         player.stage_title_event = False
 
@@ -8445,12 +8445,12 @@ class Music(commands.Cog):
 
         try:
             channels.add(before.channel.id)
-        except:
+        except Exception:
             pass
 
         try:
             channels.add(after.channel.id)
-        except:
+        except Exception:
             pass
 
         try:
@@ -8565,13 +8565,13 @@ class Music(commands.Cog):
 
             try:
                 func = inter.edit_original_message
-            except:
+            except Exception:
                 try:
                     func = inter.store_message.edit
-                except:
+                except Exception:
                     try:
                         func = message.edit
-                    except:
+                    except Exception:
                         func = inter.send
                         kwargs["ephemeral"] = True
 

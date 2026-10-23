@@ -38,6 +38,7 @@ select = [
     "E7",
     "E9",
     "F",
+    "E722",
 ]
 # Violações legadas pré-existentes ignoradas temporariamente para permitir
 # adoção gradual sem risco de quebra de comportamento em produção
@@ -46,7 +47,6 @@ ignore = [
     "E702",  # multiple statements on one line (semicolon)
     "E713",  # test for membership should be 'not in'
     "E714",  # test for identity should be 'is not'
-    "E722",  # do not use bare 'except' (legado em 38 arquivos; saneamento futuro)
     "E731",  # do not assign a lambda expression
     "E741",  # ambiguous variable name
     "F401",  # imported but unused
