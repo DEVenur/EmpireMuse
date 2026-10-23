@@ -27,6 +27,7 @@ import pytest
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.errors import GenericError
+from tests.support.api_publica import arvore_da_familia, fonte_da_familia
 
 SEGREDO = "detalhe-interno /srv/empiremuse/segredo.json"
 CAUSA = "java.lang.IllegalStateException: causa-interna-do-lavaplayer em /opt/lavalink/plugin.jar"
@@ -708,9 +709,11 @@ class TestGuardaDeEstruturaEmModels:
 
     @pytest.fixture
     def fonte(self):
-        import empiremuse.utils.music.models as models
-
-        return Path(models.__file__).read_text(encoding="utf-8")
+        fonte = fonte_da_familia("models")
+        # Sentinela positiva: as guardas abaixo são NEGATIVAS ("não há repr(e)") e passariam no vazio se a fixture lesse só
+        # um ``__init__`` fino depois da divisão de models.py. As duas funções que o docstring cita têm de estar no texto.
+        assert "def get_autoqueue_tracks" in fonte and "def invoke_np" in fonte, "a fixture não leu o código do player"
+        return fonte
 
     @pytest.mark.parametrize(
         "padrao",
@@ -853,9 +856,7 @@ class TestLavalinkTextEmCodeSpan:
 
     def test_o_autoplay_usa_o_mesmo_helper_sem_envolver_em_crases(self):
         """``get_autoqueue_tracks`` é longo demais para dirigir com dublê: a guarda lê o código dos dois usos."""
-        import empiremuse.utils.music.models as models
-
-        fonte = Path(models.__file__).read_text(encoding="utf-8")
+        fonte = fonte_da_familia("models")
         usos = [linha.strip() for linha in fonte.splitlines() if "lavalink_text(" in linha and "def " not in linha]
         assert len(usos) == 2, usos
         assert any("exception.message" in uso for uso in usos) and any("event.message" in uso for uso in usos)
@@ -1212,9 +1213,7 @@ class TestGuardaAstEmModels:
     def funcoes(self):
         import ast
 
-        import empiremuse.utils.music.models as models
-
-        arvore = ast.parse(Path(models.__file__).read_text(encoding="utf-8"))
+        arvore = arvore_da_familia("models")
         achadas = {
             no.name: no
             for no in ast.walk(arvore)
