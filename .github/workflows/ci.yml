@@ -30,9 +30,12 @@ jobs:
       - name: Instalar uv
         run: python -m pip install "uv==0.13.1"
 
-      - name: Instalar dependências
+      - name: Instalar dependências com hashes
         run: |
-          uv pip install --system -r requirements.txt -r requirements-dev.txt "tinymongo[serialization]"
+          uv pip install --system --require-hashes -r requirements-lock.txt -r requirements-dev-lock.txt
+
+      - name: Instalar dependências Git fixadas por SHA
+        run: uv pip install --system --no-deps -r requirements-git.txt
 
       - name: Verificação de lint (ruff check)
         run: ruff check .
@@ -42,6 +45,10 @@ jobs:
 
       - name: Verificação de compilação de bytecode
         run: python -m compileall -q main.py empiremuse
+
+      - name: Verificação estática de tipos (mypy)
+        continue-on-error: true
+        run: mypy
 
       - name: Execução dos testes automatizados (pytest)
         run: pytest -q

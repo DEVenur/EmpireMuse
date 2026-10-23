@@ -84,7 +84,7 @@ UPSTREAM_RESOURCE_PATTERNS = (
     "911370624507707483",
 )
 # Exceção explícita: fork do jishaku de zRitsu (TODO saneamento/DevOps).
-JISHAKU_EXCEPTION_FILE = "requirements.txt"
+JISHAKU_EXCEPTION_FILES = ("requirements.txt", "requirements-git.txt")
 
 # "MuseHeart", "muse heart", "Muse_Heart", "muse-heart"; não casa "amuse heart" (palavra diferente).
 OLD_NAME_RE = re.compile(r"(?<![A-Za-z])muse[ _-]?heart", re.IGNORECASE)
@@ -432,7 +432,7 @@ def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror(
 
 
 def _jishaku_exception(path: str, line: str) -> bool:
-    return path == JISHAKU_EXCEPTION_FILE and re.search(r"jishaku", line, re.IGNORECASE) is not None
+    return path in JISHAKU_EXCEPTION_FILES and re.search(r"jishaku", line, re.IGNORECASE) is not None
 
 
 PANEL_CREDIT_FILE = (

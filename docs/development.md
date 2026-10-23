@@ -22,12 +22,16 @@ cd EmpireMuse
 uv venv --python 3.13
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
-uv pip install -r requirements.txt
+uv pip install --require-hashes -r requirements-lock.txt
+uv pip install --no-deps -r requirements-git.txt
 ```
 
 Observações:
 
-- O `disnake` está fixado em um commit Git anterior à 2.12.0 (`requirements.txt:1`); a atualização para a
+- As dependências via Git (`disnake` e `jishaku`) são fixadas por SHA completo de commit em `requirements-git.txt` (`requirements-git.txt:3` e `requirements-git.txt:4`).
+- As dependências do PyPI são travadas com hashes SHA-256 no arquivo de lock `requirements-lock.txt` (compilado via `uv pip compile --generate-hashes`), garantindo integridade criptográfica da cadeia de suprimentos (conforme `.claude/rules/empiremuse/security.md` §8).
+- O arquivo `requirements.txt` permanece como especificação de alto nível do projeto e ponto de entrada para plataformas gerenciadas (como a Discloud).
+- O `disnake` está fixado em um commit Git anterior à 2.12.0 (`requirements-git.txt:3`); a atualização para a
   versão estável está planejada para fases futuras.
 - Dependências obsoletas expurgadas (Bloco C2): 8 bibliotecas declaradas sem nenhum uso no código (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`) foram removidas de `requirements.txt`, saneando a superfície de dependências e resolvendo o item KI-05 (ver [`known-issues.md`](known-issues.md)).
 
@@ -157,12 +161,13 @@ Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/b
 As subpastas são organizadas por domínio: `audio/` (Lavalink, JDK, YouTube, Spotify), `brand/`, `cogs/`, `config/`, `deploy/`, `panel/`, `persistence/` (sessões, fila salva, skins, caches, db.py), `pool/`, `repo/` (layout da raiz e ignores), `rules/`, `runtime/` (paths e .runtime/), `serialization/`, `web/` (RPC/WebSocket) e `support/` (helpers compartilhados e raiz.py). O arquivo vai para a pasta do módulo de produção que ele testa e o nome de arquivo não leva fase nem etapa.
 
 ```bash
-uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio, pytest-cov e ruff
+uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-asyncio, pytest-cov, ruff e mypy
 .venv/bin/python -m pytest               # executa a suíte de testes (Windows: .venv\Scripts\python -m pytest)
 .venv/bin/python -m pytest --cov         # executa testes medindo a cobertura de código
 .venv/bin/ruff check .                   # verificação estática de linting
 .venv/bin/ruff format --check .          # verificação de conformidade de formatação
 .venv/bin/ruff format .                  # formatação automática de arquivos
+.venv/bin/mypy                           # verificação estática de tipos
 ```
 
 ### Status das ferramentas no projeto:
@@ -172,14 +177,15 @@ uv pip install -r requirements-dev.txt   # pytest 9.1.1, pytest-asyncio, pytest-
 | `ruff` | **Ativo** | Linter e formatador configurado em `pyproject.toml` (target Python 3.13, line-length 120, regras `E4`, `E7`, `E9`, `F`). |
 | `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
 | `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q main.py empiremuse`). |
-| `mypy` ou `pyright` | Planejado | Tipagem gradual nos módulos novos (etapa posterior de saneamento). |
-| `uv` | Planejado | Dependências e *lockfile* completo quando o projeto migrar dependências para o `pyproject.toml`. |
+| `mypy` | **Ativo** | Checagem estática de tipos configurada em `pyproject.toml` (target Python 3.13, baseline gradual com checagem ativa em `empiremuse.rules.*`). |
+| `uv` | **Ativo** | Gerenciamento de dependências e arquivos de lock com integridade estrita via hash (`requirements-lock.txt` e `requirements-dev-lock.txt`). |
 
 A esteira de integração contínua (CI) em `.github/workflows/ci.yml` executa automaticamente em todos os pushes e PRs para a branch `main`:
 1. `ruff check .` (linting);
 2. `ruff format --check .` (formatação);
 3. `python -m compileall -q main.py empiremuse` (validação de compilação de bytecode);
-4. `pytest -q` (execução da suíte de testes).
+4. `mypy` (verificação estática de tipos, não-bloqueante via `continue-on-error`);
+5. `pytest -q` (execução da suíte de testes).
 
 Convenções de código adicionais: `.claude/rules/empiremuse/python-disnake.md`.
 
