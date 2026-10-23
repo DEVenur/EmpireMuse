@@ -1,5 +1,5 @@
 """Fase 2, Trilha A (itens 1, 4, 5, 6 e 7 do contrato do bot) — busca padrão, mensagens de falha, aviso de novo servidor,
-decodetrack na rota v4 e voz sem canal. O item 3 (local_lavalink) está em test_local_lavalink.py; o item 2 (constantes) em
+decodetrack na rota v4 e voz sem canal. O item 3 (local_lavalink) está em test_lavalink_download_sha256.py; o item 2 (constantes) em
 test_branding.py; o item 8 (cabeçalhos de `/`) em tests/panel/test_status_page.py.
 
 Contrato: BRIEFING-FASE2.md ("Trilha A — contrato do item 3"). Interpretações: .qa-fase2a-interp.txt.

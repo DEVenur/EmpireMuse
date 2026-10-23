@@ -33,7 +33,7 @@ from tests.persistence.test_formato_skin import editor_sem_tela as _base_do_edit
 
 @pytest.fixture
 def editor_sem_tela(request):
-    """O editor de ``tests/test_f3_6b_formato_skin.py`` já aberto em modo ``editor`` (só nele se salva ou importa skin)."""
+    """O editor de ``tests/persistence/test_formato_skin.py`` já aberto em modo ``editor`` (só nele se salva ou importa skin)."""
 
     base = request.getfixturevalue("_base_do_editor")
 

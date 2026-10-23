@@ -99,7 +99,7 @@ class TestBrandingRelease003:
     def test_no_runtime_python_file_still_hardcodes_the_002_release(self):
         offenders = []
         # branding.py e local_lavalink.py podem listar URLs antigas de propósito (URLs oficiais de versões anteriores são
-        # reconhecidas e atualizadas sozinhas — tests/test_audio_fase2a3.py); aqui só o que escolhe a versão atual.
+        # reconhecidas e atualizadas sozinhas — tests/audio/test_lavalink_url_antiga.py); aqui só o que escolhe a versão atual.
         for rel in ("empiremuse/config_loader.py", "empiremuse/utils/client.py"):
             for lineno, line in enumerate((ROOT / rel).read_text("utf-8").splitlines(), start=1):
                 if "EmpireMuse-LL-binaries/releases/download/0.0.2" in line:
@@ -289,7 +289,7 @@ class TestRunLavalinkOauthEnv:
 
     def test_with_token_only_the_allowlisted_environment_is_inherited(self, started, monkeypatch):
         # Fase 2.1 (item 2): o filho Java não herda mais o os.environ inteiro; a allowlist completa está em
-        # tests/test_audio_fase2_1.py. Aqui: PATH segue (o java precisa ser achado) e uma variável qualquer NÃO segue.
+        # tests/audio/test_jdk_sha256_e_ambiente.py. Aqui: PATH segue (o java precisa ser achado) e uma variável qualquer NÃO segue.
         monkeypatch.setenv("QA_MARKER_VAR", "valor-herdado")
         start(FAKE_TOKEN)
         env = env_of(started[0])

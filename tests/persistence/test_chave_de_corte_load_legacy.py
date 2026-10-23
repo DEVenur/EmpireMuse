@@ -8,7 +8,7 @@ fila em ``Music.play`` (``queue``); skin em ``Music.create_player``, ``MusicSett
 * por espião (``load_legacy`` trocado em todo módulo que o importou): os kinds e os tipos de ``raw`` de verdade, com os
   GRAVADORES REAIS (``save_info``, ``save_queue``, o editor de skin), e o resultado igual ao ``pickle.loads`` de hoje;
 * recusa TRATADA em cada ponto com um pickle hostil: sem execução, sem exceção crua, sem perder o que ficou guardado,
-  com aviso no log só com ``guild_id`` e tipo da falha (decisões em ``tests/helpers_f3_6b_corte.py``);
+  com aviso no log só com ``guild_id`` e tipo da falha (decisões em ``tests/support/chave_de_corte.py``);
 * skin ``""`` vale como sem skin.
 """
 
@@ -54,7 +54,7 @@ from tests.persistence.test_formato_skin import (
 from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 from tests.support.raiz import RAIZ
 
-editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
+editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/persistence/test_formato_skin.py
 PACOTE = RAIZ / "empiremuse"
 
 # (arquivo relativo a empiremuse/, função qualificada, kind)

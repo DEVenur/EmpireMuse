@@ -2,7 +2,7 @@
 
 Uma skin é o dicionário do editor (``queue_max_entries``, ``queue_format``, ``content``, ``controller_enabled``, ``embeds``).
 O validador é a porta de TUDO que vira dicionário no documento: o que o editor salva e o que a migração lê do texto legado.
-As decisões (tetos, ``Cf`` liberado nos textos livres, nenhuma chave nova) estão em ``tests/helpers_f3_6b_skins.py``.
+As decisões (tetos, ``Cf`` liberado nos textos livres, nenhuma chave nova) estão em ``tests/support/skins.py``.
 
 * aceita as skins reais: a padrão do editor, as que o editor monta (campos vazios, ``type: rich`` do ``Embed.to_dict``,
   emojis compostos, campo "em branco") e cada teto no limite exato;

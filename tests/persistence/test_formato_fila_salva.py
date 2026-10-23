@@ -9,7 +9,7 @@ parada (guarda o que recebeu e interrompe).
   ``created_at`` em UTC, ``guild_id``) e as faixas que voltam como as classes reais;
 * a etapa 4 trocou o formato gravado (``TestFormatoGravado``: JSON em ``saved_queues_json/``, sem envelope); o ``.pkl`` antigo
   só é LIDO (``TestLegadoEmVariosProtocolos``, pelo ``load_legacy``) e migrado; os testes do JSON estão em
-  ``tests/test_f3_6b_etapa4_fila.py``.
+  ``tests/persistence/test_fila_salva.py``.
 """
 
 import copy

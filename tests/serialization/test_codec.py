@@ -1,6 +1,6 @@
 """F3-6b, etapa 1 (RED) — ``empiremuse/serialization/codec.py``: ler e gravar JSON com limites, e o envelope zlib + base64.
 
-API fixada por estes testes (decisões de assinatura em ``tests/helpers_f3_6b_serializacao.py``); todo erro é ``SchemaError``
+API fixada por estes testes (decisões de assinatura em ``tests/support/serializacao_nucleo.py``); todo erro é ``SchemaError``
 (``path == ""``, ``code`` do helper), sem o conteúdo do dado, e sem ``JSONDecodeError``/``RecursionError``/``ValueError``
 crus escapando:
 

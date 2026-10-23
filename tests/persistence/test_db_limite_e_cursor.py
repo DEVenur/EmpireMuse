@@ -93,7 +93,7 @@ class TestChamadoresDeHoje:
         assert len(pares) == 75
 
     def test_o_fixfavs_nao_passa_mais_limit_e_percorre_pelo_cursor(self):
-        """O ``limit`` de 300 e 500 nunca valeu; com ele valendo, o comando corrigiria só uma parte (ver ``test_f3_6b_fixfavs_sem_limite.py``)."""
+        """O ``limit`` de 300 e 500 nunca valeu; com ele valendo, o comando corrigiria só uma parte (ver ``test_fixfavs_sem_limite.py``)."""
         arvore = ast.parse((RAIZ / "empiremuse" / "cogs" / "misc.py").read_text(encoding="utf-8"))
         chamadas = [
             no.func.attr

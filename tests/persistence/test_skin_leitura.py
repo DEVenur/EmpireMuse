@@ -3,7 +3,7 @@
 Migração no primeiro acesso (plano 3.2): o texto legado (``base64`` de ``pickle``) é lido por ``load_legacy(texto, "skin")``,
 validado por ``validate_skin`` e trocado por dicionário NO documento, que é gravado inteiro UMA vez. O que for recusado (pickle
 hostil ou skin fora do esquema) continua como texto, com um aviso só com ``guild_id`` e ``code``. Depois da migração nada
-mais é lido nem gravado (idempotente). As decisões estão em ``tests/helpers_f3_6b_skins.py``.
+mais é lido nem gravado (idempotente). As decisões estão em ``tests/support/skins.py``.
 
 Os 4 pontos: ``Music.create_player``, ``MusicSettings.change_skin``, ``SkinEditorMenu.load_skin`` e o laço do player em
 ``SkinEditorMenu.modal_handler`` (depois de salvar).
@@ -34,7 +34,7 @@ from tests.persistence.test_formato_skin import (
 )
 from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 
-editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
+editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/persistence/test_formato_skin.py
 
 
 def documento(normais=None, estaticas=None, **extra) -> dict:

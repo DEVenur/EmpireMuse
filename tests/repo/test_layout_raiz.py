@@ -71,7 +71,7 @@ def test_raiz_so_tem_arquivos_versionados_da_lista_fechada():
 
     assert not inesperados, (
         f"arquivos novos na raiz sem decisão: {inesperados}. Mova para a pasta do domínio (.github/, deploy/, docs/...) "
-        "ou, se a raiz for mesmo o lugar, inclua na lista de tests/test_layout_raiz.py justificando."
+        "ou, se a raiz for mesmo o lugar, inclua na lista de tests/repo/test_layout_raiz.py justificando."
     )
 
 

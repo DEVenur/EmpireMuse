@@ -6,7 +6,7 @@ tratados pelo ``BotPool.load_cache``) e ``.lastfm_cache`` (na raiz do diretório
 Depois da etapa 2b (chave de corte) NENHUM cache legado é lido: o arquivo é apagado sem ser aberto e o cache recomeça vazio
 (decisão P3: caches não migram). Desde a etapa 6 só o cache de playlist (``BotPool.cache_updater``) e o do Last.fm são
 GRAVADOS, em JSON (``playlist_cache.json`` e ``.lastfm_cache.json``); o formato novo é testado em
-``tests/test_f3_6b_etapa6_caches.py``. Aqui ficam as fixtures compartilhadas, o descarte dos arquivos antigos e o que vale
+``tests/serialization/test_cache_json.py``. Aqui ficam as fixtures compartilhadas, o descarte dos arquivos antigos e o que vale
 para qualquer formato: cache ausente ou ilegível não derruba a inicialização.
 """
 

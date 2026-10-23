@@ -3,7 +3,7 @@
 A ``.runtime/`` fica em ``PROJECT_DIR``, é ignorada pelo git e só existe no checkout principal. Se um teste a enxergasse,
 ``paths.get_runtime_dir()`` e ``enter_runtime_dir()`` mudariam de resultado conforme o lugar onde a suíte roda, e o
 ``.env`` real do desenvolvedor poderia ser lido ou sobrescrito. A guarda mora em ``tests/conftest.py`` (fixture
-autouse ``_hide_dev_runtime``) e em ``tests/helpers_runtime_guard.py``.
+autouse ``_hide_dev_runtime``) e em ``tests/support/runtime_guard.py``.
 """
 
 import os

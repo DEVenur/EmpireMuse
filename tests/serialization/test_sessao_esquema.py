@@ -3,8 +3,8 @@
 Cobre ``encode_session``, ``decode_session`` e ``validate_session`` (sem tocar no produto): ida e volta com a sessão REAL do
 ``save_info``, tipos e tetos de cada campo, ``voice_state``/``extra_info`` fora, ``_id`` do conteúdo == o esperado (condição 2 do
 5.1), ``time`` (R2: nem imortal nem do futuro) e números/datas extremos, o esquema da skin da sessão (R5) e o vazamento.
-As faixas (URLs, R1) estão em ``tests/test_f3_6b_etapa5_faixas.py`` e a redução por tamanho (R6) em ``..._tamanho.py``.
-Decisões em ``tests/helpers_f3_6b_sessao.py``.
+As faixas (URLs, R1) estão em ``tests/serialization/test_sessao_faixas.py`` e a redução por tamanho (R6) em ``..._tamanho.py``.
+Decisões em ``tests/support/sessoes.py``.
 """
 
 import copy

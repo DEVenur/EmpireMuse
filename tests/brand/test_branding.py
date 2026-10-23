@@ -423,7 +423,7 @@ def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
 
 
 def test_example_env_leaves_the_jar_url_empty_so_it_follows_the_official_mirror():
-    # Fase 2 (defeito de atualização): uma URL fixa no .env quebrava a cada versão nova. Detalhes: tests/test_audio_fase2a3.py.
+    # Fase 2 (defeito de atualização): uma URL fixa no .env quebrava a cada versão nova. Detalhes: tests/audio/test_lavalink_url_antiga.py.
     match = re.search(r"^LAVALINK_FILE_URL=(.*)$", _read(".example.env"), re.MULTILINE)
     assert match and match.group(1).strip().strip("'\"") == ""
 

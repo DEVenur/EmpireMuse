@@ -1,6 +1,6 @@
 """F3-7 (D1 a D4) — complemento do QA depois da mutação do código REAL (``paths.py``, ``__main__.py``, ``config_loader.py``).
 
-Sobreviventes de ``tests/test_runtime_dir_dev.py`` que não eram equivalentes:
+Sobreviventes de ``tests/runtime/test_runtime_dir_dev.py`` que não eram equivalentes:
 
 - ``enter_runtime_dir`` na ``.runtime/`` gravava ``EMPIREMUSE_HOME`` (o Docker e o Pterodactyl se reconhecem por ela);
 - ``.runtime/`` como link simbólico não era resolvida (``RUNTIME_DIR`` apontava para o link, não para a pasta);

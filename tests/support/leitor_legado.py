@@ -54,7 +54,7 @@ __all__ = [
     "vazamentos",
 ]
 
-# Códigos próprios do leitor legado (os demais vêm de ``tests/helpers_f3_6b_serializacao.py``).
+# Códigos próprios do leitor legado (os demais vêm de ``tests/support/serializacao_nucleo.py``).
 PROTOCOL = "protocol"  # sem PROTO, PROTO menor que 4 (inclui o protocolo 3 e o set como classe) ou maior que 5
 OPCODE = "opcode"  # opcode fora da lista fechada do kind
 GLOBAL = "global"  # STACK_GLOBAL com par (módulo, nome) fora da allowlist do kind

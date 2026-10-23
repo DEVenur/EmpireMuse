@@ -128,7 +128,7 @@ class TestFavoritesRules:
 
     @pytest.mark.asyncio
     async def test_add_modal_and_both_player_buttons_have_the_zero_and_owner_exemption(self):
-        """KI-39: o comportamento do modal é medido em tests/test_f3_cogs_painel.py; aqui os três caminhos de escrita."""
+        """KI-39: o comportamento do modal é medido em tests/cogs/test_cogs_x_painel.py; aqui os três caminhos de escrita."""
         cheios = {f"f{i}": URL for i in range(8)}
         for favs, dono in ((0, False), (3, True)):
             modal = ModalBot(favs=favs, dono=dono, fav_links=cheios)

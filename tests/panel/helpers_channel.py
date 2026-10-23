@@ -1,6 +1,6 @@
 """Dublês da E4c (categoria `canal`): um servidor 100 com um bot (7000) e canais REAIS de disnake.
 
-Reaproveita os dublês de Discord de tests/helpers_request_channel.py (os mesmos da caracterização) e o FakeDB do
+Reaproveita os dublês de Discord de tests/support/canal_de_pedidos.py (os mesmos da caracterização) e o FakeDB do
 painel (tests/panel/helpers_settings.py), que registra mutação do cache, gravação do próprio dict e ids não-int.
 """
 

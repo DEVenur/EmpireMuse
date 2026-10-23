@@ -2,7 +2,7 @@
 
 O motivo do teto: ``collections.deque(iteravel)`` COPIA o argumento a cada chamada; sem limite, uma lista grande e
 compartilhada pelo memo, entregue a milhares de ``deque(...)``, custa tempo e memória quadráticos. Estes testes fecham o que
-os testes do Backend (``test_f3_6b_etapa2_endurecimento.py``) não pegam:
+os testes do Backend (``test_legado_endurecimento.py``) não pegam:
 
 * a CLASSE ``deque`` pode ser empilhada uma vez, guardada no memo e chamada várias vezes (``BINGET`` + ``REDUCE``): o teto
   tem de contar as CHAMADAS, e não os ``STACK_GLOBAL``;

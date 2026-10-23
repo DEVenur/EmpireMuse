@@ -1,6 +1,6 @@
 """F3-6b, etapa 2 (RED) — ``legacy_pickle.load_legacy``: nenhuma EXECUÇÃO e nenhuma classe fora da allowlist.
 
-Cada caso monta o pickle à mão (``tests/helpers_f3_6b_legado.py``) e passa por ``load_legacy``, que tem de recusar com
+Cada caso monta o pickle à mão (``tests/support/leitor_legado.py``) e passa por ``load_legacy``, que tem de recusar com
 ``LegacyFormatError`` e sem efeito colateral: o comando de cada carga só faz ``touch`` de um arquivo-sentinela dentro de
 ``tmp_path`` e os chamadores perigosos (``os.system``, ``posix.system``, ``subprocess.Popen``) são trocados por espiões que
 registram e não executam. Os testes conferem que o sentinela não existe e que os espiões não foram chamados.

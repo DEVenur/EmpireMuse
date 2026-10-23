@@ -67,7 +67,7 @@ from tests.persistence.test_formato_skin import (
 from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 from tests.serialization.test_profundidade_campos_livres import letras_palavra_a_palavra
 
-editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/test_f3_6b_formato_skin.py
+editor_sem_tela = _editor_sem_tela  # a fixture do editor de skin, reaproveitada de tests/persistence/test_formato_skin.py
 UTC = timezone.utc
 
 

@@ -1,6 +1,6 @@
 """Fase 2.1 (validação GREEN) — extração segura do JDK .tar.gz: filtro ``data`` e remoção da pasta raiz.
 
-Complementa tests/test_audio_fase2_1.py. O arquivo já passou pela verificação de SHA-256 (a âncora de confiança), mas a
+Complementa tests/audio/test_jdk_sha256_e_ambiente.py. O arquivo já passou pela verificação de SHA-256 (a âncora de confiança), mas a
 extração não pode, mesmo assim, escrever fora da pasta de destino nem criar links/arquivos especiais perigosos.
 Sem rede e sem produção: tudo em tmp_path, arquivos .tar.gz mínimos gerados em memória.
 """

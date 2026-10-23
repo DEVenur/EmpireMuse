@@ -1,6 +1,6 @@
 """F3-6b, etapa 1 (RED) — ``empiremuse/serialization/schema.py``: os tipos do esquema e o ``SchemaError``.
 
-API fixada por estes testes (as decisões em aberto estão em ``tests/helpers_f3_6b_serializacao.py``):
+API fixada por estes testes (as decisões em aberto estão em ``tests/support/serializacao_nucleo.py``):
 
 * ``validate(esquema, valor)`` devolve o dado LIMPO (estrutura nova, a entrada não é alterada) ou levanta
   ``SchemaError(path, code)``; ``path`` é texto (``""`` na raiz, ``campo``, ``lista[2]``, ``a[1].b``) e nunca leva o valor;
@@ -12,7 +12,7 @@ API fixada por estes testes (as decisões em aberto estão em ``tests/helpers_f3
 * ``Dict(fields, extra="drop")`` com ``extra`` em ``"drop"`` (descarta e avisa, sem nomes), ``"keep"`` (guarda, validado como
   ``Any_JSON``) ou ``"error"``; ``Optional(inner, default=None)``: o campo pode faltar (vira ``default``) ou ser ``None``.
 
-Os limites e a ``Any_JSON`` ficam em ``test_f3_6b_etapa1_estrutura.py``; o ``codec`` em ``test_f3_6b_etapa1_codec.py``.
+Os limites e a ``Any_JSON`` ficam em ``test_estrutura.py``; o ``codec`` em ``test_codec.py``.
 """
 
 import copy

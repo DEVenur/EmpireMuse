@@ -3,7 +3,7 @@
 Cada classe cobre um item de ``docs/known-issues.md``. Os testes ``test_guarda_*`` passam hoje e continuam passando
 depois da correção (protegem o comportamento que a correção não pode mudar); os demais são RED e falham pelo defeito
 descrito no docstring da classe. Sem Discord real, sem rede, sem ``.env`` e sem ``setup()``: canais, mensagens e
-interações são dublês (``tests/helpers_request_channel.py``) e os valores falsos são montados em tempo de execução.
+interações são dublês (``tests/support/canal_de_pedidos.py``) e os valores falsos são montados em tempo de execução.
 """
 
 import copy

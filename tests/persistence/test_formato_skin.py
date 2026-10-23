@@ -7,7 +7,7 @@ Os leitores (``SkinEditorMenu.load_skin``, o laço depois de salvar no ``SkinEdi
 dicionário pronto; o gravador é o ``modal_handler`` do botão de salvar.
 
 * o que continua valendo depois da migração: os leitores entregam ao player o MESMO dicionário, venha o dado como
-  texto legado (protocolos 4 e 5; os mais antigos viram recusa, em ``tests/test_f3_6b_etapa2b_pontos.py``) ou como dicionário (``TestLeitores``, ``TestEditorSalvaESegue``);
+  texto legado (protocolos 4 e 5; os mais antigos viram recusa, em ``tests/persistence/test_chave_de_corte_load_legacy.py``) ou como dicionário (``TestLeitores``, ``TestEditorSalvaESegue``);
 * a etapa 3 troca o formato GRAVADO (texto → dicionário): os testes dela estão em ``tests/test_f3_6b_etapa3_*.py``.
 """
 

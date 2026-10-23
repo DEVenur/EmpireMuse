@@ -11,7 +11,7 @@ Dois tetos de profundidade (DE-4), ambos com caso de borda:
 
 Nos dois: pilha explícita (sem ``RecursionError``), CONTAGEM DE VISITAS (uma referência compartilhada conta a cada vez que é
 visitada) e nenhuma chamada a ``repr``, ``==``, ``hash``, ``len`` ou ``iter`` de objeto de fora dos tipos permitidos.
-Nós = contêineres + escalares (chaves de dicionário não contam), como em ``tests/test_f3_6b_profundidade_de4.py``.
+Nós = contêineres + escalares (chaves de dicionário não contam), como em ``tests/serialization/test_profundidade_campos_livres.py``.
 """
 
 import time
