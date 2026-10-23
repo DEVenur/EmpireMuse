@@ -62,7 +62,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
 - `tests/`: Testes automatizados (pytest), organizados por domínio em subpastas (ver docs/development.md, seção 6).
-- `repos/`: Repositórios irmãos clonados (`EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app`), ignorados pelo git do repositório principal.
+- `repos/`: submódulos git (`EmpireMuse-RPC-app`, `EmpireMuse-LL-binaries`); `git submodule update --init` para baixar.
 
 ---
 

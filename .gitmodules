@@ -1,0 +1,8 @@
+# Subrepositories for EmpireMuse
+[submodule "EmpireMuse-RPC-app"]
+	path = repos/EmpireMuse-RPC-app
+	url = https://github.com/EmpireCommunity/EmpireMuse-RPC-app.git
+[submodule "EmpireMuse-LL-binaries"]
+	path = repos/EmpireMuse-LL-binaries
+	url = https://github.com/EmpireCommunity/EmpireMuse-LL-binaries.git
+
