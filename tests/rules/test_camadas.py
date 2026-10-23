@@ -176,12 +176,14 @@ class TestDetectorDeImportacoes:
         assert "empiremuse.rules.limits" in achados
 
     def test_o_scanner_le_os_arquivos_de_verdade(self):
-        """O varredor enxerga o que o bot realmente importa: ``interactions.py`` usa ``empiremuse.rules``, não o painel."""
-        interactions = PACOTE / "utils" / "music" / "interactions.py"
+        """O varredor enxerga o que o bot realmente importa: ``interactions/`` usa ``empiremuse.rules``, não o painel."""
+        interactions = PACOTE / "utils" / "music" / "interactions"
         achados = {
-            nome for nome, _ in importados(interactions.read_text(encoding="utf-8"), nome_do_modulo(interactions))
+            nome
+            for arquivo in arquivos(interactions)
+            for nome, _ in importados(arquivo.read_text(encoding="utf-8"), nome_do_modulo(arquivo))
         }
-        assert "empiremuse.rules.limits" in achados and "empiremuse.rules.quota" in achados
+        assert "empiremuse.rules.limits" in achados and "empiremuse.rules.entries" in achados
         assert not any(importa_o_painel(nome) for nome in achados)
         assert {arquivo.name for arquivo in arquivos(REGRAS)} >= {"limits.py", "text.py", "urls.py", "quota.py"}
 
