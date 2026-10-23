@@ -68,3 +68,18 @@ def test_a_lista_de_booleanos_inteira_aceita_o_nativo(home):
 
     convertidas = {k for k in chaves if config[k] is (not config_loader.DEFAULT_CONFIG[k])}
     assert {"ENABLE_RPC_AUTH", "RUN_RPC_SERVER", "PANEL_ENABLED", "MEMBERS_INTENT"} <= convertidas
+
+
+@pytest.mark.parametrize("texto", ["none", "None", "NONE"])
+@pytest.mark.parametrize("chave", ["ENABLE_RPC_AUTH", "RUN_RPC_SERVER", "PANEL_ENABLED", "MEMBERS_INTENT"])
+def test_none_em_chave_booleana_e_ausente_e_vale_o_padrao(home, monkeypatch, chave, texto):
+    padrao = config_loader.DEFAULT_CONFIG[chave]
+
+    assert pelo_config_json(home, chave, texto) is padrao
+    (home / "config.json").unlink()
+    monkeypatch.setenv(chave, texto)
+    assert config_loader.load_config()[chave] is padrao
+
+
+def test_enable_rpc_auth_none_nao_desliga_a_autenticacao(home):
+    assert pelo_config_json(home, "ENABLE_RPC_AUTH", "none") is True

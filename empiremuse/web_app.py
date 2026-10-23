@@ -115,7 +115,7 @@ class IndexHandler(tornado.web.RequestHandler):
     async def get(self):
         try:
             killing_state = self.pool.killing_state
-        except:
+        except Exception:
             killing_state = False
 
         ready_bots = []
@@ -433,7 +433,7 @@ class WSClient:
         for t in self.connect_task:
             try:
                 t.cancel()
-            except:
+            except Exception:
                 continue
 
         if not self.session:
@@ -505,7 +505,7 @@ class WSClient:
         for t in self.connect_task:
             try:
                 t.cancel()
-            except:
+            except Exception:
                 continue
 
         self.connect_task.clear()

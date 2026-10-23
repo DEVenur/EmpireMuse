@@ -33,7 +33,7 @@ def parse_embed_color(value: str | None) -> disnake.Color | None:
     return disnake.Color(int(match.group(1), 16))
 
 
-bools = {"true": True, "false": False, "none": None}
+bools = {"true": True, "false": False}
 
 DEFAULT_CONFIG = {
     "DEFAULT_PREFIX": "!!",
@@ -346,7 +346,7 @@ def load_config():
         ):  # true/false nativos do config.json valem como estão (False == 0 não é "ausente")
             continue
 
-        if CONFIG[i] in ("", None):
+        if CONFIG[i] is None or str(CONFIG[i]).lower() in ("", "none"):  # "none" é ausente, nunca False: vale o padrão
             CONFIG[i] = DEFAULT_CONFIG[i]
             continue
 

@@ -107,7 +107,7 @@ class YtOauthView(disnake.ui.View):
 
         try:
             self.bot.pool.yt_oauth_loop.cancel()
-        except:
+        except Exception:
             pass
 
         async with aiohttp.ClientSession() as session:
@@ -142,12 +142,12 @@ class YtOauthLL(commands.Cog):
     async def ytoauth(self, ctx: CustomContext):
         try:
             self.bot.pool.yt_oauth_loop.cancel()
-        except:
+        except Exception:
             pass
 
         try:
             self.bot.pool.yt_oauth_loop_command.cancel()
-        except:
+        except Exception:
             pass
 
         self.bot.pool.yt_oauth_loop_command = self.bot.loop.create_task(self.oauth_command(ctx))

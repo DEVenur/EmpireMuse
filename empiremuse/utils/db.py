@@ -271,7 +271,7 @@ class MongoDatabase(BaseDB):
 
                 try:
                     shutil.move(str(dbs_dir / f), str(backups_dir / f))
-                except:
+                except Exception:
                     traceback.print_exc()
 
     async def get_data(

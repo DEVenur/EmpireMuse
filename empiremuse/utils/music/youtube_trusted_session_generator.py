@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     try:
         loop().run_until_complete(b.start(sandbox=False))
-    except:
+    except Exception:
         traceback.print_exc()
 
     pprint.pprint(b.data)
