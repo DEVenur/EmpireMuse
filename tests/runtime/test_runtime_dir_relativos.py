@@ -2,7 +2,7 @@
 
 ``enter_runtime_dir`` já leva o cwd para o ``RUNTIME_DIR``, mas quem lê ou grava por caminho relativo só funciona se o
 processo entrou por ``main()``. Estes testes fixam o caminho absoluto em cada ponto que sobrou
-(``guild_bots.json``, ``install_jabba.sh`` e o padrão ``directory="."`` do ``prepare_lavalink_files``) e uma guarda
+(``guild_bots.json`` e o padrão ``directory="."`` do ``prepare_lavalink_files``) e uma guarda
 estática contra novos acessos relativos. Cada teste tem o ``EMPIREMUSE_HOME`` e o cwd em pastas diferentes do ``tmp_path``.
 """
 
@@ -51,39 +51,6 @@ class TestGuildBots:
         (home / "guild_bots.json").write_text("{não é json", encoding="utf-8")
 
         assert client.read_guild_bots() == {}
-
-
-class TestJabba:
-    @pytest.fixture
-    def instalacao(self, monkeypatch, home_e_cwd):
-        chamadas = {"download": [], "subprocess": [], "remove": []}
-        monkeypatch.setattr(
-            local_lavalink, "download_file", lambda url, filename: chamadas["download"].append(filename)
-        )
-        monkeypatch.setattr(
-            local_lavalink.subprocess, "call", lambda cmd, **kw: chamadas["subprocess"].append(cmd) or 0
-        )
-        monkeypatch.setattr(local_lavalink.os, "remove", lambda caminho: chamadas["remove"].append(str(caminho)))
-        monkeypatch.setattr(local_lavalink.os, "name", "posix")
-        return chamadas
-
-    def test_o_script_do_jabba_e_baixado_e_removido_no_runtime_dir(self, instalacao, home_e_cwd):
-        home, _ = home_e_cwd
-
-        local_lavalink._install_jdk(str(home), "Linux-64bit-ELF", "64bit", use_jabba=True)
-
-        script = str(home / "install_jabba.sh")
-        assert instalacao["download"] == [script]
-        assert instalacao["remove"] == [script]
-
-    def test_o_bash_executa_o_script_pelo_caminho_absoluto(self, instalacao, home_e_cwd):
-        home, _ = home_e_cwd
-
-        local_lavalink._install_jdk(str(home), "Linux-64bit-ELF", "64bit", use_jabba=True)
-
-        comandos_bash = [c for c in instalacao["subprocess"] if "install_jabba.sh" in str(c)]
-        assert len(comandos_bash) == 1
-        assert str(home / "install_jabba.sh") in str(comandos_bash[0])
 
 
 class TestPrepareLavalinkFilesPadrao:

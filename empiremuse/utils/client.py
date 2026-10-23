@@ -291,7 +291,6 @@ class BotPool:
                     lavalink_ram_limit=self.config["LAVALINK_RAM_LIMIT"],
                     lavalink_cpu_cores=self.config["LAVALINK_CPU_CORES"],
                     lavalink_additional_sleep=int(self.config["LAVALINK_ADDITIONAL_SLEEP"]),
-                    use_jabba=self.config["USE_JABBA"],
                     lavalink_java_path=self.config["LAVALINK_JAVA_PATH"],
                     lavalink_home=self.config["LAVALINK_HOME"],
                     lavalink_offline=self.config["LAVALINK_OFFLINE"],

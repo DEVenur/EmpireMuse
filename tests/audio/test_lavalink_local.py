@@ -154,9 +154,7 @@ class TestKI24JavaHome:
     def _procurar(monkeypatch, java_home: str, aceito: str):
         monkeypatch.setenv("JAVA_HOME", java_home)
         monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd if cmd == aceito else None)
-        return ll._find_or_install_java(
-            "/tmp/sem-uso", "Linux-64bit-ELF", "64bit", use_jabba=False, allow_install=False
-        )
+        return ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", allow_install=False)
 
     def test_java_home_sem_barra_final_aponta_para_bin_java(self, runtime, monkeypatch, tmp_path):
         jdk = tmp_path / "jdk-17"
@@ -186,7 +184,7 @@ class TestKI24JavaHome:
         monkeypatch.setenv("JAVA_HOME", str(jdk))
         monkeypatch.setattr(ll, "validate_java", validar)
 
-        ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", use_jabba=False, allow_install=False)
+        ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", allow_install=False)
 
         assert str(jdk / "bin" / "java") in candidatos, f"candidatos testados: {candidatos}"
         assert f"{jdk}bin/java" not in candidatos
@@ -199,17 +197,14 @@ class TestKI24JavaHome:
         monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: None)
 
         with pytest.raises(ll.LavalinkDownloadError, match="LAVALINK_JAVA_PATH"):
-            ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", use_jabba=False, allow_install=False)
+            ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", allow_install=False)
 
     def test_o_java_do_path_continua_tendo_prioridade(self, runtime, monkeypatch, tmp_path):
         """GUARDA."""
         monkeypatch.setenv("JAVA_HOME", str(tmp_path / "jdk"))
         monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd if cmd == "java" else None)
 
-        assert (
-            ll._find_or_install_java("/tmp/x", "Linux-64bit-ELF", "64bit", use_jabba=False, allow_install=False)
-            == "java"
-        )
+        assert ll._find_or_install_java("/tmp/x", "Linux-64bit-ELF", "64bit", allow_install=False) == "java"
 
 
 # ============================================================================ override do Spring como URI

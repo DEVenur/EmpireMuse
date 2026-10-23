@@ -392,13 +392,12 @@ class TestRunLavalinkSignatureA2:
 
         params = inspect.signature(ll.run_lavalink).parameters
         names = list(params)
-        assert names[:6] == [
+        assert names[:5] == [
             "lavalink_file_url",
             "lavalink_initial_ram",
             "lavalink_ram_limit",
             "lavalink_additional_sleep",
             "lavalink_cpu_cores",
-            "use_jabba",
         ]
         assert params["lavalink_file_sha256"].kind is inspect.Parameter.KEYWORD_ONLY
 

@@ -621,7 +621,6 @@ def config_do_pool(**extras):
         "LAVALINK_RAM_LIMIT": 120,
         "LAVALINK_ADDITIONAL_SLEEP": 0,
         "LAVALINK_CPU_CORES": 2,
-        "USE_JABBA": False,
         "LAVALINK_JAVA_PATH": "",
         "LAVALINK_HOME": "",
         "LAVALINK_OFFLINE": False,

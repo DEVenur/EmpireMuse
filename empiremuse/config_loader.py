@@ -103,12 +103,12 @@ DEFAULT_CONFIG = {
     ################################################
     ### Sistema de música - RPC (Rich Presence): ###
     ################################################
-    "RUN_RPC_SERVER": True,
+    "RUN_RPC_SERVER": False,
     "RPC_SERVER": "ws://localhost:$PORT/ws",
     "PORT": None,
     "RPC_PUBLIC_URL": "",
     "ENABLE_RPC_COMMAND": False,
-    "ENABLE_RPC_AUTH": False,
+    "ENABLE_RPC_AUTH": True,
     "RPC_SERVER_SECRET": "",
     "RPC_ALLOWED_ORIGINS": "",
     "WEB_BIND_ADDRESS": "0.0.0.0",
@@ -129,7 +129,6 @@ DEFAULT_CONFIG = {
     ##################################################
     "RUN_LOCAL_LAVALINK": False,
     "CONNECT_LOCAL_LAVALINK": True,
-    "USE_JABBA": False,
     "LAVALINK_JAVA_PATH": "",
     "LAVALINK_HOME": "",
     "LAVALINK_OFFLINE": False,
@@ -301,7 +300,6 @@ def load_config():
         "AUTO_SYNC_COMMANDS",
         "INTERACTION_COMMAND_ONLY",
         "RUN_LOCAL_LAVALINK",
-        "USE_JABBA",
         "LAVALINK_OFFLINE",
         "CONNECT_LOCAL_LAVALINK",
         "COMMAND_LOG",

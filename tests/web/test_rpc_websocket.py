@@ -122,6 +122,7 @@ async def iniciar_servidor(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path / "cwd")
     for nome in AMBIENTE:
         monkeypatch.delenv(nome, raising=False)
+    monkeypatch.setenv("ENABLE_RPC_AUTH", "false")  # o padrão do código é true; os casos ligam a auth quando precisam
     web_app.users_ws.clear()
     web_app.bots_ws.clear()
     abertos = []

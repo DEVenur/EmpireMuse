@@ -681,7 +681,7 @@
             "name": "Exigir autenticação no Rich Presence",
             "description": "Obriga uso de token de usuário para conectar ao relé WebSocket do Rich Presence.",
             "env_variable": "ENABLE_RPC_AUTH",
-            "default_value": "false",
+            "default_value": "true",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|in:true,false"

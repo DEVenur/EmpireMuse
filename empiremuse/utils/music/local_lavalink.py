@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -24,6 +25,9 @@ DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um serv
 HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
 VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
+JDK_STAGING_MAX_AGE = 3600  # segundos sem mudança para um staging do JDK ser tido como órfão (extração leva segundos)
+JDK_STAGING_NAME = re.compile(r"[\w-]+\.\w{8}\.tmp")  # <plataforma>.<8 caracteres do mkdtemp>.tmp, nunca a pasta final
+JDK_EXECUTABLES = ("java", "java.exe")  # bin/<nome> de um JDK instalado (Linux e Windows)
 LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
 PLUGINS_OVERRIDE_RELATIVE = ".lavalink/plugins-override.yml"
 PLUGINS_OVERRIDE_CONTENT = "lavalink:\n  plugins: []\n"  # constante: sem hash, é regravada se divergir
@@ -371,42 +375,43 @@ def _extract_tar_without_top_dir(archive_path: str, destination: str) -> None:
 
 
 def _jdk_is_usable(java_dir: str) -> bool:
-    """Um JDK instalado só vale se ``bin/java`` existir, for arquivo (symlink válido serve) e executável."""
-    java = os.path.join(java_dir, "bin", "java")
-    return os.path.isfile(java) and os.access(java, os.X_OK)
+    """Um JDK instalado só vale se ``bin/java`` (ou ``bin/java.exe``) existir, for arquivo (symlink válido serve) e executável."""
+    for name in JDK_EXECUTABLES:
+        java = os.path.join(java_dir, "bin", name)
+        if os.path.isfile(java) and os.access(java, os.X_OK):
+            return True
+    return False
+
+
+def _extract_zip_without_top_dir(archive_path: str, destination: str) -> None:
+    """Extrai o .zip (já verificado) em ``destination`` e sobe o conteúdo da pasta raiz do JDK (a que tem ``bin/java.exe``)."""
+    with zipfile.ZipFile(archive_path, "r") as zip_ref:
+        zip_ref.extractall(destination)
+
+    roots = [d for d in os.listdir(destination) if os.path.isfile(os.path.join(destination, d, "bin", "java.exe"))]
+    if len(roots) != 1:
+        raise LavalinkDownloadError("O arquivo do JDK não contém uma única pasta com bin/java.exe.")
+
+    root = os.path.join(destination, roots[0])
+    for item in os.listdir(root):
+        os.rename(os.path.join(root, item), os.path.join(destination, item))
+    os.rmdir(root)
 
 
 def _install_jdk_windows(tmp_dir: str, jdk_platform: str, arch: str) -> str:
+    java_dir = f"{tmp_dir}/.java/{jdk_platform}"
     url, sha256 = _jdk_download("windows", arch)
     archive_path = f"{tmp_dir}/java.zip"
     _fetch_verified_jdk(archive_path, url, sha256)
-
-    shutil.rmtree(f"{tmp_dir}/.java", ignore_errors=True)
-    os.makedirs(f"{tmp_dir}/.java/{jdk_platform}", exist_ok=True)
-
     try:
-        with zipfile.ZipFile(archive_path, "r") as zip_ref:
-            zip_ref.extractall(f"{tmp_dir}/.java")
+        _install_extracted_jdk(
+            archive_path, f"{tmp_dir}/.java", java_dir, jdk_platform, extract=_extract_zip_without_top_dir
+        )
     finally:
         with suppress(FileNotFoundError):
             os.remove(archive_path)
 
-    extracted_folder = None
-    java_dirs = os.listdir(f"{tmp_dir}/.java")
-
-    for d in java_dirs:
-        if d != jdk_platform and os.path.isfile(f"{tmp_dir}/.java/{d}/bin/java.exe"):
-            extracted_folder = f"{tmp_dir}/.java/{d}"
-
-    if not extracted_folder:
-        raise Exception(f"JDK não encontrando no diretório: {tmp_dir}/.java\n" + "\n".join(java_dirs))
-
-    for item in os.listdir(extracted_folder):
-        os.rename(os.path.join(extracted_folder, item), os.path.join(f"{tmp_dir}/.java/{jdk_platform}", item))
-
-    shutil.rmtree(extracted_folder, ignore_errors=True)
-
-    return os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
+    return os.path.realpath(f"{java_dir}/bin/java")
 
 
 def _install_jdk_linux(tmp_dir: str, jdk_platform: str, arch: str) -> str:
@@ -425,20 +430,68 @@ def _install_jdk_linux(tmp_dir: str, jdk_platform: str, arch: str) -> str:
     return os.path.realpath(f"{java_dir}/bin/java")
 
 
-def _install_extracted_jdk(archive_path: str, java_root: str, java_dir: str, jdk_platform: str) -> None:
+def _install_extracted_jdk(
+    archive_path: str,
+    java_root: str,
+    java_dir: str,
+    jdk_platform: str,
+    extract: Optional[Callable[[str, str], None]] = None,
+) -> None:
     """Extrai num diretório temporário irmão e só o promove a ``java_dir`` (os.replace) se tudo deu certo.
 
-    Qualquer falha (inclusive Ctrl+C) apaga o temporário e não mexe em outras instalações de ``java_root``.
+    Qualquer falha (inclusive Ctrl+C) apaga o temporário e não mexe em outras instalações de ``java_root``. Um ``kill -9``
+    não passa pelo ``finally``: a sobra é apagada na próxima subida por ``remove_orphan_jdk_staging``.
     """
+    extract = extract or _extract_tar_without_top_dir
     os.makedirs(java_root, exist_ok=True)
     staging = tempfile.mkdtemp(prefix=f"{jdk_platform}.", suffix=".tmp", dir=java_root)
     try:
         os.chmod(staging, 0o755)
-        _extract_tar_without_top_dir(archive_path, staging)
+        extract(archive_path, staging)
         shutil.rmtree(java_dir, ignore_errors=True)  # instalação quebrada: é trocada por inteiro
         os.replace(staging, java_dir)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _newest_mtime(directory: str) -> float:
+    """Última modificação do diretório ou de qualquer entrada direta dele (a extração cria entradas em sequência)."""
+    newest = os.stat(directory).st_mtime
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            newest = max(newest, entry.stat(follow_symlinks=False).st_mtime)
+    return newest
+
+
+def remove_orphan_jdk_staging(java_root: str, max_age: float = JDK_STAGING_MAX_AGE, now: Optional[float] = None) -> int:
+    """Apaga os staging do JDK que sobraram de um processo morto no meio da extração (cerca de 150 MB cada).
+
+    Só apaga diretório real (nunca link) cujo nome é o do ``mkdtemp`` de ``_install_extracted_jdk`` e que não muda há mais
+    de ``max_age`` segundos: a instalação válida (``<plataforma>`` sem ``.tmp``) e uma extração em curso em outro processo
+    ficam intactas. Falhas de leitura ou de remoção não derrubam a subida. Devolve quantos foram apagados.
+    """
+    now = time.time() if now is None else now
+    removed = 0
+    try:
+        names = os.listdir(java_root)
+    except OSError:
+        return 0
+    for name in names:
+        path = os.path.join(java_root, name)
+        if not JDK_STAGING_NAME.fullmatch(name) or os.path.islink(path) or not os.path.isdir(path):
+            continue
+        try:
+            idle = now - _newest_mtime(path)
+        except OSError:
+            continue
+        if idle < max_age:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        if not os.path.exists(path):
+            removed += 1
+    if removed:
+        logger.info("Removidos %d diretório(s) temporário(s) órfão(s) de instalação do JDK em %s.", removed, java_root)
+    return removed
 
 
 def _configured_java(java_path: str) -> str:
@@ -465,7 +518,7 @@ def _lavalink_home(configured: Optional[str]) -> str:
     return configured
 
 
-def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool, allow_install: bool) -> str:
+def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, allow_install: bool) -> str:
     """Java 17+ do sistema, de JAVA_HOME ou já instalado pelo bot; só instala o JDK se ``allow_install``."""
     if java_cmd := validate_java("java"):
         return java_cmd
@@ -479,16 +532,9 @@ def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba:
 
     if os.name == "nt":
         dirs.append(f"{tmp_dir}/.java/{jdk_platform}/bin/java")
-        shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)
-
-    elif use_jabba:
-        jabba_java = str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java")
-        dirs.extend([os.path.realpath(jabba_java), os.path.expanduser(jabba_java)])
-        shutil.rmtree(f"{tmp_dir}/.java", ignore_errors=True)
-
     else:
         dirs.append(os.path.realpath(f"{tmp_dir}/.java/{jdk_platform}/bin/java"))
-        shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)
+    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba"), ignore_errors=True)  # resto de instalação antiga (jabba removido)
 
     for cmd in dirs:
         if validate_java(cmd):
@@ -499,25 +545,13 @@ def _find_or_install_java(tmp_dir: str, jdk_platform: str, arch: str, use_jabba:
             "LAVALINK_OFFLINE=true: nenhum Java 17+ foi encontrado e o JDK não será baixado no modo offline; "
             "defina LAVALINK_JAVA_PATH com o executável do Java instalado."
         )
-    return _install_jdk(tmp_dir, jdk_platform, arch, use_jabba)
+    return _install_jdk(tmp_dir, jdk_platform, arch)
 
 
-def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str, use_jabba: bool) -> str:
+def _install_jdk(tmp_dir: str, jdk_platform: str, arch: str) -> str:
     if os.name == "nt":
         return _install_jdk_windows(tmp_dir, jdk_platform, arch)
-
-    if not use_jabba:
-        return _install_jdk_linux(tmp_dir, jdk_platform, arch)
-
-    shutil.rmtree(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0"), ignore_errors=True)
-
-    jabba_script = str(paths.RUNTIME_DIR / "install_jabba.sh")
-    download_file("https://raw.githubusercontent.com/shyiko/jabba/master/install.sh", jabba_script)
-    subprocess.call(["bash", jabba_script])
-    subprocess.call(f"{paths.RUNTIME_DIR}/.jabba/bin/jabba install zulu@1.17.0-0", shell=True)
-    os.remove(jabba_script)
-
-    return os.path.expanduser(str(paths.RUNTIME_DIR / ".jabba/jdk/zulu@1.17.0-0/bin/java"))
+    return _install_jdk_linux(tmp_dir, jdk_platform, arch)
 
 
 def _has_override_content(path: str) -> bool:
@@ -603,7 +637,6 @@ def run_lavalink(
     lavalink_ram_limit: int = 100,
     lavalink_additional_sleep: int = 0,
     lavalink_cpu_cores: int = 1,
-    use_jabba: bool = False,
     *,
     lavalink_file_sha256: str = None,
     youtube_oauth_refresh_token: str = None,
@@ -616,12 +649,14 @@ def run_lavalink(
 
     tmp_dir = tempfile.gettempdir() if os.name == "nt" else str(paths.RUNTIME_DIR)
 
+    remove_orphan_jdk_staging(f"{tmp_dir}/.java")
+
     home = _lavalink_home(lavalink_home)
 
     if configured_java := (lavalink_java_path or "").strip():
         java_cmd = _configured_java(configured_java)
     else:
-        java_cmd = _find_or_install_java(tmp_dir, jdk_platform, arch, use_jabba, allow_install=not lavalink_offline)
+        java_cmd = _find_or_install_java(tmp_dir, jdk_platform, arch, allow_install=not lavalink_offline)
 
     prepare_lavalink_files(
         home,
