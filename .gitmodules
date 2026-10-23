@@ -1,7 +1,8 @@
 # Subrepositories for EmpireMuse
 [submodule "EmpireMuse-RPC-app"]
 	path = repos/EmpireMuse-RPC-app
-	url = git@github.com:DiscordEmpireHub/EmpireMuse-RPC-app.git
+	url = https://github.com/EmpireCommunity/EmpireMuse-RPC-app.git
 [submodule "EmpireMuse-LL-binaries"]
 	path = repos/EmpireMuse-LL-binaries
-	url = git@github.com:DiscordEmpireHub/EmpireMuse-LL-binaries.git
+	url = https://github.com/EmpireCommunity/EmpireMuse-LL-binaries.git
+
