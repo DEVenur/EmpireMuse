@@ -22,6 +22,7 @@ from empiremuse.cogs import music_settings
 from empiremuse.cogs.music import Music
 from empiremuse.cogs.music_settings import MusicSettings
 from empiremuse.utils.music import interactions
+from empiremuse.utils.music.interactions import skin_editor
 from empiremuse.utils.music.interactions import SkinEditorMenu, base_skin
 from tests.support.formatos_reais import SERVIDOR
 
@@ -170,7 +171,7 @@ def editor_sem_tela(monkeypatch):
     async def atualizar(self, inter):
         return None
 
-    monkeypatch.setattr(interactions, "SkinSettingsButton", BotaoDeModo)
+    monkeypatch.setattr(skin_editor, "SkinSettingsButton", BotaoDeModo)
     monkeypatch.setattr(SkinEditorMenu, "update_message", atualizar)
     monkeypatch.setattr(SkinEditorMenu, "build_embeds", lambda self: {"embed": None})
 
