@@ -794,14 +794,16 @@ class BotPool:
             }
         )
 
+        # stderr descartado: fora de um repositório (ex.: modo .runtime) o git imprimiria "fatal: not a git repository".
         try:
-            self.commit = check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
+            self.commit = check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode("ascii").strip()
             print(f"📥 - Commit ver: {self.commit}")
-        except:
+        except (OSError, subprocess.CalledProcessError, UnicodeDecodeError):
             self.commit = None
 
         try:
-            self.remote_git_url = parse_remote_web_url(check_output(["git", "remote", "-v"]).decode("utf-8", "replace"))
+            remotes = check_output(["git", "remote", "-v"], stderr=subprocess.DEVNULL).decode("utf-8", "replace")
+            self.remote_git_url = parse_remote_web_url(remotes)
         except (OSError, subprocess.CalledProcessError):
             pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
