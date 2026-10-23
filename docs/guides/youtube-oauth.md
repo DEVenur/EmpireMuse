@@ -1,4 +1,4 @@
-> Documentação técnica original do [EmpireMuse](https://github.com/DiscordEmpireHub/EmpireMuse) sobre contorno do anti-bot do YouTube e autenticação OAuth.
+> Documentação técnica original do [EmpireMuse](https://github.com/EmpireCommunity/EmpireMuse) sobre contorno do anti-bot do YouTube e autenticação OAuth.
 
 # Guia de Configuração do YouTube OAuth no Lavalink Local
 
@@ -23,7 +23,7 @@ Como o catálogo do YouTube é o provedor primário de reprodução do EmpireMus
 
 No plugin oficial de reprodução do YouTube (`youtube-plugin`, snapshot fixado `2be8e542`), o **cliente `TV` é o único que suporta autenticação via OAuth** (`Tv.supportsOAuth() == true`). Clientes móveis ou web ignoram o token e operam sempre em modo anônimo.
 
-A partir da release **0.0.3** do [DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries):
+A partir da release **0.0.3** do [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries):
 - O `application.yml` padrão inclui o cliente `TV` na lista de clientes homologados (`MUSIC, TV, ANDROID_VR, WEB, WEBEMBEDDED, TVHTML5_SIMPLY`);
 - A configuração `plugins.youtube.oauth.enabled` permanece desativada (`false`) por padrão para não gerar tentativas de autenticação inválidas;
 - O nível de log da classe `dev.lavalink.youtube.http.YoutubeOauth2Handler` vem fixado em `WARN`, prevenindo que tokens apareçam nos registros do terminal ou em arquivos de log.

@@ -16,7 +16,7 @@ Como preparar o ambiente para desenvolver e testar o EmpireMuse. Para entender o
 ## 2. Ambiente virtual e instalação
 
 ```bash
-git clone https://github.com/DiscordEmpireHub/EmpireMuse.git
+git clone https://github.com/EmpireCommunity/EmpireMuse.git
 cd EmpireMuse
 
 uv venv --python 3.13
@@ -145,7 +145,7 @@ de nodes são somadas (`BotPool.setup` em `empiremuse/utils/client.py`):
 |---|---|
 | **`lavalink.ini`** | Copie [`deploy/lavalink.ini.example`](../deploy/lavalink.ini.example) para `lavalink.ini` na pasta de execução (`.runtime/lavalink.ini` ou raiz, ignorado pelo Git). Cada seção é um node (`host`, `port`, `password`, `secure`, `region`, `search_providers`, …). Use `%%` para escrever `%` em valores. Só é lido quando `AUTO_DOWNLOAD_LAVALINK_SERVERLIST` é falso (`BotPool.setup` em `empiremuse/utils/client.py`). |
 | **`LAVALINK_NODE_<N>`** | Variável (ou chave do `.env`) com um JSON por node, p.ex. `LAVALINK_NODE_1='{"identifier": "meu", "host": "...", "port": 443, "password": "...", "secure": true}'`. O JSON é usado como está, sem valores padrão: informe `identifier`, `host`, `port` e `password` (`BotPool.setup` e `BotPool.check_node` em `empiremuse/utils/client.py`). |
-| **Lavalink local** | `RUN_LOCAL_LAVALINK=true`, ou nenhum node configurado (`BotPool.setup` em `empiremuse/utils/client.py`). Baixa `Lavalink.jar`, `application.yml` e plugins com verificação rigorosa de integridade via SHA-256 no download. Por padrão, `LAVALINK_FILE_URL` fica vazio no `.env`, o que seleciona automaticamente o espelho oficial correspondente à versão do código ([DiscordEmpireHub/EmpireMuse-LL-binaries](https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries) release `0.0.3` com Lavalink oficial 4.2.2 e plugins espelhados; constantes em `empiremuse/utils/branding.py`; o `application.yml` traz o cliente TV, OAuth desligado por padrão e log de `YoutubeOauth2Handler` em WARN). Se `LAVALINK_FILE_URL` contiver uma URL oficial de versão anterior do espelho, o bot atualiza sozinho para a versão atual com aviso no log. Para usar um jar próprio ou hospedagem customizada, o endereço exige obrigatoriamente HTTPS (`https://`) e a definição de `LAVALINK_FILE_SHA256`. Preserva `application.yml` personalizado existente (substituindo apenas versões oficiais conhecidas como 0.0.1 e 0.0.2). Baixa o JDK se não houver Java 17+. Requer rede e a RAM definida em `LAVALINK_RAM_LIMIT` (MB). O node se chama `LOCAL` e escuta em `127.0.0.1:${SERVER_PORT:-8090}`. |
+| **Lavalink local** | `RUN_LOCAL_LAVALINK=true`, ou nenhum node configurado (`BotPool.setup` em `empiremuse/utils/client.py`). Baixa `Lavalink.jar`, `application.yml` e plugins com verificação rigorosa de integridade via SHA-256 no download. Por padrão, `LAVALINK_FILE_URL` fica vazio no `.env`, o que seleciona automaticamente o espelho oficial correspondente à versão do código ([EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) release `0.0.3` com Lavalink oficial 4.2.2 e plugins espelhados; constantes em `empiremuse/utils/branding.py`; o `application.yml` traz o cliente TV, OAuth desligado por padrão e log de `YoutubeOauth2Handler` em WARN). Se `LAVALINK_FILE_URL` contiver uma URL oficial de versão anterior do espelho, o bot atualiza sozinho para a versão atual com aviso no log. Para usar um jar próprio ou hospedagem customizada, o endereço exige obrigatoriamente HTTPS (`https://`) e a definição de `LAVALINK_FILE_SHA256`. Preserva `application.yml` personalizado existente (substituindo apenas versões oficiais conhecidas como 0.0.1 e 0.0.2). Baixa o JDK se não houver Java 17+. Requer rede e a RAM definida em `LAVALINK_RAM_LIMIT` (MB). O node se chama `LOCAL` e escuta em `127.0.0.1:${SERVER_PORT:-8090}`. |
 | **Lista pública** | `AUTO_DOWNLOAD_LAVALINK_SERVERLIST=true` baixa a lista de nodes públicos (`get_lavalink_servers`, com `LAVALINK_SERVER_LIST` como alternativa; o padrão é `data/lavalink_servers.ini` do repositório, `LAVALINK_SERVER_LIST_URL` em `empiremuse/utils/branding.py`). Nodes públicos são instáveis e não devem ser usados com dados sensíveis. |
 
 A lista baixada é validada (status 200 e formato INI com `host`, `port` e `password` em cada seção; `empiremuse/utils/music/lavalink_server_list.py`). Se o download falhar ou a resposta for inválida, o bot usa o arquivo local `data/lavalink_servers.ini`.
@@ -218,8 +218,8 @@ Para facilitar o desenvolvimento integrado entre o bot principal e seus ecossist
 - **Clonagem dos irmãos**: para clonar ou atualizar os repositórios irmãos em `repos/`:
   ```bash
   mkdir -p repos
-  git clone https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries repos/EmpireMuse-LL-binaries
-  git clone https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app repos/EmpireMuse-RPC-app
+  git clone https://github.com/EmpireCommunity/EmpireMuse-LL-binaries repos/EmpireMuse-LL-binaries
+  git clone https://github.com/EmpireCommunity/EmpireMuse-RPC-app repos/EmpireMuse-RPC-app
   ```
 
 ## 9. Padrão de Git Worktrees e Isolamento de Branches
