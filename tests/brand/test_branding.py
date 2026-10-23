@@ -26,17 +26,17 @@ LICENSE_SHA256 = "6e786173e40f582911924258618a20534c0fb162bcfef71c68e1b0b98de075
 # Valores definitivos do contrato (literais de propósito: não derivam de branding.py).
 EXPECTED_CONSTANTS = {
     "BOT_NAME": "EmpireMuse",
-    "REPO_URL": "https://github.com/DiscordEmpireHub/EmpireMuse",
-    "SOURCE_REPO_GIT": "https://github.com/DiscordEmpireHub/EmpireMuse.git",
-    "RAW_BASE_URL": "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main",
-    "ASSETS_BASE_URL": "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/assets",
-    "LICENSE_URL": "https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/LICENSE",
-    "GUIDES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse/blob/main/docs/guides",
-    "RPC_APP_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app",
-    "RPC_APP_RELEASES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-RPC-app/releases",
-    "LAVALINK_BINARIES_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3",
-    "LAVALINK_JAR_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
-    "LAVALINK_APPLICATION_YML_URL": "https://github.com/DiscordEmpireHub/EmpireMuse-LL-binaries/releases/download/0.0.3/application.yml",
+    "REPO_URL": "https://github.com/EmpireCommunity/EmpireMuse",
+    "SOURCE_REPO_GIT": "https://github.com/EmpireCommunity/EmpireMuse.git",
+    "RAW_BASE_URL": "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main",
+    "ASSETS_BASE_URL": "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main/assets",
+    "LICENSE_URL": "https://github.com/EmpireCommunity/EmpireMuse/blob/main/LICENSE",
+    "GUIDES_URL": "https://github.com/EmpireCommunity/EmpireMuse/blob/main/docs/guides",
+    "RPC_APP_URL": "https://github.com/EmpireCommunity/EmpireMuse-RPC-app",
+    "RPC_APP_RELEASES_URL": "https://github.com/EmpireCommunity/EmpireMuse-RPC-app/releases",
+    "LAVALINK_BINARIES_URL": "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3",
+    "LAVALINK_JAR_URL": "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
+    "LAVALINK_APPLICATION_YML_URL": "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3/application.yml",
     "LAVALINK_JAR_SHA256": "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a",
     "LAVALINK_APPLICATION_YML_SHA256": "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95",
     "LAVALINK_PLUGIN_SHA256": {
@@ -44,7 +44,7 @@ EXPECTED_CONSTANTS = {
         "lavasrc-plugin-4.8.3.jar": "4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3",
         "lavalink-2.6.1.jar": "1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3",
     },
-    "LAVALINK_SERVER_LIST_URL": "https://raw.githubusercontent.com/DiscordEmpireHub/EmpireMuse/main/data/lavalink_servers.ini",
+    "LAVALINK_SERVER_LIST_URL": "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main/data/lavalink_servers.ini",
     "UPSTREAM_NAME": "MuseHeart-MusicBot",
     "UPSTREAM_AUTHOR": "zRitsu",
     "UPSTREAM_URL": "https://github.com/zRitsu/MuseHeart-MusicBot",
@@ -394,11 +394,9 @@ def test_local_lavalink_does_not_use_upstream_binaries():
     _fail_with("local_lavalink.py ainda aponta para zRitsu/LL-binaries", violations)
 
 
-RENAMED_LL_REPO = (
-    "DiscordEmpireHub/LL-binaries"  # renomeado para DiscordEmpireHub/EmpireMuse-LL-binaries (301 no GitHub)
-)
+RENAMED_LL_REPO = "EmpireCommunity/LL-binaries"  # renomeado para EmpireCommunity/EmpireMuse-LL-binaries (301 no GitHub)
 # O nome antigo termina o nome do repositório (``LL-binaries``, ``LL-binaries.git``, ``LL-binaries/``), nunca outro nome.
-OLD_LL_REPO_RE = re.compile(r"(?:DiscordEmpireHub|zRitsu)/LL-binaries(?![A-Za-z0-9_-])", re.IGNORECASE)
+OLD_LL_REPO_RE = re.compile(r"(?:EmpireCommunity|zRitsu)/LL-binaries(?![A-Za-z0-9_-])", re.IGNORECASE)
 
 
 def test_code_and_docs_use_the_renamed_binaries_repo_and_no_upstream_binaries():
@@ -881,11 +879,11 @@ class TestCorrespondenciaPrecisa:
     @pytest.mark.parametrize(
         ("regex", "texto", "achou"),
         [
-            (OLD_LL_REPO_RE, "DiscordEmpireHub/LL-binaries", True),
-            (OLD_LL_REPO_RE, "https://github.com/DiscordEmpireHub/LL-binaries.git", True),
-            (OLD_LL_REPO_RE, "discordempirehub/ll-binaries/releases", True),
-            (OLD_LL_REPO_RE, "DiscordEmpireHub/EmpireMuse-LL-binaries", False),
-            (OLD_LL_REPO_RE, "DiscordEmpireHub/LL-binaries-extra", False),
+            (OLD_LL_REPO_RE, "EmpireCommunity/LL-binaries", True),
+            (OLD_LL_REPO_RE, "https://github.com/EmpireCommunity/LL-binaries.git", True),
+            (OLD_LL_REPO_RE, "empirecommunity/ll-binaries/releases", True),
+            (OLD_LL_REPO_RE, "EmpireCommunity/EmpireMuse-LL-binaries", False),
+            (OLD_LL_REPO_RE, "EmpireCommunity/LL-binaries-extra", False),
             (UPSTREAM_LL_REPO_RE, "zRitsu/LL-binaries", True),
             (UPSTREAM_LL_REPO_RE, "zRitsu/LL-binariesX", False),
         ],

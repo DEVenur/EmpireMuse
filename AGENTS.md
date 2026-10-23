@@ -6,7 +6,7 @@
 
 ## 1. O Projeto
 
-- **Nome**: **EmpireMuse** (organização GitHub: [DiscordEmpireHub/EmpireMuse](https://github.com/DiscordEmpireHub/EmpireMuse)).
+- **Nome**: **EmpireMuse** (organização GitHub: [EmpireCommunity/EmpireMuse](https://github.com/EmpireCommunity/EmpireMuse)).
 - **Descrição**: Bot de música multi-instância para Discord em **Python 3.13**, utilizando o framework **disnake** e processamento de áudio 100% externo em servidores **Lavalink v3/v4** ou NodeLink.
 - **Origem e Licença**: Obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu**, sob licença **GPL-2.0**.
 - **Aviso Mandatório**: É obrigatório preservar o arquivo `LICENSE` e todos os créditos e avisos de direitos autorais ao autor original em todos os arquivos pertinentes.

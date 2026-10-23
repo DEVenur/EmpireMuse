@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Reporte de Vulnerabilidade de Segurança
-    url: https://github.com/DiscordEmpireHub/EmpireMuse/security/advisories/new
+    url: https://github.com/EmpireCommunity/EmpireMuse/security/advisories/new
     about: Por favor, utilize o relato privado de vulnerabilidades do GitHub para reportar falhas de segurança de forma responsável. Não utilize issues públicas para falhas de segurança.
   - name: Suporte e dúvidas (Discord EmpireHUB)
     url: https://discord.gg/KgtyNg9U6H
