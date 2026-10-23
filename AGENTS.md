@@ -72,7 +72,8 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   ```bash
   uv venv --python 3.13
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
-  uv pip install -r requirements.txt
+  uv pip install --require-hashes -r requirements-lock.txt
+  uv pip install --no-deps -r requirements-git.txt
   cp .example.env .env
   ```
 - **Execução do Bot**:
@@ -80,9 +81,9 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   python -m empiremuse                   # ponto de entrada canônico (ou python main.py)
   ```
 - **Lint e Testes Automatizados**:
-  - Testes com `pytest` (config em `pyproject.toml`; dependências em `requirements-dev.txt`):
+  - Testes com `pytest` (config em `pyproject.toml`; dependências em `requirements-dev-lock.txt`):
     ```bash
-    uv pip install -r requirements-dev.txt
+    uv pip install --require-hashes -r requirements-dev-lock.txt
     .venv/bin/python -m pytest
     ```
   - Lint e formatação com `ruff` (configurado em `pyproject.toml`):
@@ -91,7 +92,10 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
     .venv/bin/ruff format --check .         # verificação de conformidade de formatação
     .venv/bin/ruff format .                 # formatação automática
     ```
-  - Ferramentas restantes de tipagem (`mypy`/`pyright`) estão a configurar em blocos posteriores; não execute comandos dessas ferramentas antes de sua homologação.
+  - Checagem estática de tipos com `mypy` (configurado em `pyproject.toml`; baseline gradual com checagem ativa em `empiremuse.rules.*`):
+    ```bash
+    .venv/bin/mypy                          # verificação estática de tipos
+    ```
   - Para validação sintática estática básica:
     ```bash
     python -m compileall -q main.py empiremuse
