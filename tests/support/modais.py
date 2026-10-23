@@ -1,6 +1,6 @@
 """Dublês compartilhados dos testes de modais, importadores e comandos de prefixo (F3-5a e F3-5b).
 
-Só montam o que ``interactions.py`` e ``legacy_cmds.py`` pedem ao bot e à interação: sem Discord real, sem rede e sem
+Só montam o que ``interactions/`` e ``legacy_cmds.py`` pedem ao bot e à interação: sem Discord real, sem rede e sem
 ``.env``. Os dados são o MESMO dict que o banco devolveria (como no ``BaseDB``) e cada gravação fica registrada.
 """
 
@@ -9,12 +9,22 @@ import json
 from types import SimpleNamespace
 
 import empiremuse.cogs.legacy_cmds as legacy_cmds
+from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import FavMenuView, FavModalAdd, FavModalImport, ViewMode
+from empiremuse.utils.music.interactions import fav_menu, fav_modals
 from empiremuse.utils.others import CustomContext
 
 
 SERVIDOR = 5000
 URL_BASE = "https://exemplo.invalid"
+
+
+def trocar_process_idle_embed(monkeypatch, falso):
+    """Troca ``process_idle_embed`` em todo módulo que o lê pelo nome: os que o importam (``fav_modals`` e ``fav_menu``)
+    e o pacote ``interactions`` (o painel chama ``interactions.process_idle_embed``). Trocar só o pacote não afeta os
+    modais: o nome importado fica preso ao módulo onde o código mora."""
+    for modulo in (interactions, fav_modals, fav_menu):
+        monkeypatch.setattr(modulo, "process_idle_embed", falso)
 
 
 class FakeMusicCog:
