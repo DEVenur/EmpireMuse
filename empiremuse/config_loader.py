@@ -341,7 +341,12 @@ def load_config():
         "SILENT_PUBLICBOT_WARNING",
         "ENABLE_SONGREQUEST_MENTION",
     ]:
-        if CONFIG[i] in (True, False, None, ""):
+        if isinstance(
+            CONFIG[i], bool
+        ):  # true/false nativos do config.json valem como estão (False == 0 não é "ausente")
+            continue
+
+        if CONFIG[i] in ("", None):
             CONFIG[i] = DEFAULT_CONFIG[i]
             continue
 
