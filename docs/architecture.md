@@ -277,7 +277,7 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 | **Spotify** | `empiremuse/utils/music/audio_sources/spotify.py` | API oficial por *client credentials* (`SPOTIFY_CLIENT_ID/SECRET`); só metadados, o áudio vem de outra fonte. Veja `known-issues.md`. |
 | **Deezer** | `empiremuse/utils/music/audio_sources/deezer.py` | API pública sem credenciais; metadados. |
 | **Last.fm** | `empiremuse/utils/music/lastfm_tools.py`, `empiremuse/cogs/lastfm.py` | Scrobble e perfil; exige `LASTFM_KEY/SECRET`. |
-| **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models.py`), `BotPool.__init__` em `empiremuse/utils/client.py`, `empiremuse/utils/music/ytdl_tools.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
+| **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models.py`), `BotPool.__init__` em `empiremuse/utils/client.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
 | **YouTube OAuth / PoToken** | `empiremuse/cogs/ll_yt_oauth.py`, `Node.refresh_potoken` em `empiremuse/wavelink/node.py`, `empiremuse/utils/music/youtube_trusted_session_generator.py` | Autenticação do plugin `youtube-plugin` do Lavalink e geração de `poToken` (`nodriver`). |
 | **Discord** | `disnake` (commit git fixado, `requirements.txt:1`) | Slash/prefix/menus de contexto; `AutoShardedBot`. |
 
