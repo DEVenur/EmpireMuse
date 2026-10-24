@@ -382,7 +382,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/rpc_protocol.py` | Protocolo do relé RPC: validações, limites, sanitização e rate limit | 156 |
 | `empiremuse/web_app.py` | Status HTTP, relé WebSocket do RPC, roteador do painel web | 651 |
 | `empiremuse/panel/` | Sub-aplicação web Tornado: OAuth2, sessões, handlers, serviços puros, templates e estáticos | 4.306 |
-| `empiremuse/rules/` | Regras de negócio puras (limites, texto, URLs, cota, configurações, erros, favoritos, links, integrações); só biblioteca padrão | 542 |
+| `empiremuse/rules/` | Regras de negócio puras (limites, texto, URLs, cota, configurações, erros, favoritos, links, integrações, IP do visitante atrás da Cloudflare); só biblioteca padrão | 542 |
 | `empiremuse/serialization/` | Serialização segura em JSON (schema, codec, queue, cache, skins, session, tracks, files) | 1.442 (soma) |
 | `empiremuse/utils/music/request_channel.py` | Lógica unificada de setup e reset de canal de pedidos compartilhada entre cogs e painel | 497 |
 | `empiremuse/utils/client.py` | `BotPool` (setup, nodes, tokens) e `BotCore` (prefixo, sync, módulos) | 1.511 |

@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Optional
 import aiohttp
 import disnake
 import tornado.httpserver
+import tornado.httputil
 import tornado.ioloop
+import tornado.routing
 import tornado.template
 import tornado.web
 import tornado.websocket
@@ -18,6 +20,7 @@ from packaging import version
 
 from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
+from empiremuse.rules.client_ip import client_ip_from_headers
 from empiremuse.rpc_protocol import (
     BOT_OPS,
     BOT_TO_USER_FIELDS,
@@ -581,6 +584,23 @@ def make_router(main_app: tornado.web.Application, panel_app: Optional[tornado.w
     return panel_make_router(main_app, panel_app)
 
 
+class ClientIpRouter(tornado.routing.Router):
+    """Ponto único do IP do visitante para o painel, a página de status e o relé ``/ws`` (tudo lê ``request.remote_ip``).
+
+    Com proxy confiável, ``CF-Connecting-IP`` (válido) vira o IP da requisição; sem ele vale o que o ``xheaders`` do
+    servidor já resolveu. Sem proxy confiável o cabeçalho é ignorado, porque um cliente direto poderia forjá-lo.
+    """
+
+    def __init__(self, inner: tornado.routing.Router, trust_proxy: bool) -> None:
+        self.inner = inner
+        self.trust_proxy = trust_proxy
+
+    def find_handler(self, request: tornado.httputil.HTTPServerRequest, **kwargs):
+        if self.trust_proxy:
+            request.remote_ip = client_ip_from_headers(request.headers, True, request.remote_ip)
+        return self.inner.find_handler(request, **kwargs)
+
+
 def _build_panel(pool: BotPool, config: dict):
     """Cria a aplicação do painel (None se desligado ou com configuração inválida; o servidor segue sem ele)."""
     from empiremuse.panel import build_panel_app
@@ -630,8 +650,9 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
         websocket_ping_timeout=WEBSOCKET_PING_TIMEOUT,
     )
 
+    trusted = bool(panel_app and trust_proxy)
     server = tornado.httpserver.HTTPServer(
-        make_router(app, panel_app), xheaders=bool(panel_app and trust_proxy), max_body_size=MAX_BODY_SIZE
+        ClientIpRouter(make_router(app, panel_app), trusted), xheaders=trusted, max_body_size=MAX_BODY_SIZE
     )
     bind_address = config.get("WEB_BIND_ADDRESS") or DEFAULT_BIND_ADDRESS
     _warn_if_exposed_without_auth(config, bind_address)
