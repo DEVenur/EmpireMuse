@@ -202,7 +202,7 @@ class TestServicoBot:
         assert bot["memswap_limit"] == "${EMPIREMUSE_MEM_LIMIT:-1024m}"
 
     def test_boas_praticas_de_resiliencia_e_limites(self, bot):
-        assert bot.get("pids_limit") == 512
+        assert bot.get("pids_limit") == 256
         assert bot.get("stop_grace_period") == "30s"
         assert bot.get("pull_policy") == "missing"
 
