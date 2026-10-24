@@ -1,14 +1,12 @@
-"""Dublês e fixtures realistas da F3-6b (rede de segurança do pickle → JSON), sem Discord, rede nem ``.env``.
+"""Dublês e fixtures realistas das sessões, filas e skins em JSON, sem Discord, rede nem ``.env``.
 
 * Faixas montadas pelas classes REAIS (``LavalinkTrack``, ``PartialTrack``, ``LavalinkPlaylist``), com os mesmos campos
   que os provedores (Deezer, Spotify, YouTube) preenchem em ``extra`` e em ``pluginInfo``.
 * Letras no formato do plugin de letras do Lavalink (linhas sincronizadas e texto), com texto neutro.
 * Um jogador mínimo para o ``PlayerSession.save_info`` REAL e um Mongo em memória que copia os documentos (como o BSON).
-* Leitores de opcodes (``pickletools.genops``, que não executa nada) para olhar o que o código gravou.
 """
 
 import copy
-import pickletools
 from collections import deque
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -282,48 +280,6 @@ def cog_de_sessoes(*, mongo: MongoEmMemoria | None = None, **config) -> PlayerSe
         ),
     )
     return cog
-
-
-# ============================================================================ o que há dentro de um pickle (sem executar)
-
-
-def opcodes_do_pickle(dados: bytes) -> list[str]:
-    return [opcode.name for opcode, _arg, _pos in pickletools.genops(dados)]
-
-
-def protocolo_do_pickle(dados: bytes) -> int | None:
-    """Versão do opcode ``PROTO`` do início; ``None`` se não houver (protocolos 0 e 1)."""
-    for opcode, arg, _pos in pickletools.genops(dados):
-        return arg if opcode.name == "PROTO" else None
-    return None
-
-
-def globais_do_pickle(dados: bytes) -> set[tuple[str, str]]:
-    """Os pares ``(módulo, nome)`` que o pickle pede por ``STACK_GLOBAL`` ou ``GLOBAL`` (as duas últimas strings)."""
-    memo: dict[int, object] = {}
-    ultimo: object = None
-    textos: list[object] = []
-    globais: set[tuple[str, str]] = set()
-    for opcode, arg, _pos in pickletools.genops(dados):
-        nome = opcode.name
-        if nome in {"SHORT_BINUNICODE", "BINUNICODE", "UNICODE", "BINUNICODE8"}:
-            ultimo = arg
-            textos.append(arg)
-        elif nome == "MEMOIZE":
-            memo[len(memo)] = ultimo
-        elif nome in {"BINGET", "LONG_BINGET"}:
-            ultimo = memo.get(arg)
-            textos.append(ultimo)
-        elif nome == "STACK_GLOBAL":
-            globais.add((textos[-2], textos[-1]))
-            ultimo = None
-        elif nome == "GLOBAL":
-            modulo, _, simbolo = str(arg).partition(" ")
-            globais.add((modulo, simbolo))
-            ultimo = None
-        else:
-            ultimo = None
-    return globais
 
 
 # ============================================================================ profundidade de um valor JSON

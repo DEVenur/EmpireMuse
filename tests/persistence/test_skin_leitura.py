@@ -1,32 +1,22 @@
-"""F3-6b, etapa 3 (RED) — a leitura da skin: o helper único ``load_custom_skins`` e os 4 pontos que o usam.
+"""A leitura da skin: o helper único ``load_custom_skins`` e o ``Music.create_player``.
 
-Migração no primeiro acesso (plano 3.2): o texto legado (``base64`` de ``pickle``) é lido por ``load_legacy(texto, "skin")``,
-validado por ``validate_skin`` e trocado por dicionário NO documento, que é gravado inteiro UMA vez. O que for recusado (pickle
-hostil ou skin fora do esquema) continua como texto, com um aviso só com ``guild_id`` e ``code``. Depois da migração nada
-mais é lido nem gravado (idempotente). As decisões estão em ``tests/support/skins.py``.
-
-Os 4 pontos: ``Music.create_player``, ``MusicSettings.change_skin``, ``SkinEditorMenu.load_skin`` e o laço do player em
-``SkinEditorMenu.modal_handler`` (depois de salvar).
+Só o dicionário do documento chega ao player, depois de validado por ``validate_skin``. O texto do formato antigo
+(``base64`` de ``pickle``) nunca é aberto: fica como está no documento, nada é gravado, a skin padrão assume e sai um aviso só
+com o ``guild_id``.
 """
 
 import copy
 import logging
-from types import SimpleNamespace
+import pickle
 
 import pytest
 
-from empiremuse.utils.db import DBModel
 from tests.support.formatos_reais import SERVIDOR
-from tests.support.chave_de_corte import criar_armadilhas, espionar_load_legacy, log_sem_o_conteudo, registrou
-from tests.support.leitor_legado import SEGREDO
+from tests.support.avisos_no_log import avisos, log_sem_o_conteudo
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.skins import carregar_helper
-from tests.persistence.test_chave_de_corte_load_legacy import HOSTIS_DE_SKIN, texto_hostil
 from tests.persistence.test_formato_skin import (
-    BotaoDeModo,
     BotDeSkins,
-    InteracaoDoEditor,
-    Jogador,
-    chamar_change_skin,
     chamar_create_player,
     dados_globais,
     skin_realista,
@@ -38,7 +28,7 @@ editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/
 
 
 def documento(normais=None, estaticas=None, **extra) -> dict:
-    """O documento global do servidor com tudo que os 4 pontos leem."""
+    """O documento global do servidor com tudo que os pontos de leitura usam."""
     base = {
         **dados_globais(normais, estaticas),
         "prefix": "!",
@@ -57,11 +47,6 @@ def _ambiente(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def armadilhas(tmp_path, monkeypatch):
-    return criar_armadilhas(tmp_path, monkeypatch)
-
-
-@pytest.fixture
 def helper():
     return carregar_helper()
 
@@ -72,135 +57,45 @@ async def rodar(helper, dados, jogadores=()):
     return bot
 
 
-# ============================================================================ o helper
-
-
 class TestHelper:
     @pytest.mark.asyncio
-    async def test_grava_o_documento_inteiro_uma_so_vez(self, helper):
-        dados = documento(
-            normais={"A": texto_legado(skin_realista()), "B": texto_legado(skin_realista(content="b"))},
-            estaticas={"F": texto_legado(skin_realista(content="f"))},
-            prefix="?",
-            outro={"mantido": [1, 2, 3]},
-        )
-        bot = await rodar(helper, dados)
-        assert bot.escritas == [(SERVIDOR, DBModel.guilds)]
-        assert len(bot.salvos) == 1 and bot.banco["prefix"] == "?" and bot.banco["outro"] == {"mantido": [1, 2, 3]}
-        assert bot.banco == dados
-
-    @pytest.mark.asyncio
-    async def test_documento_ja_em_dicionario_nao_le_nem_grava(self, helper, monkeypatch):
+    async def test_dicionario_valido_chega_inteiro_e_nada_e_gravado(self, helper):
         dados = documento(
             normais={"A": skin_realista(), "Vazia": {}, "Nenhuma": None}, estaticas={"F": skin_realista(content="f")}
         )
         antes = copy.deepcopy(dados)
-        chamadas = espionar_load_legacy(monkeypatch)
-        bot = await rodar(helper, dados)
-        assert chamadas == [] and bot.escritas == [] and dados == antes
+        bot = BotDeSkins(dados)
+        skins = await helper(bot, SERVIDOR, dados)
+        assert skins.normal == {"A": skin_realista()} and skins.static == {"F": skin_realista(content="f")}
+        assert skins.rejected == 0 and bot.escritas == [] and dados == antes
 
     @pytest.mark.asyncio
-    async def test_nome_antigo_estranho_continua_com_o_mesmo_nome(self, helper):
-        """Os nomes só são conferidos ao SALVAR; a migração não renomeia nem recusa pelo nome."""
-        nome = "v1.2 $teste"
-        dados = documento(normais={nome: texto_legado(skin_realista())})
-        await rodar(helper, dados)
-        assert dados["custom_skins"] == {nome: skin_realista()}
+    async def test_texto_do_formato_antigo_fica_no_documento_e_nunca_e_aberto(
+        self, helper, monkeypatch, caplog, capsys
+    ):
+        def nunca(*args, **kwargs):
+            raise AssertionError("o texto antigo foi aberto")
+
+        monkeypatch.setattr(pickle, "loads", nunca)
+        monkeypatch.setattr(pickle, "load", nunca)
+        monkeypatch.setattr(pickle, "Unpickler", nunca)
+        antigo = texto_legado(skin_realista(content=SEGREDO))
+        dados = documento(normais={"Velha": antigo, "Boa": skin_realista()}, estaticas={"FixaVelha": antigo})
+        bot = BotDeSkins(dados)
+        with caplog.at_level(logging.DEBUG):
+            skins = await helper(bot, SERVIDOR, dados)
+        assert skins.normal == {"Boa": skin_realista()} and skins.static == {} and skins.rejected == 2
+        assert dados["custom_skins"]["Velha"] == antigo and dados["custom_skins_static"]["FixaVelha"] == antigo
+        assert bot.escritas == []
+        assert any(str(SERVIDOR) in aviso for aviso in avisos(caplog)) and log_sem_o_conteudo(caplog, capsys)
 
 
-class TestRecusadasFicamComoTexto:
+class TestCreatePlayer:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("nome", list(HOSTIS_DE_SKIN)[:2])
-    async def test_pickle_hostil_fica_como_texto_e_as_boas_migram(self, helper, armadilhas, caplog, capsys, nome):
-        texto, codigo = texto_hostil(armadilhas, nome)
-        bom = skin_realista(content="boa")
+    async def test_o_player_recebe_so_dicionarios_e_o_texto_antigo_e_ignorado(self):
         dados = documento(
-            normais={"Boa": texto_legado(bom), "Ruim": texto},
-            estaticas={"FixaBoa": texto_legado(bom), "FixaRuim": texto},
+            normais={"N": skin_realista(content="n"), "Velha": texto_legado(skin_realista())}, estaticas={"F": ""}
         )
-        with caplog.at_level(logging.DEBUG):
-            bot = await rodar(helper, dados)
-        assert dados["custom_skins"] == {"Boa": bom, "Ruim": texto}
-        assert dados["custom_skins_static"] == {"FixaBoa": bom, "FixaRuim": texto}
-        assert len(bot.escritas) == 1 and bot.banco == dados
-        assert armadilhas.intacto() and registrou(caplog, SERVIDOR, codigo) and log_sem_o_conteudo(caplog, capsys)
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("skin", "codigo"),
-        [
-            ({"embeds": [{"description": SEGREDO + "d" * 5000}]}, "length"),
-            ({"embeds": [{"title": SEGREDO + "\x00"}]}, "control"),
-        ],
-        ids=[
-            "descricao-longa",
-            "titulo-com-nul",
-        ],
-    )
-    async def test_pickle_valido_fora_do_esquema_fica_como_texto(self, helper, caplog, capsys, skin, codigo):
-        """O pickle é bem-comportado, mas a skin não passa no esquema: continua legível no documento, e só o tipo da falha sai no log."""
-        texto = texto_legado(skin)
-        dados = documento(normais={"Fora": texto, "Boa": texto_legado(skin_realista())})
-        with caplog.at_level(logging.DEBUG):
-            await rodar(helper, dados)
-        assert dados["custom_skins"]["Fora"] == texto and dados["custom_skins"]["Boa"] == skin_realista()
-        assert registrou(caplog, SERVIDOR, codigo) and log_sem_o_conteudo(caplog, capsys)
-
-
-# ============================================================================ os 4 pontos
-
-
-class Acesso(SimpleNamespace):
-    """O que um ponto de leitura deixou: ``escritas`` (``(id_, db_name)``) e ``banco`` (o documento persistido)."""
-
-
-async def por_create_player(dados, monkeypatch, editor):
-    escritas = []
-    await chamar_create_player(dados, escritas)
-    return Acesso(escritas=[(i, d) for i, _, d in escritas], banco=escritas[-1][1] if escritas else None, doc=dados)
-
-
-async def por_change_skin(dados, monkeypatch, editor):
-    jogador = await chamar_change_skin(monkeypatch, dados, nova_skin="> custom_skin: Minha")
-    return Acesso(escritas=jogador.bot.escritas, banco=jogador.bot.banco, doc=jogador.bot.global_data)
-
-
-async def por_load_skin(dados, monkeypatch, editor):
-    menu, bot, _ = editor(dados)
-    await menu.load_skin(SimpleNamespace(values=["> cs: Minha"]))
-    return Acesso(escritas=bot.escritas, banco=bot.banco, doc=bot.global_data)
-
-
-async def por_editor_salvando(dados, monkeypatch, editor):
-    menu, bot, _ = editor(dados, [Jogador()])
-    menu.message_data = skin_realista(content="outra")
-    BotaoDeModo.modo = "custom_skins"
-    await menu.modal_handler(InteracaoDoEditor(skin_name="Outra"))
-    return Acesso(escritas=bot.escritas, banco=bot.banco, doc=bot.global_data)
-
-
-# (função, gravações esperadas quando o documento JÁ está em dicionário): o editor grava a skin que acabou de salvar
-PONTOS = {
-    "create_player": (por_create_player, 0),
-    "change_skin": (por_change_skin, 0),
-    "load_skin": (por_load_skin, 0),
-    "modal_handler": (por_editor_salvando, 1),
-}
-
-
-class TestPontosMigramNoPrimeiroAcesso:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("ponto", list(sorted(PONTOS))[:2])
-    async def test_documento_em_dicionario_nao_le_texto_e_so_o_editor_grava(self, ponto, monkeypatch, editor_sem_tela):
-        funcao, gravacoes = PONTOS[ponto]
-        dados = documento(normais={"Minha": skin_realista()}, estaticas={"Fixa": skin_realista(content="f")})
-        chamadas = espionar_load_legacy(monkeypatch)
-        acesso = await funcao(dados, monkeypatch, editor_sem_tela)
-        assert chamadas == [] and len(acesso.escritas) == gravacoes
-
-    @pytest.mark.asyncio
-    async def test_o_player_do_create_player_recebe_so_dicionarios_apos_a_migracao(self):
-        dados = documento(normais={"N": texto_legado(skin_realista(content="n"))}, estaticas={"F": ""})
         recebidos = await chamar_create_player(dados, [])
         assert recebidos["custom_skin_data"] == {"N": skin_realista(content="n")}
         assert recebidos["custom_skin_static_data"] == {}  # skin vazia vale como sem skin: o player nem a recebe

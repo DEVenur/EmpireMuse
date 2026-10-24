@@ -24,7 +24,6 @@ from tests.persistence.test_formato_skin import (
     Jogador,
     dados_globais,
     skin_realista,
-    texto_legado,
 )
 from tests.persistence.test_formato_skin import editor_sem_tela as _base_do_editor  # noqa: F401  (fixture)
 
@@ -191,8 +190,8 @@ class TestMemoriaEBancoNoMesmoFormato:
     @pytest.mark.asyncio
     async def test_cache_e_banco_ficam_iguais_e_so_com_dicionarios_depois_de_salvar(self, editor_sem_tela):
         dados = dados_globais(
-            normais={"Velha": texto_legado(skin_realista(content="velha"))},
-            estaticas={"Fixa": texto_legado(skin_realista(content="fixa"))},
+            normais={"Velha": skin_realista(content="velha")},
+            estaticas={"Fixa": skin_realista(content="fixa")},
         )
         menu, bot, _ = editor_sem_tela(dados, [Jogador()])
         menu.message_data = skin_realista(content="nova")

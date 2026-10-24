@@ -264,13 +264,3 @@ class TestPorAst:
             and "text_channel_id" in ast.dump(c.args[0])
         ]
         assert thread == []
-
-    def test_resume_players_migra_antes_de_ler(self):
-        no = funcao("resume_players")
-        migrar = [
-            c.lineno for c in ast.walk(no) if isinstance(c, ast.Attribute) and c.attr == "migrate_legacy_sessions"
-        ]
-        ler = [
-            c.lineno for c in ast.walk(no) if isinstance(c, ast.Attribute) and c.attr.startswith("get_player_sessions_")
-        ]
-        assert migrar and ler and min(migrar) < min(ler)

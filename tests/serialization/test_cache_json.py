@@ -5,8 +5,8 @@
   usuário) e o arquivo mais velho que o TTL não volta;
 * ``empiremuse/utils/music/json_cache.py``: ``save_json_cache`` (atômico, 0600) e ``load_json_cache`` (nunca derruba);
 * ``BotPool.cache_updater`` grava ``local_database/playlist_cache.json`` fora do laço de eventos e ``BotPool.load_cache`` o lê;
-  ``LastFM`` grava e lê ``<runtime>/.lastfm_cache.json``; os arquivos ``.pkl`` e ``.lastfm_cache`` antigos continuam sendo
-  apagados sem abrir (2b);
+  ``LastFM`` grava e lê ``<runtime>/.lastfm_cache.json``; os arquivos ``.pkl`` e ``.lastfm_cache`` antigos não são lidos nem
+  apagados;
 * nenhuma gravação em ``pickle`` sobra nos caches.
 """
 
@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from empiremuse.utils.music.lastfm_tools import LastFM
-from tests.support.leitor_legado import SEGREDO
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.serializacao_nucleo import TYPE, falha, vazamentos
 from tests.persistence.test_formato_caches import (
     PLAYLIST,

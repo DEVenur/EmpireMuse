@@ -1,7 +1,7 @@
 """F3-6b, etapa 5 (RED, commit 2) — as sessões no MONGO: ``save_session_mongo``, ``get_player_sessions_mongo``, ``delete_data_mongo``.
 
 Formato novo: coleção ``player_sessions_json`` (por bot), um documento por servidor ``{_id: str(guild), v: 1, data: base64(zlib(JSON))}``.
-O legado (``player_sessions``) NÃO é lido aqui (só pela migração, ``..._migracao_mongo.py``). A leitura confere o tamanho do texto
+O legado (``player_sessions``) NÃO é lido nem apagado. A leitura confere o tamanho do texto
 ANTES de decodificar (12 MiB), o ``_id`` do documento contra o do conteúdo, e nunca apaga nada por causa de um documento ruim.
 """
 
@@ -134,13 +134,13 @@ class TestDocumentoRuim:
 
 class TestRemocao:
     @pytest.mark.asyncio
-    async def test_remove_dos_dois_formatos_so_do_servidor_pedido(self):
+    async def test_remove_so_o_servidor_pedido_e_nao_toca_na_colecao_antiga(self):
         cog, mongo = cog_com_mongo()
         for guild in (SERVIDOR, OUTRO):
             await semear(mongo, guild)
             await mongo.update_data(guild, {"data": "legado"}, db_name=BOT_ID, collection=ANTIGA)
         await cog.delete_data_mongo(SERVIDOR)
-        assert mongo.ids(NOVA) == {str(OUTRO)} and mongo.ids(ANTIGA) == {str(OUTRO)}
+        assert mongo.ids(NOVA) == {str(OUTRO)} and mongo.ids(ANTIGA) == {str(SERVIDOR), str(OUTRO)}
 
     @pytest.mark.asyncio
     async def test_delete_data_vai_para_o_mongo_quando_o_destino_e_o_mongo(self):

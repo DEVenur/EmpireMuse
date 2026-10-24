@@ -5,7 +5,6 @@ Movido de ``saved_queue.py`` para ``serialization/files.py`` (plano, seção 6) 
 e o arquivo fica onde está.
 """
 
-import ast
 import os
 import tracemalloc
 from pathlib import Path
@@ -15,7 +14,6 @@ import pytest
 
 from tests.support.serializacao_nucleo import TOO_BIG, falha
 from tests.support.sessoes import files
-from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.critical
 
@@ -61,11 +59,3 @@ class TestReadCapped:
             files.read_capped(tmp_path / "nao-existe", 10)
         with pytest.raises(OSError):
             files.read_capped(tmp_path, 10**6)
-
-
-class TestMovidoParaOModuloComum:
-    def test_saved_queue_usa_o_helper_comum_e_nao_define_o_proprio(self):
-        arvore = ast.parse((RAIZ / "empiremuse" / "utils" / "music" / "saved_queue.py").read_text(encoding="utf-8"))
-        definidas = {n.name for n in ast.walk(arvore) if isinstance(n, ast.FunctionDef)}
-        importadas = {a.name for n in ast.walk(arvore) if isinstance(n, ast.ImportFrom) for a in n.names}
-        assert "_read_capped" not in definidas and "read_capped" in importadas

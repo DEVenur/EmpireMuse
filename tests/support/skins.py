@@ -1,13 +1,12 @@
-"""Apoio dos testes da etapa 3 da F3-6b: as skins personalizadas passam de texto (``pickle``) para dicionário (JSON).
+"""Apoio dos testes das skins personalizadas (dicionário JSON; o texto do formato antigo não é mais lido).
 
 DECISÕES DA ETAPA 3 (para inverter uma, troque aqui e na implementação):
 * o esquema vive em ``empiremuse/serialization/skins.py`` (``validate_skin(dict) -> dict``, só biblioteca padrão); devolve um
   dicionário NOVO e limpo, sem o ``"v"`` (P5), levanta ``SchemaError(path, code)`` sem o valor e NÃO acrescenta chave que a
   entrada não tinha (o ``skin_converter`` trata chave ausente de um jeito e ``None`` de outro);
 * o helper ``load_custom_skins(bot, guild_id, global_data)`` é uma corrotina, mora FORA de ``serialization/`` (usa o bot) e é a
-  única porta de leitura da skin: converte os textos legados com ``load_legacy(texto, "skin")``, valida, troca por dicionário
-  NO documento, grava o documento inteiro UMA vez (``update_global_data``) e só se algo mudou; o que for recusado (leitura ou
-  esquema) continua como texto no documento, com um WARNING só com ``guild_id`` e ``code``;
+  única porta de leitura da skin: valida cada dicionário, ignora o texto do formato antigo e nunca grava o documento; o que for
+  recusado (formato antigo ou esquema) continua como está no documento, com um WARNING só com ``guild_id`` (e ``code``);
 * ``""``, ``{}`` e ``None`` valem como sem skin: ficam como estão no documento (sem escrita, sem aviso) e o player não os recebe;
 * texto livre da skin: sem surrogate solto e sem controle ``Cc`` (menos ``\\n``, ``\\r`` e ``\\t``); ``Cf`` PASSA (``U+200D`` dos
   emojis compostos e ``U+200B``, o truque de campo "em branco" do embed, são comuns em skins reais). Nome da skin: 1 a 64

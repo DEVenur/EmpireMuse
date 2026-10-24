@@ -3,7 +3,7 @@
 Formato novo: ``local_database/player_sessions_json/<bot>/<guild>.json`` (JSON puro, escrita atômica, 0600) e uma cópia
 ``<guild>.json.bak``. A leitura devolve só dicionários do JSON validado: nome só ``[0-9]{1,20}.json`` de arquivo comum (sem link
 simbólico, sem pasta), tamanho conferido antes de ler, ``_id`` do conteúdo igual ao do nome (condição 2 do 5.1). Tudo o que falhar
-FICA onde está, com um aviso só com ``guild_id`` e ``code``. A migração do ``.pkl`` está em ``..._migracao_disco.py``.
+FICA onde está, com um aviso só com ``guild_id`` e ``code``. O ``.pkl`` do formato antigo não é lido nem apagado.
 """
 
 import logging
@@ -14,8 +14,8 @@ import disnake
 import pytest
 
 from tests.support.formatos_reais import BOT_ID, INSTANTE, SERVIDOR, cog_de_sessoes
-from tests.support.chave_de_corte import registrou
-from tests.support.leitor_legado import SEGREDO
+from tests.support.avisos_no_log import registrou
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.sessoes import (
     escrever_json,
     escrever_pkl,
@@ -161,7 +161,7 @@ class TestLeitura:
 
 
 class TestRemocao:
-    def test_remove_o_json_a_copia_e_os_restos_do_legado_so_do_servidor_pedido(self, tmp_path):
+    def test_remove_o_json_e_a_copia_so_do_servidor_pedido_e_nao_toca_no_formato_antigo(self, tmp_path):
         for guild in (SERVIDOR, OUTRO):
             escrever_json(tmp_path, guild)
             (pasta_json(tmp_path) / f"{guild}.json.bak").write_bytes(b"copia")
@@ -169,7 +169,9 @@ class TestRemocao:
             escrever_pkl(tmp_path, guild, ext=".bak")
         cog_de_sessoes().delete_data_local(SERVIDOR)
         restantes = sorted(p.name for pasta in (pasta_json(tmp_path), pasta_legado(tmp_path)) for p in pasta.iterdir())
-        assert restantes == sorted([f"{OUTRO}.json", f"{OUTRO}.json.bak", f"{OUTRO}.pkl", f"{OUTRO}.bak"])
+        assert restantes == sorted(
+            [f"{OUTRO}.json", f"{OUTRO}.json.bak", f"{SERVIDOR}.pkl", f"{SERVIDOR}.bak", f"{OUTRO}.pkl", f"{OUTRO}.bak"]
+        )
 
     @pytest.mark.asyncio
     async def test_delete_data_vai_para_o_disco_quando_o_destino_e_o_disco(self, tmp_path):

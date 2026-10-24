@@ -1,11 +1,6 @@
-"""F3-6b, etapa 3 (RED, complemento) — duas decisões do MAESTRO sobre ``load_custom_skins``.
-
-1. ``queue_max_entries`` de 26 a 99 num texto LEGADO é ajustado para 25 ANTES de validar (o ``skin_converter`` de hoje aceita
-   até 2 dígitos); o esquema continua 0..25 (o editor recusa 26 ao salvar) e o ajuste vale só na migração do texto: um valor
-   fora da faixa que não seja inteiro exato de 26 a 99 continua recusado, e um dicionário já gravado não é ajustado.
-2. O dicionário JÁ gravado também é validado na leitura pelo mesmo ``validate_skin`` (defesa contra dicionário plantado no
-   banco): o inválido não chega ao player nem ao ``skin_converter`` (a skin padrão assume), o documento fica intacto (nem
-   reescrito) e sai um WARNING só com ``guild_id`` e ``code``. No ``load_skin`` ele não abre no editor, como o texto recusado.
+"""A skin já gravada como dicionário também é validada na leitura por ``load_custom_skins`` (defesa contra dicionário plantado
+no banco): o inválido não chega ao player nem ao ``skin_converter`` (a skin padrão assume), o documento fica intacto (nem
+reescrito) e sai um WARNING só com ``guild_id`` e ``code``. No ``load_skin`` ele não abre no editor.
 """
 
 import copy
@@ -13,7 +8,7 @@ import logging
 
 import pytest
 
-from tests.support.leitor_legado import SEGREDO
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.serializacao_nucleo import aninhado
 from tests.support.skins import carregar_helper
 from tests.persistence.test_skin_leitura import documento, rodar
@@ -21,9 +16,7 @@ from tests.persistence.test_formato_skin import (
     BotaoDeModo,
     InteracaoDoEditor,
     Jogador,
-    chamar_create_player,
     skin_realista,
-    texto_legado,
 )
 from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 
@@ -35,25 +28,7 @@ def helper():
     return carregar_helper()
 
 
-# ============================================================================ 1) 26..99 vira 25 na migração do texto
-
-
-class TestFilaAcimaDoTetoNaMigracao:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("valor", [0, 25])
-    async def test_valor_dentro_da_faixa_nao_muda(self, helper, valor):
-        dados = documento(normais={"A": texto_legado({"queue_max_entries": valor})})
-        await rodar(helper, dados)
-        assert dados["custom_skins"]["A"] == {"queue_max_entries": valor}
-
-    @pytest.mark.asyncio
-    async def test_o_player_do_create_player_recebe_a_skin_ajustada(self):
-        dados = documento(normais={"A": texto_legado({"queue_max_entries": 40, "content": "c"})})
-        recebidos = await chamar_create_player(dados, [])
-        assert recebidos["custom_skin_data"] == {"A": {"queue_max_entries": 25, "content": "c"}}
-
-
-# ============================================================================ 2) o dicionário gravado também é validado
+# ============================================================================ o dicionário gravado é validado na leitura
 
 INVALIDOS = [
     ("descricao-longa", {"embeds": [{"description": SEGREDO + "d" * 5000}]}, "length"),
@@ -75,16 +50,6 @@ def com_invalido(invalido) -> dict:
 
 @pytest.mark.parametrize(("invalido", "codigo"), [i[1:] for i in INVALIDOS], ids=[i[0] for i in INVALIDOS])
 class TestDicionarioInvalidoNaLeitura:
-    @pytest.mark.asyncio
-    async def test_a_migracao_de_um_texto_grava_o_invalido_intacto(self, helper, invalido, codigo):
-        dados = com_invalido(invalido)
-        dados["custom_skins"]["Velha"] = texto_legado(skin_realista(content="velha"))
-        bot = await rodar(helper, dados)
-        assert len(bot.escritas) == 1 and bot.banco["custom_skins"]["Velha"] == skin_realista(content="velha")
-        assert (
-            bot.banco["custom_skins"]["Ruim"] == invalido and bot.banco["custom_skins_static"]["FixaRuim"] == invalido
-        )
-
     @pytest.mark.asyncio
     async def test_o_editor_ao_salvar_nao_entrega_o_invalido_ao_player(self, editor_sem_tela, caplog, invalido, codigo):
         jogador = Jogador()

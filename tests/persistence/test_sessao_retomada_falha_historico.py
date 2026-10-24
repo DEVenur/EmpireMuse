@@ -9,7 +9,7 @@ import logging
 import pytest
 
 from tests.support.formatos_reais import CANAL_DE_TEXTO, CANAL_DE_VOZ
-from tests.support.leitor_legado import SEGREDO
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.persistence.test_sessao_retomada import _ambiente, montar, proprio, retomar, sessao  # noqa: F401
 
 pytestmark = pytest.mark.regression

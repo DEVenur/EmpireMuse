@@ -14,7 +14,6 @@ from typing import Any
 from .codec import dumps, loads_bounded
 from .schema import (
     LENGTH,
-    MISSING,
     PATTERN,
     RANGE,
     SNOWFLAKE,
@@ -27,7 +26,7 @@ from .schema import (
     Str,
     validate,
 )
-from .tracks import TRACK, clean_track, plain
+from .tracks import TRACK, clean_track
 
 VERSION = 1
 MAX_TRACKS = 5_000
@@ -89,14 +88,3 @@ def decode_saved_queue(raw: bytes) -> dict:
     document["created_at"] = _parse_date(document["created_at"])
     del document["v"]
     return document
-
-
-def normalize_legacy_queue(document: dict) -> dict:
-    """Converte o documento lido do ``.pkl`` antigo para o mesmo formato de ``decode_saved_queue`` (e o revalida)."""
-    for name in ("tracks", "created_at", "guild_id"):
-        if name not in document:
-            raise SchemaError(name, MISSING)
-    created_at = document["created_at"]
-    if type(created_at) is datetime and created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
-    return decode_saved_queue(encode_saved_queue(plain(document["tracks"]), created_at, document["guild_id"]))

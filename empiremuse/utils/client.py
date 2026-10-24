@@ -43,7 +43,7 @@ from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
-from empiremuse.utils.music.legacy_reader import discard_legacy_cache
+from empiremuse.utils.music.legacy_notice import log_ignored_legacy_data
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
 from empiremuse.utils.music.models import (
@@ -56,7 +56,6 @@ from empiremuse.utils.music.models import (
     CustomYTDL,
 )
 from empiremuse.utils.music.remote_lavalink_serverlist import get_lavalink_servers
-from empiremuse.utils.music.saved_queue import migrate_saved_queues
 from empiremuse.utils.others import CustomContext, token_regex, sort_dict_recursively
 from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
@@ -193,10 +192,7 @@ class BotPool:
         return self.current_useragent
 
     def load_cache(self):
-        """Os caches em ``pickle`` não são mais lidos (o arquivo antigo é apagado sem ser aberto); o de playlist volta do JSON."""
-        for name in ("playlist_cache.pkl", "partial_track_cache.pkl", ".lyric_cache_data"):
-            discard_legacy_cache(paths.RUNTIME_DIR / "local_database" / name)
-
+        """O cache de playlist volta do JSON; os caches do formato antigo não são lidos."""
         self.playlist_cache.update(
             load_json_cache(_playlist_cache_file(), max_bytes=PLAYLIST_MAX_BYTES, max_age=self.playlist_cache.ttl)
         )
@@ -694,7 +690,6 @@ class BotPool:
             print(traceback.format_exc())
 
     def setup(self):
-        migrate_saved_queues()
         self.load_skins()
 
         if self.config["ENABLE_LOGGER"]:
@@ -703,6 +698,8 @@ class BotPool:
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
             logger.addHandler(build_file_log_handler(logs_dir))
+
+        log_ignored_legacy_data()  # depois do arquivo de log, para o aviso constar nele
 
         LAVALINK_SERVERS = {}
 

@@ -7,7 +7,7 @@ DECISÕES DA ETAPA 5 (plano do Backend e decisões do MAESTRO R1 a R6; para inve
 * ``encode_session(dados) -> bytes`` (JSON UTF-8 compacto) recebe o dicionário que o ``save_info`` monta (``time`` ``datetime`` com
   fuso, ``dj`` ``set``, ``command_log_list`` ``deque``); ``decode_session(bruto, expected_id=) -> dict`` devolve o que o
   ``resume_player`` consome: ``time`` ``datetime`` UTC, ``dj`` LISTA de inteiros ordenada, ``command_log_list`` LISTA, sem ``v``;
-  ``validate_session`` é a mesma validação sobre esse dicionário (entrada do migrador do ``.pkl``/Mongo legado);
+  ``validate_session`` é a mesma validação sobre esse dicionário;
 * o erro é ``SchemaError(path, code)`` sem o valor; ``id_mismatch`` é o código do ``_id`` do conteúdo diferente do esperado;
 * ``voice_state``, ``extra_info`` e qualquer chave desconhecida são descartados em SILÊNCIO (nunca gravados, nunca lidos);
 * R1: ``uri``, ``artworkUrl``, ``playlist.url``/``thumb`` e ``extra.album.url`` inválidos viram ``""`` (faixa mantida); ``uri``
@@ -19,9 +19,8 @@ DECISÕES DA ETAPA 5 (plano do Backend e decisões do MAESTRO R1 a R6; para inve
   de todas as faixas, e só então recusa (``too_big``); para no primeiro passo que cabe em 8 MiB;
 * faixa que o esquema recusa é DESCARTADA (a sessão segue); campo obrigatório ruim (``_id``, ``voice_channel``, ``time``, ``queue`` que
   não é lista) recusa a sessão;
-* o consumidor lê o armazenamento por ``PlayerSession`` (``save_session_*``, ``get_player_sessions_*``, ``delete_data_*``) e a
-  migração do legado roda por ``PlayerSession.migrate_legacy_sessions()`` (disco sempre; Mongo se configurado), chamada no início de
-  ``resume_players`` (nomes do QA: o plano não os fixa).
+* o consumidor lê o armazenamento por ``PlayerSession`` (``save_session_*``, ``get_player_sessions_*``, ``delete_data_*``); as
+  sessões do formato antigo (``.pkl`` e coleção ``player_sessions``) não são lidas nem apagadas.
 """
 
 import copy
@@ -160,18 +159,11 @@ def tamanho_do_json(dados: dict) -> int:
 
 import base64  # noqa: E402
 import copy as _copy  # noqa: E402
-import os  # noqa: E402
 import pickle  # noqa: E402
-import time as _time  # noqa: E402
 import zlib  # noqa: E402
-from collections import deque  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-from tests.support.formatos_reais import BOT_ID, DJ_A, DJ_B, MongoEmMemoria  # noqa: E402
-from tests.support.leitor_legado import SEGREDO  # noqa: E402
-
-HORAS = 3600
-JANELA_DE_48H = 48 * HORAS
+from tests.support.formatos_reais import BOT_ID, MongoEmMemoria  # noqa: E402
 
 
 def pasta_json(tmp_path) -> Path:
@@ -182,58 +174,26 @@ def pasta_legado(tmp_path) -> Path:
     return tmp_path / "local_database" / "player_sessions" / str(BOT_ID)
 
 
-def sessao_legada(**mudancas) -> dict:
-    """A sessão como a versão ANTIGA a gravava: com ``voice_state`` e ``extra_info`` (tupla), ``dj`` em ``set`` e log em ``deque``."""
-    log = deque([{"text": f"Comando {n}", "emoji": "▶️", "timestamp": 1760882600.0 + n} for n in range(3)], maxlen=10)
-    dados = sessao_minima(
-        dj={DJ_A, DJ_B},
-        command_log_list=log,
-        queue=[faixa_info(0), faixa_info(1)],
-        played=[faixa_info(2)],
-        **mudancas,
-    )
-    dados["voice_state"] = {"sessionId": SEGREDO, "event": {"token": SEGREDO, "endpoint": "voz.exemplo.invalid"}}
-    dados["extra_info"] = {"guild-yt-oauth": (SEGREDO, 1, (2, 3))}
-    return dados
-
-
-def pkl_bytes(dados, protocolo: int = 4) -> bytes:
-    """O que a versão antiga gravava no disco: ``zlib`` de ``pickle``."""
-    return zlib.compress(pickle.dumps(dados, protocol=protocolo))
-
-
 def envelope_do_mongo(raw: bytes) -> str:
-    """``base64`` de ``zlib`` (o envelope do Mongo, igual para o pickle antigo e para o JSON novo)."""
+    """``base64`` de ``zlib`` (o envelope do Mongo)."""
     return base64.b64encode(zlib.compress(raw)).decode("ascii")
 
 
-def envelope_antigo_do_mongo(dados, protocolo: int = 4) -> str:
-    return base64.b64encode(pkl_bytes(dados, protocolo)).decode("ascii")
-
-
-def com_idade(caminho: Path, horas: float) -> Path:
-    """Põe a data de modificação de ``caminho`` ``horas`` horas atrás (relógio real)."""
-    quando = _time.time() - horas * HORAS
-    os.utime(caminho, (quando, quando))
-    return caminho
-
-
-def escrever_pkl(tmp_path, guild=SERVIDOR, dados=None, *, ext=".pkl", horas=None, bruto_=None, protocolo=4) -> Path:
+def escrever_pkl(tmp_path, guild=SERVIDOR, *, ext=".pkl") -> Path:
+    """Um arquivo de sessão do formato antigo: o bot não o abre (o conteúdo aqui é só um marcador)."""
     pasta = pasta_legado(tmp_path)
     pasta.mkdir(parents=True, exist_ok=True)
     alvo = pasta / f"{guild}{ext}"
-    alvo.write_bytes(
-        bruto_ if bruto_ is not None else pkl_bytes(sessao_legada(_id=guild) if dados is None else dados, protocolo)
-    )
-    return com_idade(alvo, horas) if horas is not None else alvo
+    alvo.write_bytes(zlib.compress(pickle.dumps({"_id": guild}, protocol=4)))
+    return alvo
 
 
-def escrever_json(tmp_path, guild=SERVIDOR, *, horas=None, **mudancas) -> Path:
+def escrever_json(tmp_path, guild=SERVIDOR, **mudancas) -> Path:
     pasta = pasta_json(tmp_path)
     pasta.mkdir(parents=True, exist_ok=True)
     alvo = pasta / f"{guild}.json"
     alvo.write_bytes(session.encode_session(sessao_minima(_id=guild, **mudancas)))
-    return com_idade(alvo, horas) if horas is not None else alvo
+    return alvo
 
 
 class MongoDeSessoes(MongoEmMemoria):
