@@ -14,6 +14,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.music.interactions.view_modal import ViewModal
 from empiremuse.utils.music.skin_utils import skin_converter
 from tests.support.skins import FAMILIA, LIMITES, ZWSP, tipos_do_documento, valida
 from tests.persistence.test_formato_skin import (
@@ -318,3 +320,44 @@ def _sem_o_type(skin: dict) -> dict:
     for embed in saida.get("embeds", []):
         embed.pop("type", None)
     return saida
+
+
+# ============================================================================ regressões de entrada do editor
+
+
+class TestEntradaDoEditorRegressao:
+    @pytest.mark.regression
+    @pytest.mark.asyncio
+    async def test_quantidade_da_fila_nao_numerica_e_recusada_sem_mudar_o_formato(self, editor_sem_tela):
+        menu, _, _ = editor_sem_tela(dados_globais())
+        menu.message_data = copy.deepcopy(skin_realista())
+        antes = copy.deepcopy(menu.message_data)
+
+        with pytest.raises(GenericError, match="número inteiro"):
+            await passo(menu, "skin_editor_setup_queue", queue_format="outro formato", queue_max_entries="aa")
+
+        assert menu.message_data == antes
+
+    @pytest.mark.regression
+    @pytest.mark.asyncio
+    async def test_modal_mostra_ao_dono_o_texto_do_generic_error(self):
+        interacao = InteracaoDoEditor()
+        await ViewModal.on_error(SimpleNamespace(), GenericError("**Texto claro.**"), interacao)
+        assert interacao.enviados == ["**Texto claro.**"]
+
+    @pytest.mark.regression
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "importada",
+        ["[1, 2]", '{"embeds": null}', '{"embeds": "texto"}', '{"embeds": [1]}'],
+        ids=["raiz-lista", "embeds-null", "embeds-texto", "embed-nao-objeto"],
+    )
+    async def test_import_com_formato_invalido_e_recusado_sem_mudar_a_skin(self, editor_sem_tela, importada):
+        menu, _, _ = editor_sem_tela(dados_globais())
+        menu.message_data = copy.deepcopy(skin_realista())
+        antes = copy.deepcopy(menu.message_data)
+
+        interacao = await passo(menu, "skin_editor_import_skin", skin=importada)
+
+        assert menu.message_data == antes
+        assert len(interacao.enviados) == 1 and "objeto JSON" in interacao.enviados[0]
