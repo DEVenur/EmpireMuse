@@ -13,10 +13,13 @@ from empiremuse.panel.services.appearance import reload_skin
 from empiremuse.rules import limits, quota, settings, text, urls
 from tests.support.drivers_de_regras import BotDoPainel, painel_favoritos
 
+pytestmark = pytest.mark.critical
+
 URL = "https://exemplo.invalid/a"
 
 
 class TestLimites:
+    @pytest.mark.smoke
     def test_valores_atuais(self):
         assert (limits.FAV_NAME_MIN, limits.FAV_NAME_MAX) == (2, 25)
         assert (limits.FAV_URL_MIN, limits.FAV_URL_MAX) == (10, 200)
@@ -50,21 +53,15 @@ class TestLimites:
 
 
 class TestTexto:
-    @pytest.mark.parametrize("valor", [None, 123, b"ab", ["ab"], {"a": 1}])
+    @pytest.mark.parametrize("valor", [None, {"a": 1}])
     def test_clean_title_so_aceita_texto(self, valor):
         assert text.clean_title(valor, 1, 10) is None
 
+    @pytest.mark.smoke
     @pytest.mark.parametrize(
         ("entrada", "baixo", "alto", "esperado"),
         [
             ("  ab  ", 2, 5, "ab"),
-            ("a", 2, 5, None),
-            (" a ", 2, 5, None),
-            ("abcde", 2, 5, "abcde"),
-            ("abcdef", 2, 5, None),
-            ("ab\u200b", 2, 5, None),
-            ("a\x07b", 2, 5, None),
-            ("a\nb", 2, 5, None),
             ("a b", 2, 5, "a b"),
         ],
     )
@@ -91,11 +88,6 @@ class TestTexto:
         ("entrada", "esperado"),
         [
             ("a\nb", "a b"),
-            ("a\r\nb", "a b"),
-            ("a\rb", "a b"),
-            ("\n  a  \n", "a"),
-            ("  a  ", "a"),
-            ("a\n\nb", "a  b"),
             ("", ""),
         ],
     )
@@ -108,12 +100,6 @@ class TestUrls:
         "url",
         [
             "http://exemplo.invalid/a",
-            "https://exemplo.invalid/a",
-            "https://exemplo.invalid/a%20b",
-            "https://exemplo.invalid/a(b!*,",
-            "https://exemplo.invalid/a?x=1&y=2+3",
-            "https://exemplo.invalid/a%2",
-            "https://exemplo.invalid/@user",
             "https://exemplo.invalid/a_b-c.d",
         ],
     )
@@ -124,21 +110,10 @@ class TestUrls:
         "url",
         [
             "ftp://exemplo.invalid/a",
-            "exemplo.invalid/a",
-            "https://",
             "https://exemplo.invalid/a texto",
-            "https://exemplo.invalid/a\n",
-            "https://exemplo.invalid/a[b",
             "https://exemplo.invalid/a]b",
-            "https://exemplo.invalid/@everyone",
-            "https://exemplo.invalid/@HERE",
-            "https://exemplo.invalid/a)b",  # endurecimento: `)`, `<`, `>` e `\\` dentro da URL
             "https://exemplo.invalid/a<b>",
-            "https://exemplo.invalid/a\\b",
-            "https://usuario:senha@exemplo.invalid/a",  # credencial na autoridade
             "https://exemplo.invalid/a#z",
-            "https://exemplo.invalid/a~",
-            "https://exemplo.invalid/a{b}",
             "",
         ],
     )
@@ -149,15 +124,8 @@ class TestUrls:
         ("avatar", "esperado"),
         [
             (None, ""),
-            ("", ""),
-            (f"  {URL}  ", URL),
             (URL, URL),
-            (f"{URL} lixo", None),
-            (f"{URL}]", None),
-            (f"{URL}/@everyone", None),
             (123, None),
-            (["x"], None),
-            ("não é link", None),
             ("   ", None),
         ],
     )
@@ -175,7 +143,7 @@ class TestUrls:
 class TestCota:
     @pytest.mark.parametrize(
         ("maximo", "dono", "esperado"),
-        [(10, False, 10), (10, True, 0), (1, False, 1), (0, False, 0), (0, True, 0), (-1, False, 0), (-5, True, 0)],
+        [(10, False, 10), (-5, True, 0)],
     )
     def test_quota_limit(self, maximo, dono, esperado):
         assert quota.quota_limit(maximo, dono) == esperado

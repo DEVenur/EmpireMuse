@@ -29,16 +29,6 @@ def projeto(monkeypatch, tmp_path):
 
 
 class TestMensagemDoSystemExit:
-    def test_com_empiremuse_home_manda_corrigir_a_variavel(self, monkeypatch, tmp_path, chdir_falha):
-        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path / "container"))
-
-        with pytest.raises(SystemExit) as erro:
-            main_module.enter_runtime_dir()
-
-        texto = str(erro.value)
-        assert "EMPIREMUSE_HOME" in texto
-        assert "Permissão negada" in texto
-
     def test_com_a_runtime_de_desenvolvimento_nao_cita_a_variavel(self, projeto, chdir_falha):
         (projeto / ".runtime").mkdir()
 

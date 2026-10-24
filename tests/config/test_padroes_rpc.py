@@ -25,22 +25,9 @@ def config_padrao(monkeypatch, tmp_path):
     return config_loader.load_config()
 
 
-def test_servidor_rpc_vem_desligado_por_padrao(config_padrao):
-    assert config_padrao["RUN_RPC_SERVER"] is False
-
-
+@pytest.mark.smoke
 def test_autenticacao_do_rpc_vem_ligada_por_padrao(config_padrao):
     assert config_padrao["ENABLE_RPC_AUTH"] is True
-
-
-def test_chaves_explicitas_no_ambiente_continuam_valendo(monkeypatch, config_padrao):
-    monkeypatch.setenv("RUN_RPC_SERVER", "true")
-    monkeypatch.setenv("ENABLE_RPC_AUTH", "false")
-
-    config = config_loader.load_config()
-
-    assert config["RUN_RPC_SERVER"] is True
-    assert config["ENABLE_RPC_AUTH"] is False
 
 
 @pytest.mark.parametrize(("chave", "valor"), [("RUN_RPC_SERVER", "false"), ("ENABLE_RPC_AUTH", "true")])

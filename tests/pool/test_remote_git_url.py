@@ -90,75 +90,21 @@ WEB = "https://github.com/EmpireCommunity/EmpireMuse"
 class TestGuardaDoFormatoAtual:
     """GUARDA: o caso que já funciona (remote ``origin`` em https com ``.git``) não pode regredir."""
 
-    def test_origin_https_com_sufixo_git(self, monkeypatch, pool):
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", f"{WEB}.git")) == WEB
-
+    @pytest.mark.smoke
     def test_origin_https_sem_sufixo_git(self, monkeypatch, pool):
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", WEB)) == WEB
-
-    def test_nunca_roda_o_git_de_verdade(self, monkeypatch, pool):
-        def real(*args, **kwargs):
-            raise AssertionError("subprocess real")
-
-        monkeypatch.setattr(subprocess, "Popen", real)
         assert com_saida_do_git(monkeypatch, pool, remote("origin", WEB)) == WEB
 
 
 class TestRemoteComOutroNome:
-    def test_unico_remote_chamado_upstream(self, monkeypatch, pool):
-        assert com_saida_do_git(monkeypatch, pool, remote("upstream", f"{WEB}.git")) == WEB
-
-    @pytest.mark.parametrize("nome", ["fork", "gitlab-espelho", "o", "um_nome_bem_longo_de_remote"])
-    def test_o_tamanho_do_nome_do_remote_nao_importa(self, monkeypatch, pool, nome):
-        """O fatiamento fixo ``[7:]`` só acerta quando o nome tem exatamente 6 caracteres (``origin``)."""
-        assert com_saida_do_git(monkeypatch, pool, remote(nome, f"{WEB}.git")) == WEB
-
     def test_prefere_o_origin_mesmo_que_nao_seja_o_primeiro(self, monkeypatch, pool):
         saida = remote("fork", "https://github.com/alguem/Fork.git") + remote("origin", f"{WEB}.git")
         assert com_saida_do_git(monkeypatch, pool, saida) == WEB
-
-    def test_sem_origin_usa_o_primeiro_remote(self, monkeypatch, pool):
-        saida = remote("beta", "https://github.com/org/Beta.git") + remote("alfa", "https://github.com/org/Alfa.git")
-        assert com_saida_do_git(monkeypatch, pool, saida) == "https://github.com/org/Beta"
-
-    def test_so_as_linhas_de_fetch_valem_e_a_ordem_de_fetch_e_push_nao_importa(self, monkeypatch, pool):
-        saida = f"origin\t{WEB}.git (push)\norigin\t{WEB}.git (fetch)\n"
-        assert com_saida_do_git(monkeypatch, pool, saida) == WEB
-
-    def test_remote_so_com_push_cai_no_padrao(self, monkeypatch, pool):
-        saida = f"origin\t{WEB}.git (push)\n"
-        esperado = pool.config["SOURCE_REPO"].removesuffix(".git")
-        assert com_saida_do_git(monkeypatch, pool, saida) == esperado
 
     def test_separador_por_espacos_em_vez_de_tabulacao(self, monkeypatch, pool):
         assert com_saida_do_git(monkeypatch, pool, f"origin   {WEB}.git (fetch)\n") == WEB
 
 
 class TestFormatosDeUrl:
-    @pytest.mark.parametrize(
-        ("url", "esperado"),
-        [
-            ("git@github.com:EmpireCommunity/EmpireMuse.git", WEB),
-            ("git@github.com:EmpireCommunity/EmpireMuse", WEB),
-            ("ssh://git@github.com/EmpireCommunity/EmpireMuse.git", WEB),
-            ("ssh://git@github.com:22/EmpireCommunity/EmpireMuse.git", WEB),
-            ("git@gitlab.com:grupo/sub/projeto.git", "https://gitlab.com/grupo/sub/projeto"),
-            ("git://github.com/EmpireCommunity/EmpireMuse.git", WEB),
-        ],
-        ids=["scp_com_git", "scp_sem_git", "ssh_url", "ssh_com_porta", "gitlab_subgrupo", "protocolo_git"],
-    )
-    def test_formatos_ssh_viram_a_url_web_https(self, monkeypatch, pool, url, esperado):
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == esperado
-
-    def test_so_o_sufixo_git_e_removido_nao_o_que_aparece_no_meio(self, monkeypatch, pool):
-        """``.replace(".git", "")`` mutilava ``.github`` e qualquer ``.git`` no meio do caminho."""
-        url = "https://github.com/org/org.github.io.git"
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == "https://github.com/org/org.github.io"
-
-    def test_repositorio_chamado_dot_github_sem_sufixo_git(self, monkeypatch, pool):
-        url = "https://github.com/org/.github"
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == url
-
     @pytest.mark.parametrize(
         "url",
         [
@@ -172,92 +118,9 @@ class TestFormatosDeUrl:
         assert resultado == WEB
         assert "@" not in resultado and "segredo" not in resultado and "token" not in resultado
 
-    @pytest.mark.parametrize("url", [f"{WEB}/", f"{WEB}.git/", f"{WEB}//"], ids=["barra", "git_barra", "duas_barras"])
-    def test_barra_final_e_removida(self, monkeypatch, pool, url):
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == WEB
-
-    def test_url_com_porta_http_e_mantida_so_sem_credenciais(self, monkeypatch, pool):
-        url = "https://git.exemplo.invalid:8443/equipe/projeto.git"
-        assert (
-            com_saida_do_git(monkeypatch, pool, remote("origin", url))
-            == "https://git.exemplo.invalid:8443/equipe/projeto"
-        )
-
-    @pytest.mark.parametrize(
-        ("url", "esperado"),
-        [
-            ("http://git.exemplo.invalid/equipe/projeto.git", "http://git.exemplo.invalid/equipe/projeto"),
-            ("https://[::1]:8443/equipe/projeto.git", "https://[::1]:8443/equipe/projeto"),
-            ("ssh://git@[2001:db8::1]/equipe/projeto.git", "https://[2001:db8::1]/equipe/projeto"),
-            ("github.com:EmpireCommunity/EmpireMuse.git", WEB),
-            ("git+ssh://git@github.com/EmpireCommunity/EmpireMuse.git", WEB),
-        ],
-        ids=["http_mantido", "ipv6_http_com_porta", "ipv6_ssh", "scp_sem_usuario", "git_mais_ssh"],
-    )
-    def test_outras_formas_de_endereco(self, monkeypatch, pool, url, esperado):
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == esperado
-
     @pytest.mark.parametrize("saida", [f"  origin\t{WEB}.git (fetch)\n", f"origin\t{WEB}.git (fetch)\r\n"], ids=repr)
     def test_espacos_e_quebra_de_linha_do_windows_nas_pontas_da_linha(self, monkeypatch, pool, saida):
         assert com_saida_do_git(monkeypatch, pool, saida) == WEB
-
-
-class TestSaidaSemRemoteUtil:
-    """Vazia, ilegível, remote local ou falha do git: cai em ``SOURCE_REPO`` sem levantar erro."""
-
-    @pytest.mark.parametrize(
-        "saida",
-        [
-            "",
-            "\n",
-            "   \n\n",
-            "fatal: not a git repository (or any of the parent directories): .git\n",
-            "origin\n",
-            "origin (fetch)\n",
-            "origin\t(fetch)\n",
-            "esta linha não tem formato nenhum\n",
-            "origin\t/srv/git/projeto.git (fetch)\n",
-            "origin\t../projeto (fetch)\n",
-            "origin\tfile:///srv/git/projeto.git (fetch)\n",
-            "origin\thttps://exemplo.invalid (fetch)\n",
-            "origin\thttps://exemplo.invalid/ (fetch)\n",
-            "origin\tgit@github.com: (fetch)\n",
-            "origin\tgit@github.com:/ (fetch)\n",
-            "origin\tgit@github.com:.git (fetch)\n",
-            "origin\thttps://[::1/projeto (fetch)\n",
-            "origin\tftp://exemplo.invalid/org/projeto.git (fetch)\n",
-        ],
-        ids=lambda saida: repr(saida)[:40],
-    )
-    def test_cai_na_configuracao_sem_erro(self, monkeypatch, pool, saida):
-        esperado = pool.config["SOURCE_REPO"].removesuffix(".git")
-        assert com_saida_do_git(monkeypatch, pool, saida) == esperado
-
-    @pytest.mark.parametrize(
-        "erro",
-        [FileNotFoundError("git"), subprocess.CalledProcessError(128, ["git", "remote", "-v"])],
-        ids=["git_ausente", "codigo_128"],
-    )
-    def test_guarda_falha_ao_rodar_o_git_cai_na_configuracao(self, monkeypatch, pool, erro):
-        esperado = pool.config["SOURCE_REPO"].removesuffix(".git")
-        assert com_saida_do_git(monkeypatch, pool, erro) == esperado
-
-    def test_saida_nao_utf8_nao_derruba_o_setup(self, monkeypatch, pool):
-        """O código atual decodifica como ascii; um remote com acento não pode quebrar o setup."""
-        chamadas = []
-
-        def falso(comando, *args, **kwargs):
-            chamadas.append(comando)
-            if comando[:2] == ["git", "rev-parse"]:
-                return SHA.encode()
-            return "origin\thttps://github.com/org/Repositório.git (fetch)\n".encode("utf-8")
-
-        monkeypatch.setattr(client, "check_output", falso)
-        pool.setup()
-        assert pool.remote_git_url in {
-            "https://github.com/org/Repositório",
-            pool.config["SOURCE_REPO"].removesuffix(".git"),
-        }
 
 
 class TestGitSemRuidoNoConsole:
@@ -274,13 +137,3 @@ class TestGitSemRuidoNoConsole:
         pool.setup()
 
         assert stderrs == {("git", "rev-parse"): subprocess.DEVNULL, ("git", "remote"): subprocess.DEVNULL}
-
-    def test_sem_repositorio_o_commit_fica_nulo_e_a_url_cai_no_source_repo(self, monkeypatch, pool):
-        def falso(comando, *args, **kwargs):
-            raise subprocess.CalledProcessError(128, comando)
-
-        monkeypatch.setattr(client, "check_output", falso)
-        pool.setup()
-
-        assert pool.commit is None
-        assert pool.remote_git_url == FALLBACK

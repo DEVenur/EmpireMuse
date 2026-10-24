@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.rules.test_camadas import BIBLIOTECA_PADRAO, importados
+from tests.support.camadas import BIBLIOTECA_PADRAO, importados
 from tests.support.raiz import RAIZ
 
 PACOTE = RAIZ / "empiremuse"
