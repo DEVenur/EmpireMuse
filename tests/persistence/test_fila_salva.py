@@ -242,7 +242,8 @@ class TestLer:
         pkl = escrever_pkl(tmp_path)
         antes = pkl.read_bytes()
         await salvar(faixas[1:], atual=faixas[0])
-        assert len(await montar_leitura(monkeypatch, None)()) == 3
+        lidas = await montar_leitura(monkeypatch, None)()
+        assert [f.info["title"] for f in lidas] == [f.info["title"] for f in faixas]
         assert pkl.read_bytes() == antes
 
 

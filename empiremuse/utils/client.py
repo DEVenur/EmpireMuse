@@ -690,7 +690,6 @@ class BotPool:
             print(traceback.format_exc())
 
     def setup(self):
-        log_ignored_legacy_data()
         self.load_skins()
 
         if self.config["ENABLE_LOGGER"]:
@@ -699,6 +698,8 @@ class BotPool:
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
             logger.addHandler(build_file_log_handler(logs_dir))
+
+        log_ignored_legacy_data()  # depois do arquivo de log, para o aviso constar nele
 
         LAVALINK_SERVERS = {}
 
