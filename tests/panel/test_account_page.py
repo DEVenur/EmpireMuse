@@ -6,7 +6,6 @@ favorito_remover | favoritos_importar | integracao_remover | integracoes_importa
 Os dados são SEMPRE os do usuário da sessão (um `user_id` vindo do formulário/URL é ignorado).
 """
 
-
 from tests.panel.helpers_account import AccountBase, OTHER_UID
 from tests.panel.helpers_login import DEFAULT_USER
 from tests.panel.helpers_settings import UID, acao_form

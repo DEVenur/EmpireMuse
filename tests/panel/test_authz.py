@@ -3,7 +3,6 @@
 Interpretações (contrato BRIEFING-PAINEL-E3.md): ver o relatório. Tudo com dublês; relógio injetado; sem rede.
 """
 
-
 import aiohttp
 import pytest
 
@@ -105,7 +104,7 @@ def test_fetches_member_when_not_cached_and_accepts_admin():
         not_found,
         lambda: aiohttp.ClientError("rede"),
     ],
-    ids=["NotFound", "Forbidden", "HTTPException", "timeout", "OSError", "aiohttp"],
+    ids=["NotFound", "aiohttp"],
 )
 def test_fetch_member_failures_deny_access(failure):
     guild, _, _, authorizer = setup(member=False)

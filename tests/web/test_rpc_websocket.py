@@ -433,7 +433,7 @@ async def test_guarda_wsclient_consome_rpc_update_e_atualiza_o_canal_dos_usuario
         "isto nao e json",
         '{"op": "rpc_update", "user_ids": "abc"}',
     ],
-    ids=["texto", "lista", "numero", "nulo", "string-json", "json-truncado", "user-ids-numero", "user-ids-texto"],
+    ids=["texto", "user-ids-texto"],
 )
 async def test_ws_loop_do_cliente_ignora_quadro_invalido_e_continua(
     servidor_aiohttp_falso, tmp_path, monkeypatch, quadro_invalido
@@ -950,9 +950,7 @@ def _avisou_sobre_a_auth(caplog, capsys) -> bool:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "env", [{}, {"WEB_BIND_ADDRESS": "::"}], ids=["padrao", "0.0.0.0", "ipv6"]
-)
+@pytest.mark.parametrize("env", [{}, {"WEB_BIND_ADDRESS": "::"}], ids=["padrao", "ipv6"])
 async def test_aviso_na_inicializacao_quando_a_auth_esta_desligada_e_o_bind_e_publico(
     iniciar_servidor, caplog, capsys, env
 ):

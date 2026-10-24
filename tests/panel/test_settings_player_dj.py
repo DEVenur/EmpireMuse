@@ -1,7 +1,6 @@
 """E4a — categorias Player (G-01…G-04) e DJ (G-05): leitura, escrita só dos campos do formulário, validações
 contra o código dos comandos, escopo por bot e efeitos em memória."""
 
-
 from tests.panel.helpers_settings import ROLE_IDS, command_allowed_volumes, parse_forms
 from tests.panel.test_settings_http import HttpBase, external_change
 
