@@ -114,6 +114,63 @@ O arquivo `docker-compose.yml` aplica uma política rigorosa de segurança defen
 - **Isolamento de Privilégios**: `security_opt: [no-new-privileges:true]` previne escalada de privilégios e `cap_drop: [ALL]` descarta todas as capacidades Linux (Linux Capabilities).
 - **Limites e Resiliência**: `mem_limit` e `memswap_limit` fixados em `1024m` (sem swap), `pids_limit: 256`, `stop_grace_period: 30s` e rotação de logs (`json-file` 10m x 3) para bot e mongo.
 - **Volumes Nomeados**: Os dados são isolados nos volumes `empiremuse-data` (para `/data` do bot) e `empiremuse-mongo` (para `/data/db` do MongoDB).
+- **Identificação e Nomes Determinísticos**: O compose declara `name: empiremuse` e nomes de contêineres fixos (`container_name: empiremuse` para o bot e `container_name: empiremuse-mongo` para o MongoDB), padronizando a inspeção e comandos operacionais (`docker logs empiremuse`, `docker top empiremuse`) independentemente do diretório hospedeiro.
+
+### 3.5 Produção atrás do Traefik e da Cloudflare
+
+Para implantar o EmpireMuse em um servidor de produção com proxy reverso gerenciado pelo **Traefik v3** e proteção da **Cloudflare**, utilize o arquivo de override [`deploy/docker-compose.traefik.yml`](../../deploy/docker-compose.traefik.yml).
+
+Esta configuração segue as práticas de segurança do [Traefik com Cloudflare (docker-compose-cookbook)](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/traefik):
+- A VPS mantém apenas a porta **443** aberta, aceitando conexões exclusivamente da Cloudflare via mTLS (**Authenticated Origin Pulls**), certificado **Cloudflare Origin CA** e lista de IPs permitidos (`cloudflare-only`).
+- Nenhuma porta do bot é exposta no host (`ports: !reset []`). Toda a comunicação passa pela rede interna do Docker (`proxy`).
+- Atrás do Traefik do cookbook, `PANEL_TRUST_PROXY=true` faz o painel web utilizar com segurança o endereço IP real enviado pela Cloudflare (`CF-Connecting-IP`).
+
+#### Passo a Passo de Implantação:
+
+1. **Rede Externa `proxy`**:
+   Certifique-se de que a rede gerenciada pelo Traefik já existe no host (se ainda não existir, crie-a):
+   ```bash
+   docker network create proxy
+   ```
+
+2. **Configuração das Variáveis de Ambiente no `.env`**:
+   No arquivo `.env` na raiz do projeto, defina as variáveis operacionais para o ambiente atrás do proxy:
+   ```env
+   # Domínio público FQDN (usado na regra Host(...) do Traefik; obrigatório com o override):
+   EMPIREMUSE_DOMAIN=muse.seudominio.com
+
+   # Ativação do servidor web/RPC interno do bot:
+   RUN_RPC_SERVER=true
+   WEB_BIND_ADDRESS=0.0.0.0
+
+   # Configurações do Painel Web:
+   PANEL_ENABLED=true
+   PANEL_BASE_URL=https://muse.seudominio.com
+   # Atrás do Traefik do cookbook, faz o painel usar o IP enviado pela Cloudflare (CF-Connecting-IP):
+   PANEL_TRUST_PROXY=true
+
+   # Configurações do RPC (Rich Presence):
+   # O bot fala com o relé local internamente no contêiner, sem circular pela Cloudflare:
+   # (utilize aspas simples para impedir que o Docker Compose interpole a variável $PORT)
+   RPC_SERVER='ws://localhost:$PORT/ws'
+   # Endereço público entregue aos clientes e exibido no comando /rich_presence:
+   RPC_PUBLIC_URL=wss://muse.seudominio.com/ws
+   ```
+
+3. **Cadastro do Callback OAuth no Discord**:
+   No [Discord Developer Portal](https://discord.com/developers/applications), na página da sua aplicação em **OAuth2 > Redirects**, cadastre a URL de callback:
+   ```
+   https://<domínio>/painel/callback
+   ```
+
+4. **Inicialização com Override do Compose**:
+   Inicie a stack combinando o `docker-compose.yml` base com o arquivo de override:
+   ```bash
+   docker compose -f docker-compose.yml -f deploy/docker-compose.traefik.yml up -d
+   ```
+
+> [!NOTE]
+> O Traefik já define os entrypoints, certificados e middlewares (`cloudflare-only` e `secure-headers`) por padrão na entrada 443; o override do EmpireMuse declara o roteamento de domínio (`Host`), a porta interna do serviço (`6000`), a rede `proxy` (com a label `traefik.docker.network=proxy` para desambiguação de interfaces) e a rede interna `default` para alcançar o MongoDB quando o perfil `mongo` for utilizado.
 
 ---
 
