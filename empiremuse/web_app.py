@@ -29,6 +29,8 @@ from empiremuse.rpc_protocol import (
     MAX_BOT_IDS,
     MAX_CONNECTIONS,
     MAX_MESSAGE_SIZE,
+    WEBSOCKET_PING_INTERVAL,
+    WEBSOCKET_PING_TIMEOUT,
     MAX_USER_IDS,
     RPC_KEY_HEADER,
     TOKEN_LENGTHS,
@@ -624,6 +626,8 @@ def run_app(pool: BotPool, message: str = "", config: dict = None):
             (r"/ws", WebSocketHandler, {"config": config, "connections": set()}),
         ],
         websocket_max_message_size=MAX_MESSAGE_SIZE,
+        websocket_ping_interval=WEBSOCKET_PING_INTERVAL,
+        websocket_ping_timeout=WEBSOCKET_PING_TIMEOUT,
     )
 
     server = tornado.httpserver.HTTPServer(
