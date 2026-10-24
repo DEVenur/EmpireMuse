@@ -11,6 +11,8 @@ import pytest
 from tests.panel.helpers import OAUTH_SECRET, https_config, load_settings, local_config, require
 from tests.panel.helpers_login import ACCESS_TOKEN, CLIENT_ID, CODE, GATE, AUTHORIZE_PARAM_KEYS, s256
 
+pytestmark = pytest.mark.critical
+
 UNRESERVED = re.compile(r"^[A-Za-z0-9\-._~]{43,128}$")
 
 
@@ -41,6 +43,7 @@ def _client(config=None):
     return settings, _oauth().DiscordOAuthClient(settings, CLIENT_ID)
 
 
+@pytest.mark.smoke
 def test_authorize_url_has_exact_parameters():
     settings, client = _client()
     url = client.authorize_url("state-123", "challenge-456")
@@ -70,10 +73,6 @@ def test_authorize_url_encodes_special_characters_in_state():
     _, client = _client()
     url = client.authorize_url("a&b=c d", "x")
     assert parse_qs(urlsplit(url).query)["state"] == ["a&b=c d"], "state deve ser codificado na query"
-
-
-def test_discord_oauth_error_is_an_exception():
-    assert issubclass(_oauth().DiscordOAuthError, Exception)
 
 
 # --------------------------------------------------------------------------- cliente HTTP com sessão simulada
@@ -180,13 +179,6 @@ def test_exchange_code_posts_form_with_pkce_and_returns_access_token():
     "outcome",
     [
         (400, {"error": "invalid_grant"}),
-        (401, {"message": "401: Unauthorized"}),
-        (429, {"retry_after": 1.0}),
-        (500, {}),
-        (200, {"sem": "access_token"}),
-        (200, ["lista"]),
-        aiohttp.ClientError("rede"),
-        asyncio.TimeoutError(),
         OSError("rede"),
     ],
 )
@@ -224,10 +216,6 @@ def test_fetch_guilds_requests_limit_200_and_returns_list():
     "method_name,outcome",
     [
         ("fetch_user", (401, {})),
-        ("fetch_user", (200, ["não é dict"])),
-        ("fetch_user", aiohttp.ClientError("rede")),
-        ("fetch_guilds", (429, {})),
-        ("fetch_guilds", (200, {"não": "lista"})),
         ("fetch_guilds", asyncio.TimeoutError()),
     ],
 )

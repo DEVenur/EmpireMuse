@@ -5,6 +5,11 @@
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+markers = [
+    "smoke: caminho feliz rápido (import, config, db, painel); roda primeiro no CI",
+    "critical: segurança, persistência, migração, config_loader, contratos Discord/Lavalink e regras puras",
+    "regression: um teste por bug real corrigido",
+]
 
 [tool.coverage.run]
 source = ["empiremuse"]
