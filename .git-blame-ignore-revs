@@ -3,3 +3,25 @@ fc4b7f8f034071ccb08803c153511afbe5a2c9e9
 
 # refactor(tests): reorganiza por domínio, sem prefixo de fase
 3255e4f9f5f4013ff7551ecaa186aac68873aae3
+
+# refactor(ki29): divisão de music.py, models.py e interactions.py (só movimentação de código)
+# refactor(ki29): interactions.py vira pacote; move common, view_modal, player_views e stage_title
+62facac7b638a7179daa93e70758cfd0d1163942
+# refactor(ki29): move favoritos de interactions/__init__ para favorites_texts, fav_modals e fav_menu
+b34c1a93b76f71bf5cf26e4bb855843b26f61774
+# refactor(ki29): move o editor de skins para interactions/skin_editor.py; __init__ só reexporta
+d6997d7127ea99ed1a1769c8dc5195c442c33fe8
+# refactor(ki29): models.py vira pacote; move helpers e tracks (LavalinkPlayer fica no __init__)
+d6a37f497aa3415e2961639c2dca3919b64bab61
+# refactor(ki29): LavalinkPlayer vira player.py + PlayerFiltersMixin, PlayerStateMixin e PlayerMessageMixin
+d532df7d920a1148830fdc79ecdea0810b3f69b5
+# refactor(ki29): LavalinkPlayer perde voz, eventos, autoqueue e reprodução para mixins
+88663dbe2891ef4c49fd2d58ee0073f4ec3d6aec
+# refactor(ki29): cria music_cog/ e move o status de voz de Music para VoiceStatusMixin
+c3d32c8ed1e11734969cee050bbd8f15cc45fa59
+# refactor(ki29): Music perde skip, controles de reprodução, edição da fila, modos, favoritos, np e sessão para mixins
+f1d234a03abb3a18393ce364962e832a5533e360
+# refactor(ki29): Music perde entrada do play, play, grupo /queue e autocomplete da fila para mixins
+2938e2acd27c6b9c6c2fb58bdfbdf4a2f37352d3
+# refactor(ki29): Music perde nós, despacho do controlador, pedidos, faixas e ciclo de vida do player para mixins
+dbce4cdc9fe83fb06bdd135f6b884edd3ef14f66

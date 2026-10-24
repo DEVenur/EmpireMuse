@@ -29,7 +29,7 @@ detectam se um comando mudar e o painel ficar para trás.
   caracteres de controle. Vazio volta ao padrão e grava `""` no `guild_prefix_cache` (como `resetprefix`), com a chave
   inteira do servidor editado.
 - Status de voz: ao menos 1 dos 9 placeholders de `SetStageTitle.placeholders`, até 496 caracteres, quebras de linha
-  viram espaço (`utils/music/interactions.py`).
+  viram espaço (`utils/music/interactions/`).
 - Skins: nomes de `bot.player_skins` / `bot.player_static_skins` menos `IGNORE_SKINS` / `IGNORE_STATIC_SKINS`, lidos de
   `bot.config` a cada requisição. Skins personalizadas do servidor não são lidas nem gravadas pelo painel.
 
@@ -49,7 +49,7 @@ detectam se um comando mudar e o painel ficar para trás.
 
 ## Pendência para a fase de saneamento
 
-Os cogs (`modules/music_settings.py`, `modules/legacy_cmds.py`, `utils/music/interactions.py`) ainda têm as próprias
+Os cogs (`modules/music_settings.py`, `modules/legacy_cmds.py`, `utils/music/interactions/`) ainda têm as próprias
 cópias dessas regras. **Refatorá-los para chamarem `panel/services/` fica para o saneamento**; nesta etapa os serviços
 espelham os comandos e os testes de caracterização garantem a equivalência.
 

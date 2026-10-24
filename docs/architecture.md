@@ -20,7 +20,7 @@ flowchart LR
     b1 & b2 --> cogs["empiremuse/cogs/*.py<br/>(cogs)"]
     cogs --> req["empiremuse/utils/music/request_channel.py<br/>(setup e reset de canal)"]
     cogs --> rules["empiremuse/rules/<br/>(regras puras: só stdlib)"]
-    cogs --> player["LavalinkPlayer<br/>empiremuse/utils/music/models.py"]
+    cogs --> player["LavalinkPlayer<br/>empiremuse/utils/music/models/"]
     player --> wl["empiremuse/wavelink/<br/>(cliente próprio)"]
     wl <--> ll["Lavalink v3/v4<br/>(local ou remoto)"]
     cogs --> ext["Spotify · Deezer · Last.fm · yt-dlp"]
@@ -80,6 +80,49 @@ relevantes:
 - Se `ENABLE_DISCORD_URLS_PLAYBACK` for falso, o comando `play_music_file` é removido (`BotCore.load_modules` em `empiremuse/utils/client.py`).
 - Descrições de slash commands acima de 100 caracteres derrubam o carregamento (`BotCore.load_modules` em `empiremuse/utils/client.py`).
 
+### Cog `Music` e seus mixins (`empiremuse/cogs/music.py` + `empiremuse/music_cog/`)
+
+A Cog `Music` é montada por herança múltipla (KI-29): `class Music(<mixins>, commands.Cog)` em `empiremuse/cogs/music.py`,
+com os comandos e listeners distribuídos em mixins de `empiremuse/music_cog/` (um módulo por tema). Em `cogs/music.py` ficam
+só os atributos de núcleo (`emoji`, `name`, `desc_prefix`, `providers_info`, …), `__init__`, `cog_check`, `cog_unload`,
+`setup()` e as reexportações (por exemplo, `is_discord_attachment_url`).
+
+| Módulo (`empiremuse/music_cog/`) | Mixin | Conteúdo |
+|---|---|---|
+| `voice_status.py` | `VoiceStatusMixin` | `setvoicestatus`, `set_voice_status` |
+| `play_entry.py` | `PlayEntryMixin` | `message_play`, `search`, `connect`, `play_legacy`, `play_file`, … |
+| `play_command.py` | `PlayCommandMixin` | `play` (1.588 linhas), `fav_add_autocomplete` |
+| `skip.py` | `SkipMixin` | `skip`, `skipto`, `back`, `voteskip` |
+| `playback_controls.py` | `PlaybackControlsMixin` | `volume`, `pause`, `resume`, `seek`, `loop`, `nightcore` |
+| `queue_edit.py` | `QueueEditMixin` | `remove`, `readd`, `rotate` |
+| `player_session.py` | `PlayerSessionMixin` | pedidos por thread, DJs, log de comandos, `stop`, salvar fila |
+| `now_playing.py` | `NowPlayingMixin` | `now_playing`, `reload_np`, `controller` |
+| `queue_group.py` | `QueueGroupMixin` | grupo `/queue`: `shuffle`, `reverse`, `display`, `clear`, `move`, … |
+| `autocompletes.py` | `AutocompletesMixin` | `queue_tracks` e `node_suggestions`, que decoram comandos de mais de um mixin |
+| `player_modes.py` | `PlayerModesMixin` | `restrict_mode`, `nonstop`, `autoplay` |
+| `nodes.py` | `NodesMixin` | `change_node`, `playeruptime`, eventos e reconexão de nodes, `connect_node`, `get_best_node` |
+| `favorites.py` | `FavoritesMixin` | `fav_manager` |
+| `controller_dispatch.py` | `ControllerDispatchMixin` | canal de pedidos, despacho de interações do controlador |
+| `player_controller.py` | `PlayerControllerMixin` | `player_controller` (ações dos botões do controlador do player) |
+| `song_requests.py` | `SongRequestsMixin` | pedidos de música por mensagem |
+| `tracks.py` | `TracksMixin` | `get_partial_tracks`, `get_lavalink_tracks`, `get_tracks` |
+| `player_lifecycle.py` | `PlayerLifecycleMixin` | `process_music`, `create_player`, `player_vc_disconnect`, relatório de erros |
+| `shared.py` | — | constantes e objetos de corpo de classe usados por mais de um mixin |
+
+Regras de montagem (guardadas por testes em `tests/repo/` e `tests/cogs/`):
+
+- Os mixins ficam **fora de `empiremuse/cogs/`** porque `BotCore.load_modules` carrega todo `.py` dessa pasta como extensão.
+- O `disnake` executa o módulo da extensão uma vez por bot, e o corpo de cada mixin cria `CooldownMapping`, `MaxConcurrency` e
+  `CommandArgparse` próprios. Por isso `cogs/music.py` remove `empiremuse.music_cog.*` de `sys.modules` antes de importar os mixins:
+  cada bot continua com os próprios cooldowns e a concorrência, e o `reload` de desenvolvimento enxerga edições nos mixins.
+- Não use `from __future__ import annotations` em `music_cog/*` (o `disnake` avalia as anotações dos parâmetros dos comandos).
+- Objetos de corpo de classe usados por mais de um mixin (`remove_mc`, `queue_manipulation_cd`, `case_sensitive_args`, `play_cd`,
+  `play_mc`, `playlist_opts`) moram em `shared.py` e `Music` os expõe como atributos. O `logger` mantém o nome `empiremuse.cogs.music`.
+- Mixins que decoram comandos de outros (`autocompletes.py`) importam os donos (`SkipMixin.skip.autocomplete(...)`); nenhum mixin importa
+  `autocompletes.py`.
+- Ao testar, troque (`monkeypatch`) o nome no módulo que **usa** o símbolo (por exemplo, `music_cog.play_command.check_player_perm`), não na
+  reexportação de `cogs/music.py`.
+
 ## 4. Roteamento entre bots do pool
 
 Com vários bots no mesmo servidor, **apenas um** deve responder a cada comando. A decisão fica em
@@ -100,21 +143,41 @@ Com vários bots no mesmo servidor, **apenas um** deve responder a cada comando.
 
 ## 5. Player
 
-`LavalinkPlayer` (`empiremuse/utils/music/models.py`, herda `wavelink.Player`) concentra fila, loop, autoplay,
-filtros, controlador (mensagem com botões), integração com skins e o RPC. O arquivo tem 4.018 linhas.
-Outras classes: `LavalinkTrack` (`empiremuse/utils/music/models.py`), `PartialTrack` (`empiremuse/utils/music/models.py`, faixa de outra
-plataforma resolvida só ao tocar) e `LavalinkPlaylist` (`empiremuse/utils/music/models.py`). `music_mode(bot)` apenas devolve
-`wavelink.Client(bot=bot)` (`music_mode` em `empiremuse/utils/music/models.py`).
+`LavalinkPlayer` (`empiremuse/utils/music/models/player.py`, herda `wavelink.Player`) concentra fila, loop, autoplay,
+filtros, controlador (mensagem com botões), integração com skins e o RPC. Desde a KI-29, `empiremuse/utils/music/models/` é um pacote:
+o `__init__.py` só reexporta os nomes públicos (e os privados que os testes usam), então `empiremuse.utils.music.models` continua
+importável como antes. O núcleo (`__init__`, propriedades, `connect`, `set_pause`, `destroy`, …) fica em `player.py`, e o resto de
+`LavalinkPlayer` vem de mixins que precedem `wavelink.Player` nas bases (os overrides continuam valendo):
+
+| Módulo (`models/`) | Conteúdo |
+|---|---|
+| `player.py` | `LavalinkPlayer`: núcleo e lista de mixins |
+| `player_filters.py` | `PlayerFiltersMixin`: `seek` e filtros de áudio |
+| `player_state.py` | `PlayerStateMixin`: `cleanup`, `process_destroy`, salvar fila, RPC |
+| `player_message.py` | `PlayerMessageMixin`: `invoke_np`, atualização da mensagem, dicas |
+| `player_voice.py` | `PlayerVoiceMixin`: reconexão de voz, `members_timeout`, tópico do palco, `_wait_for_new_node` |
+| `player_events.py` | `PlayerEventsMixin`: `hook`, `hook_events`, `track_end` |
+| `player_autoqueue.py` | `PlayerAutoqueueMixin`: `get_autoqueue_tracks`, `resolve_track` |
+| `player_playback.py` | `PlayerPlaybackMixin`: `process_next`, `_process_next`, `play`, modo ocioso |
+| `tracks.py` | `PartialTrack`, `PartialPlaylist`, `LavalinkTrack`, `LavalinkPlaylist` |
+| `helpers.py` | `CustomYTDL`, `music_mode`, `lavalink_text`, `exclude_tags`, `logger`, … |
+
+`PartialTrack` (`empiremuse/utils/music/models/tracks.py`) é a faixa de outra plataforma resolvida só ao tocar. `music_mode(bot)` apenas devolve
+`wavelink.Client(bot=bot)` (`music_mode` em `empiremuse/utils/music/models/helpers.py`). O logger do pacote continua chamado
+`empiremuse.utils.music.models` (`logging.getLogger(__package__)` nos módulos-folha).
 
 - **Faixas parciais** (Spotify/Deezer): o player busca equivalentes nas `partial_providers` do node
-  (`ytsearch`, `scsearch`, `dzsearch`, …) e filtra por duração/título (`LavalinkPlayer._process_next` e `LavalinkPlayer.resolve_track` em `empiremuse/utils/music/models.py`).
+  (`ytsearch`, `scsearch`, `dzsearch`, …) e filtra por duração/título (`LavalinkPlayer._process_next` em `empiremuse/utils/music/models/player_playback.py` e `LavalinkPlayer.resolve_track` em `empiremuse/utils/music/models/player_autoqueue.py`).
 - **Skins** são módulos com função `load()`: 10 em `empiremuse/utils/music/skins/normal_player/` e 5 em
   `static_player/` (15 no total), carregados dinamicamente por `BotPool.load_skins` em `empiremuse/utils/client.py`. Skins
   personalizadas por servidor são guardadas no banco (ver seção 8).
-- **UI**: views, botões e modais em `empiremuse/utils/music/interactions.py` (3.534 linhas). Os identificadores do
+- **UI**: views, botões e modais em `empiremuse/utils/music/interactions/` (pacote desde a KI-29; o `__init__.py` reexporta os nomes
+  públicos): `player_views.py` (volume, fila, paginador, botões, seletores), `stage_title.py` (`SetStageTitle`), `fav_menu.py`
+  (`FavMenuView`), `fav_modals.py` (importação e adição de favoritos), `favorites_texts.py`, `skin_editor.py` (`SkinEditorMenu`),
+  `view_modal.py` e `common.py`. Os identificadores do
   controlador estão em `PlayerControls` (`empiremuse/utils/others.py`, prefixo `musicplayer_`).
 - **Rich Presence**: `LavalinkPlayer.process_rpc` monta o payload e `LavalinkPlayer._send_rpc_data` o envia por `ws_client`
-  (`empiremuse/utils/music/models.py`).
+  (`empiremuse/utils/music/models/player_state.py`).
 
 ## 6. Cliente Lavalink embutido (`empiremuse/wavelink/`)
 
@@ -122,22 +185,22 @@ Pacote local derivado do wavelink 0.9.x (`__version__` em `empiremuse/wavelink/_
 licença MIT — mantenha o cabeçalho). Foi estendido para o Lavalink **v4** e o NodeLink.
 
 - **v3 × v4**: `Node.version` é detectado consultando `GET {rest_uri}/v4/info`: 200 → v4; 404 → v3
-  (`Node.connect` em `empiremuse/wavelink/node.py`; também em `BotPool.check_node` em `empiremuse/utils/client.py` e `Music.node_reconnect` em `empiremuse/cogs/music.py`). O WebSocket usa
+  (`Node.connect` em `empiremuse/wavelink/node.py`; também em `BotPool.check_node` em `empiremuse/utils/client.py` e `Music.node_reconnect` em `empiremuse/music_cog/nodes.py`). O WebSocket usa
   URL e cabeçalhos diferentes por versão (`WebSocket.headers` e `WebSocket._connect` em `empiremuse/wavelink/websocket.py`).
 - **Resume**: v3 envia `Resume-Key` (`WebSocket.headers` em `empiremuse/wavelink/websocket.py`); v4 envia `Session-Id` e `Session-Resumed`
   (`WebSocket.headers` em `empiremuse/wavelink/websocket.py`). O `sessionId` vem do `op: ready` (`WebSocket.process_data` em `empiremuse/wavelink/websocket.py`). `Node.is_available` exige
   `session_id` na v4 (`empiremuse/wavelink/node.py`).
 - **DAVE (Lavalink ≥ 4.2)**: o `channelId` é enviado na atualização de voz (`Player._dispatch_voice_update` em `empiremuse/wavelink/player.py`).
 - **Reconexão**: `wavelink_node_connection_closed` dispara `node_reconnect` com backoff
-  (`Music.node_connection_closed` e `Music.node_reconnect` em `empiremuse/cogs/music.py`), limitada por `LAVALINK_RECONNECT_RETRIES`.
+  (`Music.node_connection_closed` e `Music.node_reconnect` em `empiremuse/music_cog/nodes.py`), limitada por `LAVALINK_RECONNECT_RETRIES`.
 - **Migração de players entre nodes**: ao perder o node, cada player aguarda outro via `_wait_for_new_node`
-  (agendado em `Music.node_reconnect` em `empiremuse/cogs/music.py`; definido em `LavalinkPlayer._wait_for_new_node` em `empiremuse/utils/music/models.py`); `Player.change_node`
+  (agendado em `Music.node_reconnect` em `empiremuse/music_cog/nodes.py`; definido em `LavalinkPlayer._wait_for_new_node` em `empiremuse/utils/music/models/player_voice.py`); `Player.change_node`
   troca o node manualmente (`empiremuse/wavelink/player.py`) e o comando `Music.change_node` expõe isso
-  (`empiremuse/cogs/music.py`).
+  (`empiremuse/music_cog/nodes.py`).
 - **Seleção de node**: `Client.get_best_node`, `Client.get_node_by_region`, `Client.get_node_by_shard` em `empiremuse/wavelink/client.py`.
 - **Conexão dos nodes**: `BotPool.node_check` verifica cada node e agenda `connect_node` em todos os bots
   (`BotPool.check_node` e `BotPool.node_check` em `empiremuse/utils/client.py`); `Music.connect_node` cria o `Node` e monta `search_providers`/`partial_providers`
-  (`empiremuse/cogs/music.py`).
+  (`empiremuse/music_cog/nodes.py`).
 
 ### Lavalink local
 
@@ -184,7 +247,7 @@ As definições do protocolo, limites, constantes e validações puras (sem I/O)
   - `1013` (`CLOSE_TRY_AGAIN_LATER`): capacidade máxima do servidor atingida.
   - `4200` (`CLOSE_REFUSED`): encerramento de sessão anterior substituída por nova conexão do mesmo usuário ou desconexão por falta de IDs.
 
-O payload de status `update`/`idle` é montado em `LavalinkPlayer.process_rpc` (`empiremuse/utils/music/models.py`). Se `RUN_RPC_SERVER` for falso e `RPC_SERVER` apontar para o próprio host, `connect_rpc_ws` em `empiremuse/utils/client.py` não conecta.
+O payload de status `update`/`idle` é montado em `LavalinkPlayer.process_rpc` (`empiremuse/utils/music/models/player_state.py`). Se `RUN_RPC_SERVER` for falso e `RPC_SERVER` apontar para o próprio host, `connect_rpc_ws` em `empiremuse/utils/client.py` não conecta.
 
 ### Sub-aplicação do Painel Web (`empiremuse/panel/`)
 
@@ -199,7 +262,7 @@ O painel web é ativado quando `PANEL_ENABLED=true` e requer `RUN_RPC_SERVER=tru
 
 ### Pacote de Regras Compartilhadas (`empiremuse/rules/`)
 
-O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhadas entre os componentes do bot (`empiremuse/cogs/`, `empiremuse/utils/music/interactions.py`, `empiremuse/utils/music/converters.py`) e os serviços da interface web (`empiremuse/panel/services/`):
+O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhadas entre os componentes do bot (`empiremuse/cogs/`, `empiremuse/utils/music/interactions/`, `empiremuse/utils/music/converters.py`) e os serviços da interface web (`empiremuse/panel/services/`):
 
 - **`limits.py`**: limites numéricos e constantes de tamanho (nomes, URLs, descrições, prefixos, canais e volumes);
 - **`text.py`**: sanitização e formatação de texto (`clean_title`, `clean_import_name`, `drop_same_names`, `normalize_status`);
@@ -272,12 +335,12 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 
 | Integração | Onde | Observações |
 |---|---|---|
-| **Lavalink** (v3/v4, NodeLink) | `empiremuse/wavelink/`, `empiremuse/cogs/music.py` | Fonte de áudio única; lista pública opcional (`empiremuse/utils/music/remote_lavalink_serverlist.py`, padrão `data/lavalink_servers.ini`). `Lavalink.jar`, `application.yml` e plugins vêm do espelho [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) `0.0.3` (Lavalink oficial 4.2.2; `application.yml` com cliente TV, OAuth opcional desligado por padrão e log do `YoutubeOauth2Handler` em WARN). |
-| **App de RPC (Rich Presence)** | `empiremuse/web_app.py`, `empiremuse/utils/music/models.py` | Aplicativo desktop [EmpireCommunity/EmpireMuse-RPC-app](https://github.com/EmpireCommunity/EmpireMuse-RPC-app) (origem: upstream, GPL-3.0); URLs em `empiremuse/utils/branding.py`. |
+| **Lavalink** (v3/v4, NodeLink) | `empiremuse/wavelink/`, `empiremuse/music_cog/nodes.py` | Fonte de áudio única; lista pública opcional (`empiremuse/utils/music/remote_lavalink_serverlist.py`, padrão `data/lavalink_servers.ini`). `Lavalink.jar`, `application.yml` e plugins vêm do espelho [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) `0.0.3` (Lavalink oficial 4.2.2; `application.yml` com cliente TV, OAuth opcional desligado por padrão e log do `YoutubeOauth2Handler` em WARN). |
+| **App de RPC (Rich Presence)** | `empiremuse/web_app.py`, `empiremuse/utils/music/models/player_state.py` | Aplicativo desktop [EmpireCommunity/EmpireMuse-RPC-app](https://github.com/EmpireCommunity/EmpireMuse-RPC-app) (origem: upstream, GPL-3.0); URLs em `empiremuse/utils/branding.py`. |
 | **Spotify** | `empiremuse/utils/music/audio_sources/spotify.py` | API oficial por *client credentials* (`SPOTIFY_CLIENT_ID/SECRET`); só metadados, o áudio vem de outra fonte. Veja `known-issues.md`. |
 | **Deezer** | `empiremuse/utils/music/audio_sources/deezer.py` | API pública sem credenciais; metadados. |
 | **Last.fm** | `empiremuse/utils/music/lastfm_tools.py`, `empiremuse/cogs/lastfm.py` | Scrobble e perfil; exige `LASTFM_KEY/SECRET`. |
-| **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models.py`), `BotPool.__init__` em `empiremuse/utils/client.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
+| **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models/helpers.py`), `BotPool.__init__` em `empiremuse/utils/client.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
 | **YouTube OAuth / PoToken** | `empiremuse/cogs/ll_yt_oauth.py`, `Node.refresh_potoken` em `empiremuse/wavelink/node.py`, `empiremuse/utils/music/youtube_trusted_session_generator.py` | Autenticação do plugin `youtube-plugin` do Lavalink e geração de `poToken` (`nodriver`). |
 | **Discord** | `disnake` (commit git fixado, `requirements.txt:1`) | Slash/prefix/menus de contexto; `AutoShardedBot`. |
 
@@ -301,15 +364,16 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/utils/db.py` | Modelos, `MongoDatabase`, `LocalDatabase`, prefixos | 330 |
 | `empiremuse/utils/others.py` | Contexto, `PoolCommand`, paginação, emojis, utilitários | 893 |
 | `empiremuse/utils/owner_panel.py` | Painel do dono (`PanelView`) | 75 |
-| `empiremuse/utils/music/models.py` | `LavalinkPlayer`, faixas, playlists, yt-dlp | 4.018 |
-| `empiremuse/utils/music/interactions.py` | Views/modais: fila, favoritos, skins, controles | 3.534 |
+| `empiremuse/utils/music/models/` | Pacote: `LavalinkPlayer` (núcleo + 7 mixins), faixas, playlists, yt-dlp (10 módulos; maior: `player_playback.py`, 681) | 4.332 (soma) |
+| `empiremuse/utils/music/interactions/` | Pacote: views/modais de fila, favoritos, skins e controles (8 módulos; maior: `skin_editor.py`, 1.064) | 3.959 (soma) |
 | `empiremuse/utils/music/checks.py` | Roteamento do pool, checks de DJ/voz/permissão | 813 |
 | `empiremuse/utils/music/local_lavalink.py` | Download/execução do Lavalink e do JDK locais | 497 |
 | `empiremuse/utils/music/audio_sources/` | Clientes Spotify (488) e Deezer (300) | 788 |
 | `empiremuse/utils/music/skins/` | 15 skins (10 normal + 5 estática) | 3.032 (soma) |
 | `empiremuse/utils/music/{converters,errors,filters,skin_utils,track_encoder,…}.py` | Auxiliares de música | 1.506 |
 | `empiremuse/wavelink/` | Cliente Lavalink v3/v4 (node, websocket, player, eventos) | 2.850 |
-| `empiremuse/cogs/music.py` | Comandos de música (play, fila, controles, nodes) | 8.688 |
+| `empiremuse/cogs/music.py` | Cog `Music` (núcleo, bases e `setup`); os comandos vivem nos mixins de `music_cog/` | 275 |
+| `empiremuse/music_cog/` | Mixins de `Music` (play, fila, controles, nodes, controlador, pedidos) + `shared.py` (19 módulos; maior: `play_command.py`, 1.710) | 9.173 (soma) |
 | `empiremuse/cogs/music_settings.py` | Configurações por servidor/usuário, skins, favoritos | 1.831 |
 | `empiremuse/cogs/player_resume.py` | Salvar e retomar sessões de players | 854 |
 | `empiremuse/cogs/misc.py` | Comandos gerais (ping, convite, sobre, …) | 1.042 |
