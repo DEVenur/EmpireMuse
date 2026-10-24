@@ -418,10 +418,8 @@ class Node:
 
         loadtype = data.get("loadType")
 
-        try:
-            new_data = data.get("data")
-        except KeyError:
-            new_data = data
+        # No Lavalink v3 o payload não tem a chave "data": tracks, playlistInfo e exception ficam na raiz.
+        new_data = data if self.version == 3 else data.get("data")
 
         if not loadtype:
             raise WavelinkException("There was an error while trying to load this track.")
