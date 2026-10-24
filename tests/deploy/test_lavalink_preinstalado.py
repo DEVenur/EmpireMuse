@@ -25,6 +25,7 @@ import asyncio
 import hashlib
 import subprocess
 import threading
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -35,6 +36,7 @@ from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
 
 NOVAS_CHAVES = ("LAVALINK_JAVA_PATH", "LAVALINK_HOME", "LAVALINK_OFFLINE")
+LIMITE_DE_ESPERA = 6.0  # segundos esperando que algo aconteça
 
 
 def sha(data: bytes) -> str:
@@ -188,6 +190,24 @@ class TestJavaConfigurado:
 
         assert popen[0][0][0] == str(java)
 
+    @pytest.mark.parametrize("cenario", ["inexistente", "diretorio"])
+    def test_java_invalido_levanta_erro_claro_citando_a_variavel(self, runtime, popen, proibidos, monkeypatch, cenario):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)  # mesmo com Java no sistema: caminho configurado inválido é erro, não fallback
+        alvo = {
+            "inexistente": runtime.parent / "nao-existe" / "bin" / "java",
+            "sem_permissao": criar_java(runtime.parent, "sem-x", modo=0o644),
+            "diretorio": runtime.parent,
+        }[cenario]
+
+        with pytest.raises(ll.LavalinkDownloadError) as erro:
+            ll.run_lavalink(lavalink_java_path=str(alvo))
+
+        mensagem = str(erro.value)
+        assert "LAVALINK_JAVA_PATH" in mensagem
+        assert any(palavra in mensagem.lower() for palavra in ("não", "executável", "encontrad", "existe"))
+        assert popen == [] and proibidos == []
+
 
 # ============================================================================ (3) modo offline
 
@@ -218,6 +238,16 @@ class TestOffline:
 
 
 class TestOfflineNoRunLavalink:
+    def test_arquivo_ausente_impede_a_partida_e_nao_baixa(self, runtime, popen, proibidos, monkeypatch):
+        instalar_binarios(runtime, monkeypatch)
+        (runtime / "Lavalink.jar").unlink()
+        com_java_do_sistema(monkeypatch)
+
+        with pytest.raises(ll.LavalinkDownloadError, match="Lavalink.jar"):
+            ll.run_lavalink(lavalink_offline=True)
+
+        assert popen == [] and proibidos == []
+
     def test_plugin_adulterado_impede_a_partida(self, runtime, popen, proibidos, monkeypatch):
         instalar_binarios(runtime, monkeypatch)
         (runtime / "plugins" / NOMES_PLUGINS[0]).write_bytes(b"ADULTERADO")
@@ -341,8 +371,51 @@ class TestPoolVigiaOJava:
         assert kwargs["lavalink_home"] == "/opt/lavalink"
         assert kwargs["lavalink_offline"] is True
 
+    @pytest.mark.asyncio
+    async def test_queda_do_java_novo_apos_reinicio_ainda_aciona_shutdown(self, fabrica_de_pool):
+        antigo, novo = FakeJava(), FakeJava()
+        pool, _ = fabrica_de_pool(antigo, novo)
+        await pool.start_lavalink()
+        await pool.start_lavalink()
+
+        novo.die(1)
+
+        assert await _aguardar_async(lambda: pool.shutdown.await_count >= 1), "a queda do Java novo precisa ser vigiada"
+
+
+async def _aguardar_async(condicao, limite=LIMITE_DE_ESPERA):
+    fim = time.monotonic() + limite
+    while time.monotonic() < fim:
+        if condicao():
+            return True
+        await asyncio.sleep(0.02)
+    return condicao()
+
+
+# ============================================================================ (7) acréscimos da D-09 (decididos pelo MAESTRO)
+
+
+class TestValidateJavaComTimeout:
+    def test_usa_timeout_e_trata_a_expiracao_como_java_invalido(self, monkeypatch):
+        chamadas = []
+
+        def check_output_falso(args, **kwargs):
+            chamadas.append((args, kwargs))
+            raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+
+        monkeypatch.setattr(ll.subprocess, "check_output", check_output_falso)
+
+        assert ll.validate_java("/opt/java com espaço/bin/java") is None
+
+        ((args, kwargs),) = chamadas
+        assert args == ["/opt/java com espaço/bin/java", "-version"], "sem shell: o caminho é UM argumento"
+        assert 0 < kwargs["timeout"] <= 30
+
 
 # ============================================================================ (8) guarda dos comandos de owner pela config
+
+
+NAO_ESTA_SENDO_USADO = "não está sendo usado"
 
 
 @pytest.fixture
@@ -389,11 +462,30 @@ class TestGuardaDosComandosDeOwner:
 
         pool.start_lavalink.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("nome, argumentos", [("restartlavalink", ()), ("updatelavalink", ("",))])
+    async def test_com_run_local_desligado_e_sem_instancia_continua_respondendo_que_nao_esta_em_uso(
+        self, owner_com_pool, nome, argumentos
+    ):
+        from empiremuse.utils.music.errors import GenericError
+
+        cog, ctx, pool = owner_com_pool(run_local=False, instancia=None)
+
+        with pytest.raises(GenericError, match=NAO_ESTA_SENDO_USADO):
+            await comando(nome)(cog, ctx, *argumentos)
+
+        pool.start_lavalink.assert_not_awaited()
+
 
 # ============================================================================ (9) D-11: sem consulta ao Maven na partida
 
 
 OVERRIDE_RELATIVO = Path(".lavalink") / "plugins-override.yml"
+PREFIXO_OVERRIDE = "-Dspring.config.additional-location="
+
+
+def arvore(raiz: Path) -> dict:
+    return {str(p.relative_to(raiz)): (p.stat().st_size if p.is_file() else None) for p in sorted(raiz.rglob("*"))}
 
 
 class TestSemConsultaAoMaven:
@@ -409,3 +501,29 @@ class TestSemConsultaAoMaven:
         ll.run_lavalink(lavalink_offline=True)
 
         assert alvo.stat().st_mtime_ns == antes
+
+    def test_com_lavalink_home_somente_leitura_nada_e_escrito_nele(self, runtime, popen, proibidos, monkeypatch):
+        pre_instalado = runtime.parent / "opt-lavalink"
+        instalar_binarios(pre_instalado, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+        antes = arvore(pre_instalado)
+        pre_instalado.chmod(0o555)
+        try:
+            ll.run_lavalink(lavalink_home=str(pre_instalado), lavalink_offline=True)
+        finally:
+            pre_instalado.chmod(0o755)
+
+        assert arvore(pre_instalado) == antes
+        assert (runtime / OVERRIDE_RELATIVO).is_file(), "o override mora em RUNTIME_DIR, nunca em LAVALINK_HOME"
+        args = popen[0][0]
+        assert f"{PREFIXO_OVERRIDE}{(runtime / OVERRIDE_RELATIVO).resolve().as_uri()}" in args
+
+    def test_falha_ao_gravar_o_override_e_erro_claro_citando_o_arquivo(self, runtime, popen, proibidos, monkeypatch):
+        instalar_binarios(runtime, monkeypatch)
+        com_java_do_sistema(monkeypatch)
+        (runtime / ".lavalink").write_text("é um arquivo, não uma pasta")
+
+        with pytest.raises(ll.LavalinkDownloadError, match="plugins-override.yml"):
+            ll.run_lavalink(lavalink_offline=True)
+
+        assert popen == []

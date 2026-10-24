@@ -13,6 +13,7 @@ datetimes cientes de fuso; caches relativos (.ytdl_cache, .lastfm_cache, GIT_DIR
 
 import ast
 import asyncio
+import datetime
 import json
 import socket
 from pathlib import Path
@@ -23,6 +24,7 @@ import disnake
 import pytest
 
 from empiremuse import config_loader
+from empiremuse.cogs.music import Music
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import DBModel, LocalDatabase
@@ -117,6 +119,22 @@ class TestKI10UpdateDataComFalhaDeGravacao:
         return LocalDatabase(dir_=str(tmp_path / "banco"))
 
     @pytest.mark.asyncio
+    async def test_falha_do_insert_one_levanta_e_nao_atualiza_o_cache(self, banco, monkeypatch):
+        from tinymongo import TinyMongoCollection
+
+        monkeypatch.setattr(TinyMongoCollection, "update_one", lambda self, *a, **k: SimpleNamespace(raw_result=False))
+
+        def quebrar(self, *args, **kwargs):
+            raise OSError("sem permissão (simulado)")
+
+        monkeypatch.setattr(TinyMongoCollection, "insert_one", quebrar)
+
+        with pytest.raises(OSError, match="sem permissão"):
+            await banco.update_data("2", {"ver": 1.0}, db_name=DBModel.guilds, collection="c")
+
+        assert "c:guilds:2" not in banco.cache
+
+    @pytest.mark.asyncio
     async def test_a_falha_nao_substitui_o_dado_que_ja_estava_no_cache(self, banco, monkeypatch):
         from tinymongo import TinyMongoCollection
 
@@ -176,6 +194,13 @@ class TestKI13RateLimitSemMatarOProcesso:
             await pool.start_bot(self._bot(erro))
 
         assert capturado.value is erro, "KI-13: o erro original deveria ser propagado"
+
+    @pytest.mark.asyncio
+    async def test_segunda_chamada_durante_o_ratelimit_retorna_sem_erro(self, pool):
+        """GUARDA: o segundo bot a tomar 429 não repete a espera nem levanta."""
+        pool.killing_state = "ratelimit"
+
+        assert await pool.start_bot(self._bot(_erro_http(429))) is None
 
     @pytest.mark.asyncio
     async def test_com_kill_on_429_o_processo_e_encerrado_ordenadamente(self, pool):
@@ -252,6 +277,22 @@ class TestKI31DatetimesCientesDeFuso:
     def test_nenhum_datetime_utcnow_naive_no_pacote(self):
         achados = _chamadas_utcnow_naive()
         assert not achados, f"datetime.utcnow() (obsoleto e naive) em: {achados}"
+
+    @pytest.mark.asyncio
+    async def test_node_reconnect_conta_falhas_consecutivas_com_datetimes_cientes(self):
+        no = SimpleNamespace(
+            _retry_dt=datetime.datetime.now(datetime.timezone.utc),
+            _retry_count=0,
+            is_available=True,
+            identifier="node1",
+            version=4,
+            players={},
+        )
+        cog = SimpleNamespace(bot=SimpleNamespace(user="bot#0000"))
+
+        await Music.node_reconnect(cog, no)
+
+        assert no._retry_count == 1, "duas quedas em menos de 7 s devem contar como consecutivas"
 
     def test_o_node_nasce_com_retry_dt_ciente_de_fuso(self):
         arvore = ast.parse((PACOTE / "wavelink" / "node.py").read_text(encoding="utf-8"))

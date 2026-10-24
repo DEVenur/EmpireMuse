@@ -66,6 +66,17 @@ class TestConsultaDeIntegracoes:
         assert segredo in caplog.text, "o detalhe da exceção deve ir para o log"
 
     @pytest.mark.asyncio
+    async def test_deezer_com_erro(self, caplog):
+        caplog.set_level(logging.DEBUG)
+        segredo = novo_segredo()
+        bot = ModalBot()
+        bot.deezer = SimpleNamespace(get_user_info=explode(segredo)[0])
+        inter = await adicionar_integracao(bot, url="https://www.deezer.com/br/profile/123456")
+        assert_generica(inter.texto, segredo)
+        assert bot.salvos_usuario == []
+        assert segredo in caplog.text
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "url", ["https://www.youtube.com/@canal", "https://soundcloud.com/artista"], ids=["youtube", "soundcloud"]
     )

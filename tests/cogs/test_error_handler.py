@@ -16,6 +16,7 @@ from disnake.ext import commands
 
 from empiremuse.cogs import error_handler
 from empiremuse.cogs.error_handler import ErrorHandler
+from empiremuse.utils.music.errors import GenericError
 
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"
 CAMINHO = "/data/local_database/guilds.json"
@@ -150,6 +151,17 @@ class TestInteracao:
 
 class TestComandoDePrefixo:
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("embed_links", [True, False], ids=["com_embed", "sem_embed"])
+    async def test_oserror_mostra_mensagem_generica_nos_dois_formatos(self, handler, embed_links):
+        ctx = _Contexto(embed_links)
+
+        await handler.on_legacy_command_error(ctx, _erro_de_disco())
+
+        texto = _texto_do_prefixo(ctx)
+        assert "Ocorreu um erro" in texto, texto
+        assert not _proibidos_na_tela(texto), f"vazou para o usuário: {_proibidos_na_tela(texto)} em {texto!r}"
+
+    @pytest.mark.asyncio
     async def test_no_report_do_webhook_o_detalhe_fica_e_o_token_nao(self, handler, arquivos_do_webhook):
         handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
 
@@ -158,6 +170,14 @@ class TestComandoDePrefixo:
         handler.send_webhook.assert_awaited_once()
         relatorio = "\n".join(arquivos_do_webhook)
         assert CAMINHO in relatorio and TOKEN_FALSO not in relatorio
+
+    @pytest.mark.asyncio
+    async def test_generic_error_continua_igual(self, handler):
+        ctx = _Contexto(True)
+
+        await handler.on_legacy_command_error(ctx, GenericError("**Sem permissão aqui.**"))
+
+        assert "**Sem permissão aqui.**" in _texto_do_prefixo(ctx)
 
     @pytest.mark.asyncio
     async def test_mensagem_propria_do_parse_error_continua_igual(self, handler):

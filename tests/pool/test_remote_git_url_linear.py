@@ -31,3 +31,14 @@ class TestMesmoResultadoDeSempre:
     )
     def test_linhas_aceitas(self, texto, esperado):
         assert parse_remote_web_url(texto) == esperado
+
+    @pytest.mark.parametrize(
+        "texto",
+        [
+            "",
+            f"origin\t{OK} (FETCH)",
+        ],
+        ids=repr,
+    )
+    def test_linhas_recusadas(self, texto):
+        assert parse_remote_web_url(texto) == ""

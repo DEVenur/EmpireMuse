@@ -20,11 +20,13 @@ import pytest
 from empiremuse.rules import guild_links, settings, urls
 from empiremuse.rules.errors import RuleError
 from empiremuse.utils.music.interactions import ViewMode
-from tests.support.modais import URL_BASE, ModalBot, adicionar_integracao, trocar_process_idle_embed
+from tests.support.drivers_de_regras import BotDeComandos, status_no_comando
+from tests.support.modais import URL_BASE, ModalBot, adicionar_integracao, importar, trocar_process_idle_embed
 
 pytestmark = pytest.mark.critical
 
 FAVORITOS, SERVIDOR, INTEGRACOES = ViewMode.fav_manager, ViewMode.guild_fav_manager, ViewMode.integrations_manager
+URL = f"{URL_BASE}/a"
 PERFIL_DEEZER = "https://www.deezer.com/br/profile/123456"
 PERFIL_SPOTIFY = "https://open.spotify.com/user/abc123"
 CANAL_YOUTUBE = "https://www.youtube.com/@canal"
@@ -93,6 +95,12 @@ class TestA2ControleNaDescricaoEnoStatus:
     def test_validate_voice_status_recusa_cc_e_cf(self, texto):
         assert isinstance(settings.validate_voice_status(texto), RuleError)
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("texto", ["{track.title}\x00", "{track.title}\u202e"], ids=repr)
+    async def test_comando_de_status_de_voz_recusa_com_mensagem_de_caracteres(self, texto):
+        salvo, mensagem = await status_no_comando(BotDeComandos(), texto)
+        assert salvo is None and "caracteres" in mensagem and "placeholder" not in mensagem.lower()
+
 
 # ============================================================================ A-3, I-3 e I-6 — modal de integração
 
@@ -151,6 +159,24 @@ class TestA3CooldownAntesDaConsultaExterna:
         assert "importar" not in inter.texto and "exportar" not in inter.texto
 
     @pytest.mark.asyncio
+    async def test_guarda_a_mensagem_do_importador_continua_falando_em_importar(self):
+        inter = await importar(ModalBot(retry_after=7.2), INTEGRACOES, {"Canal": URL})
+        assert inter.texto == "**Você deve aguardar 7 segundos para importar.**"
+
+    @pytest.mark.asyncio
+    async def test_guarda_a_mensagem_do_exportador_continua_falando_em_exportar(self):
+        from types import SimpleNamespace as Espelho
+
+        from empiremuse.utils.music.interactions import FavMenuView
+        from tests.support.modais import ModalInteraction
+
+        bot = ModalBot(retry_after=7.2)
+        inter = ModalInteraction()
+        espelho = Espelho(bot=bot, mode=FAVORITOS, data=bot.user_data, guild_data=bot.guild_data)
+        await FavMenuView.export_callback(espelho, inter)
+        assert "para exportar" in inter.texto and "aguardar" in inter.texto
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("url", ["https://exemplo.invalid/x", "sem link"])
     async def test_link_invalido_ou_de_fonte_nao_suportada_nao_gasta_o_balde(self, url):
         bot = BotEspiao(retry_after=7.2)
@@ -161,6 +187,22 @@ class TestA3CooldownAntesDaConsultaExterna:
 
 class TestA3ListaCheiaRecusaAntesDaConsulta:
     CHEIA = {"Outra": {"url": f"{URL_BASE}/antiga"}}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("url", "salva", "fonte"),
+        [
+            (PERFIL_DEEZER, "https://www.deezer.com/profile/123456", "deezer"),
+            (CANAL_YOUTUBE, f"{CANAL_YOUTUBE}/playlists", "ytdl"),
+        ],
+        ids=["deezer", "youtube"],
+    )
+    async def test_perfil_que_ja_esta_salvo_consulta_e_sobrescreve_mesmo_com_a_lista_cheia(self, url, salva, fonte):
+        titulo = {"deezer": "【DZ】: Ana", "spotify": "【SP】: Ana", "ytdl": "【YT】: Canal"}[fonte]
+        bot = BotEspiao(integracoes=1, integration_links={titulo: {"url": salva}})
+        await adicionar_integracao(bot, url=url)
+        assert [consulta[0] for consulta in bot.consultas] == [fonte]
+        assert len(bot.salvos_usuario[-1]["integration_links"]) == 1
 
     @pytest.mark.asyncio
     async def test_lista_com_vaga_consulta_normalmente(self):
@@ -188,3 +230,10 @@ class TestI6TituloExterno:
         )
         await adicionar_integracao(bot, url=PERFIL_DEEZER)
         assert len(bot.salvos_usuario[-1]["integration_links"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_titulo_novo_com_a_lista_cheia_continua_recusado_no_fim(self):
+        """A conferência final da cota continua valendo (corrida entre o cooldown e a gravação)."""
+        bot = BotEspiao(integracoes=1, integration_links={"Outra": {"url": "https://www.deezer.com/profile/123456"}})
+        inter = await adicionar_integracao(bot, url=PERFIL_DEEZER)
+        assert bot.salvos_usuario == [] and "Não há espaço disponível" in inter.texto

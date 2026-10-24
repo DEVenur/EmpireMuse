@@ -46,11 +46,27 @@ class TestRedacaoDeTokenDeWebhook:
         assert TOKEN not in texto
         assert f"/webhooks/{ID}/*** retornou 204" in texto
 
+    def test_o_token_no_corpo_ou_no_traceback_tambem_some(self, handler, tmp_path):
+        try:
+            raise RuntimeError(f"falha em https://discord.com/api/webhooks/{ID}/{TOKEN}")
+        except RuntimeError:
+            handler.handle(registro("erro", exc_info=sys.exc_info()))
+        handler.flush()
+
+        texto = (tmp_path / ".logs" / "disnake.log").read_text(encoding="utf-8")
+        assert TOKEN not in texto and "RuntimeError" in texto
+
     def test_mensagem_sem_webhook_nao_e_alterada(self):
         gravado = registro("Pedido %s feito por %d", "play", 7)
 
         assert file_log.RedactWebhookTokens().filter(gravado) is True
         assert gravado.getMessage() == "Pedido play feito por 7"
+
+    def test_registro_com_args_quebrados_nao_e_descartado(self):
+        gravado = registro("valor %d", "não é número")
+
+        assert file_log.RedactWebhookTokens().filter(gravado) is True
+        assert "falha ao redigir" in gravado.getMessage()
 
 
 @POSIX

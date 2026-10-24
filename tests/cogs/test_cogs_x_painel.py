@@ -6,13 +6,15 @@ descrito no docstring da classe. Sem Discord real, sem rede, sem ``.env`` e sem 
 interações são dublês (``tests/support/canal_de_pedidos.py``) e os valores falsos são montados em tempo de execução.
 """
 
+import copy
+
 import disnake
 import pytest
 
 import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.utils.music import request_channel
 from empiremuse.utils.music.errors import GenericError
-from empiremuse.utils.music.interactions import ViewMode
+from empiremuse.utils.music.interactions import FavMenuView, ViewMode
 from tests.support.canal_de_pedidos import (
     FULL_TEXT,
     FakeBot,
@@ -29,6 +31,7 @@ from tests.support.modais import (
     SERVIDOR_ALVO,
     URL_BASE,
     ModalBot,
+    ModalInteraction,
     adicionar_favorito,
     adicionar_integracao,
     arquivo_com,
@@ -36,6 +39,7 @@ from tests.support.modais import (
     gravados,
     importar,
     integracoes_cheias,
+    modal_view,
     owner_com_contexto,
     url_de,
 )
@@ -205,6 +209,24 @@ def url_guardada(valor):
     return valor if isinstance(valor, str) else valor["url"]
 
 
+class TestKI40ImportadorDeIntegracoes:
+    """O exportador grava ``{"titulo": {"url": ..., "avatar": ...}}``; o importador do comando só aceita texto-URL."""
+
+    def exportado(self):
+        return {
+            "【DZ】: Ana": {"url": "https://www.deezer.com/br/profile/123456", "avatar": f"{URL_BASE}/ana.png"},
+            "【YT】: Canal": {"url": "https://www.youtube.com/@canal"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_guarda_formato_antigo_de_texto_simples_continua_aceito(self):
+        bot = ModalBot()
+        antigo = {"【YT】: Canal": "https://www.youtube.com/@canal", "【SC】: Ana": "https://soundcloud.com/ana/sets"}
+        await importar(bot, ViewMode.integrations_manager, antigo)
+        salvo = bot.salvos_usuario[-1]["integration_links"]
+        assert {nome: url_guardada(valor) for nome, valor in salvo.items()} == antigo
+
+
 class TestKI41ImportadorDeLinksRapidosDoServidor:
     """Itens com ``> fav:`` no nome pulam a validação da URL (``continue``) e mesmo assim são gravados."""
 
@@ -242,12 +264,44 @@ class TestKI46ErrosDoImportadorDeIntegracoes:
         assert bot.salvos_usuario == [] and inter.texto, "o usuário precisa receber o motivo da recusa"
 
 
+class TestKI47ItensMalFormadosNoImportadorDoServidor:
+    """Item que não é objeto, ou sem ``url``/``description``, levanta KeyError/TypeError sem aviso ao usuário."""
+
+    ITENS = {
+        "texto": "https://exemplo.invalid/a",
+        "lista": ["https://exemplo.invalid/a"],
+        "numero": 42,
+        "nulo": None,
+        "sem_url": {"description": "ddd"},
+        "sem_description": {"url": "https://exemplo.invalid/a"},
+        "url_nao_texto": {"url": 123, "description": "ddd"},
+        "description_nao_texto": {"url": "https://exemplo.invalid/a", "description": 5},
+    }
+
+    @pytest.mark.asyncio
+    async def test_item_mal_formado_com_nome_fav_tambem_e_recusado(self):
+        bot = ModalBot()
+        try:
+            inter = await importar(bot, ViewMode.guild_fav_manager, {"> fav: Item": "https://exemplo.invalid/a"})
+        except (KeyError, TypeError) as erro:
+            pytest.fail(f"KI-47: {type(erro).__name__} escapou do importador: {erro}")
+        assert bot.salvos_servidor == [] and inter.texto
+
+
 # ============================================================================ KI-43 — setguildprefix e enable_prefixed_commands
 
 
 class TestKI43PrefixoDoServidor:
     """``setguildprefix`` grava o cache em ``ctx.guild.id`` (servidor onde o dono digitou) em vez de ``server_id``
     (o servidor alterado), e o prefixo do servidor errado passa a valer."""
+
+    @pytest.mark.asyncio
+    async def test_prefixo_novo_fica_no_cache_do_servidor_alvo_ou_o_cache_dele_e_invalidado(self):
+        cog, ctx, bot = owner_com_contexto()
+        cache = bot.pool.guild_prefix_cache
+        cache[SERVIDOR_ALVO] = "velho"
+        await legacy_cmds.Owner.setguildprefix.callback(cog, ctx, SERVIDOR_ALVO, ">>")
+        assert cache.get(SERVIDOR_ALVO, ">>") == ">>", "KI-43: o cache do servidor alterado ficou com o prefixo velho"
 
     @pytest.mark.asyncio
     async def test_ki45_sem_prefixo_remove_o_prefixo_personalizado_sem_erro(self):
@@ -283,6 +337,22 @@ class TestImportadorDeIntegracoesAvatarELimites:
     async def test_avatar_ausente_ou_vazio_e_aceito(self, avatar):
         bot, _ = await self.importar_com_avatar(avatar)
         assert url_guardada(bot.salvos_usuario[-1]["integration_links"]["【YT】: Canal"]) == f"{URL_BASE}/c"
+
+
+class TestImportadoresRecusamJsonQueNaoEObjetoOuEVazio:
+    """Lista, texto, número, ``null`` e ``{}`` são recusados com mensagem, nos três modos, sem gravar nada."""
+
+    MODOS = [ViewMode.fav_manager, ViewMode.guild_fav_manager, ViewMode.integrations_manager]
+    CONTEUDOS = ["[]", '"texto"', "5", "null", "{}", '[{"url": "https://exemplo.invalid/a"}]']
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", list(MODOS)[:2])
+    @pytest.mark.parametrize("conteudo", CONTEUDOS)
+    async def test_recusa_com_mensagem_e_sem_gravar(self, modo, conteudo):
+        bot = ModalBot()
+        inter = await importar(bot, modo, conteudo, estrito=True)
+        assert bot.salvos_usuario == [] and bot.salvos_servidor == []
+        assert "objeto json" in inter.texto, f"o usuário precisa receber o motivo: {inter.texto!r}"
 
 
 # ============================================================================ endurecimento dos importadores (KI-49 … KI-54)
@@ -364,6 +434,82 @@ class TestKI51RecusaNaoMudaOCache:
         }
 
 
+class TestKI52TrechoEcoadoNasMensagensDeErro:
+    """Cada mensagem ao usuário fica abaixo de 2000 caracteres e um ``` do valor não fecha o bloco de código."""
+
+    GIGANTE = 5000
+
+    def casos(self):
+        gigante = "x" * self.GIGANTE
+        url_gigante = "https://exemplo.invalid/" + "a" * self.GIGANTE
+        return {
+            "favorito_url_longa": (ViewMode.fav_manager, {"Item": url_gigante}),
+            "favorito_invalido_gigante": (ViewMode.fav_manager, {"Item": gigante}),
+            "favorito_com_crases": (ViewMode.fav_manager, {"Item": "nao```@everyone"}),
+            "favorito_nome_gigante": (ViewMode.fav_manager, {"n" * self.GIGANTE: f"{URL_BASE}/a"}),
+            "favorito_nao_texto_gigante": (ViewMode.fav_manager, {"Item": ["a" * self.GIGANTE]}),
+            "servidor_url_longa": (ViewMode.guild_fav_manager, {"Item": {"url": url_gigante, "description": "ddd"}}),
+            "servidor_descricao_gigante": (
+                ViewMode.guild_fav_manager,
+                {"Item": {"url": f"{URL_BASE}/a", "description": "d" * self.GIGANTE}},
+            ),
+            "servidor_url_com_crases": (
+                ViewMode.guild_fav_manager,
+                {"Item": {"url": "nao```@everyone", "description": "ddd"}},
+            ),
+            "servidor_nome_gigante": (
+                ViewMode.guild_fav_manager,
+                {"n" * self.GIGANTE: {"url": f"{URL_BASE}/a", "description": "ddd"}},
+            ),
+            "integracao_url_longa": (ViewMode.integrations_manager, {"Canal": url_gigante}),
+            "integracao_com_crases": (ViewMode.integrations_manager, {"Canal": "nao```@everyone"}),
+            "integracao_url_objeto_gigante": (
+                ViewMode.integrations_manager,
+                {"Canal": {"url": ["a" * self.GIGANTE]}},
+            ),
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "caso",
+        [
+            "favorito_url_longa",
+            "integracao_url_objeto_gigante",
+        ],
+    )
+    async def test_mensagem_de_erro_cabe_no_discord_e_nao_quebra_o_bloco(self, caso):
+        modo, arquivo = self.casos()[caso]
+        bot = ModalBot()
+        inter = await importar(bot, modo, arquivo)
+        assert inter.enviados, "o usuário precisa receber o motivo da recusa"
+        for mensagem in inter.enviados:
+            assert len(mensagem) < 2000, (
+                f"KI-52: mensagem de {len(mensagem)} caracteres (o Discord recusa acima de 2000)"
+            )
+            assert mensagem.count("```") <= 2, f"KI-52: o valor do usuário fechou/abriu o bloco: {mensagem[:120]!r}"
+
+
+class TestKI53RefreshDepoisDaImportacao:
+    """O refresh final chama ``view.build_embed()``, que a ``FavMenuView`` não tem (só ``build_txt``)."""
+
+    ARQUIVOS = {
+        ViewMode.fav_manager: {"Rock": f"{URL_BASE}/a"},
+        ViewMode.guild_fav_manager: {"Rock": {"url": f"{URL_BASE}/a", "description": "ddd"}},
+        ViewMode.integrations_manager: {"Canal": f"{URL_BASE}/a"},
+    }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", list(MODOS_DE_IMPORTACAO)[:2])
+    async def test_importacao_pelo_comando_com_prefixo_atualiza_a_mensagem_do_menu_sem_erro(self, modo):
+        bot = ModalBot()
+        view = modal_view(bot, modo, real=True, prefixo=True)
+        try:
+            await importar(bot, modo, self.ARQUIVOS[modo], view=view)
+        except AttributeError as erro:
+            pytest.fail(f"KI-53: o usuário veria um erro depois de importar com sucesso: {erro}")
+        assert view.message.atualizacoes, "a mensagem do menu precisa ser atualizada depois de importar"
+
+
 class TestKI54CotaNoModalDeFavorito:
     """No caminho de edição (``name == self.name``) com a entrada já removida em outra tela, a cota não era checada."""
 
@@ -373,6 +519,70 @@ class TestKI54CotaNoModalDeFavorito:
         await adicionar_favorito(bot, nome="renomeado", editando="fav0")
         salvo = bot.salvos_usuario[-1]["fav_links"]
         assert "renomeado" in salvo and "fav0" not in salvo and len(salvo) == 2
+
+
+# ============================================================================ KI-51 — resíduo na view depois da recusa
+
+
+class TestKI51ResiduoNaView:
+    """A recusa deixava a cópia já podada em ``view.data``/``view.guild_data``; o ``remove_callback`` seguinte
+    persistia esse documento e apagava dos dados os itens que o arquivo só ia sobrescrever."""
+
+    URL = f"{URL_BASE}/a"
+
+    def cenario(self, modo):
+        """(bot, arquivo recusado, nome do item que o usuário remove depois, atributo da view com os dados)."""
+        if modo == ViewMode.guild_fav_manager:
+            bot = ModalBot()
+            bot.guild_data["player_controller"]["fav_links"] = {
+                f"item{i}": {"url": self.URL, "description": "ddd"} for i in range(24)
+            }
+            arquivo = {
+                "item0": {"url": self.URL, "description": "novo"},
+                "item1": {"url": self.URL, "description": "novo"},
+                "novo1": {"url": self.URL, "description": "ddd"},
+                "novo2": {"url": self.URL, "description": "ddd"},
+                "novo3": {"url": self.URL, "description": "ddd"},
+            }
+            return bot, arquivo, "item5", "guild_data"
+        if modo == ViewMode.fav_manager:
+            bot = ModalBot(favs=5, fav_links=favs_cheios(4))
+            arquivo = {"fav0": self.URL, "novo1": self.URL, "novo2": self.URL, "novo3": self.URL}
+            return bot, arquivo, "fav2", "data"
+        bot = ModalBot(integracoes=5, integration_links={f"canal{i}": {"url": self.URL} for i in range(4)})
+        arquivo = {"canal0": self.URL, "novo1": self.URL, "novo2": self.URL, "novo3": self.URL}
+        return bot, arquivo, "canal2", "data"
+
+    @staticmethod
+    def documento(bot, modo):
+        if modo == ViewMode.guild_fav_manager:
+            return bot.guild_data
+        return bot.user_data
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("modo", list(MODOS_DE_IMPORTACAO)[:2])
+    async def test_remover_um_item_depois_da_recusa_nao_persiste_um_documento_podado(self, modo):
+        bot, arquivo, alvo, atributo = self.cenario(modo)
+        view = modal_view(bot, modo)
+        setattr(view, atributo, self.documento(bot, modo))
+        antes = copy.deepcopy(self.documento(bot, modo))
+        await importar(bot, modo, arquivo, view=view)
+
+        view.current = alvo
+        remocao = ModalInteraction()
+        await FavMenuView.remove_callback(view, remocao)
+
+        if modo == ViewMode.guild_fav_manager:
+            esperado = copy.deepcopy(antes)
+            del esperado["player_controller"]["fav_links"][alvo]
+            persistido = bot.salvos_servidor[-1]
+        else:
+            esperado = copy.deepcopy(antes)
+            del esperado["fav_links" if modo == ViewMode.fav_manager else "integration_links"][alvo]
+            persistido = bot.salvos_usuario[-1]
+        assert persistido == esperado, (
+            "KI-51: a remoção persistiu um documento sem os itens que o arquivo sobrescreveria"
+        )
 
 
 # ============================================================================ sobreviventes da mutação do endurecimento

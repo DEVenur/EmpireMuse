@@ -25,3 +25,8 @@ class TestGuardas:
     @pytest.mark.parametrize("bruto", [None, 1.5], ids=repr)
     def test_invalidos_continuam_no_padrao(self, bruto):
         assert retry_after_seconds(bruto) == 60
+
+    def test_limites_configuraveis_para_positivos(self):
+        assert retry_after_seconds(2, minimum=5, maximum=100) == 5
+        assert retry_after_seconds(500, minimum=5, maximum=100) == 100
+        assert retry_after_seconds(0, minimum=5, maximum=100) == 5

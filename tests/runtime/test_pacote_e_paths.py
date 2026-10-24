@@ -12,6 +12,7 @@ Garante os contratos arquiteturais da reorganização modular:
 
 from __future__ import annotations
 
+import datetime
 import importlib
 import importlib.util
 import pickle
@@ -21,6 +22,7 @@ import pytest
 
 
 from tests.support.formatos_reais import BOT_ID, SERVIDOR, cog_de_sessoes
+from tests.persistence.test_formato_fila_salva import caminho_da_fila, ler as ler_fila, tres_faixas
 from tests.persistence.test_formato_sessao import gravar as gravar_sessao, jogador_completo
 
 COGS = [
@@ -64,3 +66,20 @@ class TestRetrocompatibilidadeDoLegado:
         cog = cog_de_sessoes()
         await cog.migrate_legacy_sessions()  # o pickle antigo é lido por load_legacy e vira JSON
         assert await cog.get_player_sessions_local() == [session.validate_session(sessao)]
+
+    @pytest.mark.asyncio
+    async def test_fila_salva_legada_volta_como_faixas(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+        faixas = tres_faixas()
+        for faixa in faixas:
+            faixa.info["id"] = faixa.id
+        conteudo = {
+            "tracks": [dict(faixa.info) for faixa in faixas],
+            "created_at": datetime.datetime.now(datetime.timezone.utc),
+            "guild_id": SERVIDOR,
+        }
+        caminho = caminho_da_fila(tmp_path)
+        caminho.parent.mkdir(parents=True)
+        caminho.write_bytes(zlib.compress(pickle.dumps(conteudo)))
+        lidas = await ler_fila(monkeypatch)
+        assert [faixa.info["title"] for faixa in lidas] == [faixa.info["title"] for faixa in faixas]

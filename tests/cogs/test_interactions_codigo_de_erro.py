@@ -9,14 +9,27 @@ N-4: um perfil do Spotify sem imagem (``images`` vazio ou ausente) ou sem ``disp
 ``KeyError``: vira integração sem avatar e com um nome padrão (o ``user_id`` do link).
 """
 
+import logging
 import secrets
 from types import SimpleNamespace
 
 import pytest
 
-from empiremuse.utils.music.interactions import FavModalAdd, ViewMode
-from tests.support.modais import ModalBot, ModalInteraction, importar, modal_view, trocar_process_idle_embed
+from empiremuse.utils.music import interactions
+from empiremuse.utils.music.interactions import FavModalAdd, SkinEditorMenu, ViewMode
+from tests.support.drivers_de_regras import InteracaoFalsa
+from tests.support.modais import (
+    ModalBot,
+    ModalInteraction,
+    adicionar_integracao,
+    importar,
+    modal_view,
+    trocar_process_idle_embed,
+)
 
+CODIGO = "ERR-7F3A2C"
+SEGREDO = "detalhe-interno /srv/empiremuse/segredo.json"
+URL_SPOTIFY = "https://open.spotify.com/user/abc123"
 URL_PERFIL = "https://open.spotify.com/user/abc123"
 
 
@@ -27,6 +40,46 @@ def _ambiente(monkeypatch):
 
     trocar_process_idle_embed(monkeypatch, nada)
     monkeypatch.setattr(secrets, "token_hex", lambda nbytes=None: "7f3a2c")
+
+
+def explode(tipo=RuntimeError):
+    async def _async(*args, **kwargs):
+        raise tipo(SEGREDO)
+
+    def _sync(*args, **kwargs):
+        raise tipo(SEGREDO)
+
+    return _async, _sync
+
+
+def sem_vazamento(texto):
+    for proibido in (SEGREDO, "segredo.json", "RuntimeError", "Traceback", "```py", "repr("):
+        assert proibido not in texto, f"vazou para a tela: {proibido!r} em {texto!r}"
+
+
+def registros_de_erro(caplog):
+    return [r for r in caplog.records if r.name == interactions.__name__ and r.levelno >= logging.ERROR]
+
+
+def confere(inter, caplog):
+    texto = inter.texto
+    sem_vazamento(texto)
+    assert CODIGO in texto, f"a mensagem precisa levar o código: {texto!r}"
+    [registro] = registros_de_erro(caplog)
+    assert CODIGO in registro.getMessage(), "o log precisa levar o mesmo código"
+    assert registro.exc_info and registro.exc_info[0] is RuntimeError, "o log mantém o traceback"
+    assert SEGREDO in caplog.text, "o detalhe da exceção vai para o log"
+
+
+class TestCodigoNosErrosInesperados:
+    @pytest.mark.asyncio
+    async def test_atualizacao_da_mensagem_do_editor_de_skin(self, caplog):
+        caplog.set_level(logging.DEBUG)
+        inter = InteracaoFalsa()
+        inter.response.edit_message = explode()[0]
+        auto = SimpleNamespace(ctx=None, build_embeds=lambda: {})
+        await SkinEditorMenu.update_message(auto, inter)
+        confere(inter, caplog)
 
 
 class TestErrosEsperadosSemCodigo:
@@ -41,6 +94,13 @@ class TestErrosEsperadosSemCodigo:
     async def test_json_invalido_do_importador(self, modo):
         inter = await importar(ModalBot(), modo, "{isto não é json 12345678901234567890")
         assert "ERR-" not in inter.texto and "Código do erro" not in inter.texto
+
+    @pytest.mark.asyncio
+    async def test_perfil_do_spotify_sem_playlists_publicas(self):
+        bot = ModalBot()
+        bot.spotify = SimpleNamespace(get_user_info=_devolve(None))
+        inter = await adicionar_integracao(bot, url=URL_SPOTIFY)
+        assert "ERR-" not in inter.texto and "playlists públicas" in inter.texto
 
 
 def _devolve(valor):

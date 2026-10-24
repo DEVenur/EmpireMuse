@@ -4,7 +4,9 @@ O Wings cria o container sem ``Cmd`` e sem ``WorkingDir`` (o cwd fica no ``/data
 grava) e exporta ``SERVER_PORT``/``SERVER_IP``. O valor das variáveis do egg vai literal, sem interpolação.
 """
 
+import asyncio
 import os
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -57,6 +59,18 @@ class TestCwdNoRuntimeDir:
 
         assert os.path.samefile(os.getcwd(), tmp_path)
 
+    def test_arquivo_no_lugar_da_pasta_tambem_e_erro_claro(self, monkeypatch, tmp_path, main_module, cwd_restaurado):
+        arquivo = tmp_path / "arquivo.txt"
+        arquivo.write_text("x")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(arquivo))
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_module.main()
+
+        assert "EMPIREMUSE_HOME" in str(exc_info.value.code)
+        assert self.cwd_na_construcao == []
+
 
 # --------------------------------------------------------------------------------------------------------------
 # 2. Porta
@@ -66,6 +80,12 @@ class TestCwdNoRuntimeDir:
 class TestResolvePort:
     def test_nenhuma_usa_6000(self, sem_porta):
         assert config_loader.resolve_port(None) == 6000
+
+    @pytest.mark.parametrize("valor", ["65536", "-1"])
+    def test_porta_fora_da_faixa_e_erro(self, monkeypatch, sem_porta, valor):
+        monkeypatch.setenv("PORT", valor)
+        with pytest.raises(ValueError, match="PORT"):
+            config_loader.resolve_port(None)
 
 
 class TestLoadConfigRpcServer:
@@ -105,3 +125,33 @@ class TestServidorHttp:
         with pytest.raises(ValueError, match="SERVER_PORT"):
             web_app.run_app(MagicMock(), config={"PORT": None})
         assert chamadas == []
+
+
+class TestConexaoRpcDesligada:
+    """Com o RPC desligado e o endereço padrão, o bot não abre o cliente WebSocket, qualquer que seja a origem da porta."""
+
+    @staticmethod
+    def _conectar(monkeypatch, **ambiente):
+        from empiremuse.utils.client import BotPool
+
+        for nome in ("PORT", "SERVER_PORT"):
+            monkeypatch.delenv(nome, raising=False)
+        for nome, valor in ambiente.items():
+            monkeypatch.setenv(nome, valor)
+
+        async def ws_loop():
+            ws_loop.chamado = True
+
+        ws_loop.chamado = False
+        monkeypatch.setenv("RUN_RPC_SERVER", "false")
+        config = config_loader.load_config()
+        pool = SimpleNamespace(config=config, ws_client=SimpleNamespace(ws_loop=ws_loop))
+        asyncio.run(BotPool.connect_rpc_ws(pool))
+        return ws_loop.chamado
+
+    @pytest.fixture(autouse=True)
+    def runtime_vazio(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
+
+    def test_com_port_nao_abre_o_cliente(self, monkeypatch):
+        assert self._conectar(monkeypatch, PORT="8080") is False

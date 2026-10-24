@@ -94,6 +94,10 @@ def interacao() -> MagicMock:
     return inter
 
 
+def valores_dos_campos(embed: disnake.Embed) -> str:
+    return "\n".join(f"{campo.name}: {campo.value}" for campo in embed.fields)
+
+
 def registros_de_erro(caplog) -> list[str]:
     return [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR]
 
@@ -133,3 +137,18 @@ class TestFalhaAoGerarOCodigo:
             codigo = safe_error_code()
         assert codigo == ""
         assert "RuntimeError" in caplog.text and "sem entropia" not in caplog.text
+
+
+class TestSemCodigoNoWebhook:
+    """Se não deu para gerar o código, o webhook não ganha campo de código e o anexo mantém o nome simples."""
+
+    @pytest.mark.asyncio
+    async def test_interacao(self, handler, enviado, anexos, monkeypatch):
+        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
+        falhar_ao_gerar(monkeypatch)
+
+        await handler.process_interaction_error(interacao(), erro_de_disco())
+
+        embed = handler.send_webhook.await_args.kwargs["embed"]
+        assert "Código do erro" not in valores_dos_campos(embed)
+        assert [nome for _, nome in anexos] == ["error_traceback_interaction.txt"]

@@ -106,6 +106,17 @@ class TestRemoteComOutroNome:
 
 class TestFormatosDeUrl:
     @pytest.mark.parametrize(
+        ("url", "esperado"),
+        [
+            ("git@github.com:EmpireCommunity/EmpireMuse.git", WEB),
+            ("git://github.com/EmpireCommunity/EmpireMuse.git", WEB),
+        ],
+        ids=["scp_com_git", "protocolo_git"],
+    )
+    def test_formatos_ssh_viram_a_url_web_https(self, monkeypatch, pool, url, esperado):
+        assert com_saida_do_git(monkeypatch, pool, remote("origin", url)) == esperado
+
+    @pytest.mark.parametrize(
         "url",
         [
             "https://usuario:ghp_segredo123@github.com/EmpireCommunity/EmpireMuse.git",
@@ -121,6 +132,22 @@ class TestFormatosDeUrl:
     @pytest.mark.parametrize("saida", [f"  origin\t{WEB}.git (fetch)\n", f"origin\t{WEB}.git (fetch)\r\n"], ids=repr)
     def test_espacos_e_quebra_de_linha_do_windows_nas_pontas_da_linha(self, monkeypatch, pool, saida):
         assert com_saida_do_git(monkeypatch, pool, saida) == WEB
+
+
+class TestSaidaSemRemoteUtil:
+    """Vazia, ilegível, remote local ou falha do git: cai em ``SOURCE_REPO`` sem levantar erro."""
+
+    @pytest.mark.parametrize(
+        "saida",
+        [
+            "",
+            "origin\tftp://exemplo.invalid/org/projeto.git (fetch)\n",
+        ],
+        ids=lambda saida: repr(saida)[:40],
+    )
+    def test_cai_na_configuracao_sem_erro(self, monkeypatch, pool, saida):
+        esperado = pool.config["SOURCE_REPO"].removesuffix(".git")
+        assert com_saida_do_git(monkeypatch, pool, saida) == esperado
 
 
 class TestGitSemRuidoNoConsole:
