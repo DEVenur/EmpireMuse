@@ -4,11 +4,10 @@ Guia técnico para hospedagem e execução do **EmpireMuse** na plataforma **Dis
 
 ---
 
-> [!WARNING]
-> **Configuração baseada na documentação oficial, ainda não verificada na plataforma (teste em homologação pendente)**.
-> Os arquivos `discloud.config` e `.discloudignore` foram construídos conforme as especificações e regras vigentes da Discloud, mas a homologação em uma instância real ativa ocorrerá na etapa de testes do projeto.
+> [!NOTE]
+> **Testado na Discloud em 2026-10-24 (plano Gold 1 GB): 335 MB parado, 383 MB tocando, Lavalink local v4 ok.**
 > 
-> **Requisito de Plano Pago**: O plano gratuito da Discloud (100 MB de RAM) **NÃO é suportado**. O EmpireMuse requer o **plano pago com no mínimo 1 GB (1024 MB) de RAM e 1 vCPU**, dimensão definida no parâmetro `RAM=1024` do `discloud.config`.
+> **Requisito de Plano Pago**: O plano gratuito da Discloud (100 MB de RAM) **NÃO roda o bot**. O EmpireMuse requer **plano pago com no mínimo 1 GB (1024 MB) de RAM e 1 vCPU** (plano Gold ou superior), dimensão definida no parâmetro `RAM=1024` do `discloud.config`. Planos inferiores a 1 GB não possuem memória suficiente para acomodar o bot e o servidor de áudio integrado.
 
 ---
 
@@ -22,18 +21,20 @@ AVATAR=https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main/assets/
 TYPE=bot
 MAIN=main.py
 RAM=1024
-AUTORESTART=true
+# AUTORESTART=true (disponivel apenas a partir do plano Platinum; descomente se assinar Platinum+)
 VERSION=latest
+APT=tools
 ```
 
 ### Explicação dos Parâmetros:
 - **`TYPE=bot`**: Declara a aplicação como um bot do Discord (sem roteamento de porta HTTP pública na Discloud).
 - **`MAIN=main.py`**: Ponto de entrada que inicializa o loop do `BotPool` via `empiremuse.__main__.main()`.
 - **`RAM=1024`**: Aloca 1024 MB (1 GB) de memória RAM, necessária para suportar o processo Python somado ao processo Java do servidor de áudio Lavalink.
-- **`AUTORESTART=true`**: Ativa o reinício automático pelo supervisor da Discloud caso o processo do bot encerre com código de erro (por exemplo, se o processo do Java do Lavalink cair).
-- **`VERSION=latest`**: Utiliza a versão mais recente e estável do ambiente Python disponibilizada pela Discloud.
+- **`AUTORESTART=true`** *(Opcional / Platinum+)*: O reinício automático supervisionado pela Discloud está disponível exclusivamente a partir do plano **Platinum**. No plano Gold ou inferiores, este parâmetro deve permanecer comentado ou omitido no arquivo de configuração para evitar recusa no upload.
+- **`VERSION=latest`**: Utiliza a imagem mais recente disponibilizada pela Discloud.
   > [!NOTE]
-  > O EmpireMuse é desenvolvido para **Python 3.13** e foi validado em sua suíte automatizada de testes com **Python 3.11, 3.12 e 3.13**, garantindo ampla compatibilidade com as imagens de execução da Discloud.
+  > No teste realizado em **24 de outubro de 2026**, a Discloud executou **Python 3.15** sob a opção `VERSION=latest` (a versão 3.13 não é oferecida individualmente na plataforma, que disponibiliza apenas 3.11, versões legadas ou `latest`). Como `latest` seleciona a versão mais recente disponibilizada pela plataforma, recomenda-se revalidar o runtime nos logs da aplicação a cada deploy. A suíte e os módulos do EmpireMuse foram validados e são compatíveis com esse ambiente.
+- **`APT=tools`**: Instala ferramentas essenciais do sistema operacional (como `git`), requeridas pelo `pip` para clonar e instalar dependências git declaradas em `requirements.txt` (`disnake` e `jishaku`).
 
 ---
 
@@ -61,6 +62,9 @@ Caso utilize o envio manual por arquivo `.zip` ou através da ferramenta de linh
    - Arquivos auxiliares de ambiente (`.env.*`, como `.env.mongo` e backups);
    - Segredos e chaves locais (`config.json`, `*.key`, `*.pem`, `.panel-cookie-secret`, cookies do YouTube);
    - Bancos de dados locais (`local_database/`, `.local_dbs/`) e caches temporários (`.logs/`, `__pycache__/`, `.ytdl_cache/`, etc.).
+
+> [!NOTE]
+> A pasta `assets/` **não** deve ser ignorada no deploy, pois `branding.asset_url` confere a existência física de cada arquivo localmente em tempo de execução antes de gerar URLs públicas para o player, provedores e tutoriais.
 
 ---
 
@@ -90,7 +94,12 @@ O EmpireMuse oferece dois modos de operação para a reprodução de áudio:
 ### 4.1 Modo Lavalink Local Embutido (`RUN_LOCAL_LAVALINK=true`)
 - Fora do contêiner Docker oficial, o bot opera em modo de download dinâmico com integridade verificada (`LAVALINK_OFFLINE=false`, o padrão);
 - Na primeira partida na Discloud, o bot baixa automaticamente o runtime portátil JDK da BellSoft e o binário oficial `Lavalink.jar`, conferindo os hashes **SHA-256 fixados em código** antes da execução;
-- Certifique-se de ajustar a variável `LAVALINK_RAM_LIMIT` (padrão de `120` MB) para que o heap da JVM somado à memória do processo Python permaneçam confortavelmente dentro do limite de 1 GB do plano contratado. *(Valores exatos medidos em carga serão homologados no teste prático).*
+- Certifique-se de ajustar a variável `LAVALINK_RAM_LIMIT` (padrão de `120` MB) para que o heap da JVM somado à memória do processo Python permaneçam confortavelmente dentro do limite de 1 GB do plano contratado. Em teste real na Discloud (2026-10-24, plano Gold), o bot consumiu **335 MB parado e 383 MB tocando**, com o Lavalink local v4 executando de forma estável.
+
+> [!WARNING]
+> **Autenticação OAuth do YouTube em IPs de Datacenter**:
+> Como os servidores da Discloud operam em blocos de IPs de datacenter, o YouTube frequentemente bloqueia requisições anônimas ou exige desafios de bot. Para garantir a reprodução estável de faixas do YouTube sem erros de rate-limit ou bloqueio HTTP 429, **é fortemente recomendado configurar a autenticação OAuth do YouTube**.
+> Consulte o guia detalhado [Autenticação OAuth do YouTube](youtube-oauth.md) para vincular sua conta ao plugin Lavalink.
 
 ### 4.2 Modo Lavalink Remoto (Mais Leve)
 - Para uma inicialização instantânea e menor consumo de recursos, defina `RUN_LOCAL_LAVALINK=false` e configure nós Lavalink remotos e externos no arquivo `lavalink.ini` na raiz do projeto (arquivo que é incluído no pacote enviado à Discloud).
@@ -107,12 +116,13 @@ O EmpireMuse oferece dois modos de operação para a reprodução de áudio:
 
 ---
 
-## 6. Resiliência e Reinício Automático
+## 6. Resiliência e Reinício Automático (Plano Platinum+)
 
-A diretiva `AUTORESTART=true` no `discloud.config` assegura a continuidade do serviço:
+A diretiva `AUTORESTART=true` no `discloud.config` funciona a partir do plano **Platinum** da Discloud:
 - O EmpireMuse possui uma thread sentinela que monitora o processo do Java (`watch_lavalink_process`);
 - Se o servidor de áudio cair de forma anômala, o bot encerra o processo ordenadamente com código de saída de erro (`shutdown(1)`);
-- Ao detectar a saída do processo, o supervisor da Discloud executa o reinício automático da aplicação, restabelecendo as conexões.
+- No plano Platinum ou superior (com `AUTORESTART=true` descomentado no `discloud.config`), o supervisor da Discloud detecta o encerramento com código de falha e executa o reinício automático da aplicação, restabelecendo a operação;
+- No plano Gold ou inferiores, a funcionalidade de auto-restart não é liberada pela Discloud, exigindo reinício manual pelo painel web ou bot da plataforma caso a aplicação pare.
 
 ---
 

@@ -18,6 +18,7 @@ venv/
 .vscode/
 
 # Testes automatizados e documentacao
+# assets/ e necessario em runtime (branding.asset_url confere a existencia local); nao ignore
 tests/
 docs/
 .pytest_cache/
