@@ -14,9 +14,13 @@ O EmpireMuse segue rigorosamente o padrão de [Versionamento Semântico 2.0.0](h
 
 ### 1.1 Versão do Projeto e Release Candidates
 
-- **Versionamento**: O projeto adota [Semantic Versioning (SemVer)](https://semver.org/lang/pt-BR/).
-- **Release Candidates (`-rc.N`)**: Antes de publicar uma versão estável final (ex.: `v1.1.0`), pode-se publicar versões prévias como `v1.1.0-rc.1` (e subsequentes `rc.2`, `rc.3`, se necessário).
-  - O objetivo dos Release Candidates é validar cenários de deploy e plataformas externas (como o *egg* do Pterodactyl e a plataforma Discloud) e garantir o funcionamento da imagem Docker multi-arquitetura no ambiente produtivo antes de promover a versão a oficial (`latest`).
+- **Versionamento**: O projeto adota [Semantic Versioning (SemVer)](https://semver.org/lang/pt-BR/). Em razão da reformulação profunda do bot frente ao upstream original, a próxima versão oficial do projeto é a **2.0.0**.
+- **Fluxo de Release Candidates (`-rc.N`)**:
+  - A cada merge concluído na branch `main`, o **MAESTRO** publica uma nova tag de release candidate no formato `v2.0.0-rc.N` (com `N` sequencial: `v2.0.0-rc.1`, `v2.0.0-rc.2`, etc.).
+  - A publicação de uma release candidate compila e gera **estritamente a imagem com a tag exata** (`or4cu1o/empiremuse:2.0.0-rc.N`), **sem alterar nem promover** as tags flutuantes (`latest`, `2` ou `2.0`).
+  - O objetivo das release candidates é validar cenários de deploy e plataformas externas (como o *egg* do Pterodactyl, Docker Compose e a plataforma Discloud) diretamente na infraestrutura real.
+- **Promoção para a Versão Final (`2.0.0`)**:
+  - A versão final estável `2.0.0` (tag `v2.0.0`) sairá **a partir do mesmo commit da última release candidate validada no deploy da VPS**, promovendo as tags flutuantes oficiais (`2.0.0`, `2.0`, `2` e `latest`).
 
 ---
 
@@ -55,11 +59,11 @@ Para manter a integridade do histórico do Git e a rastreabilidade das alteraç�
    ```markdown
    ## [Unreleased]
 
-   ## [1.1.0] - 2026-10-24
+   ## [2.0.0] - 2026-10-24
    ### Adicionado
    ...
    ```
-   *(No caso de Release Candidate, utilize o formato `## [1.1.0-rc.1] - YYYY-MM-DD`)*;
+   *(No caso de Release Candidate, utilize o formato `## [2.0.0-rc.1] - YYYY-MM-DD`)*;
 3. Crie uma nova seção `## [Unreleased]` vazia no topo, pronta para os próximos ciclos de desenvolvimento.
 
 ### Passo 2: Submeter via Pull Request para a branch `main`
@@ -78,17 +82,17 @@ Com o merge concluído, atualize a branch `main` local e crie a tag Git apontand
 ```bash
 git checkout main
 git pull origin main
-git tag -a v1.1.0 -m "Release v1.1.0"
+git tag -a v2.0.0 -m "Release v2.0.0"
 ```
 
-*(Para Release Candidate: `git tag -a v1.1.0-rc.1 -m "Release candidate v1.1.0-rc.1"`)*
+*(Para Release Candidate: `git tag -a v2.0.0-rc.1 -m "Release candidate v2.0.0-rc.1"`)*
 
 ### Passo 4: Enviar a Tag para o Repositório Remoto
 
 Envie a tag Git criada para o GitHub para disparar automaticamente o pipeline de release:
 
 ```bash
-git push origin v1.1.0
+git push origin v2.0.0
 ```
 
 ---
@@ -123,10 +127,10 @@ flowchart TD
   - **SBOM** (`sbom: true`): Gera e anexa o inventário de software (Software Bill of Materials) diretamente ao registro;
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
 - **Regras de Versionamento de Tags da Imagem**:
-  - **Versão Final Estável** (`vX.Y.Z`, ex.: `v1.1.0`):
-    - Publica a tag de versão exata `X.Y.Z` (`1.1.0`), que é imutável, além das tags flutuantes `X.Y` (`1.1`), `X` (`1`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
-  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v1.1.0-rc.1`):
-    - Publica **estritamente** a tag do pré-lançamento (`1.1.0-rc.1`), **sem alterar nem sobrescrever** as tags flutuantes `1`, `latest` nem as tags de versões estáveis anteriores.
+  - **Versão Final Estável** (`vX.Y.Z`, ex.: `v2.0.0`):
+    - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que é imutável, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
+  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v2.0.0-rc.1`):
+    - Publica **estritamente** a tag do pré-lançamento (`2.0.0-rc.1`), **sem alterar nem sobrescrever** as tags flutuantes `2`, `2.0`, `latest` nem as tags de versões estáveis anteriores.
 
 ---
 
@@ -138,16 +142,16 @@ Após a conclusão com sucesso do workflow no GitHub Actions, realize a verifica
 Em um terminal independente (ou sem autenticação no Docker Hub), teste o download da imagem publicada para validar que o repositório é público e acessível:
 
 ```bash
-docker pull or4cu1o/empiremuse:1.1.0
+docker pull or4cu1o/empiremuse:2.0.0
 ```
 
-*(Substitua `1.1.0` pela tag publicada, como `1.1.0-rc.1` ou `1`)*.
+*(Substitua `2.0.0` pela tag publicada, como `2.0.0-rc.1` ou `2`)*.
 
 ### 5.2 Inspeção do Manifesto Multi-Arquitetura
 Utilize o comando `docker buildx imagetools inspect` para verificar as arquiteturas publicadas e os atestados de segurança:
 
 ```bash
-docker buildx imagetools inspect or4cu1o/empiremuse:1.1.0
+docker buildx imagetools inspect or4cu1o/empiremuse:2.0.0
 ```
 
 O comando exibirá a lista de manifestos contendo:
@@ -162,12 +166,12 @@ O comando exibirá a lista de manifestos contendo:
 > [!CAUTION]
 > **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG DE RELEASE `vX.Y.Z` JÁ PUBLICADA!**
 
-Apenas a tag de versão exata `X.Y.Z` (ex.: `1.1.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `1`), `X.Y` (ex.: `1.1`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
+Apenas a tag de versão exata `X.Y.Z` (ex.: `2.0.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `2`), `X.Y` (ex.: `2.0`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
 
 Se for detectado qualquer defeito de código, falha de empacotamento ou inconsistência após a publicação:
 
 1. Trate o problema normalmente via branch de correção (`fix/...`) e submeta o Pull Request para a `main`;
 2. Após o merge na `main`, incremente o número da versão conforme as regras do SemVer:
-   - Se o erro ocorreu em um Release Candidate (ex.: `v1.1.0-rc.1`), publique a versão subsequente `v1.1.0-rc.2`;
-   - Se o erro ocorreu em uma versão final estável (ex.: `v1.1.0`), publique uma versão corretiva de patch `v1.1.1`;
+   - Se o erro ocorreu em um Release Candidate (ex.: `v2.0.0-rc.1`), publique a versão subsequente `v2.0.0-rc.2`;
+   - Se o erro ocorreu em uma versão final estável (ex.: `v2.0.0`), publique uma versão corretiva de patch `v2.0.1`;
 3. Crie e envie a nova tag Git no commit atualizado da `main`.
