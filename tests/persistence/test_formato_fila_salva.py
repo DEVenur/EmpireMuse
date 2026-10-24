@@ -22,8 +22,8 @@ import disnake
 import pytest
 import pytest_asyncio
 
-from empiremuse.cogs import music
 from empiremuse.cogs.music import Music
+from empiremuse.music_cog import play_command  # depois de ``Music``: importar a Cog recarrega os mixins
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, PartialTrack
@@ -160,9 +160,9 @@ def montar_leitura(monkeypatch, faixas_lidas):
     cog.bot.get_data = lambda *args, **kwargs: _devolver(guild_data)
     cog.bot.get_global_data = dados
     cog.bot.get_channel = lambda channel_id: SimpleNamespace(id=channel_id)
-    monkeypatch.setattr(music, "can_send_message", lambda *args, **kwargs: None)
-    monkeypatch.setattr(music, "check_player_perm", nada)
-    monkeypatch.setattr(music, "check_channel_limit", lambda *args, **kwargs: True)
+    monkeypatch.setattr(play_command, "can_send_message", lambda *args, **kwargs: None)
+    monkeypatch.setattr(play_command, "check_player_perm", nada)
+    monkeypatch.setattr(play_command, "check_channel_limit", lambda *args, **kwargs: True)
 
     async def rodar():
         """Roda o ``Music.play`` sem capturar nada: o teste vê o ``Parou`` (leitura ok) ou o erro que a leitura levantou."""

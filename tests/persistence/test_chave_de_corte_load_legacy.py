@@ -59,7 +59,7 @@ PACOTE = RAIZ / "empiremuse"
 
 # (arquivo ou pasta relativo a empiremuse/, função qualificada, kind); pasta = a classe pode estar em qualquer .py dela
 PONTOS = [
-    ("cogs/music.py", "Music.play", "queue"),
+    ("music_cog/play_command.py", "PlayCommandMixin.play", "queue"),
     ("cogs/music.py", "Music.create_player", "skin"),
     ("cogs/music_settings.py", "MusicSettings.change_skin", "skin"),
     ("utils/music/interactions", "SkinEditorMenu.load_skin", "skin"),

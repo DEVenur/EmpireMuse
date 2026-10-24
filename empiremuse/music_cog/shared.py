@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """Constantes de corpo de classe usadas por mais de um mixin de ``Music`` (ver ``empiremuse/cogs/music.py``)."""
 
+import re
+from urllib.parse import urlparse
+
+import disnake
 from disnake.ext import commands
 
 from empiremuse.utils.others import CommandArgparse
@@ -18,3 +22,27 @@ case_sensitive_args.add_argument(
     action="store_true",
     help="Buscar por músicas com a frase exata no nome da música ao invés de buscar palavra por palavra.",
 )
+
+play_cd = commands.CooldownMapping.from_cooldown(3, 12, commands.BucketType.member)
+play_mc = commands.MaxConcurrency(1, per=commands.BucketType.member, wait=False)
+playlist_opts = [
+    disnake.OptionChoice("Misturar Playlist", "shuffle"),
+    disnake.OptionChoice("Inverter Playlist", "reversed"),
+]
+
+sc_recommended = re.compile(r"https://soundcloud\.com/.*/recommended$")
+sc_profile_regex = re.compile(r"<?https://soundcloud\.com/[a-zA-Z0-9_-]+>?$")
+
+DISCORD_CDN_HOSTS = frozenset({"cdn.discordapp.com", "media.discordapp.net"})
+
+
+DISCORD_ATTACHMENT_PATH_PREFIXES = ("/attachments/", "/ephemeral-attachments/")
+
+
+def is_discord_attachment_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").rstrip(".")
+    except ValueError:
+        return False
+    return hostname in DISCORD_CDN_HOSTS and parsed.path.startswith(DISCORD_ATTACHMENT_PATH_PREFIXES)
