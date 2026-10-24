@@ -21,44 +21,26 @@ from empiremuse.utils.others import PlayerControls
 from empiremuse.utils.music.models.helpers import (
     logger,
 )
+from empiremuse.utils.music.models.np_steps import (
+    _np_guards,
+    _np_data,
+    _np_plain,
+    _np_buttons_default,
+    _np_buttons_extra,
+    _np_interaction_edit,
+    _np_message_edit,
+    _np_send_new,
+)
+from empiremuse.utils.music.models.step_state import NpState
 
 
 class PlayerMessageMixin:
     async def invoke_np(self, force=False, interaction=None, rpc_update=False):
-        if self.is_closing:
+        req = NpState(force=force, interaction=interaction, rpc_update=rpc_update)
+        if await _np_guards(self, req):
             return
 
-        if not self.text_channel:
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.defer()
-            except Exception:
-                pass
-            return
-
-        if not self.current:
-            if not force:
-                try:
-                    if not interaction.response.is_done():
-                        await interaction.response.defer()
-                except Exception:
-                    pass
-            else:
-                await self.process_idle_message()
-            return
-
-        if self.updating and not force:
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.defer()
-            except Exception:
-                pass
-            return
-
-        if self.has_lyrics:
-            return
-
-        if rpc_update:
+        if req.rpc_update:
             try:
                 await self.process_rpc()
             except Exception:
@@ -68,348 +50,39 @@ class PlayerMessageMixin:
             self.setup_hints()
             self.retry_setup_hints = False
 
-        try:
-            if self.static:
-                if self.skin_static.startswith("> custom_skin: "):
-                    data = skin_converter(
-                        self.custom_skin_static_data[self.skin_static[15:]], player=self, guild=self.guild
-                    )
-                else:
-                    data = self.bot.pool.player_static_skins[self.skin_static].load(self)
-
-            else:
-                if self.skin.startswith("> custom_skin: "):
-                    data = skin_converter(self.custom_skin_data[self.skin[15:]], player=self, guild=self.guild)
-                else:
-                    data = self.bot.pool.player_skins[self.skin].load(self)
-        except OverflowError:
-            await self.process_next()
+        if await _np_data(self, req):
             return
-
-        if data == self.last_data:
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.defer()
-            except Exception:
-                pass
-            return
-
-        self.last_data = data
-
-        if not data.get("flags"):
-            try:
-                if self.static and isinstance(self.text_channel.parent, disnake.ForumChannel):
-                    data["content"] = (
-                        f"`{'▶️' if not self.paused else '⏸️'} {fix_characters(self.current.title, 50)}` |\n\n"
-                        + (data.get("content") or "")
-                    )
-            except Exception:
-                pass
 
         if not self.controller_mode:
-            if self.temp_embed:
-                data["embeds"].insert(0, self.temp_embed)
-                self.temp_embed = None
-
-            self.updating = True
-
-            if self.keep_connected:
-                if not self.is_last_message():
-                    await self.destroy_message()
-                elif self.text_channel:
-                    if not self.text_channel.permissions_for(self.guild.me).send_messages:
-                        self.text_channel = None
-                        self.message = None
-                    else:
-                        try:
-                            await self.message.edit(allowed_mentions=self.allowed_mentions, **data)
-                        except disnake.Forbidden:
-                            self.message = None
-                            self.text_channel = None
-                        except Exception:
-                            self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
-
-            else:
-                try:
-                    self.message_updater_task.cancel()
-                except Exception:
-                    pass
-                self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
-
-            self.updating = False
+            await _np_plain(self, req)
 
         else:
             # nenhum controle de botão foi definido na skin (será usado os botões padrões).
-            if data.get("components") is None:
+            if req.data.get("components") is None:
                 # Aviso: Não modifique os components abaixo, prefira copiar uma das skins da pasta utils -> music -> skins
                 # e deixá-la com outro nome (sem acentos, espaços, caracteres especiais) e modifique-as a seu gosto.
                 # Caso queira deixar uma skin customizada por padrão adicione/modifique a config DEFAULT_SKIN="tuaskin"
 
-                data["components"] = [
-                    disnake.ui.Button(
-                        emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(self.paused)
-                    ),
-                    disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-                    disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-                    disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
-                    disnake.ui.Button(
-                        emoji="📑", custom_id=PlayerControls.queue, disabled=not (self.queue or self.queue_autoplay)
-                    ),
-                    disnake.ui.Select(
-                        placeholder="Mais opções:",
-                        custom_id="musicplayer_dropdown_inter",
-                        min_values=0,
-                        max_values=1,
-                        required=False,
-                        options=[
-                            disnake.SelectOption(
-                                label="Adicionar música",
-                                emoji="➕",
-                                value=PlayerControls.add_song,
-                                description="Adicionar uma música/playlist na fila.",
-                            ),
-                            disnake.SelectOption(
-                                label="Adicionar nos seus favoritos",
-                                emoji="💗",
-                                value=PlayerControls.add_favorite,
-                                description="Adicionar a música atual nos seus favoritos.",
-                            ),
-                            disnake.SelectOption(
-                                label="Tocar do inicio",
-                                emoji="⏪",
-                                value=PlayerControls.seek_to_start,
-                                description="Voltar o tempo da música atual para o inicio.",
-                            ),
-                            disnake.SelectOption(
-                                label=f"Volume: {self.volume}%",
-                                emoji="🔊",
-                                value=PlayerControls.volume,
-                                description="Ajustar volume.",
-                            ),
-                            disnake.SelectOption(
-                                label="Misturar",
-                                emoji="🔀",
-                                value=PlayerControls.shuffle,
-                                description="Misturar as músicas da fila.",
-                            ),
-                            disnake.SelectOption(
-                                label="Readicionar",
-                                emoji="🎶",
-                                value=PlayerControls.readd,
-                                description="Readicionar as músicas tocadas de volta na fila.",
-                            ),
-                            disnake.SelectOption(
-                                label="Repetição",
-                                emoji="🔁",
-                                value=PlayerControls.loop_mode,
-                                description="Ativar/Desativar repetição da música/fila.",
-                            ),
-                            disnake.SelectOption(
-                                label=("Desativar" if self.nightcore else "Ativar") + " o efeito nightcore",
-                                emoji="🇳",
-                                value=PlayerControls.nightcore,
-                                description="Efeito que aumenta velocidade e tom da música.",
-                            ),
-                            disnake.SelectOption(
-                                label=("Desativar" if self.autoplay else "Ativar") + " a reprodução automática",
-                                emoji="🔄",
-                                value=PlayerControls.autoplay,
-                                description="Sistema de reprodução de música automática quando a fila tiver vazia.",
-                            ),
-                            disnake.SelectOption(
-                                label="Last.fm scrobble",
-                                emoji="🎧",
-                                value=PlayerControls.lastfm_scrobble,
-                                description="Ativar/desativar o scrobble/registro de músicas na sua conta do last.fm.",
-                            ),
-                            disnake.SelectOption(
-                                label=("Desativar" if self.restrict_mode else "Ativar") + " o modo restrito",
-                                emoji="🔐",
-                                value=PlayerControls.restrict_mode,
-                                description="Apenas DJ's/Staff's podem usar comandos restritos.",
-                            ),
-                        ],
-                    ),
-                ]
+                _np_buttons_default(self, req)
 
-                if self.static:
-                    if queue := self.queue or self.queue_autoplay:
-                        data["components"].append(
-                            disnake.ui.Select(
-                                placeholder="Próximas músicas:",
-                                custom_id="musicplayer_queue_dropdown",
-                                min_values=0,
-                                max_values=1,
-                                required=False,
-                                options=[
-                                    disnake.SelectOption(
-                                        label=fix_characters(f"{n + 1}. {t.single_title}", 47),
-                                        description=fix_characters(
-                                            f"[{time_format(t.duration) if not t.is_stream else '🔴 Live'}]. {t.authors_string}",
-                                            47,
-                                        ),
-                                        value=f"{n:02d}.{t.title[:96]}",
-                                    )
-                                    for n, t in enumerate(itertools.islice(queue, 25))
-                                ],
-                            )
-                        )
-
-                if self.current.ytid and self.node.lyric_support:
-                    data["components"][5].options.append(
-                        disnake.SelectOption(
-                            label="Visualizar letras",
-                            emoji="📃",
-                            value=PlayerControls.lyrics,
-                            description="Obter letra da música atual.",
-                        )
-                    )
-
-                if self.mini_queue_feature:
-                    data["components"][5].options.append(
-                        disnake.SelectOption(
-                            label="Mini-fila do player",
-                            emoji="📑",
-                            value=PlayerControls.miniqueue,
-                            description="Ativar/Desativar a mini-fila do player.",
-                        )
-                    )
-
-                if isinstance(self.last_channel, disnake.VoiceChannel):
-                    data["components"][5].options.append(
-                        disnake.SelectOption(
-                            label="Status automático",
-                            emoji="📢",
-                            value=PlayerControls.set_voice_status,
-                            description="Configurar o status automático do canal de voz.",
-                        )
-                    )
-
-                if not self.static and not self.has_thread:
-                    data["components"][5].options.append(
-                        disnake.SelectOption(
-                            label="Song-Request Thread",
-                            emoji="💬",
-                            value=PlayerControls.song_request_thread,
-                            description="Criar uma thread/conversa temporária para pedir músicas usando apenas o nome/link.",
-                        )
-                    )
+                _np_buttons_extra(self, req)
 
             self.updating = True
 
-            if interaction:
-                try:
-                    del data["flags"]
-                except KeyError:
-                    pass
-
-                try:
-                    if interaction.response.is_done():
-                        await interaction.message.edit(allowed_mentions=self.allowed_mentions, **data)
-                    else:
-                        await interaction.response.edit_message(allowed_mentions=self.allowed_mentions, **data)
-                    self.updating = False
-                except Exception:
-                    traceback.print_exc()
-                else:
-                    self.start_message_updater_task()
-                return
+            if req.interaction:
+                if await _np_interaction_edit(self, req):
+                    return
 
             else:
                 if self.message and (
-                    self.ignore_np_once or self.has_thread or self.static or not force or self.is_last_message()
+                    self.ignore_np_once or self.has_thread or self.static or not req.force or self.is_last_message()
                 ):
-                    self.ignore_np_once = False
-
-                    try:
-                        try:
-                            if data.get("flags"):
-                                data["content"] = None
-                                data["embed"] = None
-                            await self.message.edit(allowed_mentions=self.allowed_mentions, **data)
-                            await asyncio.sleep(0.5)
-                        except asyncio.CancelledError:
-                            self.updating = False
-                            return
-                        except Exception:
-                            traceback.print_exc()
-
-                            try:
-                                self.text_channel = self.bot.get_channel(
-                                    self.text_channel.id
-                                ) or await self.bot.fetch_channel(self.text_channel.id)
-                            except (AttributeError, disnake.Forbidden, disnake.HTTPException):
-                                self.text_channel = None
-
-                            if not self.text_channel:
-                                self.message = None
-                                return
-
-                            if isinstance(self.text_channel, disnake.Thread):
-                                if (
-                                    not self.text_channel.parent.permissions_for(self.guild.me).send_messages_in_threads
-                                    or not self.text_channel.permissions_for(self.guild.me).read_messages
-                                ):
-                                    self.text_channel = None
-                                    return
-
-                                if self.text_channel.locked:
-                                    if not self.text_channel.parent.permissions_for(self.guild.me).manage_threads:
-                                        self.text_channel = None
-                                        self.message = None
-                                        return
-                                    else:
-                                        await self.text_channel.edit(archived=False, locked=False)
-
-                                elif self.text_channel.archived:
-                                    if self.text_channel.owner_id == self.bot.user.id:
-                                        await self.text_channel.edit(archived=False)
-                                    else:
-                                        await self.text_channel.send("Desarquivando o tópico.", delete_after=2)
-
-                                await self.message.edit(allowed_mentions=self.allowed_mentions, **data)
-                                await asyncio.sleep(0.5)
-
-                                # elif ((
-                                #              self.text_channel.archive_timestamp - disnake.utils.utcnow()).total_seconds() / 60) < (
-                                # thread_archive_time[self.text_channel.auto_archive_duration]):
-                                #    await self.text_channel.send("Evitando o tópico auto-arquivar...", delete_after=2)
-
-                            elif (
-                                not self.text_channel.permissions_for(self.guild.me).send_messages
-                                or not self.text_channel.permissions_for(self.guild.me).read_messages
-                            ):
-                                return
-
-                        self.start_message_updater_task()
-                        self.updating = False
+                    if await _np_message_edit(self, req):
                         return
-                    except Exception as e:
-                        self.updating = False
-                        error_code = log_unexpected_error(logger, e, "atualização da mensagem do player")
-                        if self.static or self.has_thread:
-                            self.set_command_log(
-                                f"{(interaction.author.mention + ' ') if interaction else ''}houve um erro na interação{code_suffix(error_code)}.",
-                                "⚠️",
-                                controller=True,
-                            )
-                            self.update = True
-                            return
 
             await self.destroy_message()
 
-            if not self.message:
-                try:
-                    self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
-                except Exception:
-                    traceback.print_exc()
-                else:
-                    if self.static:
-                        await self.channel_cleanup()
-                        data = await self.bot.get_data(self.guild_id, db_name=DBModel.guilds)
-                        data["player_controller"]["channel"] = str(self.text_channel.id)
-                        data["player_controller"]["message_id"] = str(self.message.id)
-                        await self.bot.update_data(self.guild_id, data, db_name=DBModel.guilds)
+            await _np_send_new(self, req)
 
             self.start_message_updater_task()
 
