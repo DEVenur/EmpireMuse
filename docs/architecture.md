@@ -177,7 +177,11 @@ importável como antes. O núcleo (`__init__`, propriedades, `connect`, `set_pau
 | `player_autoqueue.py` | `PlayerAutoqueueMixin`: `get_autoqueue_tracks`, `resolve_track` |
 | `player_playback.py` | `PlayerPlaybackMixin`: `process_next`, `_process_next`, `play`, modo ocioso |
 | `tracks.py` | `PartialTrack`, `PartialPlaylist`, `LavalinkTrack`, `LavalinkPlaylist` |
+| `np_steps.py`, `autoqueue_steps.py`, `playback_steps.py` | etapas `_np_*` de `invoke_np`, `_aq_*` de `get_autoqueue_tracks` e `_pn_*` de `_process_next` |
+| `step_state.py` | `NpState`, `AutoqueueState` e `ProcessNextState`: as variáveis que passam de uma etapa para outra |
 | `helpers.py` | `CustomYTDL`, `music_mode`, `lavalink_text`, `exclude_tags`, `logger`, … |
+
+Os três métodos mais longos do player (KI-29b, PR 3) seguem o mesmo padrão do `/play`: `invoke_np`, `get_autoqueue_tracks` e `_process_next` ficam como orquestradores (até 60 linhas) e chamam etapas, que são funções de módulo `(self, req)` em `np_steps.py`, `autoqueue_steps.py` e `playback_steps.py`; o estado compartilhado mora em `step_state.py`. Testes chamam esses métodos com um `self` falso, por isso as etapas não são métodos.
 
 `PartialTrack` (`empiremuse/utils/music/models/tracks.py`) é a faixa de outra plataforma resolvida só ao tocar. `music_mode(bot)` apenas devolve
 `wavelink.Client(bot=bot)` (`music_mode` em `empiremuse/utils/music/models/helpers.py`). O logger do pacote continua chamado
@@ -384,7 +388,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/utils/db.py` | Modelos, `MongoDatabase`, `LocalDatabase`, prefixos | 330 |
 | `empiremuse/utils/others.py` | Contexto, `PoolCommand`, paginação, emojis, utilitários | 893 |
 | `empiremuse/utils/owner_panel.py` | Painel do dono (`PanelView`) | 75 |
-| `empiremuse/utils/music/models/` | Pacote: `LavalinkPlayer` (núcleo + 7 mixins), faixas, playlists, yt-dlp (10 módulos; maior: `player_playback.py`, 681) | 4.332 (soma) |
+| `empiremuse/utils/music/models/` | Pacote: `LavalinkPlayer` (núcleo + 7 mixins), faixas, playlists, yt-dlp (15 módulos; maior: `player_voice.py`. 488) | 4.692 (soma) |
 | `empiremuse/utils/music/interactions/` | Pacote: views/modais de fila, favoritos, skins e controles (16 módulos; maior: `player_views.py`, 745) | 4.128 (soma) |
 | `empiremuse/utils/music/checks.py` | Roteamento do pool, checks de DJ/voz/permissão | 813 |
 | `empiremuse/utils/music/local_lavalink.py` | Download/execução do Lavalink e do JDK locais | 497 |
