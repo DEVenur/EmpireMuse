@@ -17,9 +17,10 @@ venv/
 .idea/
 .vscode/
 
-# Testes automatizados e documentacao
+# Testes automatizados, documentacao e arquivos estaticos
 tests/
 docs/
+assets/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
