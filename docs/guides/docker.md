@@ -31,7 +31,7 @@ docker build -t empiremuse:local .
 ```
 
 > [!IMPORTANT]
-> As tags flutuantes `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, testes e validações em homologação devem utilizar obrigatoriamente as imagens de release candidate publicadas a cada merge na main (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). Não utilize tags não homologadas.
+> As tags flutuantes `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, testes e validações em homologação devem utilizar obrigatoriamente as imagens de release candidate publicadas ao fim de cada fase (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). Não utilize tags não homologadas.
 
 ### 2.2 Execução com `docker run`
 
