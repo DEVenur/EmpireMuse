@@ -38,7 +38,7 @@ O egg disponibiliza duas opções de imagem Docker:
 
 | Tag da Imagem | Descrição | Recomendação de Uso |
 | :--- | :--- | :--- |
-| `or4cu1o/empiremuse:1.0` | Fixada na série menor `1.0`. Recebe automaticamente atualizações e correções de bugs da linha 1.0 sem introduzir mudanças incompatíveis. | **Recomendada para produção.** |
+| `or4cu1o/empiremuse:1` | Acompanha toda a série maior `1.x`. Recebe automaticamente atualizações e correções de bugs da linha 1 sem introduzir quebras incompatíveis de versão maior. | **Recomendada para produção.** |
 | `or4cu1o/empiremuse:latest` | Aponta sempre para a versão estável mais recente publicada. | Útil para quem deseja acompanhar todas as atualizações automaticamente. |
 
 > [!TIP]

@@ -141,7 +141,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
-- **Atualização do Egg do Pterodactyl (D-25)**: egg validado pela especificação oficial PTDL_v2 com imagem 1.0, novas variáveis (`ENABLE_JISHAKU`, `PORT`, `DEFAULT_IDLING_SKIN`, `MAX_USER_INTEGRATIONS`, `USE_YTM_TRACKINFO_SCROBBLE`, `GUILDS_INTENT`, `MEMBERS_INTENT`) e guia atualizado.
+- **Atualização do Egg do Pterodactyl (D-25)**: egg validado pela especificação oficial PTDL_v2 com imagem `:1` recomendada (série 1.x), novas variáveis (`ENABLE_JISHAKU`, `PORT`, `DEFAULT_IDLING_SKIN`, `MAX_USER_INTEGRATIONS`, `USE_YTM_TRACKINFO_SCROBBLE`, `GUILDS_INTENT`, `MEMBERS_INTENT`), publicação da tag `:1` no workflow de release e guia atualizado.
 - **Documentação (KI-32, KI-35)**: reescrita dos passos de credenciais do Spotify em texto autossuficiente sem imagens externas (`docs/guides/spotify-keys.md`) e atualização do backlog técnico (`docs/known-issues.md`).
 - **Saneamento da Suíte de Testes e Otimização do CI (Fase T, PRs #65, #67–#71)**:
   - Redução da suíte de testes de 8.422 para 2.190 testes por eliminação de duplicações e testes de caracterização mecânicos, mantendo o piso de cobertura de 56% (PRs #67 a #69).
