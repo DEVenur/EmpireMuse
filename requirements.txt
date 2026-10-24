@@ -18,6 +18,6 @@ cachetools
 rapidfuzz
 nodriver==0.32
 ruamel.yaml
-setuptools>=70.0.0; python_version>='3.12'
+setuptools>=84.1.0; python_version>='3.12'
 audioop-lts; python_version>='3.13'
 uvloop; sys_platform != 'win32'
