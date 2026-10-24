@@ -26,6 +26,7 @@ from tests.support.modais import (
     ModalBot,
     adicionar_favorito,
     adicionar_integracao,
+    arquivo_com,
     exportar,
     exportar_integracoes,
 )
@@ -49,6 +50,10 @@ def url_com_tamanho(tamanho):
     """URL válida com exatamente ``tamanho`` caracteres."""
     base = f"{URL_BASE}/"
     return base + "x" * (tamanho - len(base))
+
+
+def arquivo_do_modo(modo, nome, url, **extra):
+    return arquivo_com(modo, nome, url, **extra)
 
 
 # ============================================================================ A2 — URL do modal manual
@@ -109,6 +114,31 @@ class TestA3LimiteDoNomeDoFavorito:
         assert aceito == {"n" * 10: URL}
 
 
+# ============================================================================ A5 — nomes que só diferem na caixa
+
+
+class TestA5NomesQueSoDiferemNaCaixa:
+    """Importador do bot: ``casefold`` (o novo substitui o antigo; repetido dentro do arquivo é recusado). Painel e
+    modal manual: comparação EXATA, então ``Rock`` e ``rock`` coexistem."""
+
+    ANTIGO = "Rock"
+    NOVO = "rock"
+
+    @staticmethod
+    def existentes(modo, url):
+        if modo == SERVIDOR_MODO:
+            return {"Rock": {"url": url, "description": "antiga"}}
+        if modo == INTEGRACOES:
+            return {"Rock": {"url": url}}
+        return {"Rock": url}
+
+    @pytest.mark.asyncio
+    async def test_guarda_arquivo_do_servidor_com_o_mesmo_nome_em_caixas_diferentes_o_bot_recusa(self):
+        arquivo = {**arquivo_do_modo(SERVIDOR_MODO, "Rock", URL), **arquivo_do_modo(SERVIDOR_MODO, "rock", URL)}
+        no_bot, texto = await importar_no_bot(SERVIDOR_MODO, arquivo)
+        assert no_bot is None and "repetir nomes" in texto
+
+
 # ============================================================================ A8, A9 — cota e código morto
 
 
@@ -152,6 +182,31 @@ class TestA12LimiteDeUrlDasIntegracoes:
 
 
 # ============================================================================ A13, A14, A15, A16 — links fixos do servidor
+
+
+class TestA13LimiteDeUrlDosLinksDoServidor:
+    """Etapa 5 (A13/D5): os links do servidor têm limite PRÓPRIO de 250 (o mesmo do modal) e deixam de usar
+    ``USER_FAV_MAX_URL_LENGTH``, que continua valendo só para os favoritos pessoais."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("url_max", [40, 200])
+    async def test_importador_aceita_ate_250_e_recusa_251_qualquer_que_seja_a_configuracao(self, url_max):
+        for tamanho, aceito in ((90, True), (120, True), (250, True), (251, False)):
+            item = arquivo_do_modo(SERVIDOR_MODO, "Link", url_com_tamanho(tamanho))
+            no_painel, _ = await importar_no_painel(SERVIDOR_MODO, item, bot=BotDoPainel(url_max=url_max))
+            no_bot, _ = await importar_no_bot(SERVIDOR_MODO, item, bot=ModalBot(url_max=url_max))
+            assert (no_painel is not None, no_bot is not None) == (aceito, aceito), (url_max, tamanho)
+
+
+class TestA14DescricaoDoLinkDoServidor:
+    """O importador (bot e painel) só confere ``<= 100``; o modal e a adição do painel exigem vazia ou 3–100."""
+
+    @pytest.mark.asyncio
+    async def test_guarda_importadores_recusam_mais_de_100(self):
+        item = {"Link": {"url": URL, "description": "d" * 101}}
+        no_painel, erros = await importar_no_painel(SERVIDOR_MODO, item)
+        no_bot, texto = await importar_no_bot(SERVIDOR_MODO, item)
+        assert no_painel is None and erros and no_bot is None and "ultrapassa" in texto
 
 
 class TestA15SobrescritaNosLinksDoServidor:

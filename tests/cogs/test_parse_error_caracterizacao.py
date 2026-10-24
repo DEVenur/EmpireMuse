@@ -11,7 +11,7 @@ import pytest
 from disnake.ext import commands
 
 from empiremuse.utils.music import errors
-from empiremuse.wavelink import MissingSessionID, WavelinkException
+from empiremuse.wavelink import MissingSessionID, TrackNotFound, WavelinkException
 
 CTX = SimpleNamespace(author=SimpleNamespace(mention="<@1>", voice=None))
 
@@ -29,6 +29,14 @@ class TestKnownErrors:
         ("error", "fragment"),
         [
             (errors.NotDJorStaff(), "lista de DJ"),
+            (commands.NotOwner(), "desenvolvedor"),
+            (errors.NotRequester(), "pular músicas"),
+            (errors.DiffVoiceChannel(), "meu canal de voz"),
+            (errors.NoSource(), "Não há músicas"),
+            (errors.NoVoice(), "entrar em um canal de voz"),
+            (errors.MissingSpotifyClient(), "spotify"),
+            (commands.NoPrivateMessage(), "mensagens privadas"),
+            (TrackNotFound(), "Não houve resultados"),
             (errors.YoutubeSourceDisabled(), "youtube está desativado"),
         ],
     )
@@ -61,6 +69,12 @@ class TestGenericError:
         out, full, *_ = parse(errors.GenericError(""))
         assert not out and "GenericError" in full
         assert "GenericError" in capsys.readouterr().out
+
+
+class TestUnwrapping:
+    def test_original_error_is_unwrapped(self):
+        wrapped = SimpleNamespace(original=errors.NoSource())
+        assert "Não há músicas" in text(wrapped)
 
 
 class TestUsage:

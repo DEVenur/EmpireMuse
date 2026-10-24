@@ -226,6 +226,12 @@ class TestKI40ImportadorDeIntegracoes:
         salvo = bot.salvos_usuario[-1]["integration_links"]
         assert {nome: url_guardada(valor) for nome, valor in salvo.items()} == antigo
 
+    @pytest.mark.asyncio
+    async def test_guarda_o_limite_de_integracoes_vale_para_o_importador(self):
+        bot = ModalBot(integracoes=1, integration_links=integracoes_cheias(1))
+        inter = await importar(bot, ViewMode.integrations_manager, {"【YT】: Canal": "https://www.youtube.com/@canal"})
+        assert bot.salvos_usuario == [] and "não possui espaço suficiente" in inter.texto
+
 
 class TestKI41ImportadorDeLinksRapidosDoServidor:
     """Itens com ``> fav:`` no nome pulam a validação da URL (``continue``) e mesmo assim são gravados."""
@@ -560,7 +566,7 @@ class TestKI51ResiduoNaView:
         return bot.user_data
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("modo", list(MODOS_DE_IMPORTACAO)[:2])
+    @pytest.mark.parametrize("modo", MODOS_DE_IMPORTACAO)
     async def test_remover_um_item_depois_da_recusa_nao_persiste_um_documento_podado(self, modo):
         bot, arquivo, alvo, atributo = self.cenario(modo)
         view = modal_view(bot, modo)
