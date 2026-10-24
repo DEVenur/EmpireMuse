@@ -644,7 +644,7 @@ def _bloqueou_com_o_aviso_de_token(entregue: dict) -> bool:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("token_do_bot", list(TOKEN_DO_BOT_VAZIO)[:2], ids=TOKEN_DO_BOT_VAZIO_IDS)
+@pytest.mark.parametrize("token_do_bot", list(TOKEN_DO_BOT_VAZIO)[:2], ids=list(TOKEN_DO_BOT_VAZIO_IDS)[:2])
 async def test_guarda_auth_ligada_usuario_com_token_e_bot_sem_token_nao_entrega(
     iniciar_servidor, sessao, segredo, token_do_bot
 ):
