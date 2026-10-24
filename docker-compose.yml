@@ -1,7 +1,7 @@
 services:
   bot:
-    # Imagem oficial do Docker Hub. Em produção, recomenda-se fixar uma tag específica
-    # de versão (ex.: or4cu1o/empiremuse:2.0.0 ou or4cu1o/empiremuse:2) em vez de latest para deploys imutáveis.
+    # Imagem oficial do Docker Hub. As tags latest e :2 passam a existir com a publicação da 2.0.0.
+    # Em produção recomenda-se fixar a tag imutável (ou a release candidate em homologação, ex.: or4cu1o/empiremuse:2.0.0-rc.1).
     image: ${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:latest}
     pull_policy: missing
     restart: unless-stopped

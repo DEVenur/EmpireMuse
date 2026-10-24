@@ -30,8 +30,8 @@ Para construir a imagem localmente a partir da raiz do repositório:
 docker build -t empiremuse:local .
 ```
 
-> [!NOTE]
-> A tag da série `or4cu1o/empiremuse:2` passa a existir a partir da publicação oficial da versão `2.0.0`. Até lá, testes e validações em homologação utilizam as imagens de release candidate publicadas a cada merge na main (`or4cu1o/empiremuse:2.0.0-rc.N`). Não utilize tags não homologadas.
+> [!IMPORTANT]
+> As tags flutuantes `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, testes e validações em homologação devem utilizar obrigatoriamente as imagens de release candidate publicadas a cada merge na main (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). Não utilize tags não homologadas.
 
 ### 2.2 Execução com `docker run`
 
@@ -98,7 +98,7 @@ Você pode customizar o comportamento do Compose através do seu arquivo `.env` 
 
 | Variável | Valor Padrão | Descrição |
 | :--- | :--- | :--- |
-| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar uma tag específica, ex.: `or4cu1o/empiremuse:2`). |
+| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (as tags `latest` e `:2` passam a existir com a 2.0.0; até lá, utilize a release candidate `or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). |
 | `EMPIREMUSE_MEM_LIMIT` | `1024m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
 | `EMPIREMUSE_PORT` | `127.0.0.1:6000` | Mapeamento da porta HTTP exposta no host para o bot (padrão em loopback). |
 

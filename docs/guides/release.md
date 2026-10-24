@@ -14,7 +14,8 @@ O EmpireMuse segue rigorosamente o padrão de [Versionamento Semântico 2.0.0](h
 
 ### 1.1 Versão do Projeto e Release Candidates
 
-- **Versionamento**: O projeto adota [Semantic Versioning (SemVer)](https://semver.org/lang/pt-BR/). Em razão da reformulação profunda do bot frente ao upstream original, a próxima versão oficial do projeto é a **2.0.0**.
+- **Versionamento**: O projeto adota [Semantic Versioning (SemVer)](https://semver.org/lang/pt-BR/). Em razão da reformulação profunda do bot frente ao upstream original, as publicações de teste da série 1.x foram retiradas e a primeira versão oficial do projeto é a **2.0.0**.
+- **Disponibilidade das Tags**: As tags flutuantes `latest` e `2` (e `2.0`) só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, o registro mantém exclusivamente as tags de release candidate (`2.0.0-rc.N`, atualmente `2.0.0-rc.1`).
 - **Fluxo de Release Candidates (`-rc.N`)**:
   - A cada merge concluído na branch `main`, o **MAESTRO** publica uma nova tag de release candidate no formato `v2.0.0-rc.N` (com `N` sequencial: `v2.0.0-rc.1`, `v2.0.0-rc.2`, etc.).
   - A publicação de uma release candidate compila e gera **estritamente a imagem com a tag exata** (`or4cu1o/empiremuse:2.0.0-rc.N`), **sem alterar nem promover** as tags flutuantes (`latest`, `2` ou `2.0`).
