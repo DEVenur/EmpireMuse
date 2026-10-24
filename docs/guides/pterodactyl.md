@@ -71,7 +71,7 @@ O egg expõe diversas variáveis configuráveis na aba **Startup** do servidor. 
 - **`LAVALINK_RAM_LIMIT`**: Limite máximo de memória RAM alocado à JVM do Lavalink (padrão: `120` MB).
 - **`ENABLE_JISHAKU`**: `false` por padrão. Habilita a extensão de depuração jishaku restrita aos donos do bot (`OWNER_IDS`). Mantenha desativado em produção por segurança.
 - **`RUN_RPC_SERVER`**: `false` por padrão. Habilita o servidor web interno Tornado necessário para o status rico e o painel web.
-- **`ENABLE_RPC_AUTH`**: `true` por padrão. Exige autenticação por token para conexões WebSocket ao relé RPC.
+- **`ENABLE_RPC_AUTH`**: `true` por padrão. Controla a validação e entrega de dados do bot aos clientes no relé RPC (quando ativado, exige tokens correspondentes entre bot e usuário antes de repassar os eventos). Não controla o handshake WebSocket nem o registro de usuários (que apenas valida o formato do token); a autenticação de bots no relé utiliza `RPC_SERVER_SECRET` no cabeçalho `X-RPC-Key`.
 
 ### 4.2 Segurança de Segredos e Permissões de Subusuários (`startup.read`)
 > [!CAUTION]

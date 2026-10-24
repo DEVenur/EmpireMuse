@@ -465,7 +465,7 @@
             "name": "Limite de integrações por usuário",
             "description": "Número máximo de integrações (Spotify, Last.fm, Deezer) cadastradas por usuário.",
             "env_variable": "MAX_USER_INTEGRATIONS",
-            "default_value": "20",
+            "default_value": "10",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|integer"
@@ -715,7 +715,7 @@
         },
         {
             "name": "Exigir autenticação no Rich Presence",
-            "description": "Obriga uso de token de usuário para conectar ao relé WebSocket do Rich Presence.",
+            "description": "Controla a entrega de dados aos clientes RPC, exigindo token correspondente entre bot e usuário (não afeta o handshake nem o X-RPC-Key).",
             "env_variable": "ENABLE_RPC_AUTH",
             "default_value": "true",
             "user_viewable": true,

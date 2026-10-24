@@ -124,9 +124,9 @@ flowchart TD
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
 - **Regras de Versionamento de Tags da Imagem**:
   - **Versão Final Estável** (`vX.Y.Z`, ex.: `v1.1.0`):
-    - Publica as tags `X.Y.Z` (`1.1.0`), `X.Y` (`1.1`), `X` (`1`, série maior estável) e `latest` (graças ao modificador `latest=auto`).
+    - Publica a tag de versão exata `X.Y.Z` (`1.1.0`), que é imutável, além das tags flutuantes `X.Y` (`1.1`), `X` (`1`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
   - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v1.1.0-rc.1`):
-    - Publica **estritamente** a tag do pré-lançamento (`1.1.0-rc.1`), **sem alterar nem sobrescrever** a tag `1`, `latest` nem as tags de versões estáveis anteriores.
+    - Publica **estritamente** a tag do pré-lançamento (`1.1.0-rc.1`), **sem alterar nem sobrescrever** as tags flutuantes `1`, `latest` nem as tags de versões estáveis anteriores.
 
 ---
 
@@ -160,9 +160,9 @@ O comando exibirá a lista de manifestos contendo:
 ## 6. O que Fazer em Caso de Erro na Tag ou na Release
 
 > [!CAUTION]
-> **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG JÁ PUBLICADA!**
+> **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG DE RELEASE `vX.Y.Z` JÁ PUBLICADA!**
 
-Imagens Docker e tags de pacotes são imutáveis e podem já ter sido baixadas por usuários finais, servidores de homologação ou sistemas de CI/CD. Mover ou forçar a sobrescrita de uma tag (`git push --force origin :vX.Y.Z`) quebra caches e compromete a rastreabilidade e integridade do projeto.
+Apenas a tag de versão exata `X.Y.Z` (ex.: `1.1.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `1`), `X.Y` (ex.: `1.1`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, mover ou forçar a sobrescrita de uma tag de versão exata (`git push --force origin :vX.Y.Z`) quebra caches, quebra deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto.
 
 Se for detectado qualquer defeito de código, falha de empacotamento ou inconsistência após a publicação:
 
