@@ -2,16 +2,13 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional, TYPE_CHECKING, List
+from typing import Optional, List
 from urllib import parse
 from urllib.parse import quote, quote_plus
 
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.converters import fix_characters
-
-if TYPE_CHECKING:
-    pass
 
 
 class PartialPlaylist:
