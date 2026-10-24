@@ -1,5 +1,6 @@
 """Hardening dos comandos de owner: ambiente mínimo do subprocesso, saída só por DM e mascarada, log e jishaku opcional."""
 
+import asyncio
 import logging
 import sys
 from types import SimpleNamespace
@@ -19,6 +20,10 @@ pytestmark = pytest.mark.regression
 SEGREDO = "segredo-do-env-123"
 
 
+def run(coro):
+    return asyncio.run(coro)
+
+
 def cog_e_contexto():
     cog = Owner.__new__(Owner)
     cog.bot = SimpleNamespace(config={"TOKEN": SEGREDO})
@@ -32,23 +37,23 @@ def cog_e_contexto():
     return cog, ctx
 
 
-async def test_o_subprocesso_nao_enxerga_o_env_do_processo(monkeypatch):
+def test_o_subprocesso_nao_enxerga_o_env_do_processo(monkeypatch):
     monkeypatch.setenv("TOKEN_BOT_9", SEGREDO)
 
-    saida = await run_command(f'"{sys.executable}" -c "import os; print(sorted(os.environ))"')
+    saida = run(run_command(f'"{sys.executable}" -c "import os; print(sorted(os.environ))"'))
 
     assert "TOKEN_BOT_9" not in saida and SEGREDO not in saida
 
 
-async def test_git_continua_funcionando_com_o_env_minimo():
-    assert "git version" in await run_command("git --version")
+def test_git_continua_funcionando_com_o_env_minimo():
+    assert "git version" in run(run_command("git --version"))
 
 
-async def test_shell_manda_a_saida_mascarada_so_por_dm(monkeypatch):
+def test_shell_manda_a_saida_mascarada_so_por_dm(monkeypatch):
     cog, ctx = cog_e_contexto()
     monkeypatch.setattr(legacy_cmds, "run_command", AsyncMock(return_value=f"TOKEN={SEGREDO}\n"))
 
-    await Owner.shell.callback(cog, ctx, command="cat .env")
+    run(Owner.shell.callback(cog, ctx, command="cat .env"))
 
     ctx.author.send.assert_awaited_once()
     enviado = ctx.author.send.await_args.kwargs["content"]
@@ -57,25 +62,25 @@ async def test_shell_manda_a_saida_mascarada_so_por_dm(monkeypatch):
     ctx.send.assert_not_awaited()
 
 
-async def test_shell_com_dm_bloqueado_avisa_sem_mandar_a_saida_ao_canal(monkeypatch):
+def test_shell_com_dm_bloqueado_avisa_sem_mandar_a_saida_ao_canal(monkeypatch):
     cog, ctx = cog_e_contexto()
     ctx.author.send.side_effect = disnake.Forbidden(MagicMock(status=403, reason="Forbidden"), "DM fechado")
     monkeypatch.setattr(legacy_cmds, "run_command", AsyncMock(return_value=f"TOKEN={SEGREDO}\n"))
 
     with pytest.raises(GenericError) as erro:
-        await Owner.shell.callback(cog, ctx, command="cat .env")
+        run(Owner.shell.callback(cog, ctx, command="cat .env"))
 
     assert SEGREDO not in erro.value.text
     ctx.reply.assert_not_awaited()
     ctx.send.assert_not_awaited()
 
 
-async def test_log_de_execucao_registra_autor_e_comando_sem_segredo(monkeypatch, caplog):
+def test_log_de_execucao_registra_autor_e_comando_sem_segredo(monkeypatch, caplog):
     cog, ctx = cog_e_contexto()
     monkeypatch.setattr(legacy_cmds, "run_command", AsyncMock(return_value="saída qualquer\n"))
 
     with caplog.at_level(logging.WARNING, logger=legacy_cmds.logger.name):
-        await Owner.shell.callback(cog, ctx, command=f"curl -H 'Authorization: {SEGREDO}' http://x")
+        run(Owner.shell.callback(cog, ctx, command=f"curl -H 'Authorization: {SEGREDO}' http://x"))
 
     registro = caplog.text
     assert "usuário=42" in registro and "comando=shell" in registro and "curl" in registro

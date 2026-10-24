@@ -223,7 +223,7 @@ def export_env(monkeypatch, tmp_path):
     )
     cog = legacy_cmds.Owner(bot)
     ctx = SimpleNamespace(
-        author=SimpleNamespace(send=author_send), guild=SimpleNamespace(me=None), send=mock.AsyncMock()
+        author=SimpleNamespace(id=1, send=author_send), guild=SimpleNamespace(me=None), send=mock.AsyncMock()
     )
 
     def run_export(flags=""):
