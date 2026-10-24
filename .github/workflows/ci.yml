@@ -102,3 +102,7 @@ jobs:
       - name: Execução dos testes automatizados (pytest)
         if: steps.detect-changes.outputs.code == 'true'
         run: pytest -q --durations=30 --cov --cov-report=term-missing:skip-covered
+
+      - name: Cobertura das áreas críticas (≥ 90%)
+        if: steps.detect-changes.outputs.code == 'true'
+        run: coverage report --fail-under=90 --skip-covered --include="empiremuse/panel/*,empiremuse/web_app.py,empiremuse/rpc_protocol.py,empiremuse/rules/*,empiremuse/config_loader.py,empiremuse/utils/db.py,empiremuse/serialization/*,empiremuse/utils/music/legacy_reader.py,empiremuse/utils/music/session_store.py"
