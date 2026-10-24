@@ -118,7 +118,7 @@ def _apply_queue_setup(view, inter: disnake.ModalInteraction):
     view.message_data["queue_max_entries"] = queue_max_entries
 
 
-def _import_shape_is_valid(info) -> bool:
+def _import_shape_is_valid(info: object) -> bool:
     """A skin importada precisa ser um objeto e, se trouxer ``embeds``, uma lista de objetos (``null`` é recusado)."""
     if not isinstance(info, dict):
         return False
