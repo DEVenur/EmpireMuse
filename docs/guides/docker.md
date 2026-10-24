@@ -123,7 +123,7 @@ Para implantar o EmpireMuse em um servidor de produção com proxy reverso geren
 Esta configuração segue as práticas de segurança do [Traefik com Cloudflare (docker-compose-cookbook)](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/traefik):
 - A VPS mantém apenas a porta **443** aberta, aceitando conexões exclusivamente da Cloudflare via mTLS (**Authenticated Origin Pulls**), certificado **Cloudflare Origin CA** e lista de IPs permitidos (`cloudflare-only`).
 - Nenhuma porta do bot é exposta no host (`ports: !reset []`). Toda a comunicação passa pela rede interna do Docker (`proxy`).
-- O cabeçalho `X-Real-IP` (definido via Transform Rule da Cloudflare e validado pelo Traefik contra faixas de IP confiáveis) é repassado com segurança ao painel para identificação auditável dos visitantes.
+- Atrás do Traefik do cookbook, `PANEL_TRUST_PROXY=true` faz o painel web utilizar com segurança o endereço IP real enviado pela Cloudflare (`CF-Connecting-IP`).
 
 #### Passo a Passo de Implantação:
 
@@ -146,6 +146,7 @@ Esta configuração segue as práticas de segurança do [Traefik com Cloudflare 
    # Configurações do Painel Web:
    PANEL_ENABLED=true
    PANEL_BASE_URL=https://muse.seudominio.com
+   # Atrás do Traefik do cookbook, faz o painel usar o IP enviado pela Cloudflare (CF-Connecting-IP):
    PANEL_TRUST_PROXY=true
 
    # Configurações do RPC (Rich Presence):
