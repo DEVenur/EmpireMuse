@@ -14,9 +14,9 @@ O plugin `ecc@ecc` opera no escopo de usuário. Utilize as capacidades integrada
   - `/ecc:python-review`: Revisão especializada em padrões idiomáticos Python.
   - `/ecc:security-scan`: Varredura e auditoria de vulnerabilidades de segurança.
 - **Subagentes Principais e TDD**:
-  - Fluxo TDD conduzido via skill `ecc:tdd-workflow` com o agente `ecc:tdd-guide` (RED → GREEN → IMPROVE).
+  - TDD (`ecc:tdd-workflow` + `ecc:tdd-guide`, RED → GREEN → IMPROVE) **só para correção de bug e regra pura**; nos demais casos siga `.claude/rules/empiremuse/testing.md`.
   - `ecc:planner`: Planejamento de implementação e refatorações complexas.
-  - `ecc:tdd-guide`: Implementação orientada a testes e validação de cobertura.
+  - `ecc:tdd-guide`: Implementação orientada a testes, para bug e regra pura.
   - `ecc:python-reviewer`: Revisão especializada em padrões e boas práticas Python.
   - `ecc:security-reviewer`: Análise de vulnerabilidades, validações e segredos.
   - `ecc:code-reviewer`: Revisão de manutenibilidade e qualidade de código.

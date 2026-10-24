@@ -95,8 +95,8 @@ projeto**. Contexto: `docs/architecture.md`; bugs conhecidos: `docs/known-issues
 
 ## Testes
 
-- Bug corrigido ou comportamento novo → teste primeiro (TDD) em `tests/`, com `pytest` e `pytest-asyncio`
-  (`asyncio_mode = "auto"`).
+- O que merece teste e o que é proibido: ver `testing.md` (esta pasta). Bug corrigido ou regra pura → teste
+  primeiro (TDD) em `tests/`, com `pytest` e `pytest-asyncio` (`asyncio_mode = "auto"`).
 - Sem rede nem Discord real: use dublês (`unittest.mock.AsyncMock`) para `disnake.Interaction`, `BotCore`,
   `aiohttp` e o banco; para `empiremuse/utils/db.py`, use `LocalDatabase` em diretório temporário (`tmp_path`).
 - Extraia lógica pura (filtros de faixa, conversão de config, parsing de URL) para funções testáveis sem

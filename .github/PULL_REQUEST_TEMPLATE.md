@@ -26,7 +26,7 @@ Marque com um `x` as opções aplicáveis:
 Descreva detalhadamente os procedimentos executados para validar as alterações:
 
 1. **Validação de código e testes**:
-   <!-- Testes automatizados quando a suíte existir (fase de saneamento); até lá: python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink + teste manual descrito no PR -->
+   <!-- CI verde (lint, suíte e compilação rodam no CI) + teste manual descrito no PR -->
 2. **Testes manuais**:
    <!-- Cenários simulados (ex.: reprodução de faixa Spotify/YouTube via Lavalink, comando /play, desconexão de canal) -->
 3. **Ambiente utilizado**:
@@ -40,7 +40,7 @@ Antes de solicitar a revisão, confirme se todos os critérios foram atendidos:
 
 - [ ] Meu código segue as diretrizes de formatação e boas práticas do projeto.
 - [ ] Realizei uma auto-revisão detalhada do código submetido.
-- [ ] Validação realizada: testes automatizados quando a suíte existir (fase de saneamento); até lá: `python -m compileall -q main.py app.py config_loader.py web_app.py modules utils wavelink` + teste manual descrito no PR.
+- [ ] Validação realizada: CI verde (lint, suíte e compilação rodam no CI e não se repetem localmente) + teste manual descrito no PR.
 - [ ] O arquivo [`CHANGELOG.md`](https://github.com/EmpireCommunity/EmpireMuse/blob/main/CHANGELOG.md) foi atualizado na seção `[Unreleased]`.
 - [ ] **Segurança**: Confirmo que nenhum segredo, chave de API, credencial ou token (`TOKEN`, `TOKEN_BOT_*`, etc.) foi incluído no repositório.
 - [ ] **Auditoria de Segurança**: Se o PR manipular entrada de dados de usuário, rede/WebSocket, chamadas externas ou banco de dados, foi realizada revisão preventiva contra vulnerabilidades (conforme [`SECURITY.md`](https://github.com/EmpireCommunity/EmpireMuse/blob/main/.github/SECURITY.md) e [`.claude/rules/empiremuse/security.md`](https://github.com/EmpireCommunity/EmpireMuse/blob/main/.claude/rules/empiremuse/security.md)).
