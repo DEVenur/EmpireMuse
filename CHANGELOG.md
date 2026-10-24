@@ -8,6 +8,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Registro de Decisão Arquitetural (ADR-0003)**: formalização da justificativa do fork `zRitsu/jishaku` para Disnake, fixado por SHA e desativado por padrão (`docs/adr/0003-jishaku-fork.md`).
 - **Submódulos Git para Ecossistemas Satélites (PR #53)**:
   - Adicionada configuração declarativa de submódulos Git via `.gitmodules` com URLs HTTPS públicas da organização `EmpireCommunity` para `repos/EmpireMuse-RPC-app` e `repos/EmpireMuse-LL-binaries`, fixados nos commits correspondentes da branch principal.
   - Preservadas as regras de isolamento em `.gitignore` e `.dockerignore`, com atualização da lista fechada de pastas permitidas na raiz do repositório (`tests/repo/test_layout_raiz.py`) e inclusão de instruções de clonagem recursiva (`git clone --recurse-submodules` ou `git submodule update --init`) em `AGENTS.md` e `docs/development.md`.
