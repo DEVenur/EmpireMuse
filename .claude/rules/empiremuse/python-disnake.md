@@ -23,18 +23,18 @@ projeto**. Contexto: `docs/architecture.md`; bugs conhecidos: `docs/known-issues
   `@commands.contexts(guild=True)`. Descrição com **no máximo 100 caracteres** — acima disso o carregamento
   de módulos aborta (`empiremuse/utils/client.py` — `BotCore.load_modules`).
 - Parâmetros: `commands.Param(name="<nome em pt-BR>", description=...)`; o identificador Python fica em
-  inglês e o nome exibido ao usuário em português (`empiremuse/cogs/music.py` — `Music.set_voice_status`).
+  inglês e o nome exibido ao usuário em português (`empiremuse/music_cog/voice_status.py` — `VoiceStatusMixin.set_voice_status`).
 - Prefixo: use `pool_command` (`empiremuse/utils/others.py` — `pool_command`), nunca `commands.command` direto, para herdar o
   roteamento do pool. Interação e prefixo devem compartilhar a mesma lógica (um chama o `.callback` do outro,
-  como em `empiremuse/cogs/music.py` — `Music.message_play`).
-- Cooldowns/concorrência: reutilize as constantes já definidas (ex.: `play_cd`, `play_mc`); comandos com
+  como em `empiremuse/music_cog/play_entry.py` — `PlayEntryMixin.message_play`).
+- Cooldowns/concorrência: reutilize as constantes já definidas (ex.: `play_cd`, `play_mc` em `empiremuse/music_cog/shared.py`); comandos com
   cooldown próprio levam `extras={"exclusive_cooldown": True}` (`empiremuse/utils/client.py` — `BotCore.sync_command_cooldowns`).
 
 ## Checks e erros
 
 - Use os decoradores de `empiremuse/utils/music/checks.py` (`has_player`, `is_dj`, `check_voice`, `has_source`,
   `can_send_message_check`, `user_cooldown`, …) acima de `@commands.slash_command`, como em
-  `empiremuse/cogs/music.py` — `Music.search`. Não reimplemente verificações de DJ, voz ou permissão.
+  `empiremuse/music_cog/play_entry.py` — `PlayEntryMixin.search`. Não reimplemente verificações de DJ, voz ou permissão.
 - Erros **para o usuário** são `GenericError(texto)` (`empiremuse/utils/music/errors.py` — `GenericError`) — o
   `empiremuse/cogs/error_handler.py` formata e responde. Não monte a resposta de erro manualmente na rota.
 - Erros inesperados: deixe propagar até o `error_handler`; não use `print`/`traceback.print_exc()` para
@@ -44,7 +44,7 @@ projeto**. Contexto: `docs/architecture.md`; bugs conhecidos: `docs/known-issues
 
 - Todo componente declara `custom_id` **estável e único**, em `snake_case` com prefixo da funcionalidade
   (`musicplayer_*` em `PlayerControls`, `queue_*`, `user_fav_*`, `guild_fav_*` — `empiremuse/utils/others.py` — `PlayerControls`,
-  `empiremuse/utils/music/interactions.py`). Não derive `custom_id` de dados do usuário.
+  `empiremuse/utils/music/interactions/`). Não derive `custom_id` de dados do usuário.
 - Views persistentes (registradas com `bot.add_view`, p.ex. `PanelView`) usam `timeout=None`
   (`empiremuse/utils/owner_panel.py` — `PanelView`); views temporárias definem `timeout` e desativam os itens no `on_timeout`.
 - Responda toda interação em até 3 s: faça `await inter.response.defer(...)` antes de I/O lento.
@@ -85,8 +85,10 @@ projeto**. Contexto: `docs/architecture.md`; bugs conhecidos: `docs/known-issues
   `dataclasses`/`TypedDict` serializados explicitamente.
 - Anotações de tipo em toda assinatura nova; `from __future__ import annotations` e `TYPE_CHECKING` para
   evitar import circular com `BotCore` (padrão do projeto).
-- Funções pequenas (< 50 linhas) e módulos novos em vez de crescer `empiremuse/cogs/music.py`,
-  `empiremuse/utils/music/models.py` e `empiremuse/utils/music/interactions.py`.
+- Funções pequenas (< 50 linhas) e módulos novos em vez de crescer `empiremuse/cogs/music.py`, os pacotes
+  `empiremuse/utils/music/models/` e `empiremuse/utils/music/interactions/` ou os mixins de `empiremuse/music_cog/`. Comando
+  novo de `Music` entra num mixin de `music_cog/` (ou num módulo novo, listado nas bases de `Music`), nunca em `cogs/`; os mixins
+  não usam `from __future__ import annotations` (ver `docs/architecture.md`, seção 3).
 - Configuração nova: chave em `DEFAULT_CONFIG` (`empiremuse/config_loader.py`), documentação em `.example.env` e
   conversão de tipo na lista correspondente. Booleanos só em minúsculas (`true`/`false`) até a KI-06.
 - Não adicione dependência sem justificar; fixe a versão.

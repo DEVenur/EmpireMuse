@@ -32,8 +32,8 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/utils/db.py`: Camada de persistência (`MongoDatabase` via motor e `LocalDatabase` via TinyMongo).
 - `empiremuse/utils/others.py`: Decorador `pool_command`, classes de paginação, contexto e identificadores do controlador.
 - `empiremuse/utils/owner_panel.py`: Interface administrativa do dono do bot (`PanelView`).
-- `empiremuse/utils/music/models.py`: Modelos centrais de reprodução (`LavalinkPlayer`, `LavalinkTrack`, `PartialTrack`).
-- `empiremuse/utils/music/interactions.py`: Componentes de UI do Discord (views, botões, modais e selects).
+- `empiremuse/utils/music/models/`: Pacote dos modelos centrais de reprodução: `LavalinkPlayer` (`player.py` + mixins `player_*.py`), `LavalinkTrack`/`PartialTrack` (`tracks.py`) e auxiliares (`helpers.py`); o `__init__.py` reexporta os nomes públicos.
+- `empiremuse/utils/music/interactions/`: Pacote dos componentes de UI do Discord (views, botões, modais e selects), com um módulo por tema (`player_views.py`, `fav_menu.py`, `fav_modals.py`, `skin_editor.py`, …); o `__init__.py` reexporta os nomes públicos.
 - `empiremuse/utils/music/checks.py`: Verificações de permissão, voz, DJ e algoritmo de roteamento entre múltiplos bots.
 - `empiremuse/utils/music/local_lavalink.py`: Download e execução sob demanda de binários JDK e Lavalink local.
 - `empiremuse/utils/music/lavalink_server_list.py`: Validação da lista de servidores Lavalink baixada, com fallback para `data/lavalink_servers.ini`.
@@ -43,7 +43,8 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/utils/music/audio_sources/`: Provedores de metadados para plataformas externas (Spotify e Deezer).
 - `empiremuse/utils/music/skins/`: Coleção de 15 skins visuais para o player (10 no modo normal e 5 no modo estático).
 - `empiremuse/wavelink/`: Cliente Lavalink v3/v4 e NodeLink (nós, conexões WebSocket, players e eventos).
-- `empiremuse/cogs/music.py`: Cog principal de comandos musicais (reprodução, filas, filtros e nós).
+- `empiremuse/cogs/music.py`: Cog principal `Music` (atributos de núcleo, `__init__`, `setup()` e a lista de mixins); os comandos e listeners (reprodução, filas, controles e nós) vivem em `empiremuse/music_cog/`.
+- `empiremuse/music_cog/`: Mixins da Cog `Music` (um módulo por tema) e `shared.py`. Fica fora de `cogs/` de propósito: `BotCore.load_modules` carrega todo `.py` de `cogs/` como extensão. Ver `docs/architecture.md`, seção 3.
 - `empiremuse/cogs/music_settings.py`: Cog de configurações de servidor/usuário, skins e favoritos.
 - `empiremuse/cogs/player_resume.py`: Salvamento e restauração de sessões de reprodução ativas.
 - `empiremuse/cogs/misc.py`: Comandos gerais de utilidade (ping, estatísticas, convite, sobre).
