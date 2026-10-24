@@ -6,6 +6,8 @@ ANTES de decodificar (12 MiB), o ``_id`` do documento contra o do conteúdo, e n
 """
 
 import base64
+import time
+import tracemalloc
 import zlib
 
 import disnake
@@ -19,6 +21,7 @@ pytestmark = pytest.mark.critical
 
 NOVA, ANTIGA = "player_sessions_json", "player_sessions"
 OUTRO = SERVIDOR + 7
+MIB = 1024 * 1024
 
 
 @pytest.fixture(autouse=True)
@@ -109,6 +112,22 @@ class TestDocumentoRuim:
         assert [s["_id"] for s in await cog.get_player_sessions_mongo()] == [SERVIDOR]
         assert identificador in mongo.ids(NOVA) and mongo.apagados == []
 
+    @pytest.mark.asyncio
+    async def test_data_acima_de_12_mib_e_recusada_antes_de_decodificar(self):
+        cog, mongo = cog_com_mongo()
+        await semear(mongo, SERVIDOR)
+        enorme = "A" * (12 * MIB + 1)
+        await mongo.update_data(OUTRO, {"v": 1, "data": enorme}, db_name=BOT_ID, collection=NOVA)
+        tracemalloc.start()
+        inicio = time.perf_counter()
+        try:
+            lidas = await cog.get_player_sessions_mongo()
+            pico = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert [s["_id"] for s in lidas] == [SERVIDOR] and str(OUTRO) in mongo.ids(NOVA)
+        assert time.perf_counter() - inicio < 2.0 and pico < 24 * MIB
+
 
 # ============================================================================ remoção
 
@@ -122,6 +141,13 @@ class TestRemocao:
             await mongo.update_data(guild, {"data": "legado"}, db_name=BOT_ID, collection=ANTIGA)
         await cog.delete_data_mongo(SERVIDOR)
         assert mongo.ids(NOVA) == {str(OUTRO)} and mongo.ids(ANTIGA) == {str(OUTRO)}
+
+    @pytest.mark.asyncio
+    async def test_delete_data_vai_para_o_mongo_quando_o_destino_e_o_mongo(self):
+        cog, mongo = cog_com_mongo()
+        await semear(mongo, SERVIDOR)
+        await cog.delete_data(SERVIDOR)
+        assert mongo.ids(NOVA) == set()
 
     @pytest.mark.asyncio
     async def test_remover_o_que_nao_existe_nao_falha(self):

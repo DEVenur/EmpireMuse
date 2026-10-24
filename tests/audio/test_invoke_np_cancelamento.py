@@ -50,3 +50,13 @@ def test_message_edit_is_attempted_before_the_cancellation():
     invoke_np(player)
 
     edit.assert_awaited_once()
+
+
+def test_successful_edit_also_leaves_updating_false():
+    player = make_player(AsyncMock())
+    player.start_message_updater_task = MagicMock()
+    player.destroy_message = AsyncMock()
+
+    invoke_np(player)
+
+    assert player.updating is False

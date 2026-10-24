@@ -242,6 +242,17 @@ def exported_value(env_text: str):
 
 
 class TestExportNeverCarriesTheToken:
+    def test_token_from_the_process_environment_is_not_exported(self, export_env):
+        export_env.monkeypatch.setenv(CONFIG_KEY, FAKE_TOKEN)
+        export_env.run()
+        assert len(export_env.snapshots) == 1
+        assert_no_token(".env exportado", export_env.snapshots[0])
+
+    def test_token_from_config_json_is_not_exported(self, export_env):
+        (export_env.tmp / "config.json").write_text(f'{{"{CONFIG_KEY}": "{FAKE_TOKEN}"}}', encoding="utf-8")
+        export_env.run()
+        assert_no_token(".env exportado", export_env.snapshots[0])
+
     def test_exported_entry_is_empty_or_absent(self, export_env):
         export_env.monkeypatch.setenv(CONFIG_KEY, FAKE_TOKEN)
         export_env.run()

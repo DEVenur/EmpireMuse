@@ -11,6 +11,7 @@ correções; os demais falham hoje pelo motivo descrito na docstring.
 import asyncio
 import logging
 import os
+import re
 import secrets
 import stat
 import tempfile
@@ -30,6 +31,8 @@ from yarl import URL
 from empiremuse.utils.music.audio_sources import spotify
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
+from empiremuse.wavelink.errors import WavelinkException
+from empiremuse.wavelink.player import Player
 
 pytestmark = pytest.mark.regression
 
@@ -181,6 +184,21 @@ def _playlist_falsa(total: int, falha_no_offset: tuple[int, Exception] | None = 
     return request, offsets_pedidos
 
 
+def _ids(resultado: dict) -> list[str]:
+    return [i["track"]["id"] for i in resultado["tracks"]["items"]]
+
+
+@pytest.mark.asyncio
+async def test_ki16_playlist_de_250_faixas_nao_pula_nem_duplica(cache_isolado):
+    """Hoje a faixa 100 é pulada (as páginas extras cobrem 101-200 e 201-249)."""
+    cliente = _cliente(cache_isolado, playlist_extra_page_limit=5)
+    cliente.request, _ = _playlist_falsa(total=250)
+
+    resultado = await cliente.get_playlist_info("abc")
+
+    assert _ids(resultado) == [f"faixa-{i}" for i in range(250)]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("limite", [1, 3])
 async def test_ki17_carrega_no_maximo_o_limite_de_paginas_extras(cache_isolado, limite):
@@ -194,6 +212,22 @@ async def test_ki17_carrega_no_maximo_o_limite_de_paginas_extras(cache_isolado, 
     await cliente.get_playlist_info("abc")
 
     assert len(offsets) == limite
+
+
+@pytest.mark.asyncio
+async def test_ki16_falha_em_pagina_extra_devolve_o_que_ja_veio_sem_vazar_o_erro(cache_isolado, caplog):
+    """Falha na 2ª página extra: mantém as faixas já carregadas, não tenta de novo e registra aviso sem o detalhe."""
+    detalhe = _valor_falso("detalhe")
+    cliente = _cliente(cache_isolado, playlist_extra_page_limit=5)
+    cliente.request, offsets = _playlist_falsa(total=1000, falha_no_offset=(200, RuntimeError(detalhe)))
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        resultado = await cliente.get_playlist_info("abc")
+
+    assert _ids(resultado) == [f"faixa-{i}" for i in range(200)]
+    assert offsets == [100, 200]
+    assert any("Spotify" in r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
+    assert detalhe not in caplog.text
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -253,6 +287,14 @@ async def test_ki20_403_na_playlist_gera_generic_error_em_portugues(cache_isolad
     erro, _ = await _erro_gerado(cache_isolado, rede, 403, com_token_na_url=False)
 
     assert isinstance(erro, GenericError), f"esperado GenericError, veio {type(erro).__name__}"
+    assert "não" in erro.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_guarda_404_na_playlist_gera_generic_error_em_portugues(cache_isolado, rede):
+    erro, _ = await _erro_gerado(cache_isolado, rede, 404, com_token_na_url=False)
+
+    assert isinstance(erro, GenericError)
     assert "não" in erro.text.lower()
 
 
@@ -364,6 +406,10 @@ async def _escolhida_no_process_next(original: LavalinkTrack, resultados: list[L
     return _id_mandado_tocar(await _rodar_process_next(original, {BUSCA_FALSA: resultados}))
 
 
+async def _escolhida_no_autoqueue(original: LavalinkTrack, resultados: list[LavalinkTrack]) -> LavalinkTrack | None:
+    return await _jogador(original, resultados).get_autoqueue_tracks()
+
+
 def _titulo_com_tag(tag: str) -> str:
     titulo = f"{TITULO_ORIGINAL} ({tag})"
     assert fuzz.token_set_ratio(titulo, TITULO_ORIGINAL) >= LIMIAR_TITULO, "a tag não pode derrubar o filtro de título"
@@ -379,6 +425,16 @@ async def test_guarda_process_next_se_todos_os_resultados_tem_tag_o_primeiro_ain
     escolhida = await _escolhida_no_process_next(_original(), [primeiro, segundo])
 
     assert escolhida == "primeiro"
+
+
+@pytest.mark.asyncio
+async def test_guarda_autoqueue_sem_tag_em_nenhum_resultado_mantem_a_ordem():
+    primeira = _candidata(TITULO_ORIGINAL, "primeira")
+    segunda = _candidata(TITULO_ORIGINAL, "segunda")
+
+    escolhida = await _escolhida_no_autoqueue(_original(), [primeira, segunda])
+
+    assert escolhida is not None and escolhida.id == "primeira"
 
 
 # --- KI-22: a faixa só vale se duração E título conferem. Cada caso põe a candidata ao lado de uma referência segura,
@@ -442,6 +498,23 @@ async def test_ki22_titulo_com_prefixo_ou_sufixo_e_duracao_certa_e_aceito(caso, 
 # ---------------------------------------------------------------------------------------------------------------------
 # KI-23 — Player.change_node com identificador inexistente
 # ---------------------------------------------------------------------------------------------------------------------
+
+
+def _player_com_cliente(no_encontrado) -> Player:
+    cliente = SimpleNamespace(get_node=MagicMock(return_value=no_encontrado))
+    node_atual = SimpleNamespace(_client=cliente, players={}, version=4)
+    return Player(bot=MagicMock(), guild_id=1, node=node_atual)
+
+
+@pytest.mark.asyncio
+async def test_guarda_change_node_com_node_indisponivel_mantem_a_mensagem_de_indisponivel():
+    indisponivel = SimpleNamespace(is_available=False)
+    player = _player_com_cliente(no_encontrado=indisponivel)
+
+    with pytest.raises(WavelinkException, match="Node unavailable") as capturado:
+        await player.change_node("fora-do-ar")
+
+    assert "fora-do-ar" in str(capturado.value)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -582,6 +655,27 @@ async def _cache_gravado(cache_isolado, rede):
     cliente = _cliente(cache_isolado)
     await cliente.get_access_token()
     return cliente, _arquivo_do_cache(cache_isolado), falsa, emitidos
+
+
+def _avisos(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING and r.name == spotify.__name__]
+
+
+@pytest.mark.asyncio
+async def test_cache_do_token_falha_na_gravacao_so_gera_aviso_e_nao_deixa_temporario(cache_isolado, rede, caplog):
+    """Não consegue gravar (o destino virou um diretório): só um aviso com o nome da exceção; o token segue em memória."""
+    cliente, arquivo, _, emitidos = await _cache_gravado(cache_isolado, rede)
+    arquivo.unlink()
+    arquivo.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        await cliente.get_access_token()
+
+    assert cliente.spotify_cache["access_token"] == emitidos[1]
+    assert _arquivos(cache_isolado.runtime, cache_isolado.sistema, cache_isolado.cwd) == [], "sobrou arquivo temporário"
+    assert any("Spotify" in a and re.search(r"\b\w+Error\b", a) for a in _avisos(caplog)), _avisos(caplog)
+    for sensivel in (str(arquivo), emitidos[0], emitidos[1]):
+        assert sensivel not in caplog.text, "o aviso expõe caminho ou token"
 
 
 @pytest.mark.asyncio

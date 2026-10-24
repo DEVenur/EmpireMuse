@@ -47,5 +47,14 @@ class TestRemoveOrphanJdkStaging:
 
         assert staging.exists()
 
+    def test_apaga_todos_os_orfaos_e_so_eles(self, java_root):
+        velho_a = criar_staging(java_root, nome=f"{PLATAFORMA}.aaaaaaaa.tmp")
+        velho_b = criar_staging(java_root, nome="Windows-64bit-WindowsPE.bbbbbbbb.tmp")
+        em_curso = criar_staging(java_root, nome=f"{PLATAFORMA}.cccccccc.tmp", idade=5)
+
+        assert ll.remove_orphan_jdk_staging(str(java_root)) == 2
+
+        assert not velho_a.exists() and not velho_b.exists() and em_curso.exists()
+
     def test_pasta_inexistente_nao_e_erro(self, tmp_path):
         assert ll.remove_orphan_jdk_staging(str(tmp_path / "nao-existe")) == 0

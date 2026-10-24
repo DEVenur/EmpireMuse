@@ -107,6 +107,27 @@ class TestRecusadasFicam:
         await migrar()
         assert link.is_symlink() and fora.is_file() and not json_de(tmp_path, OUTRO).exists()
 
+    @pytest.mark.asyncio
+    async def test_erro_inesperado_em_um_arquivo_nao_derruba_a_subida_nem_as_outras(self, tmp_path, monkeypatch):
+        """Um defeito que não é ``OSError`` nem ``SchemaError`` (aqui, no meio da troca atômica) fica contido naquele servidor."""
+        escrever_pkl(tmp_path, SERVIDOR)
+        escrever_pkl(tmp_path, OUTRO)
+        trocar = os.replace
+        chamadas = []
+
+        def quebrar_a_primeira(origem, destino):
+            chamadas.append(destino)
+            if len(chamadas) == 1:
+                raise RuntimeError("defeito inesperado")
+            return trocar(origem, destino)
+
+        monkeypatch.setattr(os, "replace", quebrar_a_primeira)
+        await migrar()  # nenhuma exceção
+        convertidos = [g for g in (SERVIDOR, OUTRO) if json_de(tmp_path, g).is_file()]
+        mantidos = [g for g in (SERVIDOR, OUTRO) if (pasta_legado(tmp_path) / f"{g}.pkl").is_file()]
+        assert len(convertidos) == 1 and len(mantidos) == 1 and convertidos != mantidos
+        assert [p.name for p in pasta_json(tmp_path).iterdir() if p.name.endswith(".tmp")] == []
+
 
 # ============================================================================ ordem, mtime e releitura
 
@@ -146,6 +167,12 @@ class TestJanelaDe48Horas:
         pkl = escrever_pkl(tmp_path, protocolo=3, horas=horas)
         await migrar()
         assert pkl.is_file()
+
+    @pytest.mark.asyncio
+    async def test_id_divergente_com_mais_de_48_horas_sai(self, tmp_path):
+        pkl = escrever_pkl(tmp_path, OUTRO, sessao_legada(_id=OUTRO + 1), horas=60)
+        await migrar()
+        assert not pkl.exists()
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(

@@ -61,9 +61,28 @@ def open_message(encoded: str) -> Reader:
 
 
 class TestDataWriter:
+    def test_primitives_are_big_endian(self):
+        writer = enc.DataWriter()
+        writer.write_boolean(True)
+        writer.write_unsigned_short(0x0102)
+        writer.write_int(-2)
+        writer.write_long(3)
+        body = open_message_from(writer)
+        assert body == b"\x01" + b"\x01\x02" + b"\xff\xff\xff\xfe" + (3).to_bytes(8, "big")
+
     def test_utf_longer_than_65535_bytes_overflows(self):
         with pytest.raises(OverflowError):
             enc.DataWriter().write_utf("a" * 65536)
+
+    def test_missing_marker_reports_an_ellipsis(self):
+        assert repr(enc.MISSING) == "..."
+
+
+def open_message_from(writer: enc.DataWriter) -> bytes:
+    raw = writer.finish()
+    flags = struct.unpack(">i", raw[:4])[0]
+    assert flags == (len(raw) - 4) | (1 << 30)
+    return raw[4:]
 
 
 class TestEncodeTrackV2:
@@ -80,6 +99,20 @@ class TestEncodeTrackV2:
         assert reader.long() == 7
         assert reader.pos == len(reader.data)
 
+    def test_source_encoder_is_called_only_for_the_matching_source(self):
+        calls = []
+
+        def extra(writer, track):
+            calls.append(track["sourceName"])
+            writer.write_utf("extra")
+
+        enc.encode_track_v2(V2, {"outra": extra})
+        assert calls == []
+        reader = open_message(enc.encode_track_v2(V2, {"http": extra}))
+        assert calls == ["http"]
+        reader.byte(), reader.utf(), reader.utf(), reader.long(), reader.utf(), reader.boolean(), reader.nullable_utf()
+        assert reader.utf() == "http" and reader.utf() == "extra" and reader.long() == 7
+
 
 class TestEncodeTrackV3:
     def test_null_isrc_is_absent(self):
@@ -88,8 +121,22 @@ class TestEncodeTrackV3:
         reader.nullable_utf()
         assert reader.nullable_utf() is None
 
+    def test_source_encoder_is_applied(self):
+        encoded = enc.encode_track_v3(V3, {"http": lambda writer, track: writer.write_utf("extra")})
+        assert b"extra" in b64decode(encoded)
+
 
 class TestEncodeTrack:
+    def test_full_track_uses_version_3(self):
+        version, encoded = enc.encode_track(V3)
+        assert version == 3 and encoded == enc.encode_track_v3(V3)
+
     def test_minimal_track_uses_version_2(self):
         version, encoded = enc.encode_track(V2)
         assert version == 2 and encoded == enc.encode_track_v2(V2)
+
+    def test_missing_required_keys_are_listed_in_the_error(self):
+        track = {k: v for k, v in V2.items() if k not in ("title", "position")}
+        with pytest.raises(Exception, match="missing keys") as info:
+            enc.encode_track(track)
+        assert "title" in str(info.value) and "position" in str(info.value)

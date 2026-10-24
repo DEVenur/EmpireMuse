@@ -63,6 +63,11 @@ class TestMaxBytes:
         assert ler('"é"', max_bytes=4) == "é"  # aspas + 2 bytes + aspas
         assert falha(ler, '"é"', max_bytes=3).code == TOO_BIG
 
+    def test_teto_de_tamanho_com_texto_valido_gigante(self):
+        grande = json.dumps({"a": "x" * 2_000_000})
+        assert falha(ler, grande, max_bytes=1_000_000).code == TOO_BIG
+        assert ler(grande, max_bytes=2_100_000)["a"] == "x" * 2_000_000
+
     @pytest.mark.parametrize("raw", [None, memoryview(b"{}")], ids=lambda v: type(v).__name__)
     def test_so_bytes_ou_str(self, raw):
         assert falha(ler, raw).code == TYPE
@@ -87,6 +92,10 @@ class TestLoadsBoundedHostil:
         assert falha(ler, f'"a{escape}b"').code == SURROGATE
         assert falha(ler, f'["x",{{"k":"{escape}"}}]').code == SURROGATE
         assert falha(ler, f'{{"{escape}":1}}').code == SURROGATE
+
+    def test_surrogate_em_str_de_python_tambem_e_recusado(self):
+        assert falha(ler, '"a\ud800b"').code == SURROGATE
+        assert falha(ler, '{"a\ud800":1}').code == SURROGATE
 
     @pytest.mark.parametrize(
         "texto",
@@ -190,6 +199,10 @@ class TestPackUnpack:
     @pytest.mark.parametrize("texto", [b"eJwDAAAAAAE=", bytearray(b"a")], ids=lambda v: type(v).__name__)
     def test_unpack_so_aceita_str(self, texto):
         assert falha(desempacotar, texto).code == TYPE
+
+    @pytest.mark.parametrize("raw", ["texto", ["a"]], ids=lambda v: type(v).__name__)
+    def test_pack_so_aceita_bytes(self, raw):
+        assert falha(empacotar, raw).code == TYPE
 
 
 class TestDocumentoCompleto:

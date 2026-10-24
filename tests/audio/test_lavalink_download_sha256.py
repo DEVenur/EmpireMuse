@@ -100,6 +100,10 @@ def tree(base: Path):
     return sorted(str(p.relative_to(base)) for p in base.rglob("*") if p.is_file())
 
 
+def plugin_dir(base: Path) -> Path:
+    return base / "plugins"
+
+
 # ============================================================================ download_verified
 
 
@@ -117,6 +121,12 @@ class TestDownloadVerified:
         ll.download_verified("https://example.test/Lavalink.jar", str(tmp_path / "Lavalink.jar"), sha(JAR))
         ((_, kwargs),) = net.calls
         assert kwargs.get("timeout"), "requests.get sem timeout trava o boot do bot"
+
+    def test_legacy_download_file_for_the_jdk_also_has_a_timeout(self, net, tmp_path):
+        net.files["java.zip"] = b"JDK"
+        assert ll.download_file("https://example.test/java.zip", str(tmp_path / "java.zip")) is True
+        ((_, kwargs),) = net.calls
+        assert kwargs.get("timeout")
 
 
 # ============================================================================ prepare_lavalink_files
@@ -144,6 +154,28 @@ class TestExistingApplicationYml:
         ll.prepare_lavalink_files(tmp_path)
         assert "application.yml" not in net.names()
         assert (tmp_path / "application.yml").read_bytes() == YML
+
+    def test_customized_yml_is_kept_with_a_log_warning(self, net, tmp_path, capsys, caplog):
+        custom = b"server:\n  port: 2333\n# personalizado pelo dono\n"
+        (tmp_path / "application.yml").write_bytes(custom)
+        with caplog.at_level("DEBUG"):
+            ll.prepare_lavalink_files(tmp_path)
+        assert (tmp_path / "application.yml").read_bytes() == custom, "configuração do dono nunca é sobrescrita"
+        assert "application.yml" not in net.names()
+        out = capsys.readouterr()
+        text = (out.out + out.err + caplog.text).lower()
+        assert "application.yml" in text and "personaliz" in text, "aviso no log: arquivo personalizado mantido"
+
+
+class TestPlugins:
+    def test_stale_plugin_versions_are_removed_when_the_jar_is_refreshed_but_canonical_ones_stay(self, net, tmp_path):
+        folder = plugin_dir(tmp_path)
+        folder.mkdir()
+        (folder / "youtube-plugin-1.0.0.jar").write_bytes(b"velho")
+        (tmp_path / "Lavalink.jar").write_bytes(b"jar antigo")
+        ll.prepare_lavalink_files(tmp_path)
+        assert not (folder / "youtube-plugin-1.0.0.jar").exists(), "jar de plugin fora da lista oficial não é carregado"
+        assert sorted(p.name for p in folder.iterdir()) == sorted(PLUGINS)
 
 
 class TestUserOverriddenUrl:

@@ -14,12 +14,14 @@ import ast
 import importlib
 import json
 import stat
+import time
 from pathlib import Path
 
 import pytest
 
 from empiremuse.utils.music.lastfm_tools import LastFM
-from tests.support.serializacao_nucleo import TYPE, falha
+from tests.support.leitor_legado import SEGREDO
+from tests.support.serializacao_nucleo import TYPE, falha, vazamentos
 from tests.persistence.test_formato_caches import (
     PLAYLIST,
     RESPOSTA_DE_PLAYLIST,
@@ -85,6 +87,23 @@ class TestDecodificar:
     def test_documento_sem_o_formato_e_recusado(self, bruto):
         assert falha(decodificar, bruto, now=1.0).code in {TYPE, "missing"}
 
+    def test_item_ruim_do_arquivo_e_descartado_sozinho(self):
+        itens = [
+            {"k": "a", "d": 1},
+            {"d": 2},
+            {"k": 5, "d": 3},
+            {"k": "sem-d"},
+            "texto",
+            {"k": "b", "d": [[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]},
+            {"k": "c", "d": {"ok": True}},
+        ]
+        bruto = json.dumps({"v": 1, "saved_at": 100.0, "items": itens}).encode()
+        assert decodificar(bruto, now=100.0) == {"a": 1, "c": {"ok": True}}
+
+    def test_nada_do_conteudo_vaza_no_erro(self):
+        bruto = f'{{"v":1,"saved_at":"{SEGREDO}","items":[]}}'.encode()
+        assert not vazamentos(falha(decodificar, bruto, now=1.0))
+
 
 # ============================================================================ utils/music/json_cache.py
 
@@ -132,6 +151,12 @@ class TestCachePlaylist:
 
 class TestCacheLastFM:
     ENTRADA = {"name": "Música", "artist": "Artista", "album": "Álbum"}
+
+    def test_cache_velho_demais_nao_volta(self, tmp_path):
+        json_cache.save_json_cache(
+            caminho_lastfm(tmp_path), [("A - B", self.ENTRADA)], max_bytes=MIB, saved_at=time.time() - 3000
+        )
+        assert len(LastFM("chave", "segredo").cache) == 0
 
     @pytest.mark.parametrize("conteudo", [b"", b'{"v":9,"saved_at":1,"items":[]}'])
     def test_arquivo_ruim_nao_derruba_e_fica(self, tmp_path, conteudo):

@@ -322,6 +322,12 @@ class TestJdkDownloadIsVerified:
             ll.run_lavalink()
         assert jdk.extractions == [] and not java.exists() and jdk.started == []
 
+    def test_a_preexisting_archive_with_the_correct_hash_may_be_used(self, jdk, system, bits):
+        key, java, archive = setup_platform(jdk, system, bits)
+        archive.write_bytes(jdk.archives[key])
+        ll.run_lavalink()
+        assert java.read_bytes() == f"JAVA-BOM-{key}".encode() and len(jdk.started) == 1
+
 
 class TestInstallationIsSkippedWhenJavaAlreadyWorks:
     def test_a_working_system_java_triggers_no_jdk_download(self, jdk):

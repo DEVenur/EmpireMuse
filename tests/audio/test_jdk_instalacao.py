@@ -121,6 +121,14 @@ def installed_java(install) -> Path:
     return install.java_dir / "bin" / "java"
 
 
+def make_valid_install(install, content=b"JAVA-JA-INSTALADO"):
+    (install.java_dir / "bin").mkdir(parents=True)
+    java = installed_java(install)
+    java.write_bytes(content)
+    java.chmod(0o755)
+    return java
+
+
 # ============================================================================ M-1 — falha não deixa instalação aproveitável
 
 
@@ -177,6 +185,12 @@ class TestAnExistingDirectoryIsOnlyAcceptedWhenJavaIsUsable:
         ll.run_lavalink()
         assert not (install.java_dir / "stale.txt").exists(), "restos da instalação antiga não podem sobreviver à troca"
         assert sorted(p.name for p in (install.base / ".java").iterdir()) == [PLATFORM_DIR]
+
+    def test_a_valid_directory_survives_when_the_archive_on_the_server_is_unsafe(self, install):
+        java = make_valid_install(install)
+        install.set_archive(GOOD + [EVIL_LINK])
+        ll.run_lavalink()
+        assert install.state["calls"] == 0 and java.read_bytes() == b"JAVA-JA-INSTALADO"
 
     def test_a_valid_directory_is_never_removed_by_a_failed_attempt_elsewhere(self, install):
         """Instalação anterior válida preservada: um outro .java/<plataforma> não é tocado por falha de extração."""

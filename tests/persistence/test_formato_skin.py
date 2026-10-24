@@ -194,6 +194,26 @@ class TestLeitores:
         await menu.load_skin(SimpleNamespace(values=["> cs: Minha"]))
         assert menu.message_data == skin
 
+    @pytest.mark.asyncio
+    async def test_load_skin_sem_prefixo_conhecido_comeca_da_skin_padrao(self, editor_sem_tela):
+        menu, _, _ = editor_sem_tela(dados_globais())
+        await menu.load_skin(SimpleNamespace(values=["default"]))
+        assert menu.message_data == base_skin
+
+    @pytest.mark.asyncio
+    async def test_change_skin_nao_mexe_no_player_que_ja_usa_a_skin_escolhida(self, monkeypatch):
+        dados = {
+            "custom_skins": {"N": texto_legado(skin_realista())},
+            "custom_skins_static": {},
+            "global_skin": False,
+            "player_skin": "",
+            "player_skin_static": "",
+        }
+        jogador = await chamar_change_skin(
+            monkeypatch, dados, nova_skin="> custom_skin: N", skin_atual="> custom_skin: N"
+        )
+        assert jogador.custom_skin_data is None and jogador.chamadas == []
+
 
 # ============================================================================ os dublês de create_player e change_skin
 

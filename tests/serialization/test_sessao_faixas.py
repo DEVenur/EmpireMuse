@@ -104,6 +104,28 @@ class TestOutrasUrlsDaFaixa:
         )
 
     @LEITORES
+    def test_em_plugin_info_a_chave_com_url_invalida_sai_e_as_outras_ficam(self, ler):
+        plugin = {
+            "artistUrl": "javascript:alert(1)",
+            "albumUrl": "https://exemplo.invalid/album",
+            "previewUrl": "ftp://exemplo.invalid/p",
+            "artworkurl": "file:///x",
+            "url": "oi",
+            "albumName": "Nome",
+            "isrc": "BR1",
+            "total": 12,
+            "lista": [1, 2],
+        }
+        faixa = ler(pluginInfo=copy.deepcopy(plugin))
+        assert faixa["pluginInfo"] == {
+            "albumUrl": "https://exemplo.invalid/album",
+            "albumName": "Nome",
+            "isrc": "BR1",
+            "total": 12,
+            "lista": [1, 2],
+        }
+
+    @LEITORES
     def test_chave_que_nao_termina_em_url_nao_e_tocada_mesmo_com_valor_estranho(self, ler):
         faixa = ler(pluginInfo={"urlBase": "javascript:x", "texto": "ftp://x"})
         assert faixa["pluginInfo"] == {"urlBase": "javascript:x", "texto": "ftp://x"}
@@ -203,6 +225,12 @@ FONTES = [
 
 
 class TestReidratacao:
+    @pytest.mark.parametrize("fonte", list(FONTES)[:2])
+    def test_faixa_completa_com_uri_invalida_constroi_e_tem_uri_e_url_de_texto(self, fonte):
+        faixas = decodificar(bruto(queue=[faixa_info(0, sourceName=fonte, uri="javascript:alert(1)")]))["queue"]
+        (faixa,) = reidratar(faixas)
+        assert faixa.uri == "" and faixa.url == "" and type(faixa.title) is str
+
     @pytest.mark.parametrize("fonte", list(FONTES)[:2])
     def test_faixa_parcial_com_uri_invalida_constroi_e_cai_na_busca(self, fonte):
         info = faixa_info(0, sourceName=fonte, uri="javascript:alert(1)", is_partial=True, id=None)

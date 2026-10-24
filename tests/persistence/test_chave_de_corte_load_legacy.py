@@ -31,8 +31,10 @@ from tests.support.chave_de_corte import (
 from tests.support.leitor_legado import SEGREDO
 from tests.support.formato_fila_salva import caminho_da_fila, montar_leitura
 from tests.persistence.test_formato_skin import chamar_change_skin, chamar_create_player, skin_realista, texto_legado
+from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 from tests.support.raiz import RAIZ
 
+editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/test_formato_skin.py
 PACOTE = RAIZ / "empiremuse"
 
 # (arquivo ou pasta relativo a empiremuse/, função qualificada, kind); pasta = a classe pode estar em qualquer .py dela
@@ -125,6 +127,11 @@ class TestFilaRecusada:
         assert registrou(caplog, SERVIDOR, codigo), avisos(caplog)
         assert log_sem_o_conteudo(caplog, capsys)
 
+    @pytest.mark.asyncio
+    async def test_fila_ausente_continua_com_a_mensagem_de_excluida(self, tmp_path, monkeypatch):
+        with pytest.raises(GenericError, match="já foi excluída"):
+            await montar_leitura(monkeypatch, None).rodar()
+
 
 # ============================================================================ recusa tratada: skin (4 pontos)
 
@@ -170,6 +177,18 @@ class TestSkinRecusada:
         assert "incompatível" in " ".join(jogador.mensagens)
         assert dados["custom_skins"]["Ruim"] == texto and dados["custom_skins_static"]["FixaRuim"] == texto
         assert armadilhas.intacto() and registrou(caplog, SERVIDOR, codigo) and log_sem_o_conteudo(caplog, capsys)
+
+    @pytest.mark.asyncio
+    async def test_load_skin_da_skin_ruim_do_song_request_tambem(self, armadilhas, editor_sem_tela, nome):
+        texto, _ = texto_hostil(armadilhas, nome)
+        menu, _, _ = editor_sem_tela(dados_com_skin_ruim(texto))
+        enviados = []
+
+        async def enviar(conteudo=None, **kwargs):
+            enviados.append(str(conteudo))
+
+        await menu.load_skin(type("I", (), {"values": ["> css: FixaRuim"], "send": staticmethod(enviar)})())
+        assert menu.mode == "select" and "incompatível" in " ".join(enviados)
 
 
 class TestSkinGiganteEOutrosFormatos:

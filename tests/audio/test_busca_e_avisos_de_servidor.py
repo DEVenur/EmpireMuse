@@ -102,9 +102,32 @@ def failing_search(exceptions):
 class TestSearchFailureMessage:
     LEAK = "FriendlyException('segredo-interno-123', cause=java.io.IOException: /srv/lavalink)"
 
+    def test_message_is_portuguese_and_generic(self):
+        text = failing_search({self.LEAK}).text.lower()
+        assert "busca" in text and ("erro" in text or "não foi possível" in text or "falha" in text)
+
     def test_region_message_is_kept(self):
         error = failing_search({"x: This track is not readable. Available countries: BR"})
         assert "região" in error.text and "Available countries" not in error.text and "BR" not in error.text
+
+    def test_without_exceptions_the_message_is_still_no_results(self):
+        assert "Não houve resultados" in failing_search(set()).text
+
+    def test_lastfm_mix_failure_has_no_repr(self):
+        from empiremuse.cogs.music import Music
+        from empiremuse.utils.music.errors import GenericError
+
+        class Boom:
+            async def get_similar_tracks(self, **kw):
+                raise RuntimeError("detalhe-secreto-lastfm")
+
+            async def get_artist_toptracks(self, artist):
+                raise RuntimeError("detalhe-secreto-lastfm")
+
+        cog = SimpleNamespace(bot=SimpleNamespace(pool=SimpleNamespace(last_fm=Boom())))
+        with pytest.raises(GenericError) as info:
+            run(Music.get_tracks(cog, "artista - faixa", ctx=None, user=SimpleNamespace(id=1), mix=True))
+        assert "detalhe-secreto-lastfm" not in info.value.text and "RuntimeError" not in info.value.text
 
 
 # ============================================================================ (5) misc.py: aviso de novo servidor
@@ -161,6 +184,11 @@ def forbidden():
 class TestWelcomeMessagePermissions:
     def test_forbidden_does_not_raise(self):
         welcome(make_channel(perms(), send_error=forbidden()))
+
+    def test_channel_with_both_permissions_receives_the_embeds(self):
+        channel = make_channel(perms())
+        welcome(channel)
+        assert len(channel.sent) == 1 and channel.sent[0].get("embeds")
 
     @pytest.mark.parametrize("where", ["public_updates_channel", "rules_channel"])
     def test_fallback_channels_also_need_embed_links(self, where):

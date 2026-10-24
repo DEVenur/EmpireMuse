@@ -379,6 +379,22 @@ class TestKI15SpotifyCredenciaisInvalidas:
         assert cliente.token_refresh is False
 
     @pytest.mark.asyncio
+    async def test_chamadas_concorrentes_terminam_todas(self, spotify_fake):
+        cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
+
+        async def duas():
+            return await asyncio.gather(cliente.get_access_token(), cliente.get_access_token(), return_exceptions=True)
+
+        # a 2ª espera a 1ª num laço de sleep(1): damos folga de 3 s; presa de verdade não termina nunca
+        try:
+            resultados = await asyncio.wait_for(duas(), 4.0)
+        except asyncio.TimeoutError:
+            pytest.fail("KI-15: chamadas concorrentes de get_access_token ficaram presas")
+
+        assert any(isinstance(r, GenericError) for r in resultados), resultados
+        assert cliente.token_refresh is False
+
+    @pytest.mark.asyncio
     async def test_erro_sem_error_description_vira_generic_error_e_nao_keyerror(self, spotify_fake):
         cliente, _ = spotify_fake(status=400, corpo={"error": "invalid_client"})
 

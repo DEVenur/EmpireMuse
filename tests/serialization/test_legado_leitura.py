@@ -124,6 +124,10 @@ class TestTipoDoRaw:
     def valido(self):
         return pickle_de(dicionario((texto("a"), inteiro(1))))
 
+    def test_fila_so_aceita_bytes(self):
+        assert carregar(envelope(self.valido()), "queue") == {"a": 1}
+        recusado(medir(carregar, envelope(self.valido(), como_texto=True), "queue"), TYPE)
+
     def test_skin_so_aceita_texto(self):
         assert carregar(envelope(self.valido(), "skin"), "skin") == {"a": 1}
         recusado(medir(carregar, self.valido(), "skin"), TYPE)

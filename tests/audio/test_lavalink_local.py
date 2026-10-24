@@ -127,6 +127,16 @@ class TestKI24JavaHome:
             "KI-24: JAVA_HOME + 'bin/java' sem separador nunca é um caminho válido"
         )
 
+    def test_java_home_invalido_sem_instalacao_permitida_continua_dando_erro_claro(
+        self, runtime, monkeypatch, tmp_path
+    ):
+        """GUARDA: no modo offline, nenhum Java válido => erro claro, nunca download."""
+        monkeypatch.setenv("JAVA_HOME", str(tmp_path / "nao-existe"))
+        monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: None)
+
+        with pytest.raises(ll.LavalinkDownloadError, match="LAVALINK_JAVA_PATH"):
+            ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", allow_install=False)
+
     def test_o_java_do_path_continua_tendo_prioridade(self, runtime, monkeypatch, tmp_path):
         """GUARDA."""
         monkeypatch.setenv("JAVA_HOME", str(tmp_path / "jdk"))

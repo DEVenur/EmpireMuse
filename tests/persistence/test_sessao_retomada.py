@@ -20,7 +20,7 @@ from empiremuse.cogs import player_resume
 from tests.support.formatos_reais import CANAL_DE_TEXTO, CANAL_DE_VOZ, INSTANTE, MENSAGEM, SERVIDOR, cog_de_sessoes
 from tests.support.sessoes import codificar, session
 from tests.support.formato_sessao import gravar, jogador_completo
-from tests.support.sessao_retomada_sem_voice_state import JogadorRetomado, No
+from tests.persistence.test_sessao_retomada_sem_voice_state import JogadorRetomado, No
 from tests.support.raiz import RAIZ
 
 OUTRO_SERVIDOR = 1100000000000000555
@@ -221,6 +221,13 @@ class TestIdadeDaSessao:
         cog, _, criados = montar(canais={}, servidor_existe=False)
         await retomar(cog, dados)
         assert cog.apagados == [SERVIDOR] and criados == []
+
+    @pytest.mark.asyncio
+    async def test_servidor_inexistente_e_sessao_recente_fica_sem_retomar(self):
+        dados = session.decode_session(codificar(time=INSTANTE - timedelta(hours=47)))
+        cog, _, criados = montar(canais={}, servidor_existe=False)
+        await retomar(cog, dados)
+        assert cog.apagados == [] and criados == []
 
     @pytest.mark.asyncio
     async def test_canal_de_voz_inexistente_e_sessao_com_mais_de_48_horas_e_apagada(self):

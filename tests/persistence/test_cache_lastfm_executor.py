@@ -5,6 +5,7 @@ corrotinas, passa a usar ``scrobble_save_cache_async``, que tira a cópia dos it
 """
 
 import ast
+import logging
 import threading
 
 import pytest
@@ -34,6 +35,18 @@ class TestGravacaoForaDoLaco:
         lastfm.cache["k"] = {}
         await lastfm.scrobble_save_cache_async()
         assert threads and threads[0] != threading.get_ident()
+
+    @pytest.mark.asyncio
+    async def test_falha_de_disco_vira_aviso_e_nao_levanta(self, monkeypatch, caplog):
+        def negar(*args, **kwargs):
+            raise OSError("negado")
+
+        monkeypatch.setattr(lastfm_tools, "save_json_cache", negar)
+        lastfm = LastFM("chave", "segredo")
+        lastfm.cache["k"] = {}
+        with caplog.at_level(logging.WARNING):
+            await lastfm.scrobble_save_cache_async()
+        assert any("não gravado" in r.getMessage() for r in caplog.records)
 
 
 class TestCogUsaAVersaoAssincrona:

@@ -13,6 +13,7 @@ pytestmark = pytest.mark.regression
 
 SPOTIFY_TRACK = "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"
 SPOTIFY_SHORT = "https://spotify.link/AbC123xYz"
+YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
 def run(coro):
@@ -42,6 +43,18 @@ def search(nodes, query, node=None):
 
 @pytest.mark.parametrize("query", [SPOTIFY_TRACK, SPOTIFY_SHORT])
 class TestSpotifyUrlSkipsNodesWithoutSpotify:
+    def test_node_without_spotify_is_not_queried(self, query):
+        sem = make_node("sem", ["youtube"], players=0)
+        com = make_node("com", ["youtube", "spotify"], players=5)
+
+        tracks, node, exceptions = search([sem, com], query)
+
+        sem.get_tracks.assert_not_awaited()
+        com.get_tracks.assert_awaited_once()
+        assert tracks == ["faixa"]
+        assert node is com
+        assert exceptions == set()
+
     def test_requested_node_without_spotify_is_skipped_and_the_resolving_node_is_returned(self, query):
         pedido = make_node("pedido", ["youtube"])
         outro = make_node("outro", ["youtube", "spotify"], players=3)
@@ -52,3 +65,14 @@ class TestSpotifyUrlSkipsNodesWithoutSpotify:
         outro.get_tracks.assert_awaited_once()
         assert tracks == ["faixa"]
         assert node is outro
+
+
+class TestNonSpotifyQueryUsesAnyNode:
+    def test_youtube_url_is_resolved_by_node_without_spotify(self):
+        sem = make_node("sem", ["youtube"])
+
+        tracks, node, _ = search([sem], YOUTUBE_URL)
+
+        sem.get_tracks.assert_awaited_once()
+        assert tracks == ["faixa"]
+        assert node is sem

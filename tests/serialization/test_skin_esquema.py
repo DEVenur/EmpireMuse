@@ -92,6 +92,10 @@ class TestAceita:
         )
         assert valida(skin) == skin
 
+    @pytest.mark.parametrize("cor", ["", "f" * LIMITES.color_texto])
+    def test_cores_aceitas(self, cor):
+        assert valida(com_embed(color=cor)) == com_embed(color=cor)
+
     def test_campo_inline_booleano_fica(self):
         skin = com_embed(
             fields=[{"name": "n", "value": "v", "inline": True}, {"name": "m", "value": "w", "inline": False}]

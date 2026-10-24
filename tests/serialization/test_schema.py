@@ -22,13 +22,17 @@ import pytest
 
 from tests.support.serializacao_nucleo import (
     CONTROL,
+    KEY_NOT_TEXT,
     LENGTH,
     LOGGER,
+    NOT_FINITE,
     PATTERN,
     RANGE,
     SEGREDO,
+    SURROGATE,
     TYPE,
     UNKNOWN_FIELD,
+    aninhado,
     falha,
     schema,
     vazamentos,
@@ -48,6 +52,9 @@ class TestSchemaError:
     def test_a_mensagem_diz_o_codigo_e_o_caminho(self):
         texto = str(schema.SchemaError("queue[3].uri", "length"))
         assert "length" in texto and "queue[3].uri" in texto
+
+    def test_a_raiz_tem_caminho_vazio(self):
+        assert falha(validar, schema.Bool(), 1).path == ""
 
 
 # ============================================================================ Str
@@ -94,6 +101,10 @@ class TestInt:
 
 
 class TestFloat:
+    @pytest.mark.parametrize("valor", [float("nan"), float("-inf")], ids=["nan", "-inf"])
+    def test_nao_finito_e_recusado(self, valor):
+        assert falha(validar, schema.Float(), valor).code == NOT_FINITE
+
     @pytest.mark.parametrize("valor", [True, [1.5]], ids=repr)
     def test_bool_e_outros_tipos_sao_recusados(self, valor):
         assert falha(validar, schema.Float(), valor).code == TYPE
@@ -143,9 +154,18 @@ class TestDict:
     def test_so_dict_vale(self, valor):
         assert falha(validar, schema.Dict({}), valor).code == TYPE
 
+    @pytest.mark.parametrize("chave", [1, True], ids=lambda v: type(v).__name__)
+    def test_chave_que_nao_e_texto_e_recusada_em_qualquer_modo(self, chave):
+        for modo in ("drop", "keep", "error"):
+            assert falha(validar, schema.Dict({}, extra=modo), {chave: 1}).code == KEY_NOT_TEXT
+
     def test_extra_padrao_e_drop(self):
         entrada = {**sessao_valida(), "desconhecido": 1}
         assert "desconhecido" not in validar(esquema_de_sessao(), entrada)
+
+    def test_extra_invalido_e_recusado_na_construcao(self):
+        with pytest.raises(ValueError):
+            schema.Dict({}, extra="ignorar")
 
 
 class TestExtra:
@@ -155,6 +175,10 @@ class TestExtra:
         with caplog.at_level(logging.WARNING, logger=LOGGER):
             validar(esquema_de_sessao(), entrada)
         assert any("meta" in r.getMessage() for r in caplog.records)
+
+    def test_keep_recusa_nome_de_campo_desconhecido_com_surrogate(self):
+        entrada = {**sessao_valida(), "a\ud800": 1}
+        assert falha(validar, esquema_de_sessao(extra="keep"), entrada).code == SURROGATE
 
     def test_error_recusa_campo_desconhecido_sem_dizer_o_nome(self):
         entrada = {**sessao_valida(), SEGREDO: 1}
@@ -176,3 +200,37 @@ class TestOptional:
 
 
 # ============================================================================ nada do conteúdo vaza
+
+
+def cenarios_de_vazamento():
+    """``(descrição, função que recebe o módulo e levanta SchemaError com SEGREDO no dado)``."""
+    return {
+        "str-longa": lambda s: s.validate(s.Str(5), SEGREDO),
+        "str-padrao": lambda s: s.validate(s.Str(80, pattern=r"[0-9]+"), SEGREDO),
+        "str-controle": lambda s: s.validate(s.Str(80), SEGREDO + "\u202e"),
+        "str-surrogate": lambda s: s.validate(s.Str(80), SEGREDO + "\ud800"),
+        "str-tipo": lambda s: s.validate(s.Int(), SEGREDO),
+        "int-tipo": lambda s: s.validate(s.Int(0, 5), {SEGREDO: SEGREDO}),
+        "float-tipo": lambda s: s.validate(s.Float(), SEGREDO),
+        "lista-tipo": lambda s: s.validate(s.List(s.Int(), 5), SEGREDO),
+        "item-ruim": lambda s: s.validate(s.List(s.Int(), 5), [1, SEGREDO]),
+        "campo-ruim": lambda s: s.validate(s.Dict({"a": s.Int()}), {"a": SEGREDO}),
+        "campo-ausente": lambda s: s.validate(s.Dict({"a": s.Int()}), {SEGREDO: SEGREDO}),
+        "desconhecido-error": lambda s: s.validate(s.Dict({}, extra="error"), {SEGREDO: SEGREDO}),
+        "chave-nao-texto": lambda s: s.validate(s.Dict({}), {1: SEGREDO}),
+        "json-livre-fundo": lambda s: s.validate(s.Any_JSON(), aninhado(20, SEGREDO)),
+        "json-livre-tipo": lambda s: s.validate(s.Any_JSON(), {"a": [SEGREDO.encode()]}),
+        "json-livre-chave": lambda s: s.validate(s.Any_JSON(), {SEGREDO: {1: SEGREDO}}),
+        "json-livre-surrogate": lambda s: s.validate(s.Any_JSON(), {SEGREDO: SEGREDO + "\ud800"}),
+        "estrutura-fundo": lambda s: s.check_structure(aninhado(40, SEGREDO)),
+        "estrutura-tipo": lambda s: s.check_structure({"a": [SEGREDO.encode()]}),
+        "estrutura-chave": lambda s: s.check_structure({SEGREDO: {b"x": SEGREDO}}),
+        "estrutura-surrogate": lambda s: s.check_structure([SEGREDO + "\ud800"]),
+    }
+
+
+@pytest.mark.parametrize("nome", list(sorted(cenarios_de_vazamento()))[:2])
+def test_nenhum_erro_leva_o_conteudo_do_dado(nome):
+    erro = falha(cenarios_de_vazamento()[nome], schema)
+    assert vazamentos(erro) == [], f"{nome}: o dado apareceu em {vazamentos(erro)}"
+    assert SEGREDO not in repr(erro.__context__) and SEGREDO not in repr(erro.__cause__)

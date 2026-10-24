@@ -55,3 +55,14 @@ class TestInstalacaoNoWindows:
 
         assert (tmp_path / ".java" / PLATAFORMA / "bin" / "java.exe").read_bytes() == b"JAVA-NOVO"
         assert not (tmp_path / ".java" / PLATAFORMA / "resto.txt").exists()
+
+    def test_zip_sem_java_exe_falha_e_preserva_a_instalacao_anterior(self, tmp_path, zip_baixado):
+        gravar_jdk(tmp_path, PLATAFORMA, "java.exe", b"JAVA-ANTERIOR")
+        zip_baixado["arquivos"] = {"jdk-17/release": b"sem-java"}
+
+        with pytest.raises(ll.LavalinkDownloadError):
+            ll._install_jdk_windows(str(tmp_path), PLATAFORMA, "64bit")
+
+        assert (tmp_path / ".java" / PLATAFORMA / "bin" / "java.exe").read_bytes() == b"JAVA-ANTERIOR"
+        assert [p.name for p in (tmp_path / ".java").iterdir()] == [PLATAFORMA], "o staging não foi apagado"
+        assert not (tmp_path / "java.zip").exists()

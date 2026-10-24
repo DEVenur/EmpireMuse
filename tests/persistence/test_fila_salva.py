@@ -11,7 +11,10 @@
 import copy
 import importlib
 import json
+import logging
+import os
 import pickle
+import time
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,12 +98,21 @@ class TestCodificar:
         bruto = codificar()
         assert bruto[:1] == b"{" and b"\\u" not in bruto and b": " not in bruto
 
+    def test_data_sem_fuso_e_recusada(self):
+        assert falha(codificar, criada=datetime(2026, 1, 1)).path == "created_at"
+
     def test_faixa_com_playlist_e_id_vazio_e_campos_desconhecidos_passam(self):
         faixas = faixas_validas()
         faixas[0]["playlist"] = {"name": "Minha Playlist", "url": "https://exemplo.invalid/playlist/1"}
         faixas[1]["id"] = ""
         faixas[2]["campo_novo"] = {"a": [1, 2]}
         assert lendo(codificar(faixas))["tracks"] == faixas
+
+    def test_letra_grande_demais_e_descartada_e_a_fila_ainda_e_salva(self):
+        faixas = faixas_validas()
+        faixas[0]["extra"]["lyrics"] = {"lines": [{"text": "x"}] * 6000}
+        lidas = lendo(codificar(faixas))["tracks"]
+        assert "lyrics" not in lidas[0]["extra"] and lidas[0]["title"] == faixas[0]["title"]
 
     def test_o_erro_leva_o_caminho_e_nao_o_valor(self):
         faixas = faixas_validas()
@@ -133,6 +145,16 @@ class TestDecodificar:
             erro = falha(lendo, json.dumps(bruto).encode())
             assert erro.code == MISSING and erro.path == f"tracks[0].{campo}"
 
+    def test_requester_pode_ser_inteiro_ou_texto_mas_nao_bool(self):
+        for bom in (DONO, "usuário"):
+            bruto = json.loads(codificar())
+            bruto["tracks"][0]["extra"]["requester"] = bom
+            assert lendo(json.dumps(bruto).encode())["tracks"][0]["extra"]["requester"] == bom
+        for ruim in (True, 1.5, None, [1], -4):
+            bruto = json.loads(codificar())
+            bruto["tracks"][0]["extra"]["requester"] = ruim
+            assert falha(lendo, json.dumps(bruto).encode()).path.startswith("tracks[0].extra")
+
     def test_nada_do_conteudo_vaza_no_erro(self):
         bruto = json.loads(codificar())
         bruto["tracks"][0]["title"] = SEGREDO + "\ud800"
@@ -149,6 +171,10 @@ class TestLegado:
         convertido = queue.normalize_legacy_queue(self.legado(created_at=datetime(2026, 1, 1)))
         assert convertido["created_at"] == datetime(2026, 1, 1, tzinfo=UTC)
 
+    def test_legado_sem_faixas_ou_com_campo_ruim_e_recusado(self):
+        assert falha(queue.normalize_legacy_queue, {"created_at": INSTANTE, "guild_id": 1}).code == MISSING
+        assert falha(queue.normalize_legacy_queue, self.legado(guild_id="x")).code == TYPE
+
 
 # ============================================================================ gravação atômica e privada
 
@@ -161,6 +187,10 @@ class TestArquivosPrivados:
         assert alvo.read_bytes() == b"novo"
 
 
+def negar(*args, **kwargs):
+    raise OSError("negado")
+
+
 # ============================================================================ Music.save_queue
 
 
@@ -170,6 +200,25 @@ class TestSalvar:
         with pytest.raises(GenericError, match="mínimo 3"):
             await salvar(tres_faixas()[1:2], atual=tres_faixas()[0])
         assert not caminho_json(tmp_path).exists()
+
+    @pytest.mark.asyncio
+    async def test_fila_que_o_esquema_recusa_vira_erro_claro_e_nao_grava(self, tmp_path, caplog):
+        faixas = tres_faixas()
+        faixas[1].info["title"] = SEGREDO.encode()
+        with caplog.at_level(logging.DEBUG), pytest.raises(GenericError, match="(?i)não foi possível") as erro:
+            await salvar(faixas[1:], atual=faixas[0])
+        assert SEGREDO not in erro.value.text and not caminho_json(tmp_path).exists()
+        assert all(SEGREDO not in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_falha_ao_gravar_deixa_o_json_anterior_e_diz_o_erro(self, tmp_path, monkeypatch):
+        faixas = tres_faixas()
+        await salvar(faixas[1:], atual=faixas[0])
+        antes = caminho_json(tmp_path).read_bytes()
+        monkeypatch.setattr(files.os, "replace", negar)
+        with pytest.raises(GenericError, match="(?i)não foi possível"):
+            await salvar(faixas[1:], atual=faixas[0])
+        assert caminho_json(tmp_path).read_bytes() == antes
 
 
 # ============================================================================ Music.play
@@ -214,6 +263,13 @@ class TestMigracaoNoPrimeiroAcesso:
             await montar_leitura(monkeypatch, None).rodar()
         assert pkl.is_file() and not caminho_json(tmp_path).exists()
 
+    @pytest.mark.asyncio
+    async def test_falha_ao_gravar_o_json_ainda_entrega_a_fila_e_mantem_o_pkl(self, tmp_path, monkeypatch):
+        pkl = escrever_pkl(tmp_path)
+        monkeypatch.setattr(files.os, "replace", negar)
+        lidas = await montar_leitura(monkeypatch, None)()
+        assert len(lidas) == 3 and pkl.is_file() and not caminho_json(tmp_path).exists()
+
 
 # ============================================================================ migração na inicialização
 
@@ -239,6 +295,17 @@ class TestMigracaoNaInicializacao:
         assert saved_queue.migrate_saved_queues() == 0
         assert len(list(pasta.iterdir())) == len(nomes)
         assert not (tmp_path / "local_database" / "saved_queues_json").exists()
+
+    def test_json_mais_novo_vence_e_o_pkl_velho_e_apagado(self, tmp_path):
+        pkl = escrever_pkl(tmp_path)
+        alvo = caminho_json(tmp_path)
+        alvo.parent.mkdir(parents=True)
+        alvo.write_bytes(codificar(faixas_validas(4)))
+        agora = time.time()
+        os.utime(pkl, (agora - 100, agora - 100))
+        os.utime(alvo, (agora, agora))
+        saved_queue.migrate_saved_queues()
+        assert not pkl.exists() and len(lendo(alvo.read_bytes())["tracks"]) == 4
 
 
 # ============================================================================ onde a existência da fila é testada

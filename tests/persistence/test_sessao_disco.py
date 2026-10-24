@@ -90,6 +90,10 @@ class TestGravacao:
 
 class TestLeitura:
     @pytest.mark.asyncio
+    async def test_sem_pasta_nao_ha_sessoes(self):
+        assert await cog_de_sessoes().get_player_sessions_local() == []
+
+    @pytest.mark.asyncio
     async def test_nao_le_nada_que_nao_seja_json_de_sessao(self, tmp_path):
         bom = escrever_json(tmp_path, SERVIDOR)
         for nome in (

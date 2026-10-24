@@ -12,6 +12,7 @@ traria a coleção inteira para a memória), em lotes de 10 com ``asyncio.sleep(
 import asyncio
 import base64
 import logging
+import time
 import zlib
 
 import disnake
@@ -21,6 +22,7 @@ from tests.support.formatos_reais import BOT_ID, INSTANTE, SERVIDOR, cog_de_sess
 from tests.support.chave_de_corte import cargas_hostis, criar_armadilhas, espionar_load_legacy
 from tests.support.leitor_legado import SEGREDO
 from tests.support.sessoes import (
+    HORAS,
     MongoDeSessoes,
     envelope_antigo_do_mongo,
     envelope_do_mongo,
@@ -150,6 +152,15 @@ class TestRecusadosFicam:
         raise AssertionError(nome)
 
     NOMES = [*HOSTIS, "protocolo-antigo", "sem-data", "data-numero", "base64-invalido", "id-diferente", "time-9999"]
+
+    @pytest.mark.asyncio
+    async def test_com_mais_de_48_horas_de_failed_at_o_documento_e_apagado_com_aviso_de_info(self, caplog):
+        cog, mongo = cog_com_mongo()
+        await legado(mongo, protocolo=3, failed_at=time.time() - 49 * HORAS)
+        with caplog.at_level(logging.DEBUG):
+            await cog.migrate_legacy_sessions()
+        assert mongo.ids(ANTIGA) == set() and mongo.ids(NOVA) == set()
+        assert [r for r in caplog.records if r.levelno == logging.INFO and str(SERVIDOR) in r.getMessage()]
 
     @pytest.mark.asyncio
     async def test_failed_at_que_nao_e_numero_conta_como_ausente(self):

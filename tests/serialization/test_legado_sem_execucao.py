@@ -336,6 +336,11 @@ class TestAllowlistPorKind:
         recusado(medir(carregar, comprimido(dados), "queue"), GLOBAL)
         recusado(medir(carregar, em_base64(dados), "skin"), {OPCODE, GLOBAL})
 
+    def test_kind_desconhecido_e_erro_de_uso(self):
+        for kind in ("cache", "SESSION", "", None, 1):
+            with pytest.raises(ValueError):
+                carregar(comprimido(pickle_de(pickle.EMPTY_DICT)), kind)
+
     @pytest.mark.parametrize("kind", list(KINDS)[:2])
     def test_a_raiz_tem_de_ser_dicionario(self, kind):
         for raiz in (lista(inteiro(1)), pickle.NONE, inteiro(5), texto("x"), tupla(inteiro(1)), conjunto_vazio()):
@@ -362,6 +367,22 @@ class TestClassePermitidaComArgumentosRuins:
     )
     def test_argumento_ruim_vira_corrupt(self, dados):
         recusado(medir(carregar, envelope(pickle_de(dados))), CORRUPT)
+
+    def test_corrupcao_do_unpickler_nunca_escapa_crua(self):
+        casos = [
+            pickle_de(pickle.APPEND),
+            pickle_de(pickle.EMPTY_DICT, pickle.NONE, pickle.NONE, pickle.NONE, pickle.SETITEM, pickle.SETITEM),
+            pickle_de(pickle.MARK, pickle.SETITEMS),
+            pickle_de(pickle.EMPTY_LIST, pickle.APPENDS),
+            pickle_de(pickle.NONE, pickle.TUPLE2),
+            pickle_de(pickle.NONE, pickle.NONE, pickle.REDUCE),
+            pickle_de(pickle.SHORT_BINUNICODE + b"\x02\xff\xfe"),
+            pickle_de(pickle.BINUNICODE + struct.pack("<I", 2) + b"\xc3("),
+            pickle_de(pickle.EMPTY_DICT, pickle.EMPTY_LIST, pickle.NONE, pickle.SETITEM),  # chave não hashável
+            pickle_de(pickle.EMPTY_SET, pickle.MARK, pickle.EMPTY_LIST, pickle.ADDITEMS),  # item não hashável
+        ]
+        for dados in casos:
+            recusado(medir(carregar, envelope(dados)), {CORRUPT, OPCODE})
 
     def test_zlib_e_pickle_do_mesmo_fluxo_nao_se_confundem(self):
         recusado(medir(carregar, zlib.compress(zlib.compress(pickle_de(pickle.EMPTY_DICT)))), {PROTOCOL, CORRUPT})

@@ -10,9 +10,17 @@ import importlib
 import pkgutil
 from unittest.mock import MagicMock
 
+import disnake
 import pytest
 
 import empiremuse.utils.music.skins.normal_player as normal_pkg
+import empiremuse.utils.music.skins.static_player as static_pkg
+
+EMBED_TOTAL_LIMIT = 6000
+EMBED_DESCRIPTION_LIMIT = 4096
+MAX_EMBEDS = 10
+MAX_CONTENT = 2000
+MAX_SELECT_OPTIONS = 25
 
 
 def skin_classes(package):
@@ -26,6 +34,7 @@ def skin_classes(package):
 
 
 NORMAL = skin_classes(normal_pkg)
+STATIC = skin_classes(static_pkg)
 
 
 def make_track(**overrides):
@@ -53,6 +62,22 @@ def make_track(**overrides):
     for key, value in values.items():
         setattr(track, key, value)
     return track
+
+
+STATES = {
+    "tocando": {},
+    "pausado": {"paused": True},
+    "livestream": {"current": make_track(is_stream=True, duration=0)},
+    "recomendada": {"current": make_track(autoplay=True)},
+    "sem_playlist": {"current": make_track(playlist_name=None, album_name=None)},
+    "fila_vazia": {"queue": [], "queue_autoplay": []},
+    "so_fila_automatica": {"queue": [], "queue_autoplay": [make_track(title=f"Auto {n}") for n in range(5)]},
+    "fila_longa": {"queue": [make_track(title=f"Fila {n}", duration=0) for n in range(30)]},
+    "sem_dica_nem_log": {"current_hint": None, "command_log": ""},
+    "mini_fila_desligada": {"mini_queue_enabled": False},
+    "modo_restrito_24_7": {"restrict_mode": True, "keep_connected": True},
+    "titulo_enorme": {"current": make_track(title="T" * 400, author="A" * 300)},
+}
 
 
 def make_player(**overrides):
@@ -85,8 +110,55 @@ def make_player(**overrides):
     return player
 
 
+def custom_ids(components):
+    ids = []
+    for component in components:
+        rows = component if isinstance(component, (list, tuple)) else [component]
+        for item in rows:
+            if getattr(item, "custom_id", None):
+                ids.append(item.custom_id)
+    return ids
+
+
+def assert_valid_message(data):
+    assert isinstance(data, dict) and "embeds" in data
+    embeds = data["embeds"]
+    # `minimalist` e `embed_link` entregam texto/link em `content` e deixam os embeds vazios
+    assert embeds or data.get("content"), "a skin não devolveu embed nem conteúdo"
+    assert len(embeds) <= MAX_EMBEDS and all(isinstance(e, disnake.Embed) for e in embeds)
+    assert len(data.get("content") or "") <= MAX_CONTENT
+    for embed in embeds:
+        assert len(embed.description or "") <= EMBED_DESCRIPTION_LIMIT
+        assert len(embed) <= EMBED_TOTAL_LIMIT
+    assert sum(len(e) for e in embeds) <= EMBED_TOTAL_LIMIT
+
+    components = data.get("components")
+    if components:
+        ids = custom_ids(components)
+        assert len(ids) == len(set(ids)), f"custom_id repetido: {ids}"
+        assert all(i.startswith("musicplayer_") or i == "bot_invite" for i in ids if i), ids
+        for component in components:
+            for item in component if isinstance(component, (list, tuple)) else [component]:
+                if isinstance(item, disnake.ui.StringSelect):
+                    assert 0 < len(item.options) <= MAX_SELECT_OPTIONS
+
+
+@pytest.mark.parametrize("state", STATES.values(), ids=STATES.keys())
+@pytest.mark.parametrize("skin_cls", NORMAL + STATIC)
+def test_every_skin_renders_every_player_state(skin_cls, state):
+    data = skin_cls().load(make_player(**state))
+    assert_valid_message(data)
+
+
 @pytest.mark.parametrize("skin_cls", NORMAL)
 def test_normal_skins_turn_off_static_mode(skin_cls):
     player = make_player(static=True)
     skin_cls().setup_features(player)
     assert player.static is False
+
+
+@pytest.mark.parametrize("skin_cls", STATIC)
+def test_static_skins_turn_on_static_mode(skin_cls):
+    player = make_player(static=False)
+    skin_cls().setup_features(player)
+    assert player.static is True

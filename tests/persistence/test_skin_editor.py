@@ -24,6 +24,7 @@ from tests.persistence.test_formato_skin import (
     skin_realista,
     texto_legado,
 )
+from tests.persistence.test_formato_skin import editor_sem_tela as _base_do_editor  # noqa: F401  (fixture)
 
 
 @pytest.fixture
@@ -129,6 +130,24 @@ class TestNomeEQuantidade:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "nome",
+        [
+            "",
+            "a\ud800b",
+        ],
+        ids=[
+            "vazio",
+            "surrogate",
+        ],
+    )
+    async def test_nome_invalido_nao_grava_nada(self, editor_sem_tela, nome):
+        menu, bot, _ = editor_sem_tela(dados_globais(normais={"Antiga": skin_realista()}))
+        menu.message_data = skin_realista()
+        interacao = await salvar(menu, nome)
+        assert bot.escritas == [] and mensagens_ao_dono(interacao) and not salvo_com_sucesso(interacao)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "nome",
         ["a" * LIMITES.nome, "  com espaços nas pontas  "],
         ids=["no-limite", "espacos-nas-pontas"],
     )
@@ -147,6 +166,13 @@ class TestNomeEQuantidade:
                 }
             }
         )
+
+    @pytest.mark.asyncio
+    async def test_a_vigesima_sexta_skin_do_modo_e_recusada(self, editor_sem_tela):
+        menu, bot, _ = editor_sem_tela(self.cheio())
+        menu.message_data = skin_realista()
+        interacao = await salvar(menu, "Nova")
+        assert bot.escritas == [] and mensagens_ao_dono(interacao) and not salvo_com_sucesso(interacao)
 
     @pytest.mark.asyncio
     async def test_sobrescrever_no_modo_cheio_e_permitido(self, editor_sem_tela):
@@ -213,3 +239,82 @@ class TestDowngradeSeguro:
 
 
 # ============================================================================ skins montadas pelo próprio editor
+
+
+PASSOS_COMPLETOS = [
+    (
+        "skin_editor_add_embed",
+        dict(
+            skin_embed_title="Título 🎵",
+            skin_embed_description="Descrição\nlinha 2",
+            image_url="https://exemplo.invalid/i.png",
+            thumbnail_url="https://exemplo.invalid/t.png",
+            skin_embed_color="#00ff00",
+        ),
+    ),
+    ("skin_editor_add_field", dict(add_field_name="Campo", add_field_value="Valor")),
+    ("skin_editor_edit_field", dict(edit_field_name="Campo 2", edit_field_value=ZWSP)),
+    (
+        "skin_editor_set_authorfooter",
+        dict(
+            footer_text="Rodapé",
+            footer_icon_url="https://exemplo.invalid/r.png",
+            set_author_name="Autor",
+            set_author_url="https://exemplo.invalid/a",
+            set_author_icon="https://exemplo.invalid/ai.png",
+        ),
+    ),
+    ("skin_editor_setup_queue", dict(queue_format="{track.number}) {track.title}", queue_max_entries="10")),
+    ("skin_editor_message_content", dict(message_content=f"Olá {FAMILIA} {{requester.mention}}")),
+]
+PASSOS_VAZIOS = [
+    (
+        "skin_editor_add_embed",
+        dict(skin_embed_title="", skin_embed_description="", image_url="", thumbnail_url="", skin_embed_color=""),
+    ),
+    (
+        "skin_editor_set_authorfooter",
+        dict(footer_text="", footer_icon_url="", set_author_name="", set_author_url="", set_author_icon=""),
+    ),
+    ("skin_editor_message_content", dict(message_content="")),
+]
+PASSOS_COM_EDICAO = [
+    PASSOS_COMPLETOS[0],
+    (
+        "skin_editor_edit_embed",
+        dict(
+            skin_embed_title="Outro",
+            skin_embed_description="",
+            image_url="",
+            thumbnail_url="",
+            skin_embed_color="ff0000",
+        ),
+    ),
+]
+
+
+class TestSkinMontadaPeloEditorPassaNoEsquema:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "passos", [PASSOS_COMPLETOS, PASSOS_VAZIOS, PASSOS_COM_EDICAO], ids=["completa", "tudo-vazio", "edita-e-limpa"]
+    )
+    async def test_o_que_o_editor_monta_e_valido_e_e_salvo_sem_perder_campo(self, editor_sem_tela, passos):
+        menu, bot, _ = editor_sem_tela(dados_globais())
+        await menu.new_skin(InteracaoDoEditor())
+        for custom_id, textos in passos:
+            await passo(menu, custom_id, **textos)
+        montada = copy.deepcopy(menu.message_data)
+        limpa = valida(montada)  # nenhuma exceção: o editor nunca monta o que o esquema recusa
+        for chave, valor in limpa.items():
+            assert valor == _sem_o_type(montada)[chave]
+        assert set(_sem_o_type(montada)) == set(limpa)
+        assert salvo_com_sucesso(await salvar(menu))
+        assert bot.banco["custom_skins"]["Minha"] == esperada(montada)
+
+
+def _sem_o_type(skin: dict) -> dict:
+    """A skin sem o ``type: rich`` que ``Embed.to_dict()`` põe (o esquema o descarta)."""
+    saida = copy.deepcopy(skin)
+    for embed in saida.get("embeds", []):
+        embed.pop("type", None)
+    return saida
