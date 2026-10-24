@@ -33,8 +33,8 @@ APT=tools
 - **`AUTORESTART=true`** *(Opcional / Platinum+)*: O reinício automático supervisionado pela Discloud está disponível exclusivamente a partir do plano **Platinum**. No plano Gold ou inferiores, este parâmetro deve permanecer comentado ou omitido no arquivo de configuração para evitar recusa no upload.
 - **`VERSION=latest`**: Utiliza a imagem mais recente disponibilizada pela Discloud.
   > [!NOTE]
-  > A Discloud executa atualmente **Python 3.15** sob a opção `VERSION=latest` (a versão 3.13 não é oferecida individualmente na plataforma, que disponibiliza apenas 3.11, versões legadas ou `latest`). A suíte e os módulos do EmpireMuse foram validados e são compatíveis com esse ambiente.
-- **`APT=tools`**: Instala ferramentas essenciais do sistema operacional (como `git`), requeridas pelo `pip` para clonar e instalar dependências git em `requirements-git.txt` (`disnake` e `jishaku`).
+  > No teste realizado em **24 de outubro de 2026**, a Discloud executou **Python 3.15** sob a opção `VERSION=latest` (a versão 3.13 não é oferecida individualmente na plataforma, que disponibiliza apenas 3.11, versões legadas ou `latest`). Como `latest` seleciona a versão mais recente disponibilizada pela plataforma, recomenda-se revalidar o runtime nos logs da aplicação a cada deploy. A suíte e os módulos do EmpireMuse foram validados e são compatíveis com esse ambiente.
+- **`APT=tools`**: Instala ferramentas essenciais do sistema operacional (como `git`), requeridas pelo `pip` para clonar e instalar dependências git declaradas em `requirements.txt` (`disnake` e `jishaku`).
 
 ---
 
@@ -59,7 +59,7 @@ Caso utilize o envio manual por arquivo `.zip` ou através da ferramenta de linh
      ```
    - **Exclua o arquivo `.zip` local imediatamente**: Logo após o envio bem-sucedido para a Discloud, delete o arquivo compactado da sua máquina para evitar vazamento de credenciais locais.
 3. O arquivo [`.discloudignore`](../../.discloudignore) já vem configurado para **bloquear** compulsoriamente o envio de:
-   - Ativos visuais estáticos (`assets/`, imagens e previews desnecessários em execução);
+   - Ativos visuais estáticos pesados (`assets/*`, como skins e tutoriais, preservando `assets/brand/` para rotas de marca);
    - Arquivos auxiliares de ambiente (`.env.*`, como `.env.mongo` e backups);
    - Segredos e chaves locais (`config.json`, `*.key`, `*.pem`, `.panel-cookie-secret`, cookies do YouTube);
    - Bancos de dados locais (`local_database/`, `.local_dbs/`) e caches temporários (`.logs/`, `__pycache__/`, `.ytdl_cache/`, etc.).
