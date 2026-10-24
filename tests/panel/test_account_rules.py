@@ -22,6 +22,7 @@ class TestIntegrationsRules:
         deezer = ModalBot()
         await adicionar_integracao(deezer, url="https://www.deezer.com/br/profile/123456")
         assert deezer.salvos_usuario[-1]["integration_links"]["【DZ】: Ana"] == {
+            "url": "https://www.deezer.com/br/profile/123456",
             "avatar": f"{URL_BASE}/ana.png",
         }
         spotify = ModalBot()
