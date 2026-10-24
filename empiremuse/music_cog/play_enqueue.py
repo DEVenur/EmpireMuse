@@ -4,7 +4,7 @@
 import asyncio
 from io import BytesIO
 from random import shuffle
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import aiohttp
 import disnake
@@ -33,11 +33,14 @@ from empiremuse.utils.others import (
     update_inter,
 )
 
+if TYPE_CHECKING:
+    from empiremuse.music_cog.play_state import PlayState
+
 # O corpo da classe usa estes nomes, então eles precisam existir neste módulo.
 
 
 class PlayEnqueueMixin:
-    async def _play_search_tracks(self, req):
+    async def _play_search_tracks(self, req: "PlayState") -> None:
         """Busca as faixas, resolve o bot do player e prepara o embed da resposta."""
         bot = req.bot
         ephemeral = req.ephemeral
@@ -112,7 +115,7 @@ class PlayEnqueueMixin:
         req.tracks = tracks
         req.warn_message = warn_message
 
-    async def _play_select_tracks(self, req):
+    async def _play_select_tracks(self, req: "PlayState") -> bool:
         """Aplica a seleção manual de faixas ou fica com o primeiro resultado."""
         attachment = req.attachment
         embed = req.embed
@@ -246,7 +249,7 @@ class PlayEnqueueMixin:
         req.tracks = tracks
         return False
 
-    async def _play_ensure_player(self, req):
+    async def _play_ensure_player(self, req: "PlayState") -> bool:
         """Garante o bot, as permissões e o player do canal de voz."""
         author = req.author
         bot = req.bot
@@ -303,7 +306,7 @@ class PlayEnqueueMixin:
         req.voice_channel = voice_channel
         return False
 
-    def _play_enqueue_track(self, req):
+    def _play_enqueue_track(self, req: "PlayState") -> None:
         """Adiciona a faixa única à fila e monta o embed."""
         embed = req.embed
         force_play = req.force_play
@@ -350,7 +353,7 @@ class PlayEnqueueMixin:
         req.reg_query = reg_query
         req.track_url = track_url
 
-    def _play_enqueue_tracks(self, req):
+    def _play_enqueue_tracks(self, req: "PlayState") -> None:
         """Adiciona a lista de faixas (busca ou fila salva) e monta o embed."""
         embed = req.embed
         embed_description = req.embed_description
@@ -436,7 +439,7 @@ class PlayEnqueueMixin:
         req.pos_txt = pos_txt
         req.query = query
 
-    def _play_enqueue_playlist(self, req):
+    def _play_enqueue_playlist(self, req: "PlayState") -> None:
         """Insere as faixas da playlist na fila."""
         options = req.options
         player = req.player
@@ -462,7 +465,7 @@ class PlayEnqueueMixin:
 
         req.pos_txt = pos_txt
 
-    async def _play_playlist_artwork(self, req):
+    async def _play_playlist_artwork(self, req: "PlayState") -> None:
         """Obtém a arte da playlist do YouTube."""
         bot = req.bot
         image_file = req.image_file
@@ -524,7 +527,7 @@ class PlayEnqueueMixin:
 
         req.image_file = image_file
 
-    def _play_playlist_embed(self, req):
+    def _play_playlist_embed(self, req: "PlayState") -> None:
         """Monta o embed e o texto de log da playlist."""
         embed = req.embed
         image_file = req.image_file
@@ -569,7 +572,7 @@ class PlayEnqueueMixin:
         req.log_text = log_text
         req.reg_query = reg_query
 
-    async def _play_reply(self, req):
+    async def _play_reply(self, req: "PlayState") -> None:
         """Responde ao usuário com o embed e os botões."""
         bot = req.bot
         embed = req.embed
@@ -658,7 +661,7 @@ class PlayEnqueueMixin:
                 kw_embed["file"] = image_file
             await func(embed=embed, **kw_embed)
 
-    async def _play_connect_and_process(self, req):
+    async def _play_connect_and_process(self, req: "PlayState") -> None:
         """Conecta ao canal de voz, se preciso, e inicia o processamento da fila."""
         bot = req.bot
         emoji = req.emoji

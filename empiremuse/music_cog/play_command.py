@@ -235,7 +235,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
 
         return await google_search(self.bot, query, max_entries=20) or favs[:20]
 
-    async def _play_prepare(self, req):
+    async def _play_prepare(self, req: "PlayState") -> None:
         """Resolve bot, servidor e autor e adia a resposta da interação."""
         inter = req.inter
         mix = req.mix
@@ -274,7 +274,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
         req.msg = msg
         req.original_bot = original_bot
 
-    async def _play_select_bot(self, req):
+    async def _play_select_bot(self, req: "PlayState") -> bool:
         """Escolhe o bot livre que atenderá o pedido quando o bot atual não está na call do autor."""
         author = req.author
         bot = req.bot
@@ -387,7 +387,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
         req.msg = msg
         return False
 
-    async def _play_check_channel(self, req):
+    async def _play_check_channel(self, req: "PlayState") -> None:
         """Valida canal de texto, permissões e lotação do canal de voz."""
         author = req.author
         bot = req.bot
@@ -408,7 +408,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
 
         req.channel = channel
 
-    async def _play_init_request(self, req):
+    async def _play_init_request(self, req: "PlayState") -> None:
         """Normaliza a busca e resolve player, nó e dados do servidor."""
         author = req.author
         bot = req.bot
@@ -491,7 +491,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
         req.voice_channel = voice_channel
         req.warn_message = warn_message
 
-    async def _play_user_context(self, req):
+    async def _play_user_context(self, req: "PlayState") -> None:
         """Carrega os dados do usuário e prepara os links dos comandos."""
         attachment = req.attachment
         ephemeral = req.ephemeral

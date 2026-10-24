@@ -1,5 +1,12 @@
 """Estado compartilhado pelas etapas do comando `/play`."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import disnake
+
+    from empiremuse.utils.others import CustomContext
+
 
 class PlayState:
     """Variáveis que passam de uma etapa do `/play` para outra (antes, locais de `Music.play`)."""
@@ -59,8 +66,18 @@ class PlayState:
     )
 
     def __init__(
-        self, *, inter, query, position, force_play, mix, manual_selection, options, server, manual_bot_choice
-    ):
+        self,
+        *,
+        inter: "disnake.ApplicationCommandInteraction | CustomContext",
+        query: str,
+        position: int,
+        force_play: str,
+        mix: "str | bool",
+        manual_selection: bool,
+        options: "str | bool",
+        server: "str | None",
+        manual_bot_choice: str,
+    ) -> None:
         self.inter = inter
         self.query = query
         self.position = position

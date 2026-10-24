@@ -4,7 +4,7 @@
 import datetime
 import pprint
 import traceback
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse, parse_qs
 
 import disnake
@@ -38,9 +38,12 @@ from empiremuse.music_cog.shared import (
     is_discord_attachment_url,
 )
 
+if TYPE_CHECKING:
+    from empiremuse.music_cog.play_state import PlayState
+
 
 class PlayResolveMixin:
-    async def _play_resolve_prefix(self, req):
+    async def _play_resolve_prefix(self, req: "PlayState") -> None:
         """Traduz os prefixos de seleção (pin, recente, favorito e integração) em links."""
         bot = req.bot
         guild_data = req.guild_data
@@ -102,7 +105,7 @@ class PlayResolveMixin:
         req.tracks = tracks
         req.user_data = user_data
 
-    async def _play_profile_playlists(self, req):
+    async def _play_profile_playlists(self, req: "PlayState") -> None:
         """Busca as playlists públicas de perfis do Spotify, Deezer, YouTube e SoundCloud."""
         bot = req.bot
         info = req.info
@@ -200,7 +203,7 @@ class PlayResolveMixin:
         req.sc_match = sc_match
         req.selected_title = selected_title
 
-    async def _play_profile_select(self, req):
+    async def _play_profile_select(self, req: "PlayState") -> bool:
         """Pede a escolha de uma das playlists do perfil."""
         embed = req.embed
         emoji = req.emoji
@@ -325,7 +328,7 @@ class PlayResolveMixin:
         req.source = source
         return False
 
-    async def _play_url_query(self, req):
+    async def _play_url_query(self, req: "PlayState") -> bool:
         """Trata a busca que contém link (resultados do YouTube e playlist)."""
         bot = req.bot
         embed = req.embed
@@ -425,7 +428,7 @@ class PlayResolveMixin:
         req.source = source
         return False
 
-    async def _play_ask_source(self, req):
+    async def _play_ask_source(self, req: "PlayState") -> bool:
         """Pergunta qual serviço priorizar na busca por texto."""
         guild = req.guild
         inter = req.inter

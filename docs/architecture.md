@@ -114,7 +114,8 @@ só os atributos de núcleo (`emoji`, `name`, `desc_prefix`, `providers_info`, �
 | `shared.py` | — | constantes e objetos de corpo de classe usados por mais de um mixin |
 
 O `/play` (KI-29b) é só o orquestrador: `PlayCommandMixin.play` cria um `PlayState` (as variáveis que eram locais do comando) e chama as etapas
-`_play_*` na ordem original; cada etapa lê do estado o que usa, roda o trecho e devolve o que mudou. Etapa que encerra o comando devolve `True`.
+`_play_*` na ordem original; cada etapa lê o que usa do `PlayState`, roda o trecho e grava de volta no estado o que alterou; ela não devolve dados. O único retorno
+é `True`, quando a etapa encerra o `/play` (o orquestrador então faz `return`); as demais devolvem `False` ou nada.
 As etapas moram em `PlayCommandMixin` (bot, canal e permissões), `PlayMenusMixin`, `PlayResolveMixin` e `PlayEnqueueMixin`.
 
 Regras de montagem (guardadas por testes em `tests/repo/` e `tests/cogs/`):

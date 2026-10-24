@@ -3,6 +3,7 @@
 
 import datetime
 import traceback
+from typing import TYPE_CHECKING
 
 import disnake
 
@@ -24,11 +25,14 @@ from empiremuse.utils.others import (
     get_source_emoji_cfg,
 )
 
+if TYPE_CHECKING:
+    from empiremuse.music_cog.play_state import PlayState
+
 # O corpo da classe usa estes nomes, então eles precisam existir neste módulo.
 
 
 class PlayMenusMixin:
-    async def _play_menu_options(self, req):
+    async def _play_menu_options(self, req: "PlayState") -> None:
         """Monta o texto e as opções do menu de favoritos, integrações e fila salva."""
         bot = req.bot
         ephemeral = req.ephemeral
@@ -110,7 +114,7 @@ class PlayMenusMixin:
         req.opts = opts
         req.txt = txt
 
-    async def _play_ask_menu(self, req):
+    async def _play_ask_menu(self, req: "PlayState") -> bool:
         """Mostra o menu inicial e aplica a opção escolhida pelo usuário."""
         guild = req.guild
         inter = req.inter
@@ -186,7 +190,7 @@ class PlayMenusMixin:
         req.query = query
         return False
 
-    async def _play_fav_options(self, req):
+    async def _play_fav_options(self, req: "PlayState") -> None:
         """Monta as opções de favoritos, integrações, músicas recentes ou favoritos do servidor."""
         bot = req.bot
         emoji = req.emoji
@@ -302,7 +306,7 @@ class PlayMenusMixin:
         req.query = query
         req.selected_title = selected_title
 
-    async def _play_fav_select(self, req):
+    async def _play_fav_select(self, req: "PlayState") -> bool:
         """Pede ao usuário que escolha um dos itens da lista montada."""
         bot = req.bot
         embed = req.embed
