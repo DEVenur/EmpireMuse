@@ -216,12 +216,6 @@ class TestGetTracksV4:
         assert run(make_node(Resposta(data=[1, 2])).get_tracks("x")) == [1, 2]
 
 
-V3_BUG = (
-    "defeito conhecido: `get_tracks` lê `data.get('data')`, que no payload v3 (sem a chave 'data') é None; a busca v3 vira "
-    "TrackNotFound e LOAD_FAILED estoura TypeError. Quando corrigido, remova o xfail."
-)
-
-
 class TestGetTracksV3:
     def test_url_has_no_v4_prefix(self):
         node = make_node(Resposta(data={"loadType": "SEARCH_RESULT", "tracks": []}), version=3)
@@ -232,11 +226,17 @@ class TestGetTracksV3:
     def test_no_matches_is_an_empty_list(self):
         assert run(make_node(Resposta(data={"loadType": "NO_MATCHES"}), version=3).get_tracks("x")) == []
 
-    @pytest.mark.xfail(strict=True, reason=V3_BUG)
+    @pytest.mark.regression
     def test_load_failed_raises_with_severity_and_message(self):
         data = {"loadType": "LOAD_FAILED", "exception": {"severity": "COMMON", "message": "falhou"}}
         with pytest.raises(TrackLoadError, match="falhou"):
             run(make_node(Resposta(data=data), version=3).get_tracks("x"))
+
+    @pytest.mark.regression
+    def test_search_result_returns_the_tracks(self):
+        data = {"loadType": "SEARCH_RESULT", "tracks": [{"track": "T0", "info": info("Solo")}]}
+        tracks = run(make_node(Resposta(data=data), version=3).get_tracks("ytsearch:x"))
+        assert [(t.id, t.title) for t in tracks] == [("T0", "Solo")]
 
 
 class TestPlaylists:
