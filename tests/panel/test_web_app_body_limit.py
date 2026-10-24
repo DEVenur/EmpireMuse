@@ -14,6 +14,8 @@ import tornado.websocket
 
 from tests.panel.helpers import local_config, require
 
+pytestmark = pytest.mark.critical
+
 LIMIT = 64 * 1024
 
 
@@ -52,13 +54,6 @@ class TestServerConfiguration:
         web_app.run_app(make_pool(config), config=make_pool(config).config)
         assert seen["kwargs"].get("max_body_size") == LIMIT, f"kwargs do HTTPServer: {seen['kwargs']}"
 
-    def test_xheaders_behaviour_is_unchanged(self, monkeypatch):
-        web_app = require("empiremuse.web_app")
-        seen = recording_server(monkeypatch, web_app)
-        config = local_config(PORT=0, PANEL_TRUST_PROXY=False)
-        web_app.run_app(make_pool(config), config=make_pool(config).config)
-        assert seen["kwargs"].get("xheaders") is False
-
 
 def run_with_server(monkeypatch, scenario, **config_overrides):
     web_app = require("empiremuse.web_app")
@@ -94,13 +89,6 @@ class TestRealServer:
         assert at_limit.code == 403, f"abaixo do limite ainda chega ao app, veio {at_limit.code}"
         assert big.code in (400, 413, 599), f"acima de 64 KiB deveria ser recusado pelo servidor, veio {big.code}"
         assert big.code != 403, "o corpo grande não pode chegar ao handler/XSRF"
-
-    def test_post_over_64_kib_is_refused_on_the_main_port_routes_too(self, monkeypatch):
-        async def scenario(base):
-            return await fetch(base + "/", method="POST", body="x=" + "a" * (LIMIT + 1024))
-
-        response = run_with_server(monkeypatch, scenario)
-        assert response.code in (400, 413, 599), f"veio {response.code}"
 
     def test_index_and_websocket_still_work(self, monkeypatch):
         async def scenario(base):

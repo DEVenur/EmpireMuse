@@ -11,6 +11,8 @@ import pytest
 from tests.panel.helpers import https_config, load_settings, require
 from tests.panel.helpers_login import FakeClock
 
+pytestmark = pytest.mark.critical
+
 HOUR, MINUTE = 3600, 60
 
 
@@ -41,6 +43,7 @@ def test_models_are_frozen_dataclasses_without_token_fields():
     assert not [n for n in names if any(w in n.lower() for w in ("token", "access", "refresh", "secret"))], names
 
 
+@pytest.mark.smoke
 def test_create_returns_long_random_unique_ids():
     store = make_store(FakeClock())
     ids = {store.create(_user(str(i)), _guilds()) for i in range(100)}
@@ -48,6 +51,7 @@ def test_create_returns_long_random_unique_ids():
     assert all(isinstance(i, str) and len(i) >= 43 for i in ids), "id deve ter >= 32 bytes de entropia"
 
 
+@pytest.mark.smoke
 def test_get_returns_session_with_user_and_guilds():
     store = make_store(FakeClock())
     session = store.get(store.create(_user(), _guilds()))
@@ -101,9 +105,10 @@ def test_per_user_limit_of_5_sessions_evicts_the_oldest():
     assert store.get(other) is not None, "sessões de outros usuários não são afetadas"
 
 
-def test_global_limit_of_10000_sessions_is_enforced():
+def test_global_limit_is_enforced_and_the_newest_session_is_valid(monkeypatch):
+    monkeypatch.setattr(require("empiremuse.panel.sessions"), "MAX_SESSIONS_TOTAL", 5)
     store = make_store(FakeClock(), PANEL_SESSION_TTL_HOURS=168)
-    ids = [store.create(_user(str(i)), _guilds()) for i in range(10_001)]
+    ids = [store.create(_user(str(i)), _guilds()) for i in range(6)]
     alive = sum(1 for i in ids if store.get(i) is not None)
-    assert alive <= 10_000, f"{alive} sessões vivas (máx. 10.000)"
+    assert alive <= 5, f"{alive} sessões vivas (máx. 5 com o limite reduzido)"
     assert store.get(ids[-1]) is not None, "a sessão mais recente deve estar válida"

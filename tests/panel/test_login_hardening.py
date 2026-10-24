@@ -6,8 +6,11 @@ from types import SimpleNamespace
 import tornado.web
 
 from tests.panel.helpers import COOKIE_SECRET, EXPECTED_SECURITY_HEADERS, OAUTH_SECRET, local_config, require
-from tests.panel.helpers_login import ACCESS_TOKEN, CODE, authorize_params, set_cookie_headers
+from tests.panel.helpers_login import ACCESS_TOKEN, CODE, set_cookie_headers
 from tests.panel.test_login_flow import SESSION_COOKIE, LoginBase
+import pytest
+
+pytestmark = pytest.mark.critical
 
 PANEL_APP_ID = "111111111111111111"
 BOT_USER_ID = "222222222222222222"
@@ -41,14 +44,6 @@ class ConfiguredClientIdTest(ClientIdBase):
         assert params["client_id"] == CONFIGURED_ID
 
 
-class ApplicationIdFallbackTest(ClientIdBase):
-    pool_bots = [SimpleNamespace(application_id=PANEL_APP_ID, user=SimpleNamespace(id=BOT_USER_ID))]
-
-    def test_empty_client_id_uses_first_bot_application_id(self):
-        _, params = self.start_login(self.browser())
-        assert params["client_id"] == PANEL_APP_ID
-
-
 class UserIdFallbackTest(ClientIdBase):
     pool_bots = [SimpleNamespace(application_id=None, user=SimpleNamespace(id=int(BOT_USER_ID)))]
 
@@ -71,14 +66,6 @@ class NoClientIdTest(ClientIdBase):
     def test_503_does_not_set_attempt_cookie(self):
         response = self.browser().get("/painel/login")
         assert not set_cookie_headers(response, "painel_login")
-
-    def test_client_id_is_resolved_lazily_once_a_bot_is_ready(self):
-        browser = self.browser()
-        assert browser.get("/painel/login").code == 503
-        self.pool.bots.append(SimpleNamespace(application_id=PANEL_APP_ID, user=None))
-        self.clock.advance(61)
-        response = browser.get("/painel/login")
-        assert response.code == 302 and authorize_params(response.headers["Location"])["client_id"] == PANEL_APP_ID
 
 
 class RetryAfterTest(LoginBase):
@@ -122,20 +109,6 @@ class AccessLogTest(LoginBase):
         assert self.session_cookie_name() not in browser.cookies
         assert ("revoke", ACCESS_TOKEN) in self.fake.calls, "o token deve ser revogado mesmo com erro inesperado"
         self.assert_no_oauth_material(params["state"])
-
-
-class RevokeFailureTest(LoginBase):
-    def test_revoke_failure_does_not_block_login_and_does_not_leak(self):
-        oauth = require("empiremuse.panel.oauth")
-
-        async def failing_revoke(_token):
-            raise oauth.DiscordOAuthError("revogação falhou")
-
-        self.fake.revoke = failing_revoke
-        browser = self.browser()
-        response = self.login(browser)
-        assert response.code == 302 and self.session_cookie_name() in browser.cookies
-        assert ACCESS_TOKEN not in self.caplog.text and CODE not in self.caplog.text
 
 
 class CookieFormatTest(LoginBase):

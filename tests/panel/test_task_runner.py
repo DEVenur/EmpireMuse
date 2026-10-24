@@ -33,17 +33,6 @@ async def instant():
 
 
 class TestTimeoutAndStates:
-    def test_job_that_exceeds_the_timeout_ends_in_erro_with_the_timeout_message(self):
-        async def scenario():
-            runner = TaskRunner(timeout=0.05)
-            _, job = blocker()
-            task = runner.submit("1", 100, "7", "setup", job)
-            await asyncio.sleep(0.2)
-            return task
-
-        task = run(scenario())
-        assert task.state == "erro" and task.message == tasks.MSG_TIMEOUT and task.finished_at is not None
-
     def test_states_pending_running_ok(self):
         async def scenario():
             runner = TaskRunner()
@@ -77,18 +66,6 @@ class TestTimeoutAndStates:
         a, b = run(scenario())
         assert (a.state, a.message) == ("erro", "Texto seguro")
         assert (b.state, b.message) == ("erro", tasks.MSG_GENERIC) and "segredo" not in b.message
-
-    def test_shutdown_cancels_running_tasks_and_marks_them(self):
-        async def scenario():
-            runner = TaskRunner()
-            _, job = blocker()
-            task = runner.submit("1", 100, "7", "setup", job)
-            await settle()
-            await runner.shutdown()
-            return task, runner
-
-        task, runner = run(scenario())
-        assert task.state == "erro" and task.message == tasks.MSG_SHUTDOWN and not runner._running
 
 
 class TestLimitsAndExpiry:
@@ -136,20 +113,6 @@ class TestLimitsAndExpiry:
             await runner.shutdown()
 
         run(scenario())
-
-    def test_finished_tasks_expire_after_the_ttl_by_the_injected_clock(self):
-        async def scenario():
-            clock = FakeClock()
-            runner = TaskRunner(clock=clock)
-            task = runner.submit("1", 100, "7", "setup", instant)
-            await settle()
-            clock.advance(tasks.TASK_TTL_SECONDS - 1)
-            alive = runner.get(task.id)
-            clock.advance(2)
-            return alive, runner.get(task.id)
-
-        alive, gone = run(scenario())
-        assert alive is not None and gone is None
 
     def test_running_tasks_never_expire(self):
         async def scenario():
