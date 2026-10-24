@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci:
     name: CI (Lint, Compile e Testes)
@@ -57,4 +61,4 @@ jobs:
         run: mypy
 
       - name: Execução dos testes automatizados (pytest)
-        run: pytest -q --cov --cov-report=term-missing:skip-covered
+        run: pytest -q --durations=30 --cov --cov-report=term-missing:skip-covered
