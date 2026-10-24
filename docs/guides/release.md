@@ -78,15 +78,21 @@ Para manter a integridade do histórico do Git e a rastreabilidade das alteraç�
 
 ### Passo 3: Criar a Tag Anotada no commit da `main`
 
-Com o merge concluído, atualize a branch `main` local e crie a tag Git apontando para o commit recém-integrado:
+Para uma **Release Candidate** (criada pelo MAESTRO a cada merge na `main` com `N` sequencial):
 
 ```bash
 git checkout main
 git pull origin main
-git tag -a v2.0.0 -m "Release v2.0.0"
+git tag -a v2.0.0-rc.N -m "Release candidate v2.0.0-rc.N"
 ```
 
-*(Para Release Candidate: `git tag -a v2.0.0-rc.1 -m "Release candidate v2.0.0-rc.1"`)*
+Para a **Versão Final Estável `2.0.0`** (apontando obrigatoriamente para o commit da última RC homologada na VPS, garantindo integridade mesmo se novos commits tiverem entrado na `main`):
+
+```bash
+git fetch origin --tags
+VALIDATED_COMMIT="$(git rev-parse v2.0.0-rc.N^{})"
+git tag -a v2.0.0 "$VALIDATED_COMMIT" -m "Release v2.0.0"
+```
 
 ### Passo 4: Enviar a Tag para o Repositório Remoto
 
