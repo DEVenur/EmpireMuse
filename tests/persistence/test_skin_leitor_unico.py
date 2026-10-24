@@ -17,7 +17,7 @@ from tests.support.skins import NOME_DO_HELPER, PACOTE, definicoes_do_helper
 from tests.persistence.test_chave_de_corte_load_legacy import funcao_do_ponto, kind_da_chamada, nome_chamado
 
 PONTOS_DE_SKIN = [
-    ("cogs/music.py", "Music.create_player"),
+    ("music_cog/player_lifecycle.py", "PlayerLifecycleMixin.create_player"),
     ("cogs/music_settings.py", "MusicSettings.change_skin"),
     ("utils/music/interactions", "SkinEditorMenu.load_skin"),
     ("utils/music/interactions", "SkinEditorMenu.modal_handler"),

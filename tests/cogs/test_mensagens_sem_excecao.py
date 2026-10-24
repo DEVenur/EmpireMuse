@@ -330,7 +330,7 @@ class TestSongRequests:
     async def test_o_embed_do_webhook_e_generico_e_leva_o_mesmo_codigo(self, monkeypatch):
         fixar_codigo(monkeypatch)
         classe, self_, ctx, mensagem, envios, cog = montar_pedido(monkeypatch, RuntimeError(SEGREDO), webhook=True)
-        monkeypatch.setattr("empiremuse.cogs.music.string_to_file", lambda texto, nome: f"arquivo:{nome}")
+        monkeypatch.setattr("empiremuse.music_cog.song_requests.string_to_file", lambda texto, nome: f"arquivo:{nome}")
 
         await classe.song_requests(self_, ctx, mensagem)
 
@@ -1196,7 +1196,9 @@ class TestLacunasDaMutacao:
             monkeypatch, RuntimeError(f"falha com {TOKEN_FALSO}"), webhook=True
         )
         anexos = []
-        monkeypatch.setattr("empiremuse.cogs.music.string_to_file", lambda texto, nome: anexos.append((texto, nome)))
+        monkeypatch.setattr(
+            "empiremuse.music_cog.song_requests.string_to_file", lambda texto, nome: anexos.append((texto, nome))
+        )
 
         await classe.song_requests(self_, ctx, mensagem)
 
