@@ -261,6 +261,7 @@ As definições do protocolo, limites, constantes e validações puras (sem I/O)
 - **Origem de conexões de navegador**: clientes nativos (app desktop e bots) não enviam cabeçalho `Origin`. Conexões de navegador passam por `check_origin` e só são aceitas se provierem da mesma origem do servidor ou de domínios explicitamente autorizados na lista `RPC_ALLOWED_ORIGINS`.
 - **Limites e controle de capacidade**:
   - Limite de mensagem: máximo de 64 KiB (`MAX_MESSAGE_SIZE` e `websocket_max_message_size`).
+  - Keepalive: o servidor envia ping a cada 30 s e derruba o cliente que não responde em 30 s (`WEBSOCKET_PING_INTERVAL`, `WEBSOCKET_PING_TIMEOUT`, `websocket_ping_interval` e `websocket_ping_timeout`; o Tornado não aceita timeout maior que o intervalo), porque a Cloudflare encerra WebSocket ocioso em ~100 s.
   - Limite de conexões: até 1000 conexões simultâneas (`MAX_CONNECTIONS`). Ao atingir a capacidade, novas conexões são recusadas com código `1013` (`CLOSE_TRY_AGAIN_LATER`).
   - Limite de taxa: clientes passam por limitador de taxa em janela deslizante (`RateLimiter`, padrão de 20 mensagens em 10 segundos). O excesso encerra a conexão com código `4429` (`CLOSE_RATE_LIMITED`).
   - Limites de identificadores: no máximo 3 IDs por conexão de usuário (`MAX_USER_IDS`) e até 250 IDs por conexão de bot (`MAX_BOT_IDS`).

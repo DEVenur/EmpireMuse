@@ -25,6 +25,11 @@ CLOSE_RATE_LIMITED = 4429
 CLOSE_TRY_AGAIN_LATER = 1013
 
 MAX_MESSAGE_SIZE = 64 * 1024
+# Ping do servidor ao cliente (segundos). A Cloudflare encerra WebSocket ocioso em ~100 s; 30 s mantém a conexão aberta
+# atrás dela e do Traefik. O Tornado (6.5) não aceita timeout maior que o intervalo (limita e avisa no log), então o
+# servidor derruba o cliente que não responde ao ping em 30 s.
+WEBSOCKET_PING_INTERVAL = 30
+WEBSOCKET_PING_TIMEOUT = WEBSOCKET_PING_INTERVAL
 MAX_CONNECTIONS = 1000
 MAX_USER_IDS = 3
 MAX_BOT_IDS = 250
