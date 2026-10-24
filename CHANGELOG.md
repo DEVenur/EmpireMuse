@@ -141,6 +141,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Divisão do comando `/play` (KI-29b, PR 1)**: `Music.play` (1.588 linhas) passa a orquestrar etapas `_play_*` em `empiremuse/music_cog/` (`play_command.py`, `play_menus.py`, `play_resolve.py`, `play_enqueue.py`) com o estado compartilhado em `play_state.py` (`PlayState`). Só reorganização: mesmas mensagens, `custom_id`, opções e ordem de efeitos. `play_command.py` cai de 1.710 para 560 linhas e deixa de ter o aviso de exceção; foi removida a string solta com código antigo comentado.
 - **Documentação (KI-32, KI-35)**: reescrita dos passos de credenciais do Spotify em texto autossuficiente sem imagens externas (`docs/guides/spotify-keys.md`) e atualização do backlog técnico (`docs/known-issues.md`).
 - **Saneamento da Suíte de Testes e Otimização do CI (Fase T, PRs #65, #67–#71)**:
   - Redução da suíte de testes de 8.422 para 2.190 testes por eliminação de duplicações e testes de caracterização mecânicos, mantendo o piso de cobertura de 56% (PRs #67 a #69).

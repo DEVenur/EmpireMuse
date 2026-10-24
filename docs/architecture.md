@@ -91,7 +91,11 @@ só os atributos de núcleo (`emoji`, `name`, `desc_prefix`, `providers_info`, �
 |---|---|---|
 | `voice_status.py` | `VoiceStatusMixin` | `setvoicestatus`, `set_voice_status` |
 | `play_entry.py` | `PlayEntryMixin` | `message_play`, `search`, `connect`, `play_legacy`, `play_file`, … |
-| `play_command.py` | `PlayCommandMixin` | `play` (1.588 linhas), `fav_add_autocomplete` |
+| `play_command.py` | `PlayCommandMixin` | `play` (orquestra as etapas), `fav_add_autocomplete` e as etapas iniciais (bot, canal e permissões) |
+| `play_menus.py` | `PlayMenusMixin` | etapas do `/play` sem busca: menus de favoritos, integrações, recentes e fila salva |
+| `play_resolve.py` | `PlayResolveMixin` | etapas do `/play` que resolvem a busca: prefixos, perfis, links e serviço de busca |
+| `play_enqueue.py` | `PlayEnqueueMixin` | etapas do `/play` que montam a fila, respondem ao usuário e conectam |
+| `play_state.py` | — | `PlayState`: as variáveis que passam de uma etapa do `/play` para outra |
 | `skip.py` | `SkipMixin` | `skip`, `skipto`, `back`, `voteskip` |
 | `playback_controls.py` | `PlaybackControlsMixin` | `volume`, `pause`, `resume`, `seek`, `loop`, `nightcore` |
 | `queue_edit.py` | `QueueEditMixin` | `remove`, `readd`, `rotate` |
@@ -108,6 +112,10 @@ só os atributos de núcleo (`emoji`, `name`, `desc_prefix`, `providers_info`, �
 | `tracks.py` | `TracksMixin` | `get_partial_tracks`, `get_lavalink_tracks`, `get_tracks` |
 | `player_lifecycle.py` | `PlayerLifecycleMixin` | `process_music`, `create_player`, `player_vc_disconnect`, relatório de erros |
 | `shared.py` | — | constantes e objetos de corpo de classe usados por mais de um mixin |
+
+O `/play` (KI-29b) é só o orquestrador: `PlayCommandMixin.play` cria um `PlayState` (as variáveis que eram locais do comando) e chama as etapas
+`_play_*` na ordem original; cada etapa lê do estado o que usa, roda o trecho e devolve o que mudou. Etapa que encerra o comando devolve `True`.
+As etapas moram em `PlayCommandMixin` (bot, canal e permissões), `PlayMenusMixin`, `PlayResolveMixin` e `PlayEnqueueMixin`.
 
 Regras de montagem (guardadas por testes em `tests/repo/` e `tests/cogs/`):
 
@@ -373,7 +381,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/utils/music/{converters,errors,filters,skin_utils,track_encoder,…}.py` | Auxiliares de música | 1.506 |
 | `empiremuse/wavelink/` | Cliente Lavalink v3/v4 (node, websocket, player, eventos) | 2.850 |
 | `empiremuse/cogs/music.py` | Cog `Music` (núcleo, bases e `setup`); os comandos vivem nos mixins de `music_cog/` | 275 |
-| `empiremuse/music_cog/` | Mixins de `Music` (play, fila, controles, nodes, controlador, pedidos) + `shared.py` (19 módulos; maior: `play_command.py`, 1.710) | 9.173 (soma) |
+| `empiremuse/music_cog/` | Mixins de `Music` (play, fila, controles, nodes, controlador, pedidos) + `shared.py` (23 módulos; maior: `queue_group.py`, 1.058) | 9.777 (soma) |
 | `empiremuse/cogs/music_settings.py` | Configurações por servidor/usuário, skins, favoritos | 1.831 |
 | `empiremuse/cogs/player_resume.py` | Salvar e retomar sessões de players | 854 |
 | `empiremuse/cogs/misc.py` | Comandos gerais (ping, convite, sobre, …) | 1.042 |
