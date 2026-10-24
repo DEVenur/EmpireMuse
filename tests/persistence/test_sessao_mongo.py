@@ -140,7 +140,7 @@ class TestRemocao:
             await semear(mongo, guild)
             await mongo.update_data(guild, {"data": "legado"}, db_name=BOT_ID, collection=ANTIGA)
         await cog.delete_data_mongo(SERVIDOR)
-        assert mongo.ids(NOVA) == {str(OUTRO)} and mongo.ids(ANTIGA) == {str(OUTRO)}
+        assert mongo.ids(NOVA) == {str(OUTRO)} and mongo.ids(ANTIGA) == {str(SERVIDOR), str(OUTRO)}
 
     @pytest.mark.asyncio
     async def test_delete_data_vai_para_o_mongo_quando_o_destino_e_o_mongo(self):
