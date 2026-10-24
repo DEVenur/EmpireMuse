@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,8 +33,8 @@ jobs:
           fi
           echo "Sucesso: O commit da tag (${GITHUB_REF_NAME}) pertence à branch origin/main."
 
-  test:
-    name: Testes Automatizados (CI)
+  verify-ci:
+    name: Verificar se CI concluiu com sucesso
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do repositório
@@ -41,43 +42,32 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Configurar Python 3.13
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Instalar uv
-        run: python -m pip install "uv==0.13.1"
-
-      - name: Instalar dependências com hashes
+      - name: Validar conclusão com sucesso do workflow CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          uv pip install --system --require-hashes -r requirements-lock.txt -r requirements-dev-lock.txt
-
-      - name: Instalar dependências Git fixadas por SHA
-        run: uv pip install --system --no-deps -r requirements-git.txt
-
-      - name: Verificação de lint (ruff check)
-        run: ruff check .
-
-      - name: Verificação de formatação (ruff format)
-        run: ruff format --check .
-
-      - name: Verificação de compilação de bytecode
-        run: python -m compileall -q main.py empiremuse
-
-      - name: Verificação estática de tipos (mypy)
-        continue-on-error: true
-        run: mypy
-
-      - name: Execução dos testes automatizados (pytest)
-        run: pytest -q
+          COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "$GITHUB_SHA")
+          echo "Verificando se o workflow CI concluiu com sucesso para o commit: $COMMIT_SHA"
+          SUCCESS_COUNT=$(gh run list --workflow CI --commit "$COMMIT_SHA" --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
+          if [ "$SUCCESS_COUNT" -eq 0 ] && [ "$COMMIT_SHA" != "$GITHUB_SHA" ]; then
+            echo "Tentando com GITHUB_SHA: $GITHUB_SHA"
+            SUCCESS_COUNT=$(gh run list --workflow CI --commit "$GITHUB_SHA" --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
+          fi
+          if [ "$SUCCESS_COUNT" -gt 0 ]; then
+            echo "Sucesso: workflow CI concluiu com sucesso para o commit ($SUCCESS_COUNT execução(ões) bem-sucedida(s))."
+          else
+            echo "::error::Nenhuma execução bem-sucedida do workflow CI foi encontrada para o commit $COMMIT_SHA."
+            gh run list --workflow CI --commit "$COMMIT_SHA" --json databaseId,status,conclusion,url || true
+            exit 1
+          fi
 
   docker:
     name: Build e Push da Imagem Docker Hub
     environment: docker-release
     needs:
-      - test
       - verify-tag
+      - verify-ci
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do repositório
