@@ -162,6 +162,8 @@ Os testes automatizados ficam em `tests/` e cobrem identidade de marca (`tests/b
 
 As subpastas são organizadas por domínio: `audio/` (Lavalink, JDK, YouTube, Spotify), `brand/`, `cogs/`, `config/`, `deploy/`, `panel/`, `persistence/` (sessões, fila salva, skins, caches, db.py), `pool/`, `repo/` (layout da raiz e ignores), `rules/`, `runtime/` (paths e .runtime/), `serialization/`, `web/` (RPC/WebSocket) e `support/` (helpers compartilhados e raiz.py). O arquivo vai para a pasta do módulo de produção que ele testa e o nome de arquivo não leva fase nem etapa.
 
+Política: lint, smoke e a suíte completa rodam no CI e não se repetem localmente; "pronto" é CI verde. Rode localmente só o que o CI/CD e o bot ECC Tools não cobrem. Os comandos abaixo servem para diagnóstico pontual.
+
 ```bash
 uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-asyncio, pytest-cov, ruff e mypy
 .venv/bin/python -m pytest               # executa a suíte de testes (Windows: .venv\Scripts\python -m pytest)
@@ -177,7 +179,7 @@ uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-as
 | Ferramenta | Status | Uso |
 |---|---|---|
 | `ruff` | **Ativo** | Linter e formatador configurado em `pyproject.toml` (target Python 3.13, line-length 120, regras `E4`, `E7`, `E9`, `F`). |
-| `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes unitários/integração; cobertura mínima de 80% para código novo (meta ≥ 80%; 97% na entrega da v1). |
+| `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes por risco (ver `.claude/rules/empiremuse/testing.md`); piso de cobertura no `pyproject.toml` (`fail_under`, nunca cai) e meta de 70%. |
 | `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q main.py empiremuse`). |
 | `mypy` | **Ativo** | Checagem estática de tipos configurada em `pyproject.toml` (target Python 3.13, baseline gradual com checagem ativa em `empiremuse.rules.*`). |
 | `uv` | **Ativo** | Gerenciamento de dependências e arquivos de lock universais com integridade estrita via hash (`requirements-lock.txt` e `requirements-dev-lock.txt`). |

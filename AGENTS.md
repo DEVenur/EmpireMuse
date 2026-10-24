@@ -125,7 +125,7 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 | **MAESTRO** | Orquestração e arbitragem | Planejamento, delegação, validação de etapas e aprovação final de commits. | Claude Code · Claude Opus 5.5 |
 | **Backend & Data Specialist** | Raciocínio arquitetural e backend | Regras de negócio, cogs, modelo do player, integração Lavalink, banco de dados e desempenho. | Claude Code |
 | **Frontend & UI/UX Specialist** | Design de UI e interação | Interface do Discord (embeds, botões, selects, modais, 15 skins) e página web/RPC (`empiremuse/web_app.py`). | Claude Code |
-| **QA & Test Engineer** | Qualidade e testes | Testes TDD e de caracterização (RED antes, validação depois); **nunca altera código de produção**. | Claude Code |
+| **QA & Test Engineer** | Qualidade e testes | Testes por risco (RED antes só para bug e regra pura; ver `testing.md`); **nunca altera código de produção**. | Claude Code |
 | **DevOps & Infrastructure Specialist** | Infraestrutura e dependências | Docker, CI, runtime, lint, dependências e lockfiles. | Antigravity · Claude Sonnet 5.5 |
 | **Cybersecurity Specialist** | Auditoria profunda e raciocínio crítico | Auditoria de segurança, validação de dados de entrada, proteção de segredos e supply chain (modo plano/leitura). | Antigravity · Claude Opus 5.5 |
 | **Second Opinion (Devil's Advocate) (fora do canvas atual)** | Pensamento divergente e revisão crítica | Revisão crítica de coerência, formulação de hipóteses divergentes e desempate de impasses (modo plano/leitura). | Antigravity · Gemini 3.8 Flash high |
@@ -147,7 +147,7 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 A metodologia padrão do projeto utiliza o framework **Everything Claude Code (ECC)**:
 
 1. **Planejamento**: `/ecc:plan` para decomposição de épicos e análise de impacto.
-2. **Desenvolvimento Orientado a Testes (TDD)**: o **QA & Test Engineer** escreve os testes reprodutores **ANTES** (RED); o especialista implementa até o GREEN e refatora (IMPROVE); o QA **valida DEPOIS** (testes verdes + smoke). O QA nunca altera código de produção.
+2. **Testes**: TDD (RED antes, conduzido pelo **QA & Test Engineer**) só para correção de bug e regra pura; no resto, teste depois e só se o item merecer (ver [`.claude/rules/empiremuse/testing.md`](.claude/rules/empiremuse/testing.md)). O QA nunca altera código de produção.
 3. **Revisão de Código**: Auto-revisão e submissão para revisão de pares (`code-reviewer`).
 4. **Auditoria de Segurança Proporcional (AppSec)**: Obrigatória em **toda demanda** (diretriz mandatória do dono do projeto), com profundidade proporcional:
    - **Auditoria Completa**: Aplicada obrigatoriamente quando a alteração tocar em:
@@ -173,7 +173,7 @@ A metodologia padrão do projeto utiliza o framework **Everything Claude Code (E
 Uma funcionalidade, correção ou tarefa só é considerada **concluída** após o cumprimento cumulativo de quatro etapas:
 1. ✅ **Implementação**: Código completo, funcional e aderente às convenções do projeto;
 2. 🛡️ **Auditoria de Segurança**: Validado pelo AppSec em toda demanda (auditoria completa para superfícies sensíveis ou checagem rápida de segredos/escopo nas demais), sem novas vulnerabilidades;
-3. 🧪 **Testes**: Testes automatizados executados e passando (ou validação manual detalhada na ausência de suite);
+3. 🧪 **Testes**: CI verde (lint, smoke e suíte rodam no CI e não se repetem localmente);
 4. 📝 **Documentação & Changelog**: Documentação técnica atualizada e registro formal em `CHANGELOG.md`.
 
 ---

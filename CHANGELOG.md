@@ -140,6 +140,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Política de Testes Enxuta e Governança de Regras (Fase T / T0)**:
+  - Novas regras `.claude/rules/empiremuse/testing.md` (o que merece teste, o que é proibido, TDD só para bug e regra pura, meta de 70% com piso no `pyproject.toml`, validação no CI) e `.claude/rules/empiremuse/governanca-de-regras.md` (toda regra cita problema concreto, custo e data de revisão). Motivo: suíte de 8.422 testes e CI de 6–7 min para um bot comunitário.
+  - Trechos de testes de `AGENTS.md`, `CLAUDE.md`, `docs/development.md`, `.github/CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md` e da seção "Testes" de `python-disnake.md` alinhados à nova política (pronto = CI verde).
 - **Divisão Modular de Arquivos Críticos em Pacotes e Mixins (KI-29, PRs #42, #44, #47, #49, #50, #51, #55, #57–#60, #62, #63)**:
   - **Decomposição estrutural sem alteração comportamental**: os três maiores arquivos legados foram desmembrados em módulos temáticos coesos preservando 100% da API pública e contratos funcionais:
     - `empiremuse/utils/music/interactions/` (PRs #44, #47, #49): `interactions.py` transformado em pacote com reexportação em `__init__.py` e submódulos dedicados (`common.py`, `view_modal.py`, `player_views.py`, `stage_title.py`, `favorites_texts.py`, `fav_modals.py`, `fav_menu.py` e `skin_editor.py`).
