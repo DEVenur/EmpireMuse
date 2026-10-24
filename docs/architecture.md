@@ -39,7 +39,7 @@ flowchart LR
    - `PACKAGE_DIR`: raiz do pacote `empiremuse/`, contendo código-fonte e templates compartilhados (`empiremuse/templates/status.html`).
    - `RUNTIME_DIR`: diretório para dados de execução (`local_database/`, `Lavalink.jar`, `application.yml`, `.logs/`, `lavalink.ini` etc.), determinado por `get_runtime_dir()` a partir da variável `EMPIREMUSE_HOME` (com fallback padrão para `Path.cwd().resolve()`).
 3. `BotPool.__init__` em `empiremuse/utils/client.py` carrega a configuração (`load_cfg` → `empiremuse.config_loader.load_config`),
-   cria caches TTL, clientes Deezer/yt-dlp e restaura caches em pickle de `local_database/` sob `RUNTIME_DIR` (`BotPool.load_cache` em `empiremuse/utils/client.py`) com guardas defensivas contra dados corrompidos ou classes obsoletas.
+   cria caches TTL, clientes Deezer/yt-dlp e restaura o cache de playlist em JSON de `local_database/` sob `RUNTIME_DIR` (`BotPool.load_cache` em `empiremuse/utils/client.py`); os caches do formato antigo não são lidos.
 4. `BotPool.setup` em `empiremuse/utils/client.py` executa, em ordem:
    - carrega as skins (`BotPool.load_skins` em `empiremuse/utils/client.py`);
    - monta a lista de nodes Lavalink: lista remota (`AUTO_DOWNLOAD_LAVALINK_SERVERLIST`), variáveis
@@ -313,16 +313,15 @@ Auxiliar em `empiremuse/utils/music/user_limits.py`: cálculo de cota do usuári
 | `global` / `guilds` | `global_db_models[guilds]` v1.4 | Prefixo, skins globais, **skins personalizadas**, status do canal de voz, convites "ouvir junto". |
 | `global` / `default` | `global_db_models[default]` v1.0 | Tokens extras. |
 | `global` / `global` (id `youtube_data`) | sem modelo | `refresh_tokens` do OAuth do YouTube (`BotPool.check_node` em `empiremuse/utils/client.py`). |
-| `player_sessions_json` / `<id do bot>` | sem modelo | Sessões de players para retomada em formato JSON (`player_sessions` legado em transição). |
+| `player_sessions_json` / `<id do bot>` | sem modelo | Sessões de players para retomada em formato JSON (a coleção `player_sessions` do formato antigo não é lida nem apagada). |
 
 ### Pacote de Serialização Segura em JSON (`empiremuse/serialization/`)
 
-O pacote `empiremuse/serialization/` centraliza a validação de esquema, codificação e persistência de dados estruturados em JSON, substituindo a serialização binária legada (`pickle`):
+O pacote `empiremuse/serialization/` centraliza a validação de esquema, codificação e persistência de dados estruturados em JSON, que substituiu a serialização binária antiga (`pickle`, removida; nenhum dado do formato antigo é lido):
 
 - **`schema.py`**: validação estrutural recursiva (`check_structure`, `scan`), tipos declarativos (`Str`, `Int`, `Float`, `Bool`, `List`, `Optional`, `OneOf`, `Any_JSON`, `Dict`), sanitização de caracteres de controle e erros tipados via `SchemaError`;
 - **`codec.py`**: codificação e decodificação JSON delimitadas (`dumps`, `loads_bounded`) com teto estrito de dígitos inteiros (`MAX_INT_DIGITS = 4300`), limite de profundidade de estruturas (`MAX_DUMPS_DEPTH = 64`) e empacotamento com compactação zlib e base64 (`pack`, `unpack`);
-- **`legacy_pickle.py`**: leitor restrito, transitório, com lista fechada de tipos por kind (session, queue, skin) e limites de tamanho e de custo; nunca usa o pickle sem restrição (`load_legacy`, `LegacyFormatError`). Mantido exclusivamente durante a fase de transição e removido definitivamente na versão N+2;
-- **`queue.py`**: serialização de filas salvas em JSON (`encode_saved_queue`, `decode_saved_queue`, `normalize_legacy_queue`) limitadas a 5.000 faixas (`MAX_TRACKS`) e tamanho máximo de 4 MiB (`MAX_BYTES`);
+- **`queue.py`**: serialização de filas salvas em JSON (`encode_saved_queue`, `decode_saved_queue`) limitadas a 5.000 faixas (`MAX_TRACKS`) e tamanho máximo de 4 MiB (`MAX_BYTES`);
 - **`cache.py`**: codecs de cache em JSON (`encode_cache`, `decode_cache`) para Last.fm e playlists, com limites por chave (`MAX_KEY = 512`), nós, profundidade e validação de validade temporal (`max_age`);
 - **`skins.py`**: validação de skins personalizadas em JSON (`validate_skin`, `validate_skin_name`) com limites de tamanho (`MAX_BYTES = 100 KiB`), campos (`MAX_FIELDS = 25`), embeds (`MAX_EMBEDS = 10`), cores, URLs (`MAX_URL = 2048`) e entradas da fila (`MAX_QUEUE_ENTRIES = 25`);
 - **`session.py`**: esquema e codec para sessões de reprodução (`encode_session`, `decode_session`, `validate_session`), com limite de 8 MiB (`MAX_BYTES`), redução progressiva em sobretamanho (descarte ordenado de letras, faixas tocadas, autoplay e faixas com falha, e cauda da fila; só então recusa por tamanho) e validação limpa de URLs;
@@ -330,11 +329,11 @@ O pacote `empiremuse/serialization/` centraliza a validação de esquema, codifi
 - **`files.py`**: utilitários de I/O seguro em disco com escrita atômica via arquivo temporário com permissões privadas `0600` (`write_private_atomic`) e leitura protegida por teto rígido de bytes (`read_capped`).
 
 **Módulos auxiliares em `empiremuse/utils/music/`**:
-- **`legacy_reader.py`**: descarte atômico de caches antigos na inicialização (`discard_legacy_cache` para `playlist_cache.pkl`, `partial_track_cache.pkl`, `.lyric_cache_data` e `.lastfm_cache`), sem carregar dados antigos em memória;
-- **`saved_queue.py`**: gerenciamento e migração de filas salvas (`load_saved_queue`, `store_saved_queue`, `saved_queue_path`, `legacy_saved_queue_path`, `has_saved_queue`), com migração automática na inicialização (`migrate_saved_queues`) de `saved_queues_v1/users/<id>.pkl` para a nova pasta `saved_queues_json/users/<id>.json`. O arquivo `.pkl` só é removido após confirmação e releitura válida do JSON;
+- **`legacy_notice.py`**: aviso na subida (`log_ignored_legacy_data`) dos dados do formato antigo que o bot não lê mais (`local_database/player_sessions/`, `local_database/saved_queues_v1/` e os caches `.pkl`); só conta e nomeia arquivos, sem abrir nem apagar;
+- **`saved_queue.py`**: leitura e gravação das filas salvas em `saved_queues_json/users/<id>.json` (`load_saved_queue`, `store_saved_queue`, `saved_queue_path`, `has_saved_queue`); o `saved_queues_v1/users/<id>.pkl` do formato antigo não é lido nem conta como fila salva;
 - **`json_cache.py`**: persistência e leitura de caches estruturados em JSON (`save_json_cache`, `load_json_cache`) com permissão `0600` em disco e gravação atômica;
-- **`skin_store.py`**: leitura e migração única de skins personalizadas no documento da guilda (`load_custom_skins`, `LoadedSkins`), com ajuste automático de skins com `queue_max_entries` acima de 25 para o teto de 25 entradas na migração e persistência imediata no banco de dados;
-- **`session_store.py`**: persistência e migração de sessões do player em formato JSON no disco (`sessions_dir`) e no MongoDB (`NEW_COLLECTION = "player_sessions_json"`), além das rotinas de migração do formato legado (`migrate_disk`, `migrate_mongo`) com leitura via cursor assíncrono (`iter_data`), controle de taxa entre lotes e janela de retenção de 48 horas para itens com falha de conversão. Em `PlayerSession` (`empiremuse/cogs/player_resume.py`), a retomada (`resume_player`) só utiliza canais pertencentes ao servidor da própria sessão (canais de outro servidor são ignorados) e não grava `voice_state` nem `extra_info` (descartados silenciosamente na persistência e na leitura).
+- **`skin_store.py`**: leitura única das skins personalizadas do documento da guilda (`load_custom_skins`, `LoadedSkins`): valida cada dicionário e ignora, com aviso, o texto do formato antigo (que permanece no documento);
+- **`session_store.py`**: persistência de sessões do player em formato JSON no disco (`sessions_dir`) e no MongoDB (`NEW_COLLECTION = "player_sessions_json"`), com leitura via cursor assíncrono (`iter_data`); as sessões do formato antigo não são lidas. Em `PlayerSession` (`empiremuse/cogs/player_resume.py`), a retomada (`resume_player`) só utiliza canais pertencentes ao servidor da própria sessão (canais de outro servidor são ignorados) e não grava `voice_state` nem `extra_info` (descartados silenciosamente na persistência e na leitura).
 
 **Novas pastas e coleções com sufixo `_json`**:
 - No armazenamento local em disco (`local_database/`): diretórios dedicados `saved_queues_json/users/<id do usuário>.json` e `player_sessions_json/<id do bot>/<id do servidor>.json` (com a respectiva cópia de segurança `.json.bak`), ambos com escrita atômica e permissão restrita `0600` (`write_private_atomic`);
@@ -371,7 +370,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/web_app.py` | Status HTTP, relé WebSocket do RPC, roteador do painel web | 651 |
 | `empiremuse/panel/` | Sub-aplicação web Tornado: OAuth2, sessões, handlers, serviços puros, templates e estáticos | 4.306 |
 | `empiremuse/rules/` | Regras de negócio puras (limites, texto, URLs, cota, configurações, erros, favoritos, links, integrações); só biblioteca padrão | 542 |
-| `empiremuse/serialization/` | Serialização segura em JSON (schema, codec, queue, cache, skins, session, tracks, files) e leitor legado transitório (legacy_pickle) | 1.826 (soma) |
+| `empiremuse/serialization/` | Serialização segura em JSON (schema, codec, queue, cache, skins, session, tracks, files) | 1.442 (soma) |
 | `empiremuse/utils/music/request_channel.py` | Lógica unificada de setup e reset de canal de pedidos compartilhada entre cogs e painel | 497 |
 | `empiremuse/utils/client.py` | `BotPool` (setup, nodes, tokens) e `BotCore` (prefixo, sync, módulos) | 1.511 |
 | `empiremuse/utils/db.py` | Modelos, `MongoDatabase`, `LocalDatabase`, prefixos | 330 |

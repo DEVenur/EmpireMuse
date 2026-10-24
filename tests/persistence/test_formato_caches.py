@@ -1,13 +1,10 @@
-"""F3-6b, etapas 0, 2b e 6 — os caches em disco: o que a leitura faz com os arquivos ANTIGOS e o que é gravado agora.
+"""Os caches em disco: o que é gravado (JSON) e o que acontece com os arquivos do formato antigo.
 
 Quatro arquivos antigos: ``playlist_cache.pkl``, ``partial_track_cache.pkl`` e ``.lyric_cache_data`` (em ``local_database/``,
-tratados pelo ``BotPool.load_cache``) e ``.lastfm_cache`` (na raiz do diretório de dados, tratado pelo ``LastFM``).
-
-Depois da etapa 2b (chave de corte) NENHUM cache legado é lido: o arquivo é apagado sem ser aberto e o cache recomeça vazio
-(decisão P3: caches não migram). Desde a etapa 6 só o cache de playlist (``BotPool.cache_updater``) e o do Last.fm são
-GRAVADOS, em JSON (``playlist_cache.json`` e ``.lastfm_cache.json``); o formato novo é testado em
-``tests/serialization/test_cache_json.py``. Aqui ficam as fixtures compartilhadas, o descarte dos arquivos antigos e o que vale
-para qualquer formato: cache ausente ou ilegível não derruba a inicialização.
+tratados pelo ``BotPool.load_cache``) e ``.lastfm_cache`` (na raiz do diretório de dados, tratado pelo ``LastFM``). NENHUM é
+lido: o cache recomeça vazio e o arquivo antigo fica onde está (o aviso da subida está em ``legacy_notice``). Só o cache de
+playlist (``BotPool.cache_updater``) e o do Last.fm são GRAVADOS, em JSON (``playlist_cache.json`` e ``.lastfm_cache.json``); o
+formato novo é testado em ``tests/serialization/test_cache_json.py``. Aqui ficam as fixtures compartilhadas.
 """
 
 import pickle
@@ -98,67 +95,24 @@ class TestRoundTrip:
         assert len(LastFM("chave", "segredo").cache) == 2
 
 
-class TestLeituraDosArquivosAntigos:
-    """Depois da 2b, cada arquivo antigo (de QUALQUER protocolo) é descartado: o cache recomeça vazio e o arquivo some."""
+class TestArquivosAntigosNaoSaoLidos:
+    """Cada arquivo antigo (de qualquer protocolo ou conteúdo) é ignorado: o cache recomeça vazio e o arquivo fica intacto."""
 
-    @pytest.mark.parametrize("protocolo", [3, 5])
-    @pytest.mark.parametrize(("arquivo", "atributo"), list(ARQUIVOS_DE_CACHE)[:2])
-    def test_cada_cache_antigo_e_descartado_sem_ser_carregado(self, tmp_path, protocolo, arquivo, atributo):
-        entradas = {PLAYLIST: RESPOSTA_DE_PLAYLIST, "outra": ["a", 1, None, True]}
-        caminho = pasta_dos_caches(tmp_path) / arquivo
-        caminho.write_bytes(pickle.dumps(entradas, protocol=protocolo))
-        pool = pool_vazio()
-        pool.load_cache()
-        assert all(len(getattr(pool, nome)) == 0 for _, nome in ARQUIVOS_DE_CACHE)
-        assert not caminho.exists()
-
-    def test_sem_arquivos_os_caches_comecam_vazios(self, tmp_path):
+    @pytest.mark.parametrize(
+        "conteudo", [pickle.dumps({PLAYLIST: RESPOSTA_DE_PLAYLIST}, protocol=5), b"", b"\x80\x09."]
+    )
+    def test_o_cache_antigo_do_bot_nao_e_carregado_nem_apagado(self, tmp_path, conteudo):
+        caminhos = [pasta_dos_caches(tmp_path) / arquivo for arquivo, _ in ARQUIVOS_DE_CACHE]
+        for caminho in caminhos:
+            caminho.write_bytes(conteudo)
         pool = pool_vazio()
         pool.load_cache()
         assert all(len(getattr(pool, atributo)) == 0 for _, atributo in ARQUIVOS_DE_CACHE)
+        assert all(caminho.read_bytes() == conteudo for caminho in caminhos)
 
-
-# O mesmo conteúdo ruim em cada arquivo: a inicialização não pode cair e o cache fica vazio, seja qual for o formato.
-CONTEUDOS_ILEGIVEIS = {
-    "classe-inexistente": b"cnonexistent_module_xyz\nFakeClass\n)\x81}.",
-    "bytes-sem-formato": b"BYTES_QUE_NAO_SAO_UM_CACHE",
-    "arquivo-vazio": b"",
-    "truncado": pickle.dumps({"a": list(range(50))})[:-12],
-    "json-que-nao-e-cache": b'{"v": 1, "items": "nao-e-lista"}',
-    "so-zeros": b"\x00" * 64,
-}
-
-
-class TestCacheIlegivel:
-    @pytest.mark.parametrize(
-        "conteudo", list(list(CONTEUDOS_ILEGIVEIS.values()))[:2], ids=list(CONTEUDOS_ILEGIVEIS)[:2]
-    )
-    def test_lastfm_ilegivel_nao_derruba_e_fica_vazio(self, tmp_path, conteudo):
-        (tmp_path / ".lastfm_cache").write_bytes(conteudo)
+    @pytest.mark.parametrize("conteudo", [pickle.dumps({"Artista - Música": {"name": "Música"}}), b""])
+    def test_o_cache_antigo_do_lastfm_nao_e_carregado_nem_apagado(self, tmp_path, conteudo):
+        antigo = tmp_path / ".lastfm_cache"
+        antigo.write_bytes(conteudo)
         assert len(LastFM("chave", "segredo").cache) == 0
-
-
-# Conteúdos que o ``except`` de hoje (``ModuleNotFoundError``, ``AttributeError``, ``UnpicklingError``, ``EOFError``)
-# NÃO trata: o ``pickle`` levanta ``ValueError``, ``UnicodeDecodeError`` ou ``TypeError`` e a inicialização cai.
-CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT = {
-    "protocolo-desconhecido": b"\x80\x09.",
-    "inteiro-malformado": b"I12x\n.",
-    "texto-nao-utf8": b"X\x02\x00\x00\x00\xff\xfe.",
-    "chave-nao-hashavel": b"(]]d.",
-    "pickle-valido-de-inteiro": pickle.dumps(5),
-    "pickle-valido-de-lista": pickle.dumps([1, 2, 3]),
-}
-
-
-class TestCacheIlegivelQueEscapaDoExcept:
-    @pytest.mark.parametrize(
-        "conteudo",
-        list(list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT.values()))[:2],
-        ids=list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT)[:2],
-    )
-    @pytest.mark.parametrize(("arquivo", "atributo"), list(ARQUIVOS_DE_CACHE)[:2])
-    def test_cache_com_esse_conteudo_nao_derruba_e_fica_vazio(self, tmp_path, arquivo, atributo, conteudo):
-        (pasta_dos_caches(tmp_path) / arquivo).write_bytes(conteudo)
-        pool = pool_vazio()
-        pool.load_cache()
-        assert len(getattr(pool, atributo)) == 0
+        assert antigo.read_bytes() == conteudo

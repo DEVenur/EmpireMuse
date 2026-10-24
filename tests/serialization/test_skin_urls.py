@@ -2,8 +2,8 @@
 
 Campos: ``footer.icon_url``, ``author.url``, ``author.icon_url``, ``image.url`` e ``thumbnail.url``. Vale ``""`` (o editor grava
 campo vazio), um placeholder de URL que o ``skin_converter`` substitui (``{guild.icon}`` e companhia, o texto inteiro) ou uma URL
-que passa no ``check_url`` (com os placeholders trocados por texto neutro, para ``https://cdn/{guild.id}.png``). Na migração do
-texto legado, URL inválida recusa a skin (fica como texto e a padrão assume), como qualquer outro campo.
+que passa no ``check_url`` (com os placeholders trocados por texto neutro, para ``https://cdn/{guild.id}.png``). Na leitura,
+URL inválida recusa a skin (fica no documento e a padrão assume), como qualquer outro campo.
 """
 
 import ast
@@ -12,12 +12,12 @@ import logging
 import pytest
 
 from tests.support.formatos_reais import SERVIDOR
-from tests.support.chave_de_corte import log_sem_o_conteudo, registrou
-from tests.support.leitor_legado import SEGREDO
+from tests.support.avisos_no_log import registrou
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.serializacao_nucleo import falha
 from tests.support.skins import carregar_helper, com_embed, valida
 from tests.persistence.test_skin_leitura import documento, rodar
-from tests.persistence.test_formato_skin import skin_realista, texto_legado
+from tests.persistence.test_formato_skin import skin_realista
 from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.critical
@@ -99,21 +99,10 @@ class TestPlaceholdersDeURLSaoOsQueOConversorSubstitui:
         assert set(PLACEHOLDERS_DE_URL) <= substituidos
 
 
-class TestMigracaoDoTextoLegado:
+class TestLeituraDaSkinComUrlInvalida:
     @pytest.fixture
     def helper(self):
         return carregar_helper()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("campo", list(sorted(CAMPOS))[:2])
-    async def test_url_invalida_recusa_a_skin_que_fica_como_texto(self, helper, caplog, capsys, campo):
-        monta, _ = CAMPOS[campo]
-        texto = texto_legado(monta("javascript:alert(1)"))
-        dados = documento(normais={"Ruim": texto, "Boa": texto_legado(skin_realista())})
-        with caplog.at_level(logging.DEBUG):
-            await rodar(helper, dados)
-        assert dados["custom_skins"]["Ruim"] == texto and dados["custom_skins"]["Boa"] == skin_realista()
-        assert registrou(caplog, SERVIDOR, "pattern") and log_sem_o_conteudo(caplog, capsys)
 
     @pytest.mark.asyncio
     async def test_dicionario_ja_gravado_com_url_invalida_nao_chega_ao_player(self, helper, caplog):

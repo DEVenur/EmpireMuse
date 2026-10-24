@@ -1,14 +1,9 @@
-"""F3-6b, etapa 0 — caracterização das skins personalizadas do servidor no formato ATUAL (sem produção alterada).
+"""As skins personalizadas do servidor: dublês e leitores (``load_skin``, ``change_skin`` e ``create_player``).
 
-Uma skin é o dicionário do editor (``message_data``). Hoje fica no documento global do servidor como TEXTO
-(``base64`` de ``pickle``, sem ``zlib``) em ``custom_skins`` (modo normal) e ``custom_skins_static`` (song-request).
-Os leitores (``SkinEditorMenu.load_skin``, o laço depois de salvar no ``SkinEditorMenu.modal_handler``,
-``MusicSettings.change_skin`` e ``Music.create_player``) só convertem o texto em dicionário na memória e já aceitam o
-dicionário pronto; o gravador é o ``modal_handler`` do botão de salvar.
-
-* o que continua valendo depois da migração: os leitores entregam ao player o MESMO dicionário, venha o dado como
-  texto legado (protocolos 4 e 5; os mais antigos viram recusa, em ``tests/persistence/test_chave_de_corte_load_legacy.py``) ou como dicionário (``TestLeitores``, ``TestEditorSalvaESegue``);
-* a etapa 3 troca o formato GRAVADO (texto → dicionário): os testes dela estão em ``tests/test_f3_6b_etapa3_*.py``.
+Uma skin é o dicionário do editor (``message_data``), guardado no documento global do servidor em ``custom_skins`` (modo normal)
+e ``custom_skins_static`` (song-request). Os leitores entregam ao player o dicionário validado. O texto do formato antigo
+(``base64`` de ``pickle``, ``texto_legado``) não é mais lido: fica no documento e a skin padrão assume (ver
+``tests/persistence/test_skin_leitura.py``).
 """
 
 import base64
@@ -51,7 +46,7 @@ def skin_realista(**mudancas) -> dict:
 
 
 def texto_legado(skin: dict, protocolo: int = 4) -> str:
-    """O que o gravador de hoje põe no documento: ``base64`` de ``pickle`` (sem ``zlib``)."""
+    """O que o gravador antigo punha no documento: ``base64`` de ``pickle`` (sem ``zlib``); o bot não o lê mais."""
     return base64.b64encode(pickle.dumps(skin, protocol=protocolo)).decode("utf-8")
 
 
@@ -203,7 +198,7 @@ class TestLeitores:
     @pytest.mark.asyncio
     async def test_change_skin_nao_mexe_no_player_que_ja_usa_a_skin_escolhida(self, monkeypatch):
         dados = {
-            "custom_skins": {"N": texto_legado(skin_realista())},
+            "custom_skins": {"N": skin_realista()},
             "custom_skins_static": {},
             "global_skin": False,
             "player_skin": "",

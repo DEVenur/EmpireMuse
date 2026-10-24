@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from empiremuse.utils.client import BotPool
-from tests.support.leitor_legado import SEGREDO
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.sessoes import bruto, decodificar, faixa_info, session, sessao_minima
 
 pytestmark = pytest.mark.critical

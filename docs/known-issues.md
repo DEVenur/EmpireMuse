@@ -51,8 +51,8 @@ quebrado ou perda de dados em cenário comum) · *médio* (comportamento incorre
 |---|---|---|---|---|
 | KI-09 | `empiremuse/utils/db.py` (`update_values`) | [Resolvido] `update_values` ignora valores do tipo lista (`elif not isinstance(v, list)`) ao migrar a versão do esquema. | Resolvido na Fase 3 (F3-1): a migração preserva listas e chaves do usuário. | alto |
 | KI-10 | `empiremuse/utils/db.py` (`LocalDatabase.update_data`) | [Resolvido] `LocalDatabase.update_data` captura qualquer exceção, imprime e segue, atualizando o cache como se tivesse gravado. | Resolvido na Fase 3 (F3-2): falhas de gravação sobem como erro, o cache só atualiza após gravação e documentos novos usam upsert. | médio |
-| KI-57 | `empiremuse/serialization/legacy_pickle.py` (`load_legacy`), `empiremuse/utils/music/legacy_reader.py` | Leitor do formato antigo de serialização mantido durante o período de transição. | O leitor legado sai na versão N+2 após a conclusão da migração dos dados legados para JSON. | baixo |
-| KI-58 | Ambiente de execução (`PYTHONHASHSEED`) | Fixação da variável `PYTHONHASHSEED` no ambiente de execução. | O operador não deve fixar `PYTHONHASHSEED` no ambiente por segurança do leitor do formato antigo. | baixo |
+| KI-57 | `empiremuse/serialization/legacy_pickle.py` (`load_legacy`), `empiremuse/utils/music/legacy_reader.py` | [Resolvido] Leitor do formato antigo de serialização mantido durante o período de transição. | Resolvido na F3-6b (etapa 7): o leitor e as migrações saíram; o dado antigo é ignorado, com aviso no log da subida (`empiremuse/utils/music/legacy_notice.py`). | baixo |
+| KI-58 | Ambiente de execução (`PYTHONHASHSEED`) | [Resolvido] Fixação da variável `PYTHONHASHSEED` no ambiente de execução. | Sem efeito desde a F3-6b (etapa 7): o leitor do formato antigo, que era o motivo da restrição, foi removido. | baixo |
 
 ## Pool de bots e inicialização
 

@@ -231,8 +231,6 @@ class PlayerSession(commands.Cog):
             return
 
         try:
-            await self.migrate_legacy_sessions()
-
             mongo_sessions = await self.get_player_sessions_mongo()
             local_sessions = await self.get_player_sessions_local()
 
@@ -712,14 +710,6 @@ class PlayerSession(commands.Cog):
 
     def _uses_mongo(self) -> bool:
         return bool(self.bot.config["PLAYER_SESSIONS_MONGODB"] and self.bot.config["MONGO"])
-
-    async def migrate_legacy_sessions(self):
-        """Converte as sessões antigas (disco e Mongo) para JSON; chamada antes de ler as sessões, na subida."""
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, session_store.migrate_disk, self.bot.user.id)
-
-        if self.bot.config["MONGO"] and self.bot.pool.mongo_database is not None:
-            await session_store.migrate_mongo(self.bot.pool.mongo_database, str(self.bot.user.id))
 
     async def get_player_sessions_mongo(self):
         if not self.bot.config["MONGO"] or self.bot.pool.mongo_database is None:

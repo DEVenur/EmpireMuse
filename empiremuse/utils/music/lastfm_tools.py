@@ -10,7 +10,6 @@ from cachetools import TTLCache
 from empiremuse import paths
 from empiremuse.serialization.cache import LASTFM_MAX_BYTES
 from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
-from empiremuse.utils.music.legacy_reader import discard_legacy_cache
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,6 @@ class LastFM:
 
     def scrobble_load_cache(self):
         cache = TTLCache(maxsize=10000, ttl=600)
-        discard_legacy_cache(paths.RUNTIME_DIR / ".lastfm_cache")  # o antigo (pickle) nunca é lido
         saved = load_json_cache(paths.RUNTIME_DIR / ".lastfm_cache.json", max_bytes=LASTFM_MAX_BYTES, max_age=cache.ttl)
         cache.update({key: value for key, value in saved.items() if type(value) is dict})
         return cache

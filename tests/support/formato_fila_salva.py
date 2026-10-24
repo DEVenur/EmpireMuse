@@ -7,8 +7,7 @@ parada (guarda o que recebeu e interrompe).
 
 * vale antes e depois da migração para JSON: o mínimo de 3 faixas, o caminho por usuário, o conteúdo (``tracks``,
   ``created_at`` em UTC, ``guild_id``) e as faixas que voltam como as classes reais;
-* a etapa 4 trocou o formato gravado (``TestFormatoGravado``: JSON em ``saved_queues_json/``, sem envelope); o ``.pkl`` antigo
-  só é LIDO (``TestLegadoEmVariosProtocolos``, pelo ``load_legacy``) e migrado; os testes do JSON estão em
+* o formato gravado é JSON em ``saved_queues_json/``, sem envelope; o ``.pkl`` antigo não é lido; os testes do JSON estão em
   ``tests/persistence/test_fila_salva.py``.
 """
 
@@ -51,7 +50,7 @@ def _ambiente(tmp_path, monkeypatch):
 
 
 def caminho_da_fila(tmp_path, usuario=DONO):
-    """O ``.pkl`` LEGADO (só lido e migrado desde a etapa 4)."""
+    """O ``.pkl`` do formato antigo (o bot não o lê)."""
     return tmp_path / "local_database" / "saved_queues_v1" / "users" / f"{usuario}.pkl"
 
 

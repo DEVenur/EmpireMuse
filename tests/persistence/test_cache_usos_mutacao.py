@@ -1,8 +1,7 @@
-"""F3-6b, etapa 6 — complemento do QA, parte 2, depois da mutação do código REAL (usos dos caches, descarte do legado e ``fixfavs``).
+"""Complemento do QA, parte 2, depois da mutação do código REAL (usos dos caches e ``fixfavs``).
 
 Sobreviventes que não eram equivalentes: o ``cache_updater`` entrega uma LISTA (cópia) à thread e um erro de disco não o mata; o
-Last.fm não lê arquivo acima de 4 MiB nem entrega o ``ItemsView`` vivo à thread; ``discard_legacy_cache`` é silencioso quando o
-arquivo não existe e avisa (INFO, só com o nome) quando apaga; e o ``fixfavs`` regrava o backup do zero a cada execução, segue
+Last.fm não lê arquivo acima de 4 MiB nem entrega o ``ItemsView`` vivo à thread; e o ``fixfavs`` regrava o backup do zero a cada execução, segue
 quando um servidor não tem ``player_controller`` e limpa os espaços dos favoritos dos USUÁRIOS.
 """
 
@@ -16,7 +15,6 @@ import pytest
 from empiremuse.cogs.misc import Misc
 from empiremuse.utils import client
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.legacy_reader import discard_legacy_cache
 from tests.persistence.test_formato_caches import gravar_o_cache_de_playlist, pool_vazio
 
 
@@ -37,13 +35,6 @@ class TestCacheDePlaylist:
         with caplog.at_level(logging.WARNING):
             await gravar_o_cache_de_playlist(pool)  # a segunda espera só chega se o laço sobreviveu
         assert any("não gravado" in r.getMessage() for r in caplog.records)
-
-
-class TestDescarteDoCacheAntigo:
-    def test_arquivo_ausente_nao_avisa_nada(self, tmp_path, caplog):
-        with caplog.at_level(logging.DEBUG):
-            discard_legacy_cache(tmp_path / "nao_existe.pkl")
-        assert caplog.records == []
 
 
 def montar_fixfavs(guildas, usuarios):

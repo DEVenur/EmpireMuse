@@ -1,20 +1,17 @@
-"""F3-6b, etapa 4 (RED do Backend) — a fila salva do usuário em JSON: esquema, gravação atômica, leitura e migração do ``.pkl``.
+"""A fila salva do usuário em JSON: esquema, gravação atômica e leitura.
 
-* ``empiremuse/serialization/queue.py``: ``encode_saved_queue``, ``decode_saved_queue`` e ``normalize_legacy_queue``
+* ``empiremuse/serialization/queue.py``: ``encode_saved_queue`` e ``decode_saved_queue``
   (documento ``{"v": 1, "tracks": [...], "created_at": ISO com offset, "guild_id": int}`` de até 4 MiB e 5 000 faixas);
-* ``Music.save_queue`` grava ``local_database/saved_queues_json/users/<id>.json`` (0600, escrita atômica) e remove o ``.pkl``
-  antigo do mesmo usuário; ``Music.play`` lê o JSON e, se só houver o ``.pkl`` legado, lê por ``load_legacy``, grava o JSON e
-  só então apaga o ``.pkl``; a migração também roda na inicialização (``BotPool.setup``);
-* fila ilegível (JSON ou ``.pkl``) vira ``GenericError`` com "incompatível" e o arquivo FICA.
+* ``Music.save_queue`` grava ``local_database/saved_queues_json/users/<id>.json`` (0600, escrita atômica); ``Music.play`` lê o JSON;
+* fila ilegível vira ``GenericError`` com "incompatível" e o arquivo FICA;
+* o ``.pkl`` do formato antigo não é lido, apagado nem conta como fila salva.
 """
 
 import copy
 import importlib
 import json
 import logging
-import os
 import pickle
-import time
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,12 +21,10 @@ import pytest
 
 from empiremuse.utils.music.errors import GenericError
 from tests.support.formatos_reais import DONO, INSTANTE, SERVIDOR, faixa_youtube
-from tests.support.chave_de_corte import espionar_load_legacy
-from tests.support.leitor_legado import SEGREDO
+from tests.support.serializacao_nucleo import SEGREDO
 from tests.support.serializacao_nucleo import LENGTH, MISSING, RANGE, TYPE, falha, vazamentos
 from tests.support.formato_fila_salva import (
     caminho_da_fila,
-    infos,
     montar_leitura,
     salvar,
     tres_faixas,
@@ -161,21 +156,6 @@ class TestDecodificar:
         assert not vazamentos(falha(lendo, json.dumps(bruto).encode()))
 
 
-class TestLegado:
-    def legado(self, **mudancas):
-        base = {"tracks": faixas_validas(), "created_at": INSTANTE, "guild_id": SERVIDOR}
-        base.update(mudancas)
-        return base
-
-    def test_data_sem_fuso_do_legado_conta_como_utc(self):
-        convertido = queue.normalize_legacy_queue(self.legado(created_at=datetime(2026, 1, 1)))
-        assert convertido["created_at"] == datetime(2026, 1, 1, tzinfo=UTC)
-
-    def test_legado_sem_faixas_ou_com_campo_ruim_e_recusado(self):
-        assert falha(queue.normalize_legacy_queue, {"created_at": INSTANTE, "guild_id": 1}).code == MISSING
-        assert falha(queue.normalize_legacy_queue, self.legado(guild_id="x")).code == TYPE
-
-
 # ============================================================================ gravação atômica e privada
 
 
@@ -224,99 +204,55 @@ class TestSalvar:
 # ============================================================================ Music.play
 
 
-def escrever_pkl(tmp_path, conteudo=None, protocolo=4, usuario=DONO):
-    if conteudo is None:
-        faixas = tres_faixas()
-        for faixa in faixas:
-            faixa.info["id"] = faixa.id
-        conteudo = {"tracks": infos(faixas), "created_at": INSTANTE, "guild_id": SERVIDOR}
+def escrever_pkl(tmp_path, usuario=DONO):
+    """Um ``.pkl`` do formato antigo: o bot não o abre."""
     alvo = caminho_da_fila(tmp_path, usuario)
     alvo.parent.mkdir(parents=True, exist_ok=True)
-    alvo.write_bytes(zlib.compress(pickle.dumps(conteudo, protocol=protocolo)))
+    conteudo = {"tracks": faixas_validas(), "created_at": INSTANTE, "guild_id": SERVIDOR}
+    alvo.write_bytes(zlib.compress(pickle.dumps(conteudo, protocol=4)))
     return alvo
 
 
 class TestLer:
     @pytest.mark.asyncio
-    async def test_le_o_json_sem_passar_pelo_leitor_legado(self, tmp_path, monkeypatch):
+    async def test_le_o_json(self, tmp_path, monkeypatch):
         faixas = tres_faixas()
         await salvar(faixas[1:], atual=faixas[0])
-        chamadas = espionar_load_legacy(monkeypatch)
         lidas = await montar_leitura(monkeypatch, None)()
-        assert chamadas == [] and [f.info["title"] for f in lidas] == [f.info["title"] for f in faixas]
+        assert [f.info["title"] for f in lidas] == [f.info["title"] for f in faixas]
 
     @pytest.mark.asyncio
-    async def test_o_json_vale_mais_que_o_pkl_antigo_quando_os_dois_existem(self, tmp_path, monkeypatch):
-        faixas = tres_faixas()
-        await salvar(faixas[1:], atual=faixas[0])
-        escrever_pkl(tmp_path)
-        chamadas = espionar_load_legacy(monkeypatch)
-        assert len(await montar_leitura(monkeypatch, None)()) == 3 and chamadas == []
+    async def test_so_o_pkl_antigo_diz_que_a_fila_nao_existe_e_o_arquivo_fica_intacto(self, tmp_path, monkeypatch):
+        pkl = escrever_pkl(tmp_path)
+        antes = pkl.read_bytes()
 
+        def nunca(*args, **kwargs):
+            raise AssertionError("o arquivo antigo foi aberto")
 
-class TestMigracaoNoPrimeiroAcesso:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [0, 3])
-    async def test_pkl_de_protocolo_antigo_continua_recusado_e_o_arquivo_fica(self, tmp_path, monkeypatch, protocolo):
-        pkl = escrever_pkl(tmp_path, protocolo=protocolo)
-        with pytest.raises(GenericError, match="incompatível"):
+        monkeypatch.setattr(pickle, "loads", nunca)
+        monkeypatch.setattr(pickle, "load", nunca)
+        monkeypatch.setattr(pickle, "Unpickler", nunca)
+        with pytest.raises(GenericError, match="(?i)excluída"):
             await montar_leitura(monkeypatch, None).rodar()
-        assert pkl.is_file() and not caminho_json(tmp_path).exists()
+        assert pkl.read_bytes() == antes and not caminho_json(tmp_path).exists()
 
     @pytest.mark.asyncio
-    async def test_falha_ao_gravar_o_json_ainda_entrega_a_fila_e_mantem_o_pkl(self, tmp_path, monkeypatch):
+    async def test_o_json_e_lido_e_o_pkl_antigo_do_mesmo_usuario_nao_e_tocado(self, tmp_path, monkeypatch):
+        faixas = tres_faixas()
         pkl = escrever_pkl(tmp_path)
-        monkeypatch.setattr(files.os, "replace", negar)
-        lidas = await montar_leitura(monkeypatch, None)()
-        assert len(lidas) == 3 and pkl.is_file() and not caminho_json(tmp_path).exists()
-
-
-# ============================================================================ migração na inicialização
-
-
-class TestMigracaoNaInicializacao:
-    def test_converte_os_pkl_validos_e_apaga_depois_de_reler_o_json(self, tmp_path):
-        a = escrever_pkl(tmp_path, usuario=DONO)
-        b = escrever_pkl(tmp_path, usuario=DONO + 1)
-        assert saved_queue.migrate_saved_queues() == 2
-        assert not a.exists() and not b.exists()
-        for usuario in (DONO, DONO + 1):
-            assert len(lendo(caminho_json(tmp_path, usuario).read_bytes())["tracks"]) == 3
-
-    def test_nome_de_arquivo_fora_do_padrao_e_ignorado(self, tmp_path):
-        pasta = caminho_da_fila(tmp_path).parent
-        pasta.mkdir(parents=True)
-        conteudo = zlib.compress(
-            pickle.dumps({"tracks": faixas_validas(), "created_at": INSTANTE, "guild_id": 1}, protocol=4)
-        )
-        nomes = ("abc.pkl", "12 3.pkl", ".pkl", "1" * 25 + ".pkl", "12.pkl.bak", "12.txt", "١٢٣.pkl")
-        for nome in nomes:
-            (pasta / nome).write_bytes(conteudo)
-        assert saved_queue.migrate_saved_queues() == 0
-        assert len(list(pasta.iterdir())) == len(nomes)
-        assert not (tmp_path / "local_database" / "saved_queues_json").exists()
-
-    def test_json_mais_novo_vence_e_o_pkl_velho_e_apagado(self, tmp_path):
-        pkl = escrever_pkl(tmp_path)
-        alvo = caminho_json(tmp_path)
-        alvo.parent.mkdir(parents=True)
-        alvo.write_bytes(codificar(faixas_validas(4)))
-        agora = time.time()
-        os.utime(pkl, (agora - 100, agora - 100))
-        os.utime(alvo, (agora, agora))
-        saved_queue.migrate_saved_queues()
-        assert not pkl.exists() and len(lendo(alvo.read_bytes())["tracks"]) == 4
+        antes = pkl.read_bytes()
+        await salvar(faixas[1:], atual=faixas[0])
+        assert len(await montar_leitura(monkeypatch, None)()) == 3
+        assert pkl.read_bytes() == antes
 
 
 # ============================================================================ onde a existência da fila é testada
 
 
 class TestExistenciaDaFila:
-    def test_json_ou_pkl_contam_e_nada_nao(self, tmp_path):
+    def test_so_o_json_conta(self, tmp_path):
         assert saved_queue.has_saved_queue(DONO) is False
         escrever_pkl(tmp_path)
-        assert saved_queue.has_saved_queue(DONO) is True
-        caminho_da_fila(tmp_path).unlink()
         assert saved_queue.has_saved_queue(DONO) is False
         alvo = caminho_json(tmp_path)
         alvo.parent.mkdir(parents=True)

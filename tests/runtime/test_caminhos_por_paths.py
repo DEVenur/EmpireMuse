@@ -1,4 +1,4 @@
-"""Testes da Task C-22: roteamento de caminhos por empiremuse.paths, subprocess Popen cwd, e guardas de cache."""
+"""Testes da Task C-22: roteamento de caminhos por empiremuse.paths e subprocess Popen cwd."""
 
 from __future__ import annotations
 
@@ -7,12 +7,10 @@ import base64
 import zlib
 
 import pytest
-from cachetools import TTLCache
 
 from empiremuse import paths
 from empiremuse.panel.handlers import brand
 from empiremuse.utils import branding
-from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import LocalDatabase
 from empiremuse.utils.music import lavalink_server_list, local_lavalink as ll
 from tests.support.formatos_reais import BOT_ID, MongoEmMemoria, cog_de_sessoes
@@ -24,43 +22,6 @@ from tests.persistence.test_formato_skin import BotaoDeModo, InteracaoDoEditor, 
 
 
 editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/test_formato_skin.py
-
-
-class TestGuardasDeCache:
-    """(b) Cache ilegível (de qualquer formato, inclusive o de uma versão antiga) é descartado sem travar a inicialização."""
-
-    @pytest.mark.parametrize(
-        "filename,attr_name",
-        [
-            ("playlist_cache.pkl", "playlist_cache"),
-            (".lyric_cache_data", "lyric_data_cache"),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "conteudo",
-        [
-            b"cnonexistent_module_xyz\nFakeClass\n)\x81}.",  # classe de um módulo que não existe (de uma versão antiga)
-            b"",
-        ],
-        ids=["classe-inexistente", "vazio"],
-    )
-    def test_cache_ilegivel_e_descartado_sem_travar(self, monkeypatch, tmp_path, filename, attr_name, conteudo):
-        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
-        db_dir = tmp_path / "local_database"
-        db_dir.mkdir(parents=True, exist_ok=True)
-        (db_dir / filename).write_bytes(conteudo)
-
-        pool = BotPool.__new__(BotPool)
-        pool.playlist_cache = TTLCache(maxsize=10, ttl=1800)  # o ``load_cache`` lê o TTL do cache de playlist
-        pool.partial_track_cache = {}
-        pool.lyric_data_cache = {}
-
-        pool.load_cache()
-
-        assert getattr(pool, attr_name) == {}
-        assert all(
-            getattr(pool, outro) == {} for outro in ("playlist_cache", "partial_track_cache", "lyric_data_cache")
-        )
 
 
 def conteudo_legivel(gravado: bytes | str) -> bytes:
