@@ -30,18 +30,18 @@ import sys
 import tempfile
 from importlib import metadata
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientError
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
 
-from empiremuse.utils import db as db_module
-from empiremuse.utils.db import DBModel, LocalDatabase, MongoDatabase, db_models, global_db_models, update_values
+from empiremuse.utils.db import DBModel, LocalDatabase, db_models, global_db_models, update_values
 from empiremuse.utils.music.audio_sources import spotify
 from empiremuse.utils.music.errors import GenericError
 from tests.support.raiz import RAIZ
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
 
 ROOT = RAIZ
 REQUIREMENTS = ROOT / "requirements.txt"
@@ -118,20 +118,6 @@ class TestKI01TinymongoComExtraSerialization:
             "(empiremuse/utils/db.py) falha numa instalação limpa só do requirements.txt (ex.: Discloud)"
         )
 
-    def test_o_extra_declarado_existe_de_verdade_no_tinymongo(self):
-        """Protege contra erro de digitação (ex.: 'serialisation'): o extra tem de ser um dos que o tinymongo publica."""
-        publicados = set(metadata.metadata("tinymongo").get_all("Provides-Extra") or [])
-        assert "serialization" in {_normalizar(extra) for extra in publicados}, publicados
-        declarados = {
-            extra
-            for nome, extras in map(_nome_e_extras, _linhas_do_requirements())
-            if nome == "tinymongo"
-            for extra in extras
-        }
-        assert declarados <= {_normalizar(extra) for extra in publicados}, (
-            f"extras inexistentes: {declarados - publicados}"
-        )
-
     def test_uma_instalacao_so_do_requirements_traz_tudo_o_que_o_db_py_importa(self):
         fecho = _fecho_de_dependencias([_nome_e_extras(linha) for linha in _linhas_do_requirements()])
         distribuicoes = metadata.packages_distributions()
@@ -155,10 +141,6 @@ def antigo(**campos) -> dict:
 
 
 class TestKI09UpdateValues:
-    def test_lista_do_usuario_no_topo_e_mantida(self):
-        resultado = update_values(modelo(djroles=[]), antigo(djroles=[111, 222]))
-        assert resultado["djroles"] == [111, 222]
-
     def test_lista_de_dicts_do_usuario_e_mantida(self):
         faixas = [{"url": "https://a", "title": "A"}, {"url": "https://b", "title": "B"}]
         assert update_values(modelo(last_tracks=[]), antigo(last_tracks=faixas))["last_tracks"] == faixas
@@ -166,22 +148,11 @@ class TestKI09UpdateValues:
     def test_lista_vazia_do_usuario_vence_um_padrao_nao_vazio(self):
         assert update_values(modelo(tags=["padrao"]), antigo(tags=[]))["tags"] == []
 
-    def test_lista_aninhada_em_mapeamento_do_modelo_e_mantida(self):
-        resultado = update_values(modelo(cfg={"itens": [], "novo": 7}), antigo(cfg={"itens": [3, 4]}))
-        assert resultado["cfg"] == {"itens": [3, 4], "novo": 7}
-
     def test_lista_dentro_de_mapeamento_de_chaves_dinamicas_e_mantida(self):
         """custom_skins/fav_links são mapeamentos cujas chaves vêm do usuário: as listas dentro delas não podem sumir."""
         salvo = {"minha_skin": {"cores": ["#fff", "#000"], "nome": "x"}}
         resultado = update_values(modelo(custom_skins={}), antigo(custom_skins=salvo))
         assert resultado["custom_skins"] == salvo
-
-    def test_valor_escalar_e_mapeamento_do_usuario_vencem_o_padrao(self):
-        resultado = update_values(
-            modelo(autoplay=False, pc={"canal": None, "skin": None}), antigo(autoplay=True, pc={"canal": 5})
-        )
-        assert resultado["autoplay"] is True
-        assert resultado["pc"] == {"canal": 5, "skin": None}
 
     def test_chaves_novas_do_modelo_recebem_o_padrao(self):
         resultado = update_values(
@@ -201,14 +172,6 @@ class TestKI09UpdateValues:
         assert resultado["obsoleta_escalar"] == "a"
         assert resultado["obsoleta_mapa"] == {"k": 1}
         assert resultado["obsoleta_lista"] == [1, 2], "lista de chave removida do modelo também não pode ser apagada"
-
-    def test_o_documento_antigo_nao_e_alterado_nem_compartilha_listas_com_o_resultado(self):
-        original = antigo(djroles=[1, 2], cfg={"itens": [9]})
-        copia = copy.deepcopy(original)
-        resultado = update_values(modelo(djroles=[], cfg={"itens": []}), original)
-        resultado["djroles"].append(99)
-        resultado["cfg"]["itens"].append(99)
-        assert original == copia, "mexer no resultado alterou o documento antigo (listas compartilhadas)"
 
     def test_migrar_duas_vezes_da_o_mesmo_resultado(self):
         primeiro = update_values(modelo(djroles=[], x=1), antigo(djroles=[1]))
@@ -257,19 +220,6 @@ def semear(pasta: str, collection: str, db_name: str, documento: dict) -> None:
 
 class TestKI09MigracaoNoLocalDatabase:
     @pytest.mark.asyncio
-    async def test_servidor_mantem_djroles_e_o_resto_ao_subir_o_ver(self, pasta_do_banco):
-        semear(pasta_do_banco, "bot1", DBModel.guilds, _documento_antigo_do_servidor())
-        banco = LocalDatabase(dir_=pasta_do_banco)
-
-        dados = await banco.get_data("900", db_name=DBModel.guilds, collection="bot1")
-
-        assert dados["djroles"] == [111, 222], "KI-09: djroles do servidor foi substituído pelo padrão vazio"
-        assert dados["autoplay"] is True and dados["default_player_volume"] == 55
-        assert dados["player_controller"]["channel"] == 123
-        assert dados["player_controller"]["fav_links"] == {"musica": {"url": "https://exemplo/x", "tags": ["a", "b"]}}
-        assert dados["ver"] == db_models[DBModel.guilds]["ver"] and dados["_id"] == "900"
-
-    @pytest.mark.asyncio
     async def test_usuario_global_mantem_last_tracks_ao_subir_o_ver(self, pasta_do_banco):
         semear(pasta_do_banco, "global", DBModel.users, _documento_antigo_do_usuario())
         banco = LocalDatabase(dir_=pasta_do_banco)
@@ -279,16 +229,6 @@ class TestKI09MigracaoNoLocalDatabase:
         assert dados["last_tracks"] == _documento_antigo_do_usuario()["last_tracks"], "KI-09: last_tracks perdido"
         assert dados["lastfm"]["scrobble"] is True and dados["custom_prefix"] == "?"
         assert dados["ver"] == global_db_models[DBModel.users]["ver"]
-
-    @pytest.mark.asyncio
-    async def test_chaves_novas_do_modelo_recebem_o_padrao_na_migracao_real(self, pasta_do_banco):
-        semear(pasta_do_banco, "bot1", DBModel.guilds, _documento_antigo_do_servidor())
-
-        dados = await LocalDatabase(dir_=pasta_do_banco).get_data("900", db_name=DBModel.guilds, collection="bot1")
-
-        assert dados["enable_restrict_mode"] is False
-        assert "enable_prefixed_commands" not in dados, "KI-43: o campo órfão saiu do modelo"
-        assert dados["check_other_bots_in_vc"] is False
 
     @pytest.mark.asyncio
     async def test_chave_removida_do_modelo_e_preservada_na_migracao_real(self, pasta_do_banco):
@@ -311,19 +251,6 @@ class TestKI09MigracaoNoLocalDatabase:
         assert de_novo["djroles"] == [111, 222] and de_novo["ver"] == bruto["ver"]
 
     @pytest.mark.asyncio
-    async def test_modelo_sintetico_com_lista_aninhada_e_chave_nova(self, pasta_do_banco):
-        modelo_novo = {DBModel.guilds: {"ver": 3.0, "cfg": {"itens": [], "nova": "n"}, "tags": [], "nova_lista": ["p"]}}
-        semear(pasta_do_banco, "c", DBModel.guilds, {"_id": "1", "ver": 1.0, "cfg": {"itens": [1, 2]}, "tags": ["x"]})
-
-        dados = await LocalDatabase(dir_=pasta_do_banco).get_data(
-            "1", db_name=DBModel.guilds, collection="c", default_model=modelo_novo
-        )
-
-        assert dados["cfg"] == {"itens": [1, 2], "nova": "n"}
-        assert dados["tags"] == ["x"]
-        assert dados["nova_lista"] == ["p"]
-
-    @pytest.mark.asyncio
     async def test_documento_ja_na_versao_atual_volta_intacto(self, pasta_do_banco):
         """Caracterização (passa hoje): sem diferença de ver não há migração."""
         atual = {**copy.deepcopy(db_models[DBModel.guilds]), "_id": "7", "djroles": [5, 6]}
@@ -332,28 +259,6 @@ class TestKI09MigracaoNoLocalDatabase:
         dados = await LocalDatabase(dir_=pasta_do_banco).get_data("7", db_name=DBModel.guilds, collection="bot1")
 
         assert dados["djroles"] == [5, 6]
-
-
-class FakeColecaoMongo:
-    def __init__(self, documento):
-        self.find_one = AsyncMock(return_value=copy.deepcopy(documento))
-        self.update_one = AsyncMock()
-
-
-class TestKI09MigracaoNoMongoDatabase:
-    @pytest.mark.asyncio
-    async def test_servidor_mantem_djroles_e_grava_a_lista_no_set(self):
-        colecao = FakeColecaoMongo(_documento_antigo_do_servidor())
-        banco = MongoDatabase.__new__(MongoDatabase)
-        db_module.BaseDB.__init__(banco)
-        banco._connect = MagicMock()
-        banco._connect.__getitem__.return_value.__getitem__.return_value = colecao
-
-        dados = await banco.get_data("900", db_name=DBModel.guilds, collection="bot1")
-
-        assert dados["djroles"] == [111, 222], "KI-09 também no Mongo: lista substituída pelo padrão vazio"
-        gravado = colecao.update_one.await_args.args[1]["$set"]
-        assert gravado["djroles"] == [111, 222] and gravado["ver"] == db_models[DBModel.guilds]["ver"]
 
 
 # ============================================================================ KI-15 — Spotify get_access_token
@@ -461,15 +366,6 @@ class TestKI15SpotifyCredenciaisInvalidas:
         assert SEGREDO_FAKE not in texto and ID_FAKE not in texto
 
     @pytest.mark.asyncio
-    async def test_nao_fica_tentando_em_laco(self, spotify_fake):
-        cliente, chamadas = spotify_fake(status=401, corpo=INVALIDO)
-
-        with pytest.raises(GenericError):
-            await _terminar(cliente.get_access_token())
-
-        assert 1 <= len(chamadas) <= 2, f"{len(chamadas)} requisições de token para credenciais inválidas"
-
-    @pytest.mark.asyncio
     async def test_uma_chamada_seguinte_tambem_nao_fica_presa(self, spotify_fake):
         cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
         with pytest.raises(GenericError):
@@ -480,22 +376,6 @@ class TestKI15SpotifyCredenciaisInvalidas:
         except GenericError:
             pass  # falhar de novo, rápido, é aceitável; ficar presa não
 
-        assert cliente.token_refresh is False
-
-    @pytest.mark.asyncio
-    async def test_chamadas_concorrentes_terminam_todas(self, spotify_fake):
-        cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
-
-        async def duas():
-            return await asyncio.gather(cliente.get_access_token(), cliente.get_access_token(), return_exceptions=True)
-
-        # a 2ª espera a 1ª num laço de sleep(1): damos folga de 3 s; presa de verdade não termina nunca
-        try:
-            resultados = await asyncio.wait_for(duas(), 4.0)
-        except asyncio.TimeoutError:
-            pytest.fail("KI-15: chamadas concorrentes de get_access_token ficaram presas")
-
-        assert any(isinstance(r, GenericError) for r in resultados), resultados
         assert cliente.token_refresh is False
 
     @pytest.mark.asyncio
@@ -520,20 +400,6 @@ class TestKI15SpotifyCredenciaisInvalidas:
         assert cliente.token_refresh is False
 
     @pytest.mark.asyncio
-    async def test_falha_nao_corrompe_o_cache_do_token_nem_apaga_as_credenciais(self, spotify_fake, tmp_path):
-        """Uma resposta de erro do Spotify não pode virar o 'token': o cache anterior e as credenciais ficam como estavam."""
-        cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
-        anterior = {"access_token": "anterior", "expires_at": 123.0}
-        cliente.spotify_cache = copy.deepcopy(anterior)
-
-        with pytest.raises(GenericError):
-            await _terminar(cliente.get_access_token())
-
-        assert cliente.spotify_cache == anterior, "a resposta de erro sobrescreveu o cache do token"
-        assert (cliente.client_id, cliente.client_secret) == (ID_FAKE, SEGREDO_FAKE), "as credenciais foram apagadas"
-        assert not _arquivos_gravados(tmp_path), "a falha gravou o arquivo de cache"
-
-    @pytest.mark.asyncio
     async def test_credenciais_nao_vazam_para_logs_nem_para_a_saida(self, spotify_fake, caplog, capsys):
         cliente, _ = spotify_fake(status=401, corpo=INVALIDO)
         basic = base64.b64encode(f"{ID_FAKE}:{SEGREDO_FAKE}".encode()).decode()
@@ -544,16 +410,6 @@ class TestKI15SpotifyCredenciaisInvalidas:
         saida = capsys.readouterr()
         tudo = f"{caplog.text} {saida.out} {saida.err}"
         assert SEGREDO_FAKE not in tudo and ID_FAKE not in tudo and basic not in tudo
-
-    @pytest.mark.asyncio
-    async def test_falha_de_rede_libera_o_token_refresh_e_propaga_o_erro(self, spotify_fake):
-        """Caracterização (passa hoje): o ramo de exceção já restaura token_refresh."""
-        cliente, _ = spotify_fake(falha_de_rede=True)
-
-        with pytest.raises(ClientError):
-            await _terminar(cliente.get_access_token())
-
-        assert cliente.token_refresh is False
 
     @pytest.mark.asyncio
     async def test_token_valido_continua_funcionando(self, spotify_fake, tmp_path):

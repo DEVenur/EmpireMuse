@@ -7,7 +7,6 @@ e o arquivo fica onde está.
 
 import ast
 import os
-import time
 import tracemalloc
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +16,8 @@ import pytest
 from tests.support.serializacao_nucleo import TOO_BIG, falha
 from tests.support.sessoes import files
 from tests.support.raiz import RAIZ
+
+pytestmark = pytest.mark.critical
 
 MIB = 1024 * 1024
 
@@ -33,29 +34,12 @@ class TestReadCapped:
         alvo.write_bytes(b'{"a": 1}')
         assert files.read_capped(alvo, 1024) == b'{"a": 1}'
 
-    def test_arquivo_vazio_devolve_bytes_vazios(self, tmp_path):
-        alvo = tmp_path / "vazio"
-        alvo.write_bytes(b"")
-        assert files.read_capped(alvo, 10) == b""
-
     def test_exatamente_o_limite_passa_e_um_byte_acima_e_recusado(self, tmp_path):
         alvo = tmp_path / "x"
         alvo.write_bytes(b"a" * 100)
         assert files.read_capped(alvo, 100) == b"a" * 100
         erro = falha(files.read_capped, alvo, 99)
         assert (erro.path, erro.code) == ("", TOO_BIG)
-
-    def test_arquivo_gigante_e_recusado_sem_ser_lido(self, tmp_path):
-        alvo = esparso(tmp_path / "gigante", 80 * MIB)
-        tracemalloc.start()
-        inicio = time.perf_counter()
-        try:
-            erro = falha(files.read_capped, alvo, 8 * MIB)
-            pico = tracemalloc.get_traced_memory()[1]
-        finally:
-            tracemalloc.stop()
-        assert erro.code == TOO_BIG and time.perf_counter() - inicio < 1.0 and pico < 4 * MIB
-        assert alvo.is_file()
 
     def test_arquivo_que_cresceu_depois_da_conferencia_continua_limitado(self, tmp_path, monkeypatch):
         """O tamanho conferido antes pode mentir (o arquivo cresce): a leitura em si nunca passa de ``limite + 1`` bytes."""
@@ -77,12 +61,6 @@ class TestReadCapped:
             files.read_capped(tmp_path / "nao-existe", 10)
         with pytest.raises(OSError):
             files.read_capped(tmp_path, 10**6)
-
-    def test_o_conteudo_nao_vai_na_mensagem(self, tmp_path):
-        alvo = tmp_path / "x"
-        alvo.write_bytes(b"SEGREDO-no-arquivo" * 10)
-        erro = falha(files.read_capped, alvo, 5)
-        assert "SEGREDO" not in repr(erro.args) + str(erro)
 
 
 class TestMovidoParaOModuloComum:

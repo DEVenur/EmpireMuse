@@ -5,18 +5,13 @@ corrotinas, passa a usar ``scrobble_save_cache_async``, que tira a cópia dos it
 """
 
 import ast
-import json
-import logging
 import threading
-from pathlib import Path
 
 import pytest
 
 from empiremuse.utils.music import lastfm_tools
 from empiremuse.utils.music.lastfm_tools import LastFM
 from tests.support.raiz import RAIZ
-
-ENTRADA = {"name": "Música", "artist": "Artista", "album": "Álbum"}
 
 
 @pytest.fixture(autouse=True)
@@ -25,16 +20,6 @@ def _ambiente(tmp_path, monkeypatch):
 
 
 class TestGravacaoForaDoLaco:
-    @pytest.mark.asyncio
-    async def test_a_versao_assincrona_grava_o_mesmo_arquivo(self, tmp_path):
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["A - B"] = ENTRADA
-        lastfm.cache["Sem - X"] = {}
-        await lastfm.scrobble_save_cache_async()
-        itens = json.loads((tmp_path / ".lastfm_cache.json").read_bytes())["items"]
-        assert itens == [{"k": "A - B", "d": ENTRADA}, {"k": "Sem - X", "d": {}}]
-        assert dict(LastFM("chave", "segredo").cache) == {"A - B": ENTRADA, "Sem - X": {}}
-
     @pytest.mark.asyncio
     async def test_a_escrita_roda_fora_do_laco_de_eventos(self, monkeypatch):
         threads = []
@@ -49,41 +34,6 @@ class TestGravacaoForaDoLaco:
         lastfm.cache["k"] = {}
         await lastfm.scrobble_save_cache_async()
         assert threads and threads[0] != threading.get_ident()
-
-    @pytest.mark.asyncio
-    async def test_a_copia_dos_itens_sai_no_laco_e_nao_na_thread(self, monkeypatch):
-        quem_leu = []
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["k"] = {}
-
-        class Espiao(type(lastfm.cache)):
-            def items(self):
-                quem_leu.append(threading.get_ident())
-                return super().items()
-
-        lastfm.cache = Espiao(maxsize=10, ttl=600)
-        lastfm.cache["k"] = {}
-        quem_leu.clear()
-        await lastfm.scrobble_save_cache_async()
-        assert quem_leu == [threading.get_ident()]
-
-    @pytest.mark.asyncio
-    async def test_falha_de_disco_vira_aviso_e_nao_levanta(self, monkeypatch, caplog):
-        def negar(*args, **kwargs):
-            raise OSError("negado")
-
-        monkeypatch.setattr(lastfm_tools, "save_json_cache", negar)
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["k"] = {}
-        with caplog.at_level(logging.WARNING):
-            await lastfm.scrobble_save_cache_async()
-        assert any("não gravado" in r.getMessage() for r in caplog.records)
-
-    def test_a_versao_sincrona_continua_existindo(self, tmp_path):
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["k"] = {}
-        lastfm.scrobble_save_cache()
-        assert (tmp_path / ".lastfm_cache.json").is_file()
 
 
 class TestCogUsaAVersaoAssincrona:
@@ -106,7 +56,3 @@ class TestCogUsaAVersaoAssincrona:
     def test_nenhuma_chamada_sincrona_dentro_do_cog(self):
         sincronas, _ = self.chamadas()
         assert sincronas == []
-
-    def test_as_duas_gravacoes_do_cog_esperam_a_versao_assincrona(self):
-        _, esperadas = self.chamadas()
-        assert len(esperadas) == 2

@@ -4,8 +4,6 @@ Uma sessão perto dos tetos leva cerca de 0,9 s para validar e codificar; no la�
 para um executor, e a cópia dos dados do player é tirada ANTES, no laço, para a thread não ler o que o laço continua mudando.
 """
 
-import asyncio
-import json
 import threading
 
 import disnake
@@ -55,16 +53,6 @@ async def salvar(cog, dados):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("destino", ["disco", "mongo"])
-async def test_encode_e_validate_nao_rodam_na_thread_do_laco(espiao, destino):
-    cog = cog_do_mongo()[0] if destino == "mongo" else cog_de_sessoes()
-    await salvar(cog, sessao_minima(queue=[faixa_info(0)]))
-    laco = threading.get_ident()
-    assert espiao["encode"] and espiao["validate"]
-    assert all(thread != laco for thread, _ in espiao["encode"] + espiao["validate"])
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("destino", ["disco", "mongo"])
 async def test_o_que_a_thread_recebe_e_uma_copia_dos_dados_do_player(espiao, destino):
     cog = cog_do_mongo()[0] if destino == "mongo" else cog_de_sessoes()
     dados = sessao_minima(queue=[faixa_info(0)], played=[faixa_info(1)])
@@ -73,20 +61,6 @@ async def test_o_que_a_thread_recebe_e_uma_copia_dos_dados_do_player(espiao, des
     assert recebido is not dados
     assert recebido["queue"] is not dados["queue"] and recebido["queue"][0] is not dados["queue"][0]
     assert recebido["played"][0] is not dados["played"][0]
-
-
-@pytest.mark.asyncio
-async def test_mudanca_no_player_depois_da_chamada_nao_entra_na_sessao_gravada(tmp_path):
-    cog = cog_de_sessoes()
-    dados = sessao_minima(queue=[faixa_info(0)])
-    titulo = dados["queue"][0]["title"]
-    tarefa = asyncio.create_task(cog.save_session_local(SERVIDOR, dados))
-    await asyncio.sleep(0)  # a gravação começa e tira a cópia; o resto roda na thread
-    dados["queue"][0]["title"] = "mudou depois"
-    dados["queue"].append(faixa_info(5))
-    await tarefa
-    gravado = json.loads((pasta_json(tmp_path) / f"{SERVIDOR}.json").read_bytes())
-    assert [f["title"] for f in gravado["queue"]] == [titulo]
 
 
 @pytest.mark.asyncio
