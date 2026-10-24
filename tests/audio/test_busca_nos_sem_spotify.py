@@ -85,6 +85,12 @@ class TestSpotifyDesligadoNaBuscaPorProvedor:
         from empiremuse.cogs.music import Music
 
         no = make_node("no", ["youtube"])
+
+        async def so_aceita_youtube(busca, **kwargs):
+            assert not busca.startswith("spsearch"), busca
+            return ["faixa"]
+
+        no.get_tracks = AsyncMock(side_effect=so_aceita_youtube)
         bot = SimpleNamespace(
             music=SimpleNamespace(nodes={"no": no}),
             pool=SimpleNamespace(spotify=None, deezer=SimpleNamespace()),
@@ -98,4 +104,6 @@ class TestSpotifyDesligadoNaBuscaPorProvedor:
 
         bot.dispatch.assert_not_called()
         assert exceptions == set()
+        no.get_tracks.assert_awaited_once()
+        assert no.get_tracks.await_args.args[0] == "ytsearch:musica qualquer"
         assert tracks == ["faixa"] and node is no

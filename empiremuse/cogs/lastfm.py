@@ -595,18 +595,17 @@ class LastFmCog(commands.Cog):
 
                         return result_
 
-                    if player.bot.spotify:
-                        try:
-                            result = filter_result(
-                                await player.bot.spotify.get_tracks(
-                                    query=f"{track.author} - {track.title}" if len(track.title) < 11 else track.title,
-                                    requester=self.bot.user.id,
-                                    bot=self.bot,
-                                    check_title=False,
-                                )
+                    try:
+                        result = filter_result(
+                            await player.bot.spotify.get_tracks(
+                                query=f"{track.author} - {track.title}" if len(track.title) < 11 else track.title,
+                                requester=self.bot.user.id,
+                                bot=self.bot,
+                                check_title=False,
                             )
-                        except Exception:
-                            traceback.print_exc()
+                        )
+                    except Exception:
+                        traceback.print_exc()
 
                     if not result:
                         try:
