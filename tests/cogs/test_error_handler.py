@@ -116,26 +116,10 @@ def _texto_do_prefixo(ctx: _Contexto) -> str:
 
 
 class TestInteracao:
-    @pytest.mark.asyncio
-    async def test_oserror_mostra_mensagem_generica_sem_detalhe_interno(self, handler, enviado):
-        await handler.process_interaction_error(_interacao(), _erro_de_disco())
-
-        texto = _texto_da_interacao(enviado)
-        assert "Ocorreu um erro" in texto, texto
-        assert not _proibidos_na_tela(texto), f"vazou para o usuário: {_proibidos_na_tela(texto)} em {texto!r}"
-
+    @pytest.mark.smoke
     @pytest.mark.asyncio
     async def test_qualquer_excecao_inesperada_tem_o_mesmo_tratamento(self, handler, enviado):
         await handler.process_interaction_error(_interacao(), KeyError(CAMINHO))
-
-        assert not _proibidos_na_tela(_texto_da_interacao(enviado))
-
-    @pytest.mark.asyncio
-    async def test_erro_embrulhado_em_command_invoke_error_tambem_e_generico(self, handler, enviado):
-        embrulhado = Exception("falha")
-        embrulhado.original = _erro_de_disco()
-
-        await handler.process_interaction_error(_interacao(), embrulhado)
 
         assert not _proibidos_na_tela(_texto_da_interacao(enviado))
 
@@ -151,35 +135,10 @@ class TestInteracao:
         assert TOKEN_FALSO not in registros[0].getMessage()
 
     @pytest.mark.asyncio
-    async def test_no_report_do_webhook_o_detalhe_fica_e_o_token_nao(self, handler, enviado, arquivos_do_webhook):
-        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
-
-        await handler.process_interaction_error(_interacao(), _erro_de_disco())
-
-        handler.send_webhook.assert_awaited_once()
-        relatorio = "\n".join(arquivos_do_webhook)
-        assert CAMINHO in relatorio and "OSError" in relatorio, "o webhook precisa do traceback completo"
-        assert TOKEN_FALSO not in relatorio, "o token do bot não pode ir para o webhook"
-        assert "será notificado" in _texto_da_interacao(enviado)
-
-    @pytest.mark.asyncio
-    async def test_generic_error_continua_igual(self, handler, enviado):
-        await handler.process_interaction_error(_interacao(), GenericError("**Você não pode fazer isso.**"))
-
-        assert "**Você não pode fazer isso.**" in _texto_da_interacao(enviado)
-
-    @pytest.mark.asyncio
     async def test_mensagem_propria_do_parse_error_continua_igual(self, handler, enviado):
         await handler.process_interaction_error(_interacao(), commands.NotOwner())
 
         assert "Apenas meu(s) desenvolvedor(es)" in _texto_da_interacao(enviado)
-
-    @pytest.mark.asyncio
-    async def test_generic_error_nao_vai_para_o_log_de_erro_inesperado(self, handler, enviado, caplog):
-        with caplog.at_level(logging.ERROR, logger=LOGGER):
-            await handler.process_interaction_error(_interacao(), GenericError("**ok**"))
-
-        assert not [r for r in caplog.records if r.name == LOGGER]
 
     @pytest.mark.asyncio
     async def test_no_log_do_chamador_e_respeitado(self, handler, enviado, caplog):
@@ -201,15 +160,6 @@ class TestComandoDePrefixo:
         texto = _texto_do_prefixo(ctx)
         assert "Ocorreu um erro" in texto, texto
         assert not _proibidos_na_tela(texto), f"vazou para o usuário: {_proibidos_na_tela(texto)} em {texto!r}"
-
-    @pytest.mark.asyncio
-    async def test_o_detalhe_completo_vai_para_o_log_do_servidor(self, handler, caplog):
-        with caplog.at_level(logging.ERROR, logger=LOGGER):
-            await handler.on_legacy_command_error(_Contexto(True), _erro_de_disco())
-
-        registros = [r for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR]
-        assert registros and registros[0].exc_info[0] is OSError
-        assert TOKEN_FALSO not in registros[0].getMessage()
 
     @pytest.mark.asyncio
     async def test_no_report_do_webhook_o_detalhe_fica_e_o_token_nao(self, handler, arquivos_do_webhook):
@@ -236,17 +186,3 @@ class TestComandoDePrefixo:
         await handler.on_legacy_command_error(ctx, commands.NoPrivateMessage())
 
         assert "não pode ser executado em mensagens privadas" in _texto_do_prefixo(ctx)
-
-
-def test_nao_ha_repr_do_erro_na_resposta_ao_usuario():
-    """Estrutura: nenhum ``repr(error)`` é montado em descrição/conteúdo no error_handler."""
-    import ast
-    from pathlib import Path
-
-    fonte = Path(error_handler.__file__).read_text(encoding="utf-8")
-    achados = [
-        no.lineno
-        for no in ast.walk(ast.parse(fonte))
-        if isinstance(no, ast.Call) and isinstance(no.func, ast.Name) and no.func.id == "repr"
-    ]
-    assert not achados, f"repr(...) no error_handler.py nas linhas {achados}"

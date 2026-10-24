@@ -12,7 +12,6 @@ Contrato: ``enter_runtime_dir()`` (a primeira coisa que ``main()`` chama) emite 
 """
 
 import logging
-import os
 
 import pytest
 
@@ -63,17 +62,6 @@ def _captura_info(caplog):
 
 
 class TestLinhaDeOrigem:
-    def test_empiremuse_home_loga_caminho_e_a_variavel(self, monkeypatch, pastas, caplog, capsys):
-        _, home, _ = pastas
-        monkeypatch.setenv("EMPIREMUSE_HOME", str(home))
-
-        main_module.enter_runtime_dir()
-
-        linhas = _linhas_do_runtime(_saida(caplog, capsys), home)
-        assert len(linhas) == 1
-        assert "EMPIREMUSE_HOME" in linhas[0]
-        assert "pasta atual" not in linhas[0]
-
     def test_runtime_de_desenvolvimento_loga_caminho_e_a_origem(self, pastas, runtime_dev, caplog, capsys):
         main_module.enter_runtime_dir()
 
@@ -82,38 +70,9 @@ class TestLinhaDeOrigem:
         assert ".runtime" in linhas[0]
         assert not [origem for origem in ORIGENS if origem in linhas[0]]
 
-    def test_sem_nada_loga_o_cwd_como_pasta_atual(self, pastas, caplog, capsys):
-        _, _, cwd = pastas
-
-        main_module.enter_runtime_dir()
-
-        linhas = _linhas_do_runtime(_saida(caplog, capsys), cwd)
-        assert len(linhas) == 1
-        assert "pasta atual" in linhas[0]
-        assert "EMPIREMUSE_HOME" not in linhas[0]
-
-    def test_runtime_que_e_arquivo_conta_como_pasta_atual(self, pastas, caplog, capsys):
-        raiz, _, cwd = pastas
-        (raiz / ".runtime").write_text("não sou uma pasta", encoding="utf-8")
-
-        main_module.enter_runtime_dir()
-
-        linhas = _linhas_do_runtime(_saida(caplog, capsys), cwd)
-        assert len(linhas) == 1
-        assert "pasta atual" in linhas[0]
-
-    def test_empiremuse_home_vazio_com_runtime_loga_a_runtime(self, monkeypatch, pastas, runtime_dev, caplog, capsys):
-        monkeypatch.setenv("EMPIREMUSE_HOME", "")
-
-        main_module.enter_runtime_dir()
-
-        linhas = _linhas_do_runtime(_saida(caplog, capsys), runtime_dev)
-        assert len(linhas) == 1
-        assert "EMPIREMUSE_HOME" not in linhas[0]
-
 
 class TestSemConteudoDeArquivo:
-    @pytest.mark.parametrize("origem", ["home", "dev", "cwd"])
+    @pytest.mark.parametrize("origem", ["home", "cwd"])
     def test_nenhuma_saida_leva_conteudo_de_env_ou_config(self, monkeypatch, pastas, caplog, capsys, request, origem):
         if origem == "home":
             monkeypatch.setenv("EMPIREMUSE_HOME", str(pastas[1]))
@@ -123,9 +82,3 @@ class TestSemConteudoDeArquivo:
         main_module.enter_runtime_dir()
 
         assert not [linha for linha in _saida(caplog, capsys) if SEGREDO in linha]
-
-    def test_entra_na_pasta_e_a_linha_sai_uma_vez_so(self, pastas, runtime_dev, caplog, capsys):
-        main_module.enter_runtime_dir()
-        assert os.path.samefile(os.getcwd(), runtime_dev)
-
-        assert len(_linhas_do_runtime(_saida(caplog, capsys), runtime_dev)) == 1

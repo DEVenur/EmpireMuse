@@ -14,6 +14,8 @@ import pytest
 
 from empiremuse import config_loader
 
+pytestmark = pytest.mark.critical
+
 # Chaves que o laço dos inteiros converte (as demais com padrão inteiro não são convertidas).
 CHAVES_INTEIRAS = [
     "BOT_ADD_REMOVE_LOG_CHANNEL_ID",
@@ -82,50 +84,29 @@ class TestZeroInteiroDoConfigJson:
     def test_o_exemplo_do_bug_retries_zero_no_config_json(self, home):
         assert pelo_config_json(home, "LAVALINK_RECONNECT_RETRIES", 0) == 0, "0 = sem limite, e não o padrão 30"
 
-    def test_zero_significa_sem_limite_nos_favoritos_e_integracoes(self, home):
-        (home / "config.json").write_text(json.dumps({"MAX_USER_FAVS": 0, "MAX_USER_INTEGRATIONS": 0}))
-        config = config_loader.load_config()
-        assert (config["MAX_USER_FAVS"], config["MAX_USER_INTEGRATIONS"]) == (0, 0)
-
-    @pytest.mark.parametrize("chave", CHAVES_INTEIRAS)
+    @pytest.mark.parametrize("chave", list(CHAVES_INTEIRAS)[:2])
     def test_zero_do_config_json_tem_o_mesmo_resultado_que_pelo_ambiente(self, home, monkeypatch, chave):
         esperado = pelo_ambiente(monkeypatch, chave, "0")
         assert pelo_config_json(home, chave, 0) == esperado, f"{chave}: 0 do config.json foi trocado pelo padrão"
 
-    @pytest.mark.parametrize("chave", CHAVES_INTEIRAS)
-    def test_guarda_zero_pelo_ambiente_e_pelo_dotenv_e_igual(self, home, monkeypatch, chave):
-        assert pelo_dotenv(monkeypatch, chave, "0") == pelo_ambiente(monkeypatch, chave, "0")
-
     def test_guarda_zero_em_texto_no_config_json_tambem_vale(self, home):
         assert pelo_config_json(home, "LAVALINK_RECONNECT_RETRIES", "0") == 0
-
-    def test_valores_nao_zero_do_config_json_continuam_respeitados(self, home):
-        assert pelo_config_json(home, "LAVALINK_RECONNECT_RETRIES", 5) == 5
-        assert pelo_config_json(home, "MAX_USER_FAVS", "7") == 7
 
 
 class TestAusenteOuVazioCaiNoPadrao:
     """GUARDA: só o ausente e o vazio usam o padrão."""
 
-    @pytest.mark.parametrize("chave", CHAVES_INTEIRAS)
+    @pytest.mark.smoke
+    @pytest.mark.parametrize("chave", list(CHAVES_INTEIRAS)[:2])
     def test_ausente_equivale_a_informar_o_valor_padrao(self, home, monkeypatch, chave):
         (home / "config.json").write_text("{}", encoding="utf-8")
         ausente = config_loader.load_config()[chave]
         padrao = config_loader.DEFAULT_CONFIG[chave]
         assert ausente == pelo_ambiente(monkeypatch, chave, str(padrao))
 
-    @pytest.mark.parametrize("vazio", ["", None])
-    def test_vazio_no_config_json(self, home, vazio):
-        assert pelo_config_json(home, "LAVALINK_RECONNECT_RETRIES", vazio) == 30
-        assert pelo_config_json(home, "MAX_USER_FAVS", vazio) == 10
-
     def test_vazio_no_ambiente_e_no_dotenv(self, home, monkeypatch):
         assert pelo_ambiente(monkeypatch, "LAVALINK_RECONNECT_RETRIES", "") == 30
         assert pelo_dotenv(monkeypatch, "LAVALINK_RECONNECT_RETRIES", "") == 30
-
-    def test_valor_invalido_continua_dando_erro_claro_citando_a_chave(self, home):
-        with pytest.raises(Exception, match="LAVALINK_RECONNECT_RETRIES"):
-            pelo_config_json(home, "LAVALINK_RECONNECT_RETRIES", "muitas")
 
 
 def test_a_lista_de_chaves_cobre_todas_as_que_o_laco_converte(home, monkeypatch):

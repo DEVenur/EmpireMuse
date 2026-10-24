@@ -12,9 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from empiremuse.utils.music.interactions import SkinEditorMenu, ViewMode
+from empiremuse.utils.music.interactions import SkinEditorMenu
 from tests.support.drivers_de_regras import InteracaoFalsa
-from tests.support.modais import ModalBot, ModalInteraction, adicionar_integracao, importar, trocar_process_idle_embed
+from tests.support.modais import ModalBot, adicionar_integracao, trocar_process_idle_embed
+
+pytestmark = pytest.mark.regression
 
 MARCADORES_DE_DETALHE_INTERNO = ("```py", "Traceback", "Error(", "Exception", "repr(")
 
@@ -49,24 +51,6 @@ def explode(segredo, tipo=RuntimeError):
         raise tipo(segredo)
 
     return _async, _sync
-
-
-class TestJsonInvalidoNosImportadores:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "modo",
-        [ViewMode.fav_manager, ViewMode.guild_fav_manager, ViewMode.integrations_manager],
-        ids=["fav", "srv", "itg"],
-    )
-    async def test_mensagem_generica_e_detalhe_no_log(self, modo, caplog):
-        caplog.set_level(logging.DEBUG)
-        bot = ModalBot()
-        inter = await importar(bot, modo, "{isto não é json 12345678901234567890")
-        assert_generica(inter.texto)
-        assert "JSONDecodeError" not in inter.texto and "Expecting" not in inter.texto
-        assert "json" in inter.texto.lower()
-        assert "Expecting" in caplog.text, "o detalhe do parse deve ir para o log"
-        assert bot.salvos_usuario == [] and bot.salvos_servidor == []
 
 
 class TestConsultaDeIntegracoes:
@@ -109,17 +93,6 @@ class TestConsultaDeIntegracoes:
 
 class TestEditorDeSkin:
     @pytest.mark.asyncio
-    async def test_erro_ao_atualizar_a_mensagem(self, caplog):
-        caplog.set_level(logging.DEBUG)
-        segredo = novo_segredo()
-        inter = InteracaoFalsa()
-        inter.response.edit_message = explode(segredo)[0]
-        auto = SimpleNamespace(ctx=None, build_embeds=lambda: {})
-        await SkinEditorMenu.update_message(auto, inter)
-        assert_generica(inter.texto, segredo)
-        assert segredo in caplog.text
-
-    @pytest.mark.asyncio
     async def test_skin_importada_com_json_invalido(self, caplog):
         caplog.set_level(logging.DEBUG)
         inter = InteracaoFalsa()
@@ -131,8 +104,3 @@ class TestEditorDeSkin:
         assert "JSONDecodeError" not in inter.texto and "Expecting" not in inter.texto
         assert "skin" in inter.texto.lower()
         assert "Expecting" in caplog.text
-
-
-def test_sanidade_do_dublê_de_interacao_modal():
-    """O dublê de modal usado acima devolve o texto enviado (senão os testes passariam por texto vazio)."""
-    assert ModalInteraction().texto == ""

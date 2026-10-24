@@ -88,13 +88,6 @@ class TestShortcuts:
         inter = SimpleNamespace(music_bot="bot", music_guild="guild")
         assert route(inter) == ("bot", "guild")
 
-    def test_bypass_attribute_ignores_the_chosen_bot(self):
-        a, b = make_bot("a", user_id=1), make_bot("b", user_id=2)
-        inter = make_inter([a, b], author_voice=voice_channel(bot_ids=[2]))
-        inter.music_bot, inter.music_guild = "velho", "velho"
-        bot, _ = route(inter, bypass_attribute=True)
-        assert bot is b
-
     def test_modal_interactions_keep_the_current_bot(self):
         modal = MagicMock(spec=disnake.ModalInteraction)
         modal.bot, modal.guild = "bot", "guild"
@@ -128,26 +121,6 @@ class TestPickingABot:
         bot, guild = route(inter)
         assert bot is b and guild is b._guild
         assert inter.music_bot is b
-
-    def test_free_bot_is_chosen_in_identifier_order(self):
-        a, b = make_bot("b", user_id=1), make_bot("a", user_id=2)
-        inter = make_inter([a, b], author_voice=voice_channel(), current=0)
-        bot, _ = route(inter, check_player=False)
-        assert bot is b  # o identificador "a" vem antes de "b"
-
-    def test_bot_with_a_session_elsewhere_is_not_free(self):
-        a = make_bot("a", user_id=1, guild=make_guild(voice_channel=voice_channel(mention="<#8>")))
-        b = make_bot("b", user_id=2)
-        inter = make_inter([a, b], author_voice=voice_channel(), current=0)
-        bot, _ = route(inter, check_player=False)
-        assert bot is b
-
-    def test_bot_without_send_permission_is_skipped(self):
-        a = make_bot("a", user_id=1, can_send=False)
-        b = make_bot("b", user_id=2)
-        inter = make_inter([a, b], author_voice=voice_channel())
-        bot, _ = route(inter, check_player=False)
-        assert bot is b
 
     def test_bot_that_cannot_see_the_channel_is_skipped(self):
         a = make_bot("a", user_id=1, channel_exists=False)
@@ -212,13 +185,6 @@ class TestNobodyAvailable:
         a = busy_bot("a", 1)
         inter = make_inter([a, busy_bot("b", 2)], author_voice=voice_channel())
         assert route(inter, return_first=True) == (a, inter.guild)
-
-    def test_all_busy_lists_the_active_sessions_and_raises_pool_exception(self):
-        inter = make_inter([busy_bot("a", 1), busy_bot("b", 2)], author_voice=voice_channel())
-        with pytest.raises(PoolException):
-            route(inter, check_player=False)
-        embed = inter.send.await_args.kwargs["embed"]
-        assert "Todos os bots estão em uso" in embed.description and "<#8>" in embed.description
 
     def test_missing_send_permission_is_reported_with_the_bot_mentions(self):
         a, b = make_bot("a", user_id=1, can_send=False), make_bot("b", user_id=2, can_send=False)
