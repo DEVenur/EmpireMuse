@@ -138,8 +138,8 @@ class TestResolvePort:
         monkeypatch.setenv("SERVER_PORT", "25565")
         assert config_loader.resolve_port(None) == 25565
 
-    def test_nenhuma_usa_80(self, sem_porta):
-        assert config_loader.resolve_port(None) == 80
+    def test_nenhuma_usa_6000(self, sem_porta):
+        assert config_loader.resolve_port(None) == 6000
 
     def test_strings_vazias_contam_como_nao_definidas(self, monkeypatch, sem_porta):
         monkeypatch.setenv("PORT", "")

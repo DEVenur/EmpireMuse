@@ -25,7 +25,7 @@ from tests.support.raiz import RAIZ
 ROOT = RAIZ
 COMPOSE = ROOT / "docker-compose.yml"
 
-PORTA_DO_PAINEL = "${EMPIREMUSE_PORT:-8080}:8080"
+PORTA_DO_PAINEL = "${EMPIREMUSE_PORT:-127.0.0.1:6000}:6000"
 VOLUME_NOMEADO = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
 NOME_SENSIVEL = re.compile(r"(PASS|TOKEN|SECRET|KEY|MONGO|CREDENTIAL|AUTH)", re.I)
 INTERPOLACAO = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(:?[-?+][^}]*)?\}$")
@@ -185,13 +185,11 @@ class TestEstrutura:
 
 
 class TestServicoBot:
-    def test_build_do_diretorio_atual(self, bot):
-        assert _contexto_do_build(bot) == "."
-        build = bot["build"]
-        assert not isinstance(build, dict) or "dockerfile" not in build, "o build deve usar o Dockerfile da raiz"
+    def test_sem_build_para_producao(self, bot):
+        assert "build" not in bot, "o compose de produção usa a imagem do Docker Hub sem build local"
 
-    def test_imagem_parametrizada_com_padrao_local(self, bot):
-        assert bot["image"] == "${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:local}"
+    def test_imagem_parametrizada_com_padrao_hub(self, bot):
+        assert bot["image"] == "${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:latest}"
 
     def test_env_file_e_somente_o_dotenv(self, bot):
         assert _env_files(bot) == [".env"]
@@ -199,8 +197,21 @@ class TestServicoBot:
     def test_reinicia_a_menos_que_parado(self, bot):
         assert bot["restart"] == "unless-stopped"
 
-    def test_limite_de_memoria_parametrizado(self, bot):
-        assert bot["mem_limit"] == "${EMPIREMUSE_MEM_LIMIT:-768m}"
+    def test_limite_de_memoria_e_swap_parametrizados(self, bot):
+        assert bot["mem_limit"] == "${EMPIREMUSE_MEM_LIMIT:-1024m}"
+        assert bot["memswap_limit"] == "${EMPIREMUSE_MEM_LIMIT:-1024m}"
+
+    def test_boas_praticas_de_resiliencia_e_limites(self, bot):
+        assert bot.get("pids_limit") == 100
+        assert bot.get("stop_grace_period") == "30s"
+        assert bot.get("pull_policy") == "missing"
+
+    def test_logging_estruturado_com_rotacao(self, bot):
+        logging_cfg = bot.get("logging") or {}
+        assert logging_cfg.get("driver") == "json-file"
+        options = logging_cfg.get("options") or {}
+        assert options.get("max-size") == "10m"
+        assert options.get("max-file") == "3"
 
     def test_unico_volume_e_o_nomeado_em_data(self, bot):
         assert _volumes(bot) == ["empiremuse-data:/data"]
@@ -272,6 +283,13 @@ class TestServicoMongo:
             if NOME_SENSIVEL.search(chave) or chave.endswith("USERNAME"):
                 assert valor is None or INTERPOLACAO.match(valor), f"{chave} com valor literal"
 
+    def test_logging_estruturado_com_rotacao_no_mongo(self, mongo):
+        logging_cfg = mongo.get("logging") or {}
+        assert logging_cfg.get("driver") == "json-file"
+        options = logging_cfg.get("options") or {}
+        assert options.get("max-size") == "10m"
+        assert options.get("max-file") == "3"
+
 
 # ============================================================================ aceite: portas
 
@@ -281,9 +299,9 @@ class TestPortasPublicadas:
         publicadas = [(nome, porta) for nome, servico in servicos.items() for porta in _portas(servico)]
         assert publicadas == [("bot", PORTA_DO_PAINEL)], f"portas publicadas: {publicadas}"
 
-    def test_a_porta_do_container_publicada_e_8080(self, servicos):
+    def test_a_porta_do_container_publicada_e_6000(self, servicos):
         containers = {_porta_do_container(porta) for servico in servicos.values() for porta in _portas(servico)}
-        assert containers == {"8080"}
+        assert containers == {"6000"}
 
     @pytest.mark.parametrize("porta", ["2333", "8090", "27017"])
     def test_lavalink_e_mongo_nunca_aparecem_em_ports_ou_expose(self, servicos, porta):
@@ -335,8 +353,8 @@ class TestSegredosEPrivilegios:
     def test_nenhum_token_do_discord_no_texto(self, raw):
         assert not TOKEN_DISCORD.search(raw)
 
-    def test_imagem_do_bot_nao_usa_latest(self, bot):
-        assert ":latest" not in bot["image"]
+    def test_imagem_do_bot_permite_fixar_versao(self, bot):
+        assert bot["image"] == "${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:latest}"
 
     def test_nenhuma_variavel_obrigatoria_no_arquivo_inteiro(self, raw):
         """``${VAR:?}`` / ``${VAR?}`` é interpolado com ou sem o profile: sem a variável, nem o bot sobe."""

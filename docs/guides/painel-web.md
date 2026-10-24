@@ -33,7 +33,7 @@ Para que o login via OAuth2 funcione, você precisa obter as credenciais de aute
    - Localize o **Client Secret**, clique em **Reset Secret** (caso não tenha o valor anotado) e copie-o para `PANEL_OAUTH_CLIENT_SECRET`;
 4. Na seção **Redirects**, clique em **Add Redirect** e insira exatamente a URL de retorno baseada no seu `PANEL_BASE_URL`:
    - Em produção: `https://seu-dominio.com/painel/callback`
-   - Em desenvolvimento local: `http://localhost:8080/painel/callback` (ajuste a porta conforme configurado em `PORT`)
+   - Em desenvolvimento local: `http://localhost:6000/painel/callback` (ajuste a porta conforme configurado em `PORT`)
 5. Clique em **Save Changes** na parte inferior da página.
 
 > [!WARNING]
@@ -48,7 +48,7 @@ Todas as variáveis do painel possuem prefixo `PANEL_`. A tabela a seguir descre
 | Variável | Padrão | Obrigatória? | Efeito e Descrição |
 | :--- | :--- | :--- | :--- |
 | `PANEL_ENABLED` | `false` | Não | Ativa (`true`) ou desativa (`false`) o painel web. Quando desativado, requisições para `/painel` retornam 404 e nada do painel é carregado em memória. |
-| `PANEL_BASE_URL` | `''` | **Sim** (se ativo) | URL pública absoluta onde o painel é acessado, sem barra no final (ex.: `https://painel.meudominio.com` ou `http://localhost:8080`). Deve usar HTTPS obrigatório, exceto em localhost com cookies inseguros autorizados. |
+| `PANEL_BASE_URL` | `''` | **Sim** (se ativo) | URL pública absoluta onde o painel é acessado, sem barra no final (ex.: `https://painel.meudominio.com` ou `http://localhost:6000`). Deve usar HTTPS obrigatório, exceto em localhost com cookies inseguros autorizados. |
 | `PANEL_OAUTH_CLIENT_ID` | `''` | Não | Client ID da aplicação OAuth2 no Discord. Quando vazio, o sistema resolve e utiliza automaticamente o ID da aplicação do primeiro bot do pool (`BotPool`). |
 | `PANEL_OAUTH_CLIENT_SECRET` | `''` | **Sim** (se ativo) | Client Secret da aplicação no Developer Portal. Segredo crítico: **nunca compartilhe nem versione em repositórios públicos**. |
 | `PANEL_COOKIE_SECRET` | `''` | Não | Chave secreta persistente (mínimo de 32 caracteres, recomendável 64 hexadecimais aleatórios) para assinar os cookies de sessão. Se deixada vazia, o bot gera uma chave temporária a cada inicialização (o que invalida todas as sessões ativas ao reiniciar o bot, exigindo novo login de todos). Gere facilmente com: `python -c "import secrets; print(secrets.token_hex(32))"`. NUNCA versione este valor. |
@@ -68,19 +68,19 @@ Para testar o painel no computador pessoal ou VPS de teste sem configurar certif
 1. No arquivo `.env`, certifique-se de configurar:
    ```env
    RUN_RPC_SERVER=true
-   PORT=8080
+   PORT=6000
 
    PANEL_ENABLED=true
-   PANEL_BASE_URL='http://localhost:8080'
+   PANEL_BASE_URL='http://localhost:6000'
    PANEL_OAUTH_CLIENT_SECRET='seu_client_secret_aqui'
    PANEL_INSECURE_COOKIES=true
    ```
-2. No Discord Developer Portal, cadastre o redirect: `http://localhost:8080/painel/callback`;
+2. No Discord Developer Portal, cadastre o redirect: `http://localhost:6000/painel/callback`;
 3. Inicie o bot:
    ```bash
    python main.py
    ```
-4. Acesse pelo navegador: `http://localhost:8080/painel/`.
+4. Acesse pelo navegador: `http://localhost:6000/painel/`.
 
 > [!NOTE]
 > Em modo inseguro local, os cookies são denominados `painel_sessao` e `painel_login` (sem o prefixo de segurança do navegador `__Host-`).
@@ -101,7 +101,7 @@ Em servidores de produção, a comunicação via **HTTPS é estritamente obrigat
 4. Ajuste o `.env`:
    ```env
    RUN_RPC_SERVER=true
-   PORT=8080
+   PORT=6000
 
    PANEL_ENABLED=true
    PANEL_BASE_URL='https://painel.meudominio.com'

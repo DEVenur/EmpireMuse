@@ -372,15 +372,6 @@
             "rules": "required|integer"
         },
         {
-            "name": "IDs de instâncias adicionais do bot",
-            "description": "IDs de bots secundários separados por espaço para inclusão de convites múltiplos.",
-            "env_variable": "ADDITIONAL_BOT_IDS",
-            "default_value": "",
-            "user_viewable": true,
-            "user_editable": true,
-            "rules": "nullable|string"
-        },
-        {
             "name": "Permissões do convite do bot",
             "description": "Máscara inteira de permissões do Discord solicitada no link gerado pelo comando convite.",
             "env_variable": "INVITE_PERMISSIONS",

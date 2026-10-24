@@ -126,16 +126,16 @@ ENV PATH="/opt/venv/bin:/opt/java/openjdk/bin:$PATH" \
     LAVALINK_OFFLINE=true \
     LAVALINK_JAVA_PATH=/opt/java/openjdk/bin/java \
     LAVALINK_HOME=/opt/lavalink \
-    PORT=8080 \
+    PORT=6000 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 USER 10001:10001
 VOLUME ["/data"]
-EXPOSE 8080
+EXPOSE 6000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, sys, urllib.request; sys.exit(0) if os.environ.get('RUN_RPC_SERVER', '').lower() != 'true' else urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8080') + '/', timeout=4)" || exit 1
+    CMD python -c "import os, sys, urllib.request; sys.exit(0) if os.environ.get('RUN_RPC_SERVER', '').lower() != 'true' else urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '6000') + '/', timeout=4)" || exit 1
 
 ENTRYPOINT ["tini", "--"]
 CMD ["python", "-m", "empiremuse"]

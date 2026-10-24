@@ -2,7 +2,7 @@
 
 Garantias: toda imagem base fixada por digest; usuário final não-root numérico; tini como ENTRYPOINT; os binários do
 Lavalink conferidos por ``sha256sum -c`` com os MESMOS SHA-256 de ``branding.py`` (se um for atualizado e o outro
-esquecido, o teste quebra); ambiente do container (offline, Java e home do Lavalink, EMPIREMUSE_HOME); só a porta 8080
+esquecido, o teste quebra); ambiente do container (offline, Java e home do Lavalink, EMPIREMUSE_HOME); só a porta 6000
 exposta; e o .dockerignore barrando segredos e dados locais.
 """
 
@@ -198,9 +198,9 @@ class TestAmbienteDoContainer:
     def test_o_lavalink_local_e_ligado_no_container(self, env):
         assert env["RUN_LOCAL_LAVALINK"] == "true"
 
-    def test_expose_somente_8080(self, stages):
+    def test_expose_somente_6000(self, stages):
         portas = [porta for line in stages[-1] if line.upper().startswith("EXPOSE ") for porta in line.split()[1:]]
-        assert portas == ["8080"], f"portas expostas: {portas}"
+        assert portas == ["6000"], f"portas expostas: {portas}"
 
     def test_nenhum_segredo_em_env_arg_ou_label(self, dockerfile):
         proibido = re.compile(r"(TOKEN|MONGO|SECRET|PASSWORD|API_KEY|REFRESH)", re.I)

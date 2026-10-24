@@ -64,8 +64,6 @@ class Misc(commands.Cog):
     def __init__(self, bot: BotCore):
         self.bot = bot
         self.task = self.bot.loop.create_task(self.presences())
-        self.extra_user_bots = []
-        self.extra_user_bots_ids = [int(i) for i in bot.config["ADDITIONAL_BOT_IDS"].split() if i.isdigit()]
 
     def placeholders(self, text: str):
         if not text:

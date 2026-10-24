@@ -49,7 +49,6 @@ DEFAULT_CONFIG = {
     "PRESENCE_INTERVAL": 900,
     "SOURCE_REPO": branding.SOURCE_REPO_GIT,
     "SUPPORT_SERVER": branding.SUPPORT_SERVER_URL,
-    "ADDITIONAL_BOT_IDS": "",
     "INVITE_PERMISSIONS": 332892794064,
     "ENABLE_LOGGER": False,
     "KILL_ON_429": True,
@@ -189,12 +188,12 @@ DEFAULT_CONFIG = {
 }
 
 
-DEFAULT_PORT = 80
+DEFAULT_PORT = 6000
 MAX_PORT = 65535
 
 
 def resolve_port(configured: str | int | None = None) -> int:
-    """Porta do servidor HTTP/RPC: `PORT` (config ou ambiente), depois `SERVER_PORT` (Pterodactyl) e, por fim, 80.
+    """Porta do servidor HTTP/RPC: `PORT` (config ou ambiente), depois `SERVER_PORT` (Pterodactyl) e, por fim, 6000.
 
     Valores vazios contam como não definidos. Valor não numérico ou fora de 0-65535 levanta `ValueError`
     citando a variável de origem.
