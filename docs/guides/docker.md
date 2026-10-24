@@ -66,7 +66,7 @@ O repositório inclui um arquivo [`docker-compose.yml`](../../docker-compose.yml
 
 Para executar o bot com o servidor Lavalink local integrado e persistência em banco local (TinyMongo):
 
-1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais;
+1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais (antes do lançamento da versão `2.0.0`, defina `EMPIREMUSE_IMAGE=or4cu1o/empiremuse:2.0.0-rc.1` no `.env`, pois a tag `latest` ainda não existe no registro);
 2. Execute:
    ```bash
    docker compose up -d

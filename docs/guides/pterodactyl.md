@@ -42,7 +42,7 @@ O egg disponibiliza duas opções de imagem Docker:
 | `or4cu1o/empiremuse:latest` | Aponta sempre para a versão estável mais recente publicada. | Útil para quem deseja acompanhar todas as atualizações automaticamente (disponível com a 2.0.0). |
 
 > [!IMPORTANT]
-> As tags `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub a partir da publicação oficial da versão `2.0.0`. Até lá, qualquer instalação, teste ou homologação deve utilizar obrigatoriamente as imagens de release candidate (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`).
+> As tags `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub a partir da publicação oficial da versão `2.0.0`. Até lá, qualquer instalação, teste ou homologação deve utilizar obrigatoriamente as imagens de release candidate (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). Para utilizá-las no Pterodactyl, acesse a aba **Startup** do servidor (ou a seção de imagem na criação), localize o campo **Docker Image** e informe manualmente `or4cu1o/empiremuse:2.0.0-rc.1`.
 
 > [!TIP]
 > O daemon do Pterodactyl (**Wings**) baixa novamente a imagem selecionada ao reiniciar o servidor caso haja atualizações na tag correspondente no registro.
