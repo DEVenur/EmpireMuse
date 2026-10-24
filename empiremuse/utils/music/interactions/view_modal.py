@@ -5,6 +5,7 @@ from typing import List, Union, TYPE_CHECKING
 
 import disnake
 
+from empiremuse.utils.music.errors import GenericError
 
 if TYPE_CHECKING:
     from empiremuse.utils.music.interactions import SkinEditorMenu
@@ -24,3 +25,10 @@ class ViewModal(disnake.ui.Modal):
 
     async def callback(self, inter: disnake.ModalInteraction, /) -> None:
         await self.view.modal_handler(inter)
+
+    async def on_error(self, error: Exception, interaction: disnake.ModalInteraction) -> None:
+        if not isinstance(error, GenericError):
+            await super().on_error(error, interaction)
+            return
+
+        await interaction.send(error.text, ephemeral=True)
