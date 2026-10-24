@@ -13,7 +13,8 @@ Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https:/
 
 ### Adicionado
 - **Override do Docker Compose para Produção com Traefik e Cloudflare**:
-  - Adicionado `deploy/docker-compose.traefik.yml` para implantação em produção atrás de proxy reverso Traefik v3 integrado à Cloudflare (mTLS, Origin CA e `cloudflare-only`), removendo mapeamento de portas do host (`ports: !reset []`), conectando o serviço à rede externa `proxy` e configurando labels de roteamento Traefik (`traefik.http.routers.empiremuse.rule=Host(...)` e `traefik.http.services.empiremuse.loadbalancer.server.port=6000`).
+  - Adicionado `deploy/docker-compose.traefik.yml` para implantação em produção atrás de proxy reverso Traefik v3 integrado à Cloudflare (mTLS, Origin CA e `cloudflare-only`), removendo mapeamento de portas do host (`ports: !reset []`), conectando o serviço à rede externa `proxy` e configurando labels de roteamento Traefik (`traefik.http.routers.empiremuse.rule=Host(...)`, `traefik.http.services.empiremuse.loadbalancer.server.port=6000` e `traefik.docker.network=proxy`).
+  - Definição explícita de `name: empiremuse` e `container_name` (`empiremuse` e `empiremuse-mongo`) no `docker-compose.yml` da raiz.
   - Documentação completa no guia `docs/guides/docker.md` e novo bloco de variáveis de ambiente em `.example.env` (`EMPIREMUSE_DOMAIN`, `RUN_RPC_SERVER`, `WEB_BIND_ADDRESS`, `PANEL_BASE_URL`, `PANEL_TRUST_PROXY`, `RPC_SERVER`, `RPC_PUBLIC_URL` e callback OAuth).
 - **Registro de Decisão Arquitetural (ADR-0003)**: formalização da justificativa do fork `zRitsu/jishaku` para Disnake, fixado por SHA e desativado por padrão (`docs/adr/0003-jishaku-fork.md`).
 - **Submódulos Git para Ecossistemas Satélites (PR #53)**:

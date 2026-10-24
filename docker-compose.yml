@@ -1,5 +1,8 @@
+name: empiremuse
+
 services:
   bot:
+    container_name: empiremuse
     # Imagem oficial do Docker Hub. As tags latest e :2 passam a existir com a publicação da 2.0.0.
     # Em produção, recomenda-se fixar uma versão exata imutável (ex.: or4cu1o/empiremuse:2.0.0 ou digest;
     # em homologação, ex.: or4cu1o/empiremuse:2.0.0-rc.1). A tag :2 é flutuante (atualizada na série 2.x).
@@ -29,6 +32,7 @@ services:
         max-file: "3"
 
   mongo:
+    container_name: empiremuse-mongo
     profiles:
       - mongo
     image: mongo:8.0.34@sha256:4a4ab5d4834207389e0d7270fac988e21ffedccecba77991a552f755df229907

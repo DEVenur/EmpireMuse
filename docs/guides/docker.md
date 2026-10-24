@@ -114,6 +114,7 @@ O arquivo `docker-compose.yml` aplica uma política rigorosa de segurança defen
 - **Isolamento de Privilégios**: `security_opt: [no-new-privileges:true]` previne escalada de privilégios e `cap_drop: [ALL]` descarta todas as capacidades Linux (Linux Capabilities).
 - **Limites e Resiliência**: `mem_limit` e `memswap_limit` fixados em `1024m` (sem swap), `pids_limit: 256`, `stop_grace_period: 30s` e rotação de logs (`json-file` 10m x 3) para bot e mongo.
 - **Volumes Nomeados**: Os dados são isolados nos volumes `empiremuse-data` (para `/data` do bot) e `empiremuse-mongo` (para `/data/db` do MongoDB).
+- **Identificação e Nomes Determinísticos**: O compose declara `name: empiremuse` e nomes de contêineres fixos (`container_name: empiremuse` para o bot e `container_name: empiremuse-mongo` para o MongoDB), padronizando a inspeção e comandos operacionais (`docker logs empiremuse`, `docker top empiremuse`) independentemente do diretório hospedeiro.
 
 ### 3.5 Produção atrás do Traefik e da Cloudflare
 
