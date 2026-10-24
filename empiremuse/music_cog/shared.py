@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Constantes de corpo de classe usadas por mais de um mixin de ``Music`` (ver ``empiremuse/cogs/music.py``)."""
 
+import logging
 import re
 from urllib.parse import urlparse
 
@@ -8,6 +9,9 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.utils.others import CommandArgparse
+
+# Mesmo nome do logger de ``empiremuse/cogs/music.py``: o que os mixins registram continua nele.
+logger = logging.getLogger("empiremuse.cogs.music")
 
 EMOJI = "🎶"
 NAME = "Música"

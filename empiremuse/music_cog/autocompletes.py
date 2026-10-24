@@ -6,6 +6,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
 )
 from empiremuse.utils.music.errors import (
+    GenericError,
     PoolException,
 )
 from empiremuse.utils.music.models import (
@@ -13,6 +14,9 @@ from empiremuse.utils.music.models import (
 )
 
 # Os comandos decorados moram nos outros mixins; este módulo importa os donos, e nenhum deles importa este.
+from empiremuse.music_cog.nodes import NodesMixin
+from empiremuse.music_cog.play_command import PlayCommandMixin
+from empiremuse.music_cog.play_entry import PlayEntryMixin
 from empiremuse.music_cog.queue_edit import QueueEditMixin
 from empiremuse.music_cog.queue_group import QueueGroupMixin
 from empiremuse.music_cog.skip import SkipMixin
@@ -80,3 +84,32 @@ class AutocompletesMixin:
                 if query.lower() in track.title.lower()
             ][:20]
         )
+
+    @PlayEntryMixin.search.autocomplete("server")
+    @PlayCommandMixin.play.autocomplete("server")
+    @NodesMixin.change_node.autocomplete("servidor")
+    async def node_suggestions(self, inter: disnake.Interaction, query: str):
+        if not self.bot.bot_ready or not self.bot.is_ready():
+            return []
+
+        try:
+            await check_pool_bots(inter)
+            bot = inter.music_bot
+        except GenericError:
+            return
+        except Exception:
+            bot = inter.bot
+
+        try:
+            node = bot.music.players[inter.guild_id].node
+        except KeyError:
+            node = None
+
+        if not query:
+            return [n.identifier for n in bot.music.nodes.values() if n != node and n.available and n.is_available]
+
+        return [
+            n.identifier
+            for n in bot.music.nodes.values()
+            if n != node and query.lower() in n.identifier.lower() and n.available and n.is_available
+        ]
