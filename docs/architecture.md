@@ -182,8 +182,12 @@ importável como antes. O núcleo (`__init__`, propriedades, `connect`, `set_pau
   personalizadas por servidor são guardadas no banco (ver seção 8).
 - **UI**: views, botões e modais em `empiremuse/utils/music/interactions/` (pacote desde a KI-29; o `__init__.py` reexporta os nomes
   públicos): `player_views.py` (volume, fila, paginador, botões, seletores), `stage_title.py` (`SetStageTitle`), `fav_menu.py`
-  (`FavMenuView`), `fav_modals.py` (importação e adição de favoritos), `favorites_texts.py`, `skin_editor.py` (`SkinEditorMenu`),
-  `view_modal.py` e `common.py`. Os identificadores do
+  (`FavMenuView`, com os mixins `fav_menu_components.py` para selects e botões e `fav_menu_text.py` para o texto da mensagem),
+  `fav_modals.py` (importação e adição de favoritos), `favorites_texts.py`, `skin_editor.py` (`SkinEditorMenu`, `SkinSettingsButton`
+  e o ciclo de vida da view, com os mixins `skin_editor_components.py` para montagem dos componentes, `skin_editor_modals.py`
+  para os callbacks que abrem modais, `skin_editor_submit.py` para aplicar o que os modais enviam, `skin_editor_persist.py` para
+  carregar, salvar e excluir skins e `skin_editor_preview.py` para a pré-visualização; `skin_editor_data.py` guarda `base_skin` e
+  os textos de recusa), `view_modal.py` e `common.py`. Os identificadores do
   controlador estão em `PlayerControls` (`empiremuse/utils/others.py`, prefixo `musicplayer_`).
 - **Rich Presence**: `LavalinkPlayer.process_rpc` monta o payload e `LavalinkPlayer._send_rpc_data` o envia por `ws_client`
   (`empiremuse/utils/music/models/player_state.py`).
@@ -374,7 +378,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/utils/others.py` | Contexto, `PoolCommand`, paginação, emojis, utilitários | 893 |
 | `empiremuse/utils/owner_panel.py` | Painel do dono (`PanelView`) | 75 |
 | `empiremuse/utils/music/models/` | Pacote: `LavalinkPlayer` (núcleo + 7 mixins), faixas, playlists, yt-dlp (10 módulos; maior: `player_playback.py`, 681) | 4.332 (soma) |
-| `empiremuse/utils/music/interactions/` | Pacote: views/modais de fila, favoritos, skins e controles (8 módulos; maior: `skin_editor.py`, 1.064) | 3.959 (soma) |
+| `empiremuse/utils/music/interactions/` | Pacote: views/modais de fila, favoritos, skins e controles (16 módulos; maior: `player_views.py`, 745) | 4.128 (soma) |
 | `empiremuse/utils/music/checks.py` | Roteamento do pool, checks de DJ/voz/permissão | 813 |
 | `empiremuse/utils/music/local_lavalink.py` | Download/execução do Lavalink e do JDK locais | 497 |
 | `empiremuse/utils/music/audio_sources/` | Clientes Spotify (488) e Deezer (300) | 788 |
