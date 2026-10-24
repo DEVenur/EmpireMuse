@@ -1,0 +1,569 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+import asyncio
+import traceback
+from typing import TYPE_CHECKING
+
+import disnake
+
+import empiremuse.wavelink as wavelink
+from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.errors import (
+    code_suffix,
+    error_code_text,
+    log_unexpected_error,
+)
+from empiremuse.utils.music.lastfm_tools import LastFmException
+
+if TYPE_CHECKING:
+    pass
+
+from empiremuse.utils.music.models.tracks import (
+    LavalinkPlaylist,
+    LavalinkTrack,
+    PartialTrack,
+)
+from empiremuse.utils.music.models.helpers import (
+    exclude_tags,
+    exclude_tags_2,
+    lavalink_text,
+    log_lavalink_failure,
+    logger,
+    native_sources,
+    providers_dict,
+)
+
+
+class PlayerAutoqueueMixin:
+    async def get_autoqueue_tracks(self):
+        try:
+            return self.queue_autoplay.popleft()
+        except Exception:
+            pass
+
+        if self.locked:
+            return
+
+        tracks_search = []
+
+        for t in reversed(self.failed_tracks + self.played):
+            if len(tracks_search) > 4:
+                break
+
+            tracks_search.insert(0, t)
+
+        if current_track := self.current or self.last_track:
+            tracks_search.insert(0, current_track)
+
+        track = None
+        tracks = []
+        tracks_ytsearch = []
+
+        exception = None
+
+        if tracks_search:
+            self.locked = True
+
+            for track_data in tracks_search:
+                if (
+                    track_data.info["sourceName"] == "spotify"
+                    and "spotify" not in self.node.info["sourceManagers"]
+                    and self.bot.spotify
+                ):
+                    result = None
+
+                    for i in range(3):
+                        try:
+                            result = await self.bot.spotify.track_search(tracks_search[0].author, limit=100)
+                            break
+                        except Exception as e:
+                            self.set_command_log(
+                                emoji="⚠️",
+                                text=f"Falha ao obter músicas recomendadas do spotify, tentativa {i + 1} de 3.",
+                                controller=True,
+                            )
+                            self.update = True
+                            traceback.print_exc()
+                            exception = e
+                            await asyncio.sleep(5)
+
+                    if result:
+                        tracks = []
+
+                        for t in result["tracks"]:
+                            try:
+                                thumb = t["album"]["images"][0]["url"]
+                            except (IndexError, KeyError):
+                                thumb = ""
+
+                            partial_track = PartialTrack(
+                                uri=t["external_urls"]["spotify"],
+                                author=t["artists"][0]["name"] or "Unknown Artist",
+                                title=t["name"],
+                                thumb=thumb,
+                                duration=t["duration_ms"],
+                                source_name="spotify",
+                                identifier=t["id"],
+                                requester=self.bot.user.id,
+                                autoplay=True,
+                            )
+
+                            partial_track.info["extra"]["authors"] = [
+                                fix_characters(i["name"])
+                                for i in t["artists"]
+                                if f"feat. {i['name'].lower()}" not in t["name"].lower()
+                            ]
+
+                            partial_track.info["extra"]["authors_md"] = ", ".join(
+                                f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in t["artists"]
+                            )
+
+                            try:
+                                if t["album"]["name"] != t["name"]:
+                                    partial_track.info["extra"]["album"] = {
+                                        "name": t["album"]["name"],
+                                        "url": t["album"]["external_urls"]["spotify"],
+                                    }
+                            except (AttributeError, KeyError):
+                                pass
+
+                            tracks.append(partial_track)
+
+                elif (
+                    track_data.info["sourceName"] == "deezer"
+                    and (
+                        self.bot.pool.config["FORCE_USE_DEEZER_CLIENT"]
+                        or "deezer" not in self.node.info["sourceManagers"]
+                    )
+                    and (artist_id := track_data.info["extra"].get("artist_id"))
+                ):
+                    try:
+                        try:
+                            result = await self.bot.deezer.get_artist_radio_info(artist_id)
+                        except Exception:
+                            traceback.print_exc()
+                            result = None
+
+                        if result:
+                            tracks = []
+
+                            for n, t in enumerate(result):
+                                partial_track = PartialTrack(
+                                    uri=f"https://www.deezer.com/track/{t['id']}",
+                                    author=t["artist"]["name"],
+                                    title=t["title"],
+                                    thumb=t["album"]["cover_big"],
+                                    duration=t["duration"] * 1000,
+                                    source_name="deezer",
+                                    identifier=t["id"],
+                                    requester=self.bot.user.id,
+                                    autoplay=True,
+                                )
+
+                                partial_track.info["isrc"] = t.get("isrc")
+                                artists = t.get("contributors") or [t["artist"]]
+
+                                partial_track.info["extra"]["authors"] = [a["name"] for a in artists]
+                                partial_track.info["extra"]["authors_md"] = ", ".join(
+                                    f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})"
+                                    for a in artists
+                                )
+                                partial_track.info["extra"]["artist_id"] = t["artist"]["id"]
+
+                                if t["title"] != t["album"]["title"]:
+                                    partial_track.info["extra"]["album"] = {
+                                        "name": t["album"]["title"],
+                                        "url": t["album"]["tracklist"],
+                                    }
+
+                                tracks.append(partial_track)
+                    except Exception:
+                        traceback.print_exc()
+
+                elif track_data.info["sourceName"] == "soundcloud":
+                    try:
+                        info = await self.bot.loop.run_in_executor(
+                            None,
+                            lambda: self.bot.pool.ytdl.extract_info(f"{track_data.uri}/recommended", download=False),
+                        )
+                    except AttributeError:
+                        pass
+
+                    else:
+                        tracks = [
+                            PartialTrack(
+                                uri=i["url"],
+                                title=i["title"],
+                                requester=self.bot.user.id,
+                                source_name="soundcloud",
+                                identifier=i["id"],
+                                autoplay=True,
+                            )
+                            for i in info.get("entries", [])
+                        ]
+
+                if not tracks:
+                    if self.bot.last_fm and not self.lastfm_artists:
+                        if track_data.ytid:
+                            if (
+                                track_data.author.endswith(" - topic")
+                                and not track_data.author.endswith("Release - topic")
+                                and not track_data.title.startswith(track_data.author[:-8])
+                            ):
+                                artist = track_data.author[:-8]
+                            else:
+                                try:
+                                    artist = track_data.title.split(" - ", maxsplit=1)[0]
+                                except ValueError:
+                                    artist = track_data.author
+                        else:
+                            artist = track_data.author
+
+                        try:
+                            self.lastfm_artists = [
+                                a["name"]
+                                for a in await self.bot.last_fm.get_similar_artists(artist)
+                                if a["name"].lower() not in track_data.author.lower()
+                            ]
+                            self.lastfm_artists.insert(0, track_data.author)
+                        except LastFmException as e:
+                            print(f"Last.FM recommendations error: {repr(e)}")
+                        except Exception:
+                            traceback.print_exc()
+
+                    try:
+                        author = self.lastfm_artists.pop(0)
+                    except Exception:
+                        author = track_data.author
+
+                    if track_data.info["sourceName"] == "youtube" and self.native_yt:
+                        queries = [f"https://www.youtube.com/watch?v={track_data.ytid}&list=RD{track_data.ytid}"]
+
+                        if p_dict := providers_dict.get(track_data.info["sourceName"]):
+                            providers = [p_dict] + [p for p in self.node.search_providers if p != p_dict]
+                        else:
+                            providers = self.node.search_providers
+
+                        queries.extend([f"{sp}:{author.split(',')[0]}" for sp in providers])
+
+                    # elif track_data.info["sourceName"] == "spotify" and "spotify" in self.node.info["sourceManagers"] and (spotify_tracks:=[t.identifier for t in tracks_search if t.info["sourceName"] == "spotify"]):
+                    #    queries = ["sprec:seed_tracks=" + ",".join(set(spotify_tracks[:5]))]
+
+                    elif (
+                        track_data.info["sourceName"] == "deezer"
+                        and "deezer" in self.node.info["sourceManagers"]
+                        and (deezer_tracks := [t.identifier for t in tracks_search if t.info["sourceName"] == "deezer"])
+                    ):
+                        queries = [f"dzrec:{deezer_tracks[0]}"]
+
+                    else:
+                        if p_dict := providers_dict.get(track_data.info["sourceName"]):
+                            providers = [p_dict] + [p for p in self.node.search_providers if p != p_dict]
+                        else:
+                            providers = self.node.search_providers
+
+                        queries = [f"{sp}:{author.split(',')[0]}" for sp in providers]
+
+                    for query in queries:
+                        if query.startswith("jssearch"):
+                            continue
+
+                        try:
+                            tracks = await self.node.get_tracks(
+                                query,
+                                track_cls=LavalinkTrack,
+                                playlist_cls=LavalinkPlaylist,
+                                autoplay=True,
+                                requester=self.bot.user.id,
+                            )
+                        except Exception as e:
+                            if [
+                                err
+                                for err in ("Could not find tracks from mix", "Could not read mix page")
+                                if err in str(e)
+                            ] and self.native_yt:
+                                try:
+                                    tracks_ytsearch = await self.node.get_tracks(
+                                        f'{query}:"{track_data.author}"',
+                                        track_cls=LavalinkTrack,
+                                        playlist_cls=LavalinkPlaylist,
+                                        autoplay=True,
+                                        requester=self.bot.user.id,
+                                    )
+                                    break
+                                except Exception as e:
+                                    exception = e
+                                    continue
+                            else:
+                                print(traceback.format_exc())
+                                exception = e
+                                await asyncio.sleep(1.5)
+                                continue
+
+                        try:
+                            tracks = tracks.tracks
+                        except Exception:
+                            pass
+
+                        if not tracks:
+                            continue
+
+                        break
+
+                    if not any(i in track_data.title.lower() for i in exclude_tags_2):
+                        final_tracks = []
+                        for t in tracks:
+                            if not any(
+                                (i in t.title.lower()) for i in exclude_tags_2
+                            ) and not track_data.uri.startswith(t.uri):
+                                final_tracks.append(t)
+                        tracks = final_tracks or tracks
+
+                track = track_data
+
+            if not tracks:
+                try:
+                    tracks_ytsearch = tracks_ytsearch.tracks
+                except AttributeError:
+                    pass
+                tracks = tracks_ytsearch
+                tracks.reverse()
+
+            if not tracks:
+                self.locked = False
+
+                if exception:
+                    if isinstance(exception, wavelink.TrackLoadError):
+                        error_code = log_lavalink_failure(
+                            "Falha ao obter dados do autoplay",
+                            message=exception.message,
+                            cause=exception.cause,
+                            severity=exception.severity,
+                            node=self.node.identifier,
+                        )
+                        error_msg = (
+                            f"**Mensagem:** {lavalink_text(exception.message)}\n"
+                            f"**Nível:** `{exception.severity}`\n"
+                            f"**Servidor de música:** `{self.node.identifier}`{code_suffix(error_code)}"
+                        )
+                    else:
+                        error_code = log_unexpected_error(logger, exception, "autoplay")
+                        error_msg = f"**Ocorreu um erro inesperado.**{code_suffix(error_code)}"
+                else:
+                    error_msg = "Não houve resultados relacionados as músicas tocadas..."
+
+                try:
+                    embed = disnake.Embed(
+                        description=f"**Falha ao obter dados do autoplay:**\n{error_msg}", color=disnake.Colour.red()
+                    )
+                    await self.text_channel.send(embed=embed, delete_after=10)
+                except Exception:
+                    traceback.print_exc()
+                await asyncio.sleep(7)
+                return
+
+        try:
+            tracks = tracks.tracks
+        except AttributeError:
+            pass
+
+        try:
+            tracks = [t for t in tracks if not [u for u in tracks_search if t.uri.startswith(u.uri)]]
+        except Exception:
+            pass
+
+        if track:
+            info = {"title": track.title, "uri": track.uri}
+
+            tracks_final = []
+
+            for t in tracks:
+                if t.is_stream:
+                    continue
+
+                # if t.duration < 90000:
+                #    continue
+
+                if track.ytid and track.ytid == t.ytid:
+                    continue
+
+                if not isinstance(t, PartialTrack):
+                    t.info["extra"].update({"autoplay": True, "requester": self.bot.user.id})
+                    t.playlist = None
+
+                t.info["extra"]["related"] = info
+                tracks_final.append(t)
+
+            tracks.clear()
+            self.queue_autoplay.extend(tracks_final)
+
+        self.locked = False
+
+        try:
+            return self.queue_autoplay.popleft()
+        except Exception:
+            try:
+                return self.played.popleft()
+            except Exception:
+                return None
+
+    async def resolve_track(self, track: PartialTrack, force=False):
+        if track.id:
+            return
+
+        check_duration = bool(track.duration)
+
+        try:
+            exceptions = []
+            selected_track = None
+            tracks = []
+
+            if track.info["sourceName"] == "http":
+                search_queries = [track.uri or track.search_uri]
+            elif (
+                track.info["sourceName"] == "youtube"
+                and not force
+                and (not self.native_yt or not self.node.prefer_youtube_native_playback)
+            ):
+                return
+            else:
+                search_queries = []
+
+            if not search_queries:
+                if (
+                    not force
+                    and track.info["sourceName"] in self.node.info.get("sourceManagers", [])
+                    and (not self.node.only_use_native_search_providers or track.info["sourceName"] in native_sources)
+                ):
+                    search_queries = [track.uri]
+                else:
+                    search_queries = []
+                    for sp in self.node.partial_providers:
+                        if (
+                            track.info["sourceName"] == "youtube"
+                            and sp.startswith(("ytsearch:", "ytmsearch:"))
+                            and not self.native_yt
+                        ):
+                            continue
+
+                        if "{isrc}" in sp:
+                            if isrc := track.info.get("isrc"):
+                                search_queries.append(sp.replace("{isrc}", isrc))
+                            continue
+                        search_queries.append(
+                            sp.replace("{title}", track.single_title).replace("{author}", ", ".join(track.authors))
+                        )
+
+            for query in search_queries:
+                if not (
+                    result := self.bot.pool.partial_track_cache.get(
+                        f"{track.info['sourceName']}:{track.author}-{track.single_title}"
+                    )
+                ):
+                    try:
+                        result = await self.node.get_tracks(
+                            query,
+                            track_cls=LavalinkTrack,
+                            playlist_cls=LavalinkPlaylist,
+                            check_title=60 if query.startswith(("ytmsearch", "ytsearch", "scsearch")) else 75,
+                        )
+                    except Exception as e:
+                        if track.info["sourceName"] == "youtube" and any(
+                            e in str(e)
+                            for e in (
+                                "This video is not available",
+                                "YouTube WebM streams are currently not supported.",
+                                "Video returned by YouTube isn't what was requested",
+                                "The video returned is not what was requested.",
+                            )
+                        ):
+                            cog = self.bot.get_cog("Music")
+                            cog.remove_provider(self.node.search_providers, ["ytsearch", "ytmsearch"])
+                            cog.remove_provider(
+                                self.node.partial_providers,
+                                [
+                                    'ytsearch:"{isrc}"',
+                                    'ytsearch:"{title} - {author}"',
+                                    'ytmsearch:"{isrc}"',
+                                    'ytmsearch:"{title} - {author}"',
+                                ],
+                            )
+                            self.native_yt = False
+                            await self.resolve_track(track)
+                            return
+                        exceptions.append(e)
+                        continue
+
+                    try:
+                        result = result.tracks
+                    except AttributeError:
+                        pass
+
+                    self.bot.pool.partial_track_cache[
+                        f"{track.info['sourceName']}:{track.author}-{track.single_title}"
+                    ] = tracks
+
+                try:
+                    if result[0].info["sourceName"] == "bandcamp":
+                        check_duration = False
+                except Exception:
+                    pass
+
+                has_exclude_tags = any(tag for tag in exclude_tags if tag.lower() in track.title.lower())
+
+                tracks.extend(result)
+
+                for t in result:
+                    if t.is_stream:
+                        continue
+
+                    if not has_exclude_tags and any(tag for tag in exclude_tags if tag.lower() in t.title.lower()):
+                        continue
+
+                    if check_duration and not ((t.duration - 10000) < track.duration < (t.duration + 10000)):
+                        continue
+
+                    selected_track = t
+                    break
+
+                if selected_track:
+                    break
+
+            if not selected_track:
+                try:
+                    selected_track = tracks[0]
+                except Exception:
+                    if exceptions:
+                        print("Falha ao resolver PartialTrack:\n" + "\n".join(repr(e) for e in exceptions))
+                    return
+
+            track.id = selected_track.id
+            track.info["id"] = selected_track.id
+            track.info["length"] = selected_track.duration
+            if track.info["sourceName"] == "last.fm":
+                track.info["pluginInfo"] = selected_track.info.get("pluginInfo", {})
+                track.info["author"] = selected_track.author
+                track.info["title"] = selected_track.title
+                track.info["sourceName"] = selected_track.info["sourceName"]
+                track.info["uri"] = selected_track.info["uri"]
+            else:
+                track.info["sourceNameOrig"] = selected_track.info["sourceName"]
+                if not track.info["author"]:
+                    track.info["author"] = selected_track.author
+            if not track.duration:
+                track.info["duration"] = selected_track.duration
+            if not track.thumb:
+                track.info["artworkUrl"] = selected_track.thumb
+
+        except Exception as e:
+            error_code = log_unexpected_error(
+                logger, e, f"obtenção de informação da PartialTrack {track.uri or track.search_uri}"
+            )
+            embed = disnake.Embed(
+                description=f"**Falha ao obter informação de PartialTrack:\n[{track.title}]({track.uri or track.search_uri})**"
+                f"{error_code_text(error_code)}\n"
+                f"**Servidor de música:** `{self.node.identifier}`",
+                color=disnake.Colour.red(),
+            )
+            await self.report_error(embed, track)

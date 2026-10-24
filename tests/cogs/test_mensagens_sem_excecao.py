@@ -646,7 +646,7 @@ class TestOutrasFalhasDoPlayer:
         p.change_node = AsyncMock()
         p.destroy = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
+        monkeypatch.setattr(models.player_voice, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
 
         with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
             await p._wait_for_new_node()
@@ -669,7 +669,7 @@ class TestOutrasFalhasDoPlayer:
         p.destroy = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
         monkeypatch.setattr(
-            models.player, "can_connect", MagicMock(side_effect=GenericError("**Sem permissão no canal.**"))
+            models.player_voice, "can_connect", MagicMock(side_effect=GenericError("**Sem permissão no canal.**"))
         )
 
         await p._wait_for_new_node()
@@ -685,7 +685,7 @@ class TestOutrasFalhasDoPlayer:
         p = jogador(monkeypatch)
         p.bot.get_channel = lambda cid: SimpleNamespace(id=7)
         p.bot.music = SimpleNamespace(players={9: p})
-        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
+        monkeypatch.setattr(models.player_voice, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
 
         async def dormir(segundos):
             raise Fim
@@ -1069,7 +1069,7 @@ class TestLacunasDaMutacao:
         p.destroy = AsyncMock()
         p.connect = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=erro))
+        monkeypatch.setattr(models.player_voice, "can_connect", MagicMock(side_effect=erro))
 
         await p._wait_for_new_node()
 
@@ -1088,7 +1088,9 @@ class TestLacunasDaMutacao:
         p.change_node = AsyncMock()
         p.destroy = AsyncMock()
         p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models.player, "can_connect", MagicMock(side_effect=PoolException("nenhum bot livre")))
+        monkeypatch.setattr(
+            models.player_voice, "can_connect", MagicMock(side_effect=PoolException("nenhum bot livre"))
+        )
 
         await p._wait_for_new_node()
 
