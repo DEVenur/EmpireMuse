@@ -32,8 +32,9 @@ RED antes só para correção de bug e regra pura. No resto, teste depois e some
 
 ## Cobertura
 
-O piso no `pyproject.toml` (`fail_under`) nunca cai. A meta é 70%, alcançada com teste por risco, nunca para
-inflar o número.
+- piso global no pyproject (`fail_under = 56`), que nunca cai;
+- áreas críticas (painel, RPC/web, regras, config, banco, serialização e leitor legado) com ≥ 90%, garantido por um passo no CI; teste removido ali que derrube a cobertura reprova o PR;
+- sem meta global de 70%: cogs e player (código de Discord/voz) ganham teste só por bug real ou risco, nunca para subir o número.
 
 ## Testes locais
 

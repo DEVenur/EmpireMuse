@@ -140,12 +140,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
-- **Saneamento da Suíte de Testes e Otimização do CI (Fase T, PRs #65, #67–#70)**:
+- **Saneamento da Suíte de Testes e Otimização do CI (Fase T, PRs #65, #67–#71)**:
   - Redução da suíte de testes de 8.422 para 2.190 testes por eliminação de duplicações e testes de caracterização mecânicos, mantendo o piso de cobertura de 56% (PRs #67 a #69).
   - Otimização da esteira de CI (`.github/workflows/ci.yml`), reduzindo o tempo de cerca de 6 min 23 s para 1 min 42 s: medição de durações (`--durations=30`), cancelamento de rodadas antigas de PR, passo rápido de smoke antes da suíte, pytest pulado em PR sem código e `mypy` restrito ao gatilho manual `workflow_dispatch` (PRs #65, #70).
+  - Guarda de cobertura para áreas críticas (painel, RPC/web, regras, config, banco, serialização e leitor legado) exigindo ≥ 90% no CI.
   - Workflow de release (`.github/workflows/release.yml`) simplificado, eliminando a reexecução da suíte e reaproveitando a verificação do CI para o mesmo commit da tag (PR #70).
 - **Política de Testes Enxuta e Governança de Regras (Fase T / T0)**:
-  - Novas regras `.claude/rules/empiremuse/testing.md` (o que merece teste, o que é proibido, TDD só para bug e regra pura, meta de 70% com piso no `pyproject.toml`, validação no CI) e `.claude/rules/empiremuse/governanca-de-regras.md` (toda regra cita problema concreto, custo e data de revisão). Motivo: suíte de 8.422 testes e CI de 6–7 min para um bot comunitário.
+  - Novas regras `.claude/rules/empiremuse/testing.md` (o que merece teste, o que é proibido, TDD só para bug e regra pura, piso global de 56% e ≥ 90% nas áreas críticas, validação no CI) e `.claude/rules/empiremuse/governanca-de-regras.md` (toda regra cita problema concreto, custo e data de revisão). Motivo: suíte de 8.422 testes e CI de 6–7 min para um bot comunitário.
   - Trechos de testes de `AGENTS.md`, `CLAUDE.md`, `docs/development.md`, `.github/CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md` e da seção "Testes" de `python-disnake.md` alinhados à nova política (pronto = CI verde).
 - **Divisão Modular de Arquivos Críticos em Pacotes e Mixins (KI-29, PRs #42, #44, #47, #49, #50, #51, #55, #57–#60, #62, #63)**:
   - **Decomposição estrutural sem alteração comportamental**: os três maiores arquivos legados foram desmembrados em módulos temáticos coesos preservando 100% da API pública e contratos funcionais:
