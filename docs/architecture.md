@@ -101,14 +101,20 @@ só os atributos de núcleo (`emoji`, `name`, `desc_prefix`, `providers_info`, �
 | `queue_edit.py` | `QueueEditMixin` | `remove`, `readd`, `rotate` |
 | `player_session.py` | `PlayerSessionMixin` | pedidos por thread, DJs, log de comandos, `stop`, salvar fila |
 | `now_playing.py` | `NowPlayingMixin` | `now_playing`, `reload_np`, `controller` |
-| `queue_group.py` | `QueueGroupMixin` | grupo `/queue`: `shuffle`, `reverse`, `display`, `clear`, `move`, … |
+| `queue_group.py` | `QueueGroupMixin` | grupo `/queue`: `shuffle`, `reverse`, `display`, `clear`, `move`, … (orquestradores de `clear` e `move`) |
+| `queue_clear_steps.py`, `queue_move_steps.py` | — | etapas `_qc_*` de `/queue clear` e `_qm_*` de `/queue move` |
+| `queue_state.py` | — | `ClearState` e `MoveState`: as variáveis que passam de uma etapa para outra |
 | `autocompletes.py` | `AutocompletesMixin` | `queue_tracks` e `node_suggestions`, que decoram comandos de mais de um mixin |
 | `player_modes.py` | `PlayerModesMixin` | `restrict_mode`, `nonstop`, `autoplay` |
 | `nodes.py` | `NodesMixin` | `change_node`, `playeruptime`, eventos e reconexão de nodes, `connect_node`, `get_best_node` |
 | `favorites.py` | `FavoritesMixin` | `fav_manager` |
 | `controller_dispatch.py` | `ControllerDispatchMixin` | canal de pedidos, despacho de interações do controlador |
-| `player_controller.py` | `PlayerControllerMixin` | `player_controller` (ações dos botões do controlador do player) |
-| `song_requests.py` | `SongRequestsMixin` | pedidos de música por mensagem |
+| `player_controller.py` | `PlayerControllerMixin` | `player_controller` (orquestra as ações dos botões do controlador do player) |
+| `controller_embed.py`, `controller_buttons.py` | — | etapas `_pc_*` do `player_controller` (botões do embed; pedir música, last.fm, favoritar, letras) |
+| `controller_state.py` | — | `ControllerState`: as variáveis que passam de uma etapa do `player_controller` para outra |
+| `song_requests.py` | `SongRequestsMixin` | pedidos de música por mensagem (`song_requests`, `parse_song_request`, `song_request_modal`) |
+| `song_request_steps.py` | — | etapas `_sr_*` de `song_requests` e `_pr_*` de `parse_song_request` |
+| `song_request_state.py` | — | `SongRequestState` e `ParseRequestState` |
 | `tracks.py` | `TracksMixin` | `get_partial_tracks`, `get_lavalink_tracks`, `get_tracks` |
 | `player_lifecycle.py` | `PlayerLifecycleMixin` | `process_music`, `create_player`, `player_vc_disconnect`, relatório de erros |
 | `shared.py` | — | constantes e objetos de corpo de classe usados por mais de um mixin |
@@ -117,6 +123,8 @@ O `/play` (KI-29b) é só o orquestrador: `PlayCommandMixin.play` cria um `PlayS
 `_play_*` na ordem original; cada etapa lê o que usa do `PlayState`, roda o trecho e grava de volta no estado o que alterou; ela não devolve dados. O único retorno
 é `True`, quando a etapa encerra o `/play` (o orquestrador então faz `return`); as demais devolvem `False` ou nada.
 As etapas moram em `PlayCommandMixin` (bot, canal e permissões), `PlayMenusMixin`, `PlayResolveMixin` e `PlayEnqueueMixin`.
+
+O mesmo padrão vale para `/queue clear`, `/queue move`, `Music.player_controller`, `Music.song_requests` e `Music.parse_song_request`, com uma diferença: as etapas são **funções de módulo** `(self, req)` (`_qc_*`, `_qm_*`, `_pc_*`, `_sr_*`, `_pr_*`), não métodos, porque testes chamam esses comandos com um `self` falso. Cada comando fica com no máximo 150 linhas; a etapa que usa um nome trocado por teste (`string_to_file`) continua em `song_requests.py`.
 
 Regras de montagem (guardadas por testes em `tests/repo/` e `tests/cogs/`):
 
@@ -385,7 +393,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/utils/music/{converters,errors,filters,skin_utils,track_encoder,…}.py` | Auxiliares de música | 1.506 |
 | `empiremuse/wavelink/` | Cliente Lavalink v3/v4 (node, websocket, player, eventos) | 2.850 |
 | `empiremuse/cogs/music.py` | Cog `Music` (núcleo, bases e `setup`); os comandos vivem nos mixins de `music_cog/` | 275 |
-| `empiremuse/music_cog/` | Mixins de `Music` (play, fila, controles, nodes, controlador, pedidos) + `shared.py` (23 módulos; maior: `queue_group.py`, 1.058) | 9.777 (soma) |
+| `empiremuse/music_cog/` | Mixins de `Music` (play, fila, controles, nodes, controlador, pedidos) + `shared.py` (32 módulos; maior: `play_enqueue.py`, 709) | 10.808 (soma) |
 | `empiremuse/cogs/music_settings.py` | Configurações por servidor/usuário, skins, favoritos | 1.831 |
 | `empiremuse/cogs/player_resume.py` | Salvar e retomar sessões de players | 854 |
 | `empiremuse/cogs/misc.py` | Comandos gerais (ping, convite, sobre, …) | 1.042 |
