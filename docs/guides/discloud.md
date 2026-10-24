@@ -59,10 +59,12 @@ Caso utilize o envio manual por arquivo `.zip` ou através da ferramenta de linh
      ```
    - **Exclua o arquivo `.zip` local imediatamente**: Logo após o envio bem-sucedido para a Discloud, delete o arquivo compactado da sua máquina para evitar vazamento de credenciais locais.
 3. O arquivo [`.discloudignore`](../../.discloudignore) já vem configurado para **bloquear** compulsoriamente o envio de:
-   - Ativos visuais estáticos pesados em `assets/` (como skins e tutoriais, preservando `assets/brand/` para rotas de marca);
    - Arquivos auxiliares de ambiente (`.env.*`, como `.env.mongo` e backups);
    - Segredos e chaves locais (`config.json`, `*.key`, `*.pem`, `.panel-cookie-secret`, cookies do YouTube);
    - Bancos de dados locais (`local_database/`, `.local_dbs/`) e caches temporários (`.logs/`, `__pycache__/`, `.ytdl_cache/`, etc.).
+
+> [!NOTE]
+> A pasta `assets/` **não** deve ser ignorada no deploy, pois `branding.asset_url` confere a existência física de cada arquivo localmente em tempo de execução antes de gerar URLs públicas para o player, provedores e tutoriais.
 
 ---
 
