@@ -22,6 +22,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse import paths
 from empiremuse.config_loader import DEFAULT_CONFIG, load_config
 from empiremuse.rules.errors import RuleError
+from empiremuse.rules.owner_shell import build_shell_env, collect_secret_values, mask_secrets
 from empiremuse.rules.settings import validate_prefix
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -37,6 +38,9 @@ from empiremuse.utils.owner_panel import panel_command, PanelView
 MSG_INVALID_PREFIX = "**O prefixo não pode conter espaços ou ter acima de 5 caracteres.**"
 
 logger = logging.getLogger(__name__)
+
+# Trecho máximo do comando que vai para o log de execução de comandos de owner.
+MAX_LOGGED_COMMAND_LENGTH = 200
 
 # Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
 EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
@@ -72,18 +76,23 @@ def format_git_log(data_list: list):
     return data
 
 
+class CommandFailed(Exception):
+    """O comando terminou com status diferente de zero; a mensagem traz a saída e o status."""
+
+
 async def run_command(cmd: str):
     p = await asyncio.create_subprocess_shell(
         cmd,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
-        env=dict(os.environ),
+        # Ambiente mínimo: o .env carregado no processo (tokens, senhas) não fica visível ao comando.
+        env=build_shell_env(os.environ, windows=os.name == "nt"),
     )
     stdout, stderr = await p.communicate()
     r = ShellResult(p.returncode, stdout, stderr)
     if r.status != 0:
-        raise Exception(f"{r.stderr or r.stdout}\n\nStatus Code: {r.status}")
+        raise CommandFailed(f"{r.stderr or r.stdout}\n\nStatus Code: {r.status}")
     return str(r.stdout)
 
 
@@ -110,6 +119,24 @@ class Owner(commands.Cog):
         self.bot = bot
         self.owner_view: Optional[PanelView] = None
         self.extra_hints = bot.config["EXTRA_HINTS"].split("||")
+
+    def secret_values(self) -> frozenset:
+        """Valores de segredo conhecidos (configuração do bot e ambiente do processo) que nunca saem em claro."""
+        return collect_secret_values(self.bot.config, os.environ)
+
+    def log_owner_command(self, ctx, name: str, detail: str = ""):
+        """Registra quem executou qual comando de owner (o horário vem do formato do log), sem a saída e sem segredos."""
+        detail = mask_secrets(detail, self.secret_values())[:MAX_LOGGED_COMMAND_LENGTH]
+        # warning: a trilha de auditoria precisa sair mesmo com ENABLE_LOGGER desligado (o nível padrão é WARNING)
+        logger.warning("comando de owner: usuário=%s comando=%s detalhe=%r", ctx.author.id, name, detail)
+
+    @commands.Cog.listener("on_command")
+    async def log_jishaku_command(self, ctx: CustomContext):
+        command = ctx.command
+        if command is None or (command.root_parent or command).qualified_name != "jishaku":
+            return
+        if await self.bot.is_owner(ctx.author):
+            self.log_owner_command(ctx, "jishaku", ctx.message.content)
 
     def format_log(self, data: list):
         return "\n".join(
@@ -340,6 +367,7 @@ class Owner(commands.Cog):
         alt_name="Atualizar Bot",
     )
     async def update(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, opts: str = ""):
+        self.log_owner_command(ctx, "update")
         raise GenericError(
             "**O comando de atualização via git foi desativado.**\n"
             "Para atualizar o EmpireMuse, implante a nova release/imagem oficial."
@@ -535,6 +563,8 @@ class Owner(commands.Cog):
         alt_name="Exportar source/código-fonte.",
     )
     async def exportsource(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, flags: str = ""):
+        self.log_owner_command(ctx, "exportsource", flags)
+
         try:
             env_file = dotenv.dotenv_values(str(paths.RUNTIME_DIR / ".env"))
         except Exception:
@@ -737,39 +767,33 @@ class Owner(commands.Cog):
         else:
             command = command.strip("` \n")
 
+        self.log_owner_command(ctx, "shell", command)
+
         try:
             async with ctx.typing():
-                result = await run_command(command)
-        except GenericError as e:
-            kwargs = {}
-            if len(e.text) > 2000:
-                kwargs["file"] = string_to_file(e.text, filename="error.txt")
-            else:
-                kwargs["content"] = f"```py\n{e.text}```"
+                output, failed = await run_command(command), False
+        except CommandFailed as e:
+            output, failed = str(e), True
 
-            try:
-                await ctx.author.send(**kwargs)
-                await ctx.message.add_reaction("⚠️")
-            except disnake.Forbidden:
-                traceback.print_exc()
-                raise GenericError(
-                    "**Ocorreu um erro (verifique os logs/terminal ou libere seu DM para o próximo "
-                    "resultado ser enviado diretamente no seu DM).**"
-                )
-
+        # A saída só vai por DM, com os segredos conhecidos mascarados; nunca para o canal.
+        output = mask_secrets(output, self.secret_values())
+        content = f"```py\n{output}```"
+        kwargs = {}
+        if len(content) > 2000:
+            kwargs["file"] = string_to_file(output, filename=f"shell_result_{ctx.message.id}.txt")
         else:
-            kwargs = {}
-            if len(result) > 2000:
-                kwargs["file"] = string_to_file(result, filename=f"shell_result_{ctx.message.id}.txt")
-            else:
-                kwargs["content"] = f"```py\n{result}```"
+            kwargs["content"] = content
+        if not failed:
+            kwargs["components"] = [disnake.ui.Button(label="Fechar Shell", custom_id="close_shell_result", emoji="♻️")]
 
-            await ctx.reply(
-                components=[disnake.ui.Button(label="Fechar Shell", custom_id="close_shell_result", emoji="♻️")],
-                mention_author=False,
-                fail_if_not_exists=False,
-                **kwargs,
+        try:
+            await ctx.author.send(**kwargs)
+        except disnake.Forbidden:
+            raise GenericError(
+                "**Não consegui enviar o resultado no seu DM: libere suas mensagens diretas e execute o comando de novo.**"
             )
+
+        await ctx.message.add_reaction("⚠️" if failed else "✅")
 
     @check_voice()
     @commands.cooldown(1, 15, commands.BucketType.guild)

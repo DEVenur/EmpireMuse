@@ -85,6 +85,14 @@ def read_guild_bots() -> Dict[str, List[str]]:
         return {}
 
 
+def load_jishaku_if_enabled(bot) -> bool:
+    """Carrega a extensão jishaku (eval e shell do owner) só com ``ENABLE_JISHAKU=true``; desligada por padrão."""
+    if not bot.config["ENABLE_JISHAKU"]:
+        return False
+    bot.load_extension("jishaku")
+    return True
+
+
 class BotPool:
     killing_state = False
     command_sync_config = commands.CommandSyncFlags(
@@ -876,7 +884,7 @@ class BotPool:
 
             bot.http.token = token
 
-            bot.load_extension("jishaku")
+            load_jishaku_if_enabled(bot)
 
             if bot.config["INTERACTION_COMMAND_ONLY"]:
 
