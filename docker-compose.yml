@@ -6,7 +6,7 @@ services:
     pull_policy: missing
     restart: unless-stopped
     stop_grace_period: 30s
-    pids_limit: 100
+    pids_limit: 512
     env_file: .env
     mem_limit: ${EMPIREMUSE_MEM_LIMIT:-1024m}
     memswap_limit: ${EMPIREMUSE_MEM_LIMIT:-1024m}

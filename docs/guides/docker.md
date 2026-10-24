@@ -112,7 +112,7 @@ O arquivo `docker-compose.yml` aplica uma política rigorosa de segurança defen
 - **Exposição Mínima de Portas**: Apenas a porta HTTP 6000 do bot é publicada no host (vinculada a `127.0.0.1` por padrão). O Lavalink (vinculado estritamente em `127.0.0.1` dentro do contêiner) e o serviço `mongo` (porta 27017 acessível exclusivamente na rede interna do Compose) **nunca** têm portas publicadas para fora.
 - **Sistema de Arquivos Somente Leitura**: O contêiner do bot roda com `read_only: true`. Diretórios temporários de escrita utilizam `/tmp` montado em memória (`tmpfs`).
 - **Isolamento de Privilégios**: `security_opt: [no-new-privileges:true]` previne escalada de privilégios e `cap_drop: [ALL]` descarta todas as capacidades Linux (Linux Capabilities).
-- **Limites e Resiliência**: `mem_limit` e `memswap_limit` fixados em `1024m` (sem swap), `pids_limit: 100`, `stop_grace_period: 30s` e rotação de logs (`json-file` 10m x 3) para bot e mongo.
+- **Limites e Resiliência**: `mem_limit` e `memswap_limit` fixados em `1024m` (sem swap), `pids_limit: 512`, `stop_grace_period: 30s` e rotação de logs (`json-file` 10m x 3) para bot e mongo.
 - **Volumes Nomeados**: Os dados são isolados nos volumes `empiremuse-data` (para `/data` do bot) e `empiremuse-mongo` (para `/data/db` do MongoDB).
 
 ---

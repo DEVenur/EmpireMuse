@@ -138,7 +138,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Alterado
 - **Docker Compose de Produção e Porta Padrão 6000**:
-  - `docker-compose.yml`: Atualizado para ambiente de produção utilizando imagem oficial do Docker Hub (`or4cu1o/empiremuse:latest`, recomendando fixar versão em prod), sem build local, `pull_policy: missing`, limites de memória (`1024m` sem swap), `pids_limit: 100`, `stop_grace_period: 30s` e rotação de logs estruturados (`json-file` 10 MB × 3) para bot e mongo.
+  - `docker-compose.yml`: Atualizado para ambiente de produção utilizando imagem oficial do Docker Hub (`or4cu1o/empiremuse:latest`, recomendando fixar versão em prod), sem build local, `pull_policy: missing`, limites de memória (`1024m` sem swap), `pids_limit: 512`, `stop_grace_period: 30s` e rotação de logs estruturados (`json-file` 10 MB × 3) para bot e mongo.
   - Porta padrão do bot atualizada para `6000` (anteriormente `80` no carregador e `8080` no Dockerfile), vinculando a publicação por padrão estritamente ao loopback (`127.0.0.1:6000`) para integração com proxy reverso. Documentação e testes correspondentes atualizados.
 - **Adoção gradual do mypy na integração contínua (PR #40)**: baseline gradual de tipagem estática no `pyproject.toml` (legado em `ignore_errors` e checagem ativa estrita em `empiremuse.rules.*`), executado na CI como etapa de verificação não bloqueante.
 - **Healthcheck adaptativo do contêiner Docker (PR #40)**: o healthcheck no `Dockerfile` passa a testar a resposta HTTP apenas quando `RUN_RPC_SERVER=true` estiver configurado, sucedendo normalmente sem falhas quando o servidor web estiver desativado (padrão desde o PR #35).
