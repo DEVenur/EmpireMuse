@@ -406,6 +406,7 @@ async def _sr_prepare_query(self, req):
             )
 
             msg = await message.channel.send(message.author.mention, embed=embed, view=view)
+            req.msg = msg  # o tratamento de erro de song_requests lê a mensagem já enviada
 
             await view.wait()
 
