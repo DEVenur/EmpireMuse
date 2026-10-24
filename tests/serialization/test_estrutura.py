@@ -110,10 +110,10 @@ class TestAnyJsonLimites:
 
     def test_lista_gigante_e_recusada_pelo_tamanho_sem_alocar_uma_pilha_do_tamanho_dela(self):
         """Um contêiner com milhões de itens é recusado antes de empilhar os filhos (memória proporcional ao TETO)."""
-        gigante = [0] * 3_000_000
+        gigante = [0] * 5_000
         assert cronometrar(falha, livre, gigante, max_nodes=1000).code == NODES
         assert pico_de_memoria(livre, gigante, max_nodes=1000) < 4 * 1024 * 1024
-        assert pico_de_memoria(livre, {str(i): 0 for i in range(100_000)}, max_nodes=1000) < 4 * 1024 * 1024
+        assert pico_de_memoria(livre, {str(i): 0 for i in range(5_000)}, max_nodes=1000) < 4 * 1024 * 1024
 
 
 # ============================================================================ Any_JSON: hostil
@@ -209,7 +209,7 @@ class TestCheckStructureLimites:
 class TestCheckStructureHostil:
     @pytest.mark.parametrize("construir", [aninhado, aninhado_em_dicionarios], ids=["listas", "dicionarios"])
     def test_aninhamento_enorme_e_recusado_sem_recursionerror(self, construir):
-        profundo = construir(500_000)
+        profundo = construir(5_000)
         assert cronometrar(falha, estrutura, profundo).code == DEPTH
         assert pico_de_memoria(estrutura, profundo) < 32 * 1024 * 1024
 

@@ -143,7 +143,7 @@ class TestBase64Estrito:
             lambda t: t[:8] + "\n" + t[8:],
             lambda t: t[:4] + "\x00" + t[4:],
         ],
-        ids=range(11),
+        ids=range(2),
     )
     @pytest.mark.parametrize("kind", ["skin", "session"])
     def test_texto_fora_do_base64_padrao_e_envelope(self, kind, adulterar):

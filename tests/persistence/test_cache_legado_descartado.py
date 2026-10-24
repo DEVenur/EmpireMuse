@@ -152,7 +152,7 @@ class TestConteudoDoArquivoNaoImporta:
     @pytest.mark.parametrize(
         "conteudo",
         list(list(CONTEUDOS_ILEGIVEIS.values()) + list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT.values()))[:2],
-        ids=list(CONTEUDOS_ILEGIVEIS) + list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT),
+        ids=(list(CONTEUDOS_ILEGIVEIS) + list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT))[:2],
     )
     @pytest.mark.parametrize(("arquivo", "atributo"), list(ARQUIVOS_DE_CACHE)[:2])
     def test_conteudo_ilegivel_de_qualquer_tipo_nao_derruba_e_o_arquivo_some(

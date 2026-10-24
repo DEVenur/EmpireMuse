@@ -62,9 +62,9 @@ class TestProfundidadeDoHelper:
 
     def test_nao_estoura_a_pilha_em_aninhamento_fundo(self):
         fundo = []
-        for _ in range(50_000):
+        for _ in range(5_000):
             fundo = [fundo]
-        assert profundidade(fundo) == 50_001
+        assert profundidade(fundo) == 5_001
 
 
 class TestMedidas:

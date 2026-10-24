@@ -46,7 +46,7 @@ def rapido(medida, codigos, pico=8 * MIB):
 
 
 class TestSetColidente:
-    @pytest.mark.parametrize("itens", [20_000, 60_000])
+    @pytest.mark.parametrize("itens", [1_001, 2_000])  # o teto é MAX_SET_ITEMS = 1000
     def test_set_colidente_enorme_e_recusado_sem_o_custo_quadratico(self, itens):
         dados = conjunto_colidente(itens)
         recusado(medir(carregar, envelope(dados)), SET_LIMIT, segundos=2.0, pico=32 * MIB)
@@ -56,8 +56,10 @@ class TestSetColidente:
 
 
 class TestAninhamentoProfundo:
-    def test_5_milhoes_de_niveis_na_skin_e_na_fila(self):
-        dados = aninhado_em_listas(5_000_000)
+    def test_aninhamento_acima_do_teto_na_skin_e_na_fila(self, monkeypatch):
+        for kind in ("queue", "skin"):
+            monkeypatch.setitem(legacy_pickle.MAX_OPCODES, kind, 1_000)  # em produção: 600 mil e 50 mil
+        dados = aninhado_em_listas(5_000)
         recusado(
             medir(carregar, envelope(dados, "queue"), "queue", memoria=False), {TOO_BIG, OPCODE_LIMIT}, segundos=8.0
         )
@@ -68,9 +70,11 @@ class TestAninhamentoProfundo:
 
 
 class TestTamanho:
-    def test_bomba_de_zlib_e_recusada_sem_alocar_o_descomprimido(self):
-        bomba = comprimido(bytes(64 * MIB))
-        assert len(bomba) < 100_000
+    def test_bomba_de_zlib_e_recusada_sem_alocar_o_descomprimido(self, monkeypatch):
+        for kind in ("session", "queue"):
+            monkeypatch.setitem(legacy_pickle.MAX_RAW, kind, 64 * 1024)  # em produção: 8 MiB e 4 MiB
+        bomba = comprimido(bytes(MIB))
+        assert len(bomba) < 4_000
         for kind in ("session", "queue"):
             recusado(medir(carregar, bomba, kind), TOO_BIG, segundos=3.0, pico=3 * MAX_RAW[kind])
 

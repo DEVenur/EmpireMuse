@@ -358,7 +358,7 @@ class TestClassePermitidaComArgumentosRuins:
             chamada("datetime", "datetime"),
             chamada("collections", "deque", lista(inteiro(1)), inteiro(-5)),
         ],
-        ids=range(12),
+        ids=range(2),
     )
     def test_argumento_ruim_vira_corrupt(self, dados):
         recusado(medir(carregar, envelope(pickle_de(dados))), CORRUPT)

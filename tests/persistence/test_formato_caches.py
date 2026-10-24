@@ -130,7 +130,7 @@ CONTEUDOS_ILEGIVEIS = {
 
 
 class TestCacheIlegivel:
-    @pytest.mark.parametrize("conteudo", list(list(CONTEUDOS_ILEGIVEIS.values()))[:2], ids=list(CONTEUDOS_ILEGIVEIS))
+    @pytest.mark.parametrize("conteudo", list(list(CONTEUDOS_ILEGIVEIS.values()))[:2], ids=list(CONTEUDOS_ILEGIVEIS)[:2])
     def test_lastfm_ilegivel_nao_derruba_e_fica_vazio(self, tmp_path, conteudo):
         (tmp_path / ".lastfm_cache").write_bytes(conteudo)
         assert len(LastFM("chave", "segredo").cache) == 0
@@ -150,7 +150,7 @@ CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT = {
 
 class TestCacheIlegivelQueEscapaDoExcept:
     @pytest.mark.parametrize(
-        "conteudo", list(list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT.values()))[:2], ids=list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT)
+        "conteudo", list(list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT.values()))[:2], ids=list(CONTEUDOS_QUE_ESCAPAM_DO_EXCEPT)[:2]
     )
     @pytest.mark.parametrize(("arquivo", "atributo"), list(ARQUIVOS_DE_CACHE)[:2])
     def test_cache_com_esse_conteudo_nao_derruba_e_fica_vazio(self, tmp_path, arquivo, atributo, conteudo):
