@@ -12,10 +12,10 @@ O EmpireMuse segue rigorosamente o padrão de [Versionamento Semântico 2.0.0](h
 - **MINOR** (`0.Y.0`): Novas funcionalidades mantendo compatibilidade retroativa.
 - **PATCH** (`0.0.Z`): Correções de bugs, ajustes de documentação ou atualizações pontuais sem quebra de compatibilidade.
 
-### 1.1 Versão Inicial e Release Candidates
+### 1.1 Versão do Projeto e Release Candidates
 
-- **Primeira versão estável oficial**: `v0.1.0`.
-- **Release Candidates (`-rc.N`)**: Antes de publicar a versão estável final `v0.1.0`, deve-se publicar versões prévias como `v0.1.0-rc.1` (e subsequentes `rc.2`, `rc.3`, se necessário).
+- **Versionamento**: O projeto adota [Semantic Versioning (SemVer)](https://semver.org/lang/pt-BR/).
+- **Release Candidates (`-rc.N`)**: Antes de publicar uma versão estável final (ex.: `v1.1.0`), pode-se publicar versões prévias como `v1.1.0-rc.1` (e subsequentes `rc.2`, `rc.3`, se necessário).
   - O objetivo dos Release Candidates é validar cenários de deploy e plataformas externas (como o *egg* do Pterodactyl e a plataforma Discloud) e garantir o funcionamento da imagem Docker multi-arquitetura no ambiente produtivo antes de promover a versão a oficial (`latest`).
 
 ---
@@ -55,11 +55,11 @@ Para manter a integridade do histórico do Git e a rastreabilidade das alteraç�
    ```markdown
    ## [Unreleased]
 
-   ## [0.1.0] - 2026-10-17
+   ## [1.1.0] - 2026-10-24
    ### Adicionado
    ...
    ```
-   *(No caso de Release Candidate, utilize o formato `## [0.1.0-rc.1] - YYYY-MM-DD`)*;
+   *(No caso de Release Candidate, utilize o formato `## [1.1.0-rc.1] - YYYY-MM-DD`)*;
 3. Crie uma nova seção `## [Unreleased]` vazia no topo, pronta para os próximos ciclos de desenvolvimento.
 
 ### Passo 2: Submeter via Pull Request para a branch `main`
@@ -78,17 +78,17 @@ Com o merge concluído, atualize a branch `main` local e crie a tag Git apontand
 ```bash
 git checkout main
 git pull origin main
-git tag -a v0.1.0 -m "Release v0.1.0"
+git tag -a v1.1.0 -m "Release v1.1.0"
 ```
 
-*(Para Release Candidate: `git tag -a v0.1.0-rc.1 -m "Release candidate v0.1.0-rc.1"`)*
+*(Para Release Candidate: `git tag -a v1.1.0-rc.1 -m "Release candidate v1.1.0-rc.1"`)*
 
 ### Passo 4: Enviar a Tag para o Repositório Remoto
 
 Envie a tag Git criada para o GitHub para disparar automaticamente o pipeline de release:
 
 ```bash
-git push origin v0.1.0
+git push origin v1.1.0
 ```
 
 ---
@@ -123,10 +123,10 @@ flowchart TD
   - **SBOM** (`sbom: true`): Gera e anexa o inventário de software (Software Bill of Materials) diretamente ao registro;
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
 - **Regras de Versionamento de Tags da Imagem**:
-  - **Versão Final Estável** (`vX.Y.Z`, ex.: `v0.1.0`):
-    - Publica as tags `X.Y.Z` (`0.1.0`), `X.Y` (`0.1`) e `latest` (graças ao modificador `latest=auto`).
-  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v0.1.0-rc.1`):
-    - Publica **estritamente** a tag do pré-lançamento (`0.1.0-rc.1`), **sem alterar nem sobrescrever** a tag `latest` nem as tags de versões estáveis anteriores.
+  - **Versão Final Estável** (`vX.Y.Z`, ex.: `v1.1.0`):
+    - Publica as tags `X.Y.Z` (`1.1.0`), `X.Y` (`1.1`), `X` (`1`, série maior estável) e `latest` (graças ao modificador `latest=auto`).
+  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v1.1.0-rc.1`):
+    - Publica **estritamente** a tag do pré-lançamento (`1.1.0-rc.1`), **sem alterar nem sobrescrever** a tag `1`, `latest` nem as tags de versões estáveis anteriores.
 
 ---
 
@@ -138,16 +138,16 @@ Após a conclusão com sucesso do workflow no GitHub Actions, realize a verifica
 Em um terminal independente (ou sem autenticação no Docker Hub), teste o download da imagem publicada para validar que o repositório é público e acessível:
 
 ```bash
-docker pull or4cu1o/empiremuse:0.1.0
+docker pull or4cu1o/empiremuse:1.1.0
 ```
 
-*(Substitua `0.1.0` pela tag publicada, como `0.1.0-rc.1`)*.
+*(Substitua `1.1.0` pela tag publicada, como `1.1.0-rc.1` ou `1`)*.
 
 ### 5.2 Inspeção do Manifesto Multi-Arquitetura
 Utilize o comando `docker buildx imagetools inspect` para verificar as arquiteturas publicadas e os atestados de segurança:
 
 ```bash
-docker buildx imagetools inspect or4cu1o/empiremuse:0.1.0
+docker buildx imagetools inspect or4cu1o/empiremuse:1.1.0
 ```
 
 O comando exibirá a lista de manifestos contendo:
@@ -168,6 +168,6 @@ Se for detectado qualquer defeito de código, falha de empacotamento ou inconsis
 
 1. Trate o problema normalmente via branch de correção (`fix/...`) e submeta o Pull Request para a `main`;
 2. Após o merge na `main`, incremente o número da versão conforme as regras do SemVer:
-   - Se o erro ocorreu em um Release Candidate (ex.: `v0.1.0-rc.1`), publique a versão subsequente `v0.1.0-rc.2`;
-   - Se o erro ocorreu em uma versão final estável (ex.: `v0.1.0`), publique uma versão corretiva de patch `v0.1.1`;
+   - Se o erro ocorreu em um Release Candidate (ex.: `v1.1.0-rc.1`), publique a versão subsequente `v1.1.0-rc.2`;
+   - Se o erro ocorreu em uma versão final estável (ex.: `v1.1.0`), publique uma versão corretiva de patch `v1.1.1`;
 3. Crie e envie a nova tag Git no commit atualizado da `main`.

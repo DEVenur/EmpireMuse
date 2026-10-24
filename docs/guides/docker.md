@@ -98,7 +98,7 @@ Você pode customizar o comportamento do Compose através do seu arquivo `.env` 
 
 | Variável | Valor Padrão | Descrição |
 | :--- | :--- | :--- |
-| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar uma tag específica). |
+| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar uma tag específica, ex.: `or4cu1o/empiremuse:1`). |
 | `EMPIREMUSE_MEM_LIMIT` | `1024m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
 | `EMPIREMUSE_PORT` | `127.0.0.1:6000` | Mapeamento da porta HTTP exposta no host para o bot (padrão em loopback). |
 
