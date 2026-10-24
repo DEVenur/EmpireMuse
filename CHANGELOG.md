@@ -137,6 +137,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Docker Compose de Produção e Porta Padrão 6000**:
+  - `docker-compose.yml`: Atualizado para ambiente de produção utilizando imagem oficial do Docker Hub (`or4cu1o/empiremuse:latest`, recomendando fixar versão em prod), sem build local, `pull_policy: missing`, limites de memória (`1024m` sem swap), `pids_limit: 256`, `stop_grace_period: 30s` e rotação de logs estruturados (`json-file` 10 MB × 3) para bot e mongo.
+  - Porta padrão do bot atualizada para `6000` (anteriormente `80` no carregador e `8080` no Dockerfile), vinculando a publicação por padrão estritamente ao loopback (`127.0.0.1:6000`) para integração com proxy reverso. Documentação e testes correspondentes atualizados.
 - **Adoção gradual do mypy na integração contínua (PR #40)**: baseline gradual de tipagem estática no `pyproject.toml` (legado em `ignore_errors` e checagem ativa estrita em `empiremuse.rules.*`), executado na CI como etapa de verificação não bloqueante.
 - **Healthcheck adaptativo do contêiner Docker (PR #40)**: o healthcheck no `Dockerfile` passa a testar a resposta HTTP apenas quando `RUN_RPC_SERVER=true` estiver configurado, sucedendo normalmente sem falhas quando o servidor web estiver desativado (padrão desde o PR #35).
 - **Servidor RPC e painel desligados por padrão (PR #35)**: `RUN_RPC_SERVER` passa a ser `false` por padrão. **Mudança de comportamento**: quem utiliza o painel web ou aplicativo desktop de RPC precisa definir explicitamente `RUN_RPC_SERVER=true` no `.env`.
@@ -233,6 +236,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **README e guias**: botões de deploy em 1 clique desativados até a fase de deploy.
 
 ### Removido
+- **Remoção da configuração obsoleta `ADDITIONAL_BOT_IDS`**:
+  - Removida a chave `ADDITIONAL_BOT_IDS` do `DEFAULT_CONFIG` (`config_loader.py`), `.example.env`, atributos não utilizados em `empiremuse/cogs/misc.py` e template do Pterodactyl (`egg-empiremuse.json`).
 - **Opção legada de download via Jabba (PR #35)**: a opção `USE_JABBA` foi removida e passa a ser ignorada se presente no `.env`; binários do JDK são obtidos exclusivamente via espelho oficial homologado.
 - **Código morto `ytdl_tools.py`**: `empiremuse/utils/music/ytdl_tools.py` (classe `YTDLTools`) foi removido; nenhum módulo o importava. A extração via yt-dlp continua em `CustomYTDL` (`empiremuse/utils/music/models.py`).
 - **Expurgo de Artefatos Legados de Deploy e Plataformas Descontinuadas (Bloco D1 / Fase D)**:

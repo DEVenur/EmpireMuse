@@ -43,7 +43,7 @@ docker run -d \
   --restart unless-stopped \
   --env-file .env \
   -v empiremuse-data:/data \
-  -p 8080:8080 \
+  -p 127.0.0.1:6000:6000 \
   empiremuse:local
 ```
 
@@ -51,7 +51,7 @@ docker run -d \
 - `--restart unless-stopped`: Política de reinício recomendada. Caso o contêiner pare inesperadamente ou após uma falha de subprocesso, o Docker reinicia o bot automaticamente.
 - `--env-file .env`: Injeta suas credenciais e configurações (tokens do Discord, chaves de API, etc.).
 - `-v empiremuse-data:/data`: Monta um volume persistente do Docker no caminho `/data`.
-- `-p 8080:8080`: Mapeia a porta HTTP do contêiner (definida por `PORT=8080`) para acesso à página de status, WebSocket de Rich Presence e ao Painel Web.
+- `-p 127.0.0.1:6000:6000`: Mapeia a porta HTTP do contêiner (definida por `PORT=6000`) para acesso à página de status, WebSocket de Rich Presence e ao Painel Web.
 
 ---
 
@@ -69,7 +69,7 @@ Para executar o bot com o servidor Lavalink local integrado e persistência em b
 1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais;
 2. Execute:
    ```bash
-   docker compose up -d --build
+   docker compose up -d
    ```
 
 ### 3.2 Executando com MongoDB Dedicado (Perfil `mongo`)
@@ -89,7 +89,7 @@ Para utilizar um contêiner oficial do MongoDB (`mongo:8.0.34`, fixado por diges
    > O parâmetro `?authSource=admin` é necessário na URL de conexão porque o usuário root inicial do Mongo é criado no banco de autenticação `admin`.
 3. Inicie a stack ativando o perfil `mongo`:
    ```bash
-   docker compose --profile mongo up -d --build
+   docker compose --profile mongo up -d
    ```
 
 ### 3.3 Variáveis de Configuração do Compose
@@ -98,20 +98,21 @@ Você pode customizar o comportamento do Compose através do seu arquivo `.env` 
 
 | Variável | Valor Padrão | Descrição |
 | :--- | :--- | :--- |
-| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:local` | Nome da imagem Docker a ser utilizada. |
-| `EMPIREMUSE_MEM_LIMIT` | `768m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
-| `EMPIREMUSE_PORT` | `8080` | Mapeamento da porta HTTP exposta no host para o bot. |
+| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar uma tag específica). |
+| `EMPIREMUSE_MEM_LIMIT` | `1024m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
+| `EMPIREMUSE_PORT` | `127.0.0.1:6000` | Mapeamento da porta HTTP exposta no host para o bot (padrão em loopback). |
 
 > [!TIP]
-> Se o bot estiver atrás de um proxy reverso (como Nginx, Caddy ou Traefik) rodando no mesmo host, publique a porta apenas na interface de loopback definindo `EMPIREMUSE_PORT=127.0.0.1:8080`. Isso restringe o acesso externo e garante que apenas o proxy converse com o bot.
+> Por padrão, a porta é publicada apenas na interface de loopback (`127.0.0.1:6000`), ideal para ambientes com proxy reverso (como Nginx, Caddy ou Traefik) rodando no mesmo host. Se desejar expor publicamente ou alterar a porta, ajuste `EMPIREMUSE_PORT` no `.env`.
 
 ### 3.4 Garantias de Segurança do Compose
 
 O arquivo `docker-compose.yml` aplica uma política rigorosa de segurança defensiva:
 
-- **Exposição Mínima de Portas**: Apenas a porta HTTP 8080 do bot é publicada no host. O Lavalink (vinculado estritamente em `127.0.0.1` dentro do contêiner) e o serviço `mongo` (porta 27017 acessível exclusivamente na rede interna do Compose) **nunca** têm portas publicadas para fora.
+- **Exposição Mínima de Portas**: Apenas a porta HTTP 6000 do bot é publicada no host (vinculada a `127.0.0.1` por padrão). O Lavalink (vinculado estritamente em `127.0.0.1` dentro do contêiner) e o serviço `mongo` (porta 27017 acessível exclusivamente na rede interna do Compose) **nunca** têm portas publicadas para fora.
 - **Sistema de Arquivos Somente Leitura**: O contêiner do bot roda com `read_only: true`. Diretórios temporários de escrita utilizam `/tmp` montado em memória (`tmpfs`).
 - **Isolamento de Privilégios**: `security_opt: [no-new-privileges:true]` previne escalada de privilégios e `cap_drop: [ALL]` descarta todas as capacidades Linux (Linux Capabilities).
+- **Limites e Resiliência**: `mem_limit` e `memswap_limit` fixados em `1024m` (sem swap), `pids_limit: 256`, `stop_grace_period: 30s` e rotação de logs (`json-file` 10m x 3) para bot e mongo.
 - **Volumes Nomeados**: Os dados são isolados nos volumes `empiremuse-data` (para `/data` do bot) e `empiremuse-mongo` (para `/data/db` do MongoDB).
 
 ---
@@ -129,7 +130,7 @@ A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente o
 | `LAVALINK_OFFLINE` | `true` | Modo offline: impede downloads de binários e valida os arquivos existentes por SHA-256. |
 | `LAVALINK_HOME` | `/opt/lavalink` | Diretório dos binários validados do Lavalink (`Lavalink.jar`, `application.yml`, `plugins/`). |
 | `LAVALINK_JAVA_PATH` | `/opt/java/openjdk/bin/java` | Caminho do executável do runtime Java 21 JRE pré-instalado. |
-| `PORT` | `8080` | Porta do servidor HTTP Tornado (status, RPC e painel). |
+| `PORT` | `6000` | Porta do servidor HTTP Tornado (status, RPC e painel). |
 
 ### 4.2 Dimensionamento de Memória (RAM) e Recursos
 

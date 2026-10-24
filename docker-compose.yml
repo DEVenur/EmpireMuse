@@ -1,14 +1,19 @@
 services:
   bot:
-    build: .
-    image: ${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:local}
+    # Imagem oficial do Docker Hub. Em produção, recomenda-se fixar uma tag específica
+    # de versão (ex.: or4cu1o/empiremuse:1.0.0) em vez de latest para deploys imutáveis.
+    image: ${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:latest}
+    pull_policy: missing
     restart: unless-stopped
+    stop_grace_period: 30s
+    pids_limit: 256
     env_file: .env
-    mem_limit: ${EMPIREMUSE_MEM_LIMIT:-768m}
+    mem_limit: ${EMPIREMUSE_MEM_LIMIT:-1024m}
+    memswap_limit: ${EMPIREMUSE_MEM_LIMIT:-1024m}
     volumes:
       - empiremuse-data:/data
     ports:
-      - "${EMPIREMUSE_PORT:-8080}:8080"
+      - "${EMPIREMUSE_PORT:-127.0.0.1:6000}:6000"
     read_only: true
     tmpfs:
       - /tmp
@@ -16,6 +21,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mongo:
     profiles:
@@ -27,6 +37,11 @@ services:
     env_file:
       - path: .env.mongo
         required: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   empiremuse-data:

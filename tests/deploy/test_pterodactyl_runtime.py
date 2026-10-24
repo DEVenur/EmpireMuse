@@ -138,8 +138,8 @@ class TestResolvePort:
         monkeypatch.setenv("SERVER_PORT", "25565")
         assert config_loader.resolve_port(None) == 25565
 
-    def test_nenhuma_usa_80(self, sem_porta):
-        assert config_loader.resolve_port(None) == 80
+    def test_nenhuma_usa_6000(self, sem_porta):
+        assert config_loader.resolve_port(None) == 6000
 
     def test_strings_vazias_contam_como_nao_definidas(self, monkeypatch, sem_porta):
         monkeypatch.setenv("PORT", "")
@@ -182,8 +182,8 @@ class TestLoadConfigRpcServer:
         monkeypatch.setenv("SERVER_PORT", "25565")
         assert config_loader.load_config()["RPC_SERVER"] == "ws://localhost:8080/ws"
 
-    def test_rpc_server_sem_nenhuma_usa_80(self):
-        assert config_loader.load_config()["RPC_SERVER"] == "ws://localhost:80/ws"
+    def test_rpc_server_sem_nenhuma_usa_6000(self):
+        assert config_loader.load_config()["RPC_SERVER"] == "ws://localhost:6000/ws"
 
     def test_load_config_com_port_invalida_falha_citando_a_variavel(self, monkeypatch):
         monkeypatch.setenv("PORT", "texto")
@@ -222,10 +222,10 @@ class TestServidorHttp:
         web_app.run_app(MagicMock(), config={"PORT": "9000"})
         assert chamadas == [9000]
 
-    def test_sem_nenhuma_escuta_na_80(self, sem_porta, listen_chamado):
+    def test_sem_nenhuma_escuta_na_6000(self, sem_porta, listen_chamado):
         web_app, chamadas = listen_chamado
         web_app.run_app(MagicMock(), config={"PORT": None})
-        assert chamadas == [80]
+        assert chamadas == [6000]
 
     def test_porta_invalida_e_erro_claro_e_nao_escuta(self, monkeypatch, sem_porta, listen_chamado):
         web_app, chamadas = listen_chamado
