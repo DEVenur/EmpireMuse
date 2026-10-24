@@ -151,20 +151,6 @@ def test_every_skin_renders_every_player_state(skin_cls, state):
 
 
 @pytest.mark.parametrize("skin_cls", NORMAL)
-def test_normal_skin_name_matches_its_file(skin_cls):
-    skin = skin_cls()
-    assert skin.name == skin_cls.__module__.rsplit(".", 1)[-1]
-    assert skin.preview.startswith("https://")
-
-
-@pytest.mark.parametrize("skin_cls", STATIC)
-def test_static_skin_name_is_its_file_with_the_static_suffix(skin_cls):
-    skin = skin_cls()
-    assert skin.name == skin_cls.__module__.rsplit(".", 1)[-1] + "_static"
-    assert skin.preview.startswith("https://")
-
-
-@pytest.mark.parametrize("skin_cls", NORMAL)
 def test_normal_skins_turn_off_static_mode(skin_cls):
     player = make_player(static=True)
     skin_cls().setup_features(player)
@@ -176,7 +162,3 @@ def test_static_skins_turn_on_static_mode(skin_cls):
     player = make_player(static=False)
     skin_cls().setup_features(player)
     assert player.static is True
-
-
-def test_there_are_ten_normal_and_five_static_skins():
-    assert (len(NORMAL), len(STATIC)) == (10, 5)

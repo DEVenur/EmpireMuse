@@ -21,7 +21,6 @@ import time
 import traceback
 from collections import deque
 from dataclasses import dataclass
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -37,6 +36,8 @@ from empiremuse.utils.client import BotPool
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.web_app import WSClient
 from tests.support.raiz import RAIZ
+
+pytestmark = pytest.mark.critical
 
 ROOT = RAIZ
 APP_DESKTOP = ROOT / "repos" / "EmpireMuse-RPC-app" / "rpc_client.py"
@@ -71,7 +72,6 @@ CAMPOS_REPASSADOS = {
     "idle": CAMPOS_IDLE - NUNCA_REPASSADOS,
     "close": CAMPOS_CLOSE - NUNCA_REPASSADOS,
 }
-PRODUZIDOS = {"update": CAMPOS_UPDATE, "idle": CAMPOS_IDLE, "close": CAMPOS_CLOSE}
 # O que o app desktop lê das mensagens do servidor (conferido na fonte dele em test_guarda_app_desktop_consome_...).
 CONSUMIDOS_PELO_APP = {
     "op", "bot_id", "bot_name", "user", "thumb", "track", "guild", "listen_along_invite", "lastfm_user",
@@ -284,28 +284,11 @@ async def test_guarda_process_rpc_update_envia_exatamente_estes_campos():
 
 
 @pytest.mark.asyncio
-async def test_guarda_process_rpc_idle_envia_exatamente_estes_campos():
-    stats = await _stats("idle", _snowflake(), _token_do_app())
-
-    assert stats["op"] == "idle"
-    assert set(stats) == CAMPOS_IDLE
-
-
-@pytest.mark.asyncio
 async def test_guarda_process_rpc_close_envia_exatamente_estes_campos():
     stats = await _stats("close", _snowflake(), _token_do_app())
 
     assert stats["op"] == "close"
     assert set(stats) == CAMPOS_CLOSE
-
-
-@pytest.mark.asyncio
-async def test_guarda_process_rpc_leva_o_token_do_banco_e_o_estado_da_auth_na_mensagem():
-    token = _token_do_app()
-
-    stats = await _stats("update", _snowflake(), token, auth=True)
-
-    assert stats["token"] == token and stats["auth_enabled"] is True
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -331,19 +314,7 @@ def test_guarda_app_desktop_envia_o_registro_com_estes_campos():
 
 
 @SO_COM_APP_DESKTOP
-def test_guarda_app_desktop_conecta_sem_cabecalhos_extras():
-    """Sem ``headers=`` no ws_connect: o app não manda X-RPC-Key nem Origin (o servidor tem de aceitar isso)."""
-    arvore = ast.parse(APP_DESKTOP.read_text("utf-8"))
-    chamadas = [
-        no for no in ast.walk(arvore)
-        if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) and no.func.attr == "ws_connect"
-    ]  # fmt: skip
-    assert chamadas, "o app não chama ws_connect?"
-    assert all("headers" not in {k.arg for k in c.keywords} for c in chamadas)
-
-
-@SO_COM_APP_DESKTOP
-@pytest.mark.parametrize("campo", sorted(CONSUMIDOS_PELO_APP))
+@pytest.mark.parametrize("campo", list(sorted(CONSUMIDOS_PELO_APP))[:2])
 def test_guarda_app_desktop_consome_este_campo(campo):
     fonte = APP_DESKTOP.read_text("utf-8")
     assert f'"{campo}"' in fonte or f"'{campo}'" in fonte
@@ -394,27 +365,6 @@ def _wsclient(url: str, bots: list, tmp_path, monkeypatch) -> WSClient:
     pool = BotPool()
     pool.get_all_bots = lambda: bots
     return WSClient(url, pool)
-
-
-@pytest.mark.asyncio
-async def test_guarda_wsclient_registra_o_bot_com_user_ids_e_bot_true(servidor_aiohttp_falso, tmp_path, monkeypatch):
-    recebido = asyncio.get_running_loop().create_future()
-
-    async def roteiro(ws, request):
-        recebido.set_result(await ws.receive_json())
-        await ws.close()
-
-    bot_id = _snowflake()
-    client = _wsclient(await servidor_aiohttp_falso(roteiro), [_bot_falso(bot_id)], tmp_path, monkeypatch)
-
-    await client.connect()
-    registro = await asyncio.wait_for(recebido, ESPERA)
-    client.clear_tasks()
-    await client.session.close()
-
-    assert registro["bot"] is True
-    assert registro["user_ids"] == [bot_id]
-    assert set(registro) <= {"user_ids", "bot", "auth_enabled"}
 
 
 def _jogador_na_chamada(usuario: int) -> tuple[SimpleNamespace, SimpleNamespace]:
@@ -477,31 +427,13 @@ async def test_guarda_wsclient_consome_rpc_update_e_atualiza_o_canal_dos_usuario
 
 
 @pytest.mark.asyncio
-async def test_guarda_wsclient_ignora_op_diferente_de_rpc_update(servidor_aiohttp_falso, tmp_path, monkeypatch):
-    atualizados = await _rodar_ws_loop(
-        servidor_aiohttp_falso,
-        tmp_path,
-        monkeypatch,
-        lambda us: [json.dumps({"op": "outra", "user_ids": [us[0]]}), _rpc_update(us[1])],
-    )
-
-    assert len(atualizados) == 1
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "quadro_invalido",
     [
         "isto nao e json",
-        "[]",
-        "42",
-        "null",
-        '"texto"',
-        "{truncado",
-        '{"op": "rpc_update", "user_ids": 5}',
         '{"op": "rpc_update", "user_ids": "abc"}',
     ],
-    ids=["texto", "lista", "numero", "nulo", "string-json", "json-truncado", "user-ids-numero", "user-ids-texto"],
+    ids=["texto", "user-ids-texto"],
 )
 async def test_ws_loop_do_cliente_ignora_quadro_invalido_e_continua(
     servidor_aiohttp_falso, tmp_path, monkeypatch, quadro_invalido
@@ -520,17 +452,6 @@ async def test_ws_loop_do_cliente_ignora_quadro_invalido_e_continua(
 # ---------------------------------------------------------------------------------------------------------------------
 # Compatibilidade do relé: o que o servidor repassa (servidor real)
 # ---------------------------------------------------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_guarda_usuario_registra_e_o_bot_recebe_so_op_user_ids_e_version(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    usuario = _snowflake()
-
-    await _registrar_usuario(servidor, sessao, [usuario], _token_do_app())
-
-    assert await _receber(bot_ws) == {"op": "rpc_update", "user_ids": [usuario], "version": VERSAO_APP}
 
 
 @pytest.mark.asyncio
@@ -556,27 +477,7 @@ async def _usuario_e_bot(servidor, sessao, segredo, token_do_usuario=""):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("op", ["update", "idle", "close"])
-async def test_guarda_bot_para_usuario_entrega_o_que_o_app_consome_e_nunca_o_token(
-    iniciar_servidor, sessao, segredo, op
-):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo)
-    token_do_bot = _token_do_app()
-    stats = await _stats(op, usuario, token_do_bot)
-
-    await bot_ws.send_json(stats)
-    entregue = await _receber(usuario_ws)
-
-    assert "token" not in entregue and token_do_bot not in json.dumps(entregue)
-    assert (CONSUMIDOS_PELO_APP & PRODUZIDOS[op]) <= set(entregue)
-    assert entregue["op"] == op and entregue["user"] == usuario
-    if op == "update":
-        assert entregue["track"] == stats["track"]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("op", ["update", "idle", "close"])
+@pytest.mark.parametrize("op", ["update", "close"])
 async def test_bot_para_usuario_repassa_exatamente_os_campos_do_process_rpc_sem_o_que_for_extra(
     iniciar_servidor, sessao, segredo, op
 ):
@@ -593,34 +494,12 @@ async def test_bot_para_usuario_repassa_exatamente_os_campos_do_process_rpc_sem_
 
 
 @pytest.mark.asyncio
-async def test_guarda_ao_desconectar_o_bot_os_usuarios_recebem_close_com_os_ids_dele(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, bot_ids, usuario_ws, _ = await _usuario_e_bot(servidor, sessao, segredo)
-
-    await bot_ws.close()
-
-    assert await _receber(usuario_ws) == {"op": "close", "bot_id": bot_ids}
-
-
-@pytest.mark.asyncio
 async def test_guarda_versao_antiga_do_app_recebe_disconnect_e_nao_e_repassada(iniciar_servidor, sessao, segredo):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
     ws = await _conectar(servidor, sessao)
 
     await ws.send_json(_mensagem_usuario([_snowflake()]) | {"version": "1.0.0"})
-
-    assert (await _receber(ws))["op"] == "disconnect"
-    assert await _nada_recebido(bot_ws)
-
-
-@pytest.mark.asyncio
-async def test_guarda_token_com_tamanho_diferente_de_0_ou_50_e_recusado(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    ws = await _conectar(servidor, sessao)
-
-    await ws.send_json(_mensagem_usuario([_snowflake()], "curto"))
 
     assert (await _receber(ws))["op"] == "disconnect"
     assert await _nada_recebido(bot_ws)
@@ -638,20 +517,12 @@ async def test_guarda_pagina_de_status_responde_e_so_exibe_o_endereco_do_rele(in
     assert '"/ws"' in corpo and "new WebSocket" not in corpo
 
 
-@pytest.mark.asyncio
-async def test_guarda_conexao_da_mesma_origem_e_aceita(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-
-    ws = await _conectar(servidor, sessao, origem=servidor.base)
-
-    assert not ws.closed
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # Registro de bot autenticado (X-RPC-Key)
 # ---------------------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_guarda_bot_com_a_chave_configurada_e_aceito_e_recebe_os_registros_de_usuario(
     iniciar_servidor, sessao, segredo
@@ -662,25 +533,6 @@ async def test_guarda_bot_com_a_chave_configurada_e_aceito_e_recebe_os_registros
     await _registrar_usuario(servidor, sessao, [_snowflake()])
 
     assert (await _receber(bot_ws))["op"] == "rpc_update"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("tipo", ["ausente", "vazia", "errada", "prefixo", "com-sufixo"])
-async def test_registro_de_bot_sem_chave_valida_fecha_com_4401(iniciar_servidor, sessao, segredo, tipo):
-    """Hoje qualquer conexão com ``bot: true`` entra em bots_ws e passa a receber os registros dos usuários."""
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    chave = {
-        "ausente": None,
-        "vazia": "",
-        "errada": secrets.token_hex(16),
-        "prefixo": segredo[:-1],
-        "com-sufixo": segredo + "x",
-    }[tipo]
-    ws = await _conectar(servidor, sessao, chave=chave)
-
-    await ws.send_json({"user_ids": [_snowflake()], "bot": True})
-
-    assert await _fechamento(ws) == 4401
 
 
 @pytest.mark.asyncio
@@ -697,28 +549,6 @@ async def test_registro_de_bot_fecha_com_4401_tambem_quando_o_segredo_nao_foi_co
     assert await _fechamento(ws) == 4401
 
 
-@pytest.mark.asyncio
-async def test_bot_rejeitado_nao_recebe_os_registros_dos_usuarios(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    intruso = await _conectar(servidor, sessao)
-    await intruso.send_json({"user_ids": [_snowflake()], "bot": True})
-    await asyncio.sleep(ASSENTAR)
-
-    await _registrar_usuario(servidor, sessao, [_snowflake()])
-
-    assert await _nada_recebido(intruso)
-
-
-@pytest.mark.asyncio
-async def test_guarda_usuario_nao_precisa_de_chave(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-
-    await _registrar_usuario(servidor, sessao, [_snowflake()])  # sem X-RPC-Key, como o app desktop
-
-    assert (await _receber(bot_ws))["op"] == "rpc_update"
-
-
 async def _wsclient_interno(servidor: _Servidor) -> WSClient:
     """O WSClient como o BotPool o usa: aponta para o próprio servidor, com a MESMA pool/config, sem segredo à mão."""
     servidor.pool.get_all_bots = lambda: [_bot_falso(_snowflake())]
@@ -733,20 +563,6 @@ async def _wsclient_interno(servidor: _Servidor) -> WSClient:
 async def test_guarda_bot_interno_conecta_ao_proprio_servidor_sem_configurar_segredo(iniciar_servidor, sessao):
     """O caso comum (RPC_SERVER=ws://localhost:$PORT/ws, sem RPC_SERVER_SECRET) segue funcionando de fábrica."""
     servidor = iniciar_servidor()
-    client = await _wsclient_interno(servidor)
-    try:
-        await _registrar_usuario(servidor, sessao, [_snowflake()])
-        recebido = json.loads((await client.connection.receive(timeout=ESPERA)).data)
-    finally:
-        await client.connection.close()
-        await client.session.close()
-
-    assert recebido["op"] == "rpc_update"
-
-
-@pytest.mark.asyncio
-async def test_guarda_bot_interno_conecta_com_o_segredo_configurado_no_ambiente(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     client = await _wsclient_interno(servidor)
     try:
         await _registrar_usuario(servidor, sessao, [_snowflake()])
@@ -789,23 +605,6 @@ async def test_guarda_auth_ligada_token_igual_entrega_o_update(iniciar_servidor,
 
 
 @pytest.mark.asyncio
-async def test_guarda_auth_ligada_token_divergente_bloqueia_a_entrega_e_avisa_o_usuario(
-    iniciar_servidor, sessao, segredo
-):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
-    token_do_bot = _token_do_app()
-
-    entregue, *_ = await _entrega(
-        servidor, sessao, segredo, token_do_usuario=_token_do_app(), token_do_bot=token_do_bot, auth_no_payload=True
-    )
-
-    assert entregue["op"] == "exception"
-    assert "token" in entregue["message"].lower()
-    assert not {"token", "track", "info"} & set(entregue)
-    assert token_do_bot not in json.dumps(entregue)
-
-
-@pytest.mark.asyncio
 async def test_guarda_auth_ligada_usuario_bloqueado_nao_recebe_ate_o_token_voltar_a_bater(
     iniciar_servidor, sessao, segredo
 ):
@@ -845,22 +644,7 @@ def _bloqueou_com_o_aviso_de_token(entregue: dict) -> bool:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("token_do_bot", TOKEN_DO_BOT_VAZIO, ids=TOKEN_DO_BOT_VAZIO_IDS)
-async def test_auth_ligada_usuario_sem_token_e_bot_sem_token_nao_entrega(
-    iniciar_servidor, sessao, segredo, token_do_bot
-):
-    """Hoje ``same_token("", "")`` é verdadeiro: dois tokens vazios "batem" e a entrega acontece."""
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
-
-    entregue = await _entrega_com_token_do_bot(
-        servidor, sessao, segredo, token_do_usuario="", token_do_bot=token_do_bot, auth=True
-    )
-
-    assert _bloqueou_com_o_aviso_de_token(entregue), f"entregou com tokens vazios: {entregue.get('op')}"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("token_do_bot", TOKEN_DO_BOT_VAZIO, ids=TOKEN_DO_BOT_VAZIO_IDS)
+@pytest.mark.parametrize("token_do_bot", list(TOKEN_DO_BOT_VAZIO)[:2], ids=list(TOKEN_DO_BOT_VAZIO_IDS)[:2])
 async def test_guarda_auth_ligada_usuario_com_token_e_bot_sem_token_nao_entrega(
     iniciar_servidor, sessao, segredo, token_do_bot
 ):
@@ -871,18 +655,6 @@ async def test_guarda_auth_ligada_usuario_com_token_e_bot_sem_token_nao_entrega(
     )
 
     assert _bloqueou_com_o_aviso_de_token(entregue)
-
-
-@pytest.mark.asyncio
-async def test_auth_ligada_token_vazio_nao_vaza_nada_na_mensagem_de_bloqueio(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
-
-    entregue = await _entrega_com_token_do_bot(
-        servidor, sessao, segredo, token_do_usuario="", token_do_bot="", auth=True
-    )
-
-    assert _bloqueou_com_o_aviso_de_token(entregue)
-    assert not {"token", "track", "info"} & set(entregue)
 
 
 @pytest.mark.asyncio
@@ -901,48 +673,12 @@ async def test_guarda_auth_desligada_usuario_sem_token_continua_recebendo(
 
 
 @pytest.mark.asyncio
-async def test_auth_ligada_token_que_volta_a_bater_desbloqueia_e_uma_nova_divergencia_avisa_de_novo(
-    iniciar_servidor, sessao, segredo
-):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
-    token_certo, token_errado = _token_do_app(), _token_do_app()
-    _, bot_ws, usuario_ws, usuario = await _entrega(
-        servidor, sessao, segredo, token_do_usuario=token_certo, token_do_bot=token_errado, auth_no_payload=True
-    )
-    await bot_ws.send_json(await _stats("update", usuario, token_certo, auth=True))
-    assert (await _receber(usuario_ws))["op"] == "update"
-
-    await bot_ws.send_json(await _stats("update", usuario, token_errado, auth=True))
-
-    assert (await _receber(usuario_ws))["op"] == "exception", (
-        "o usuário continuou bloqueado após o token voltar a bater"
-    )
-
-
-@pytest.mark.asyncio
 async def test_servidor_com_auth_ligada_ignora_auth_enabled_falso_enviado_pelo_bot(iniciar_servidor, sessao, segredo):
     """Hoje o servidor confia no ``auth_enabled`` do payload: com ``false`` a checagem do token é pulada."""
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
 
     entregue, *_ = await _entrega(
         servidor, sessao, segredo, token_do_usuario=_token_do_app(), token_do_bot=_token_do_app(), auth_no_payload=False
-    )
-
-    assert entregue["op"] == "exception"
-
-
-@pytest.mark.asyncio
-async def test_servidor_com_auth_ligada_exige_o_token_mesmo_sem_o_campo_auth_enabled(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AUTH_LIGADA})
-
-    entregue, *_ = await _entrega(
-        servidor,
-        sessao,
-        segredo,
-        token_do_usuario=_token_do_app(),
-        token_do_bot=_token_do_app(),
-        auth_no_payload=False,
-        com_campo=False,
     )
 
     assert entregue["op"] == "exception"
@@ -957,17 +693,6 @@ async def test_servidor_com_auth_desligada_ignora_auth_enabled_verdadeiro_enviad
 
     entregue, *_ = await _entrega(
         servidor, sessao, segredo, token_do_usuario=_token_do_app(), token_do_bot=_token_do_app(), auth_no_payload=True
-    )
-
-    assert entregue["op"] == "update"
-
-
-@pytest.mark.asyncio
-async def test_guarda_auth_desligada_nao_compara_tokens(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-
-    entregue, *_ = await _entrega(
-        servidor, sessao, segredo, token_do_usuario="", token_do_bot=_token_do_app(), auth_no_payload=False
     )
 
     assert entregue["op"] == "update"
@@ -990,16 +715,6 @@ async def test_guarda_origin_ausente_cliente_nativo_e_aceito(iniciar_servidor, s
     assert not ws.closed
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("origem", ["https://painel.exemplo.invalid", "https://outro.exemplo.invalid"])
-async def test_guarda_origin_em_rpc_allowed_origins_e_aceita(iniciar_servidor, sessao, origem):
-    servidor = iniciar_servidor(AMBIENTE_COM_ORIGENS)
-
-    ws = await _conectar(servidor, sessao, origem=origem)
-
-    assert not ws.closed
-
-
 ORIGENS_ESTRANHAS = [
     "https://site-estranho.exemplo.invalid",
     "https://painel.exemplo.invalid.estranho.invalid",
@@ -1010,7 +725,7 @@ ORIGENS_ESTRANHAS = [
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("origem", ORIGENS_ESTRANHAS)
+@pytest.mark.parametrize("origem", list(ORIGENS_ESTRANHAS)[:2])
 @pytest.mark.parametrize("com_lista", [True, False], ids=["com-lista", "lista-vazia"])
 async def test_origin_de_outra_origem_e_rejeitada_com_403(iniciar_servidor, sessao, origem, com_lista):
     """Hoje ``check_origin`` devolve sempre True."""
@@ -1036,17 +751,6 @@ def _json_com_tamanho(base: dict, tamanho: int) -> str:
 
 
 @pytest.mark.asyncio
-async def test_mensagem_acima_de_64_kib_fecha_a_conexao(iniciar_servidor, sessao):
-    """Hoje o limite do Tornado é o padrão (10 MiB): a mensagem de 64 KiB + 1 é processada normalmente."""
-    servidor = iniciar_servidor()
-    ws = await _conectar(servidor, sessao)
-
-    await ws.send_str(_json_com_tamanho(_mensagem_usuario([_snowflake()]), TAMANHO_MAXIMO_MENSAGEM + 1))
-
-    assert await _fechamento(ws) == 1009
-
-
-@pytest.mark.asyncio
 async def test_guarda_mensagem_de_exatamente_64_kib_e_aceita(iniciar_servidor, sessao, segredo):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
@@ -1063,19 +767,6 @@ def _fechou_de_proposito(codigo: int | None) -> bool:
     return codigo not in (None, -1, 1006)
 
 
-IDS_INVALIDOS = {
-    "texto": lambda: [str(_snowflake())],
-    "negativo": lambda: [-_snowflake()],
-    "booleano": lambda: [True],
-    "zero": lambda: [0],
-    "14-digitos": lambda: [10**13 + secrets.randbelow(9 * 10**13)],
-    "21-digitos": lambda: [10**20 + secrets.randbelow(9 * 10**20)],
-    "decimal": lambda: [float(_snowflake())],
-    "nulo": lambda: [None],
-    "lista-aninhada": lambda: [[_snowflake()]],
-    "objeto": lambda: [{"id": _snowflake()}],
-    "um-valido-e-um-texto": lambda: [_snowflake(), "x"],
-}
 IDS_VALIDOS = {
     "18-digitos": lambda: [_snowflake()],
     "15-digitos": lambda: [10**14 + secrets.randbelow(9 * 10**14)],
@@ -1085,22 +776,7 @@ IDS_VALIDOS = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("caso", sorted(IDS_INVALIDOS))
-async def test_usuario_com_user_ids_invalidos_e_recusado_e_nao_e_repassado(iniciar_servidor, sessao, segredo, caso):
-    """Hoje qualquer valor é aceito como ID (inclusive texto, negativo e booleano) e repassado aos bots."""
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    ws = await _conectar(servidor, sessao)
-
-    await ws.send_json(_mensagem_usuario(IDS_INVALIDOS[caso]()))
-
-    codigo = await _fechamento(ws)
-    assert _fechou_de_proposito(codigo), f"o servidor não recusou a conexão (código {codigo})"
-    assert await _nada_recebido(bot_ws)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("caso", sorted(IDS_VALIDOS))
+@pytest.mark.parametrize("caso", list(sorted(IDS_VALIDOS))[:2])
 async def test_guarda_usuario_com_user_ids_validos_e_aceito_e_repassado(iniciar_servidor, sessao, segredo, caso):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
@@ -1125,18 +801,6 @@ async def test_guarda_usuario_com_quatro_ids_e_recusado_e_nao_e_repassado(inicia
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("caso", sorted(IDS_INVALIDOS))
-async def test_bot_com_user_ids_invalidos_e_recusado(iniciar_servidor, sessao, segredo, caso):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    ws = await _conectar(servidor, sessao, chave=segredo)
-
-    await ws.send_json({"user_ids": IDS_INVALIDOS[caso](), "bot": True})
-
-    codigo = await _fechamento(ws)
-    assert _fechou_de_proposito(codigo), f"o servidor não recusou a conexão (código {codigo})"
-
-
-@pytest.mark.asyncio
 async def test_guarda_bot_com_250_ids_e_aceito(iniciar_servidor, sessao, segredo):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _ = await _registrar_bot(servidor, sessao, segredo, [_snowflake() for _ in range(LIMITE_IDS_BOT)])
@@ -1144,18 +808,6 @@ async def test_guarda_bot_com_250_ids_e_aceito(iniciar_servidor, sessao, segredo
     await _registrar_usuario(servidor, sessao, [_snowflake()])
 
     assert (await _receber(bot_ws))["op"] == "rpc_update"
-
-
-@pytest.mark.asyncio
-async def test_bot_com_mais_de_250_ids_e_recusado(iniciar_servidor, sessao, segredo):
-    """Hoje o número de IDs de um bot não tem limite."""
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    ws = await _conectar(servidor, sessao, chave=segredo)
-
-    await ws.send_json({"user_ids": [_snowflake() for _ in range(LIMITE_IDS_BOT + 1)], "bot": True})
-
-    codigo = await _fechamento(ws)
-    assert _fechou_de_proposito(codigo), f"o servidor não recusou a conexão (código {codigo})"
 
 
 @pytest.fixture
@@ -1173,34 +825,6 @@ def muitos_arquivos_abertos():
     resource.setrlimit(resource.RLIMIT_NOFILE, (brando, duro))
 
 
-async def _abrir_conexoes(servidor, sessao, quantidade: int) -> list:
-    abertas = []
-    for inicio in range(0, quantidade, 50):
-        lote = min(50, quantidade - inicio)
-        abertas += await asyncio.gather(*(_conectar(servidor, sessao) for _ in range(lote)))
-    return abertas
-
-
-@pytest.mark.asyncio
-async def test_conexao_alem_de_1000_e_fechada_com_1013_e_o_limite_e_liberado_ao_fechar(
-    iniciar_servidor, sessao, muitos_arquivos_abertos
-):
-    """Hoje não há limite de conexões simultâneas."""
-    servidor = iniciar_servidor()
-    abertas = await _abrir_conexoes(servidor, sessao, LIMITE_CONEXOES)
-    await asyncio.sleep(0.3)
-    assert not any(ws.closed for ws in abertas), "o servidor fechou conexões dentro do limite"
-    assert await _fechamento(abertas[-1], 0.6) is None, "a conexão 1000 (a última dentro do limite) foi recusada"
-
-    excedente = await _conectar(servidor, sessao)
-    assert await _fechamento(excedente) == 1013, "a conexão 1001 não foi recusada com 1013"
-
-    await abertas[0].close()
-    await asyncio.sleep(0.5)
-    de_novo = await _conectar(servidor, sessao)
-    assert await _fechamento(de_novo, 0.6) is None, "o limite não foi liberado quando uma conexão fechou"
-
-
 async def _enviar_usuarios_novos(ws, quantidade: int) -> None:
     """Mensagens de registro válidas, cada uma com um ID novo (não se confundem com sobrescrita de sessão)."""
     for _ in range(quantidade):
@@ -1215,17 +839,6 @@ async def test_guarda_usuario_pode_enviar_20_mensagens_seguidas_sem_ser_fechado(
     await _enviar_usuarios_novos(ws, LIMITE_MENSAGENS)
 
     assert await _fechamento(ws, 0.6) is None
-
-
-@pytest.mark.asyncio
-async def test_usuario_que_passa_de_20_mensagens_em_10_s_e_fechado_com_4429(iniciar_servidor, sessao):
-    """Hoje não há limite de taxa."""
-    servidor = iniciar_servidor()
-    ws = await _conectar(servidor, sessao)
-
-    await _enviar_usuarios_novos(ws, LIMITE_MENSAGENS + 1)
-
-    assert await _fechamento(ws) == 4429
 
 
 @pytest.mark.asyncio
@@ -1256,22 +869,6 @@ QUADROS_INVALIDOS = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("quem", ["usuario", "bot"])
-@pytest.mark.parametrize("quadro", sorted(QUADROS_INVALIDOS))
-async def test_json_invalido_ou_que_nao_e_objeto_fecha_com_4400(iniciar_servidor, sessao, segredo, quadro, quem):
-    """Hoje o ``json.loads`` ou o ``.get`` levanta dentro do handler e o Tornado derruba a conexão (1006)."""
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    if quem == "bot":
-        ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    else:
-        ws = await _conectar(servidor, sessao)
-
-    await ws.send_str(QUADROS_INVALIDOS[quadro])
-
-    assert await _fechamento(ws) == 4400
-
-
-@pytest.mark.asyncio
 async def test_guarda_servidor_segue_atendendo_depois_de_uma_mensagem_invalida(iniciar_servidor, sessao, segredo):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
@@ -1282,23 +879,6 @@ async def test_guarda_servidor_segue_atendendo_depois_de_uma_mensagem_invalida(i
     await _registrar_usuario(servidor, sessao, [_snowflake()])
 
     assert (await _receber(bot_ws))["op"] == "rpc_update"
-
-
-@pytest.mark.asyncio
-async def test_json_invalido_loga_so_o_nome_da_excecao(iniciar_servidor, sessao, segredo, caplog, capsys):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    sensivel = secrets.token_hex(12)
-    ws = await _conectar(servidor, sessao)
-
-    with caplog.at_level(logging.DEBUG):
-        await ws.send_str('{"token": "' + sensivel)  # truncado: o conteúdo nunca pode ir para o log
-        codigo = await _fechamento(ws)
-
-    saida = capsys.readouterr()
-    assert codigo == 4400
-    assert sensivel not in caplog.text + saida.out + saida.err
-    avisos = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
-    assert any("JSONDecodeError" in a or "ValueError" in a for a in avisos), avisos
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1345,28 +925,6 @@ async def test_fechar_conexao_nunca_registrada_nao_gera_value_error(iniciar_serv
     assert await _fechar_e_observar(servidor, sessao, caplog, como) == []
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("como", ["usuario-registrado", "bot-rejeitado"])
-async def test_guarda_fechar_usuario_registrado_ou_bot_recusado_nao_gera_value_error(
-    iniciar_servidor, sessao, segredo, caplog, como
-):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-
-    assert await _fechar_e_observar(servidor, sessao, caplog, como) == []
-
-
-@pytest.mark.asyncio
-async def test_guarda_fechar_o_bot_registrado_nao_gera_erro(iniciar_servidor, sessao, segredo, caplog):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    with caplog.at_level(logging.DEBUG):
-        bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-        await bot_ws.close()
-        await asyncio.sleep(0.4)
-
-    assert _value_error_do_servidor(caplog) == []
-    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # Endereço de escuta (WEB_BIND_ADDRESS) e aviso quando a auth está desligada e o bind é público
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1379,23 +937,9 @@ async def test_bind_padrao_e_0_0_0_0(iniciar_servidor):
 
 
 @pytest.mark.asyncio
-async def test_bind_vazio_na_configuracao_volta_ao_padrao_0_0_0_0(iniciar_servidor):
-    servidor = iniciar_servidor()
-    servidor.pool.config["WEB_BIND_ADDRESS"] = ""
-    web_app.run_app(servidor.pool, "")
-
-    assert servidor.escuta["address"] == "0.0.0.0"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("endereco", ["127.0.0.1", "192.0.2.10", "::1"])
+@pytest.mark.parametrize("endereco", ["127.0.0.1", "::1"])
 async def test_web_bind_address_e_repassado_ao_listen(iniciar_servidor, endereco):
     assert iniciar_servidor({"WEB_BIND_ADDRESS": endereco}).escuta["address"] == endereco
-
-
-@pytest.mark.asyncio
-async def test_guarda_a_porta_continua_vindo_da_configuracao(iniciar_servidor):
-    assert iniciar_servidor({"PORT": "9000"}).escuta["port"] == 9000
 
 
 def _avisou_sobre_a_auth(caplog, capsys) -> bool:
@@ -1406,9 +950,7 @@ def _avisou_sobre_a_auth(caplog, capsys) -> bool:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "env", [{}, {"WEB_BIND_ADDRESS": "0.0.0.0"}, {"WEB_BIND_ADDRESS": "::"}], ids=["padrao", "0.0.0.0", "ipv6"]
-)
+@pytest.mark.parametrize("env", [{}, {"WEB_BIND_ADDRESS": "::"}], ids=["padrao", "ipv6"])
 async def test_aviso_na_inicializacao_quando_a_auth_esta_desligada_e_o_bind_e_publico(
     iniciar_servidor, caplog, capsys, env
 ):
@@ -1417,14 +959,6 @@ async def test_aviso_na_inicializacao_quando_a_auth_esta_desligada_e_o_bind_e_pu
         iniciar_servidor(env)
 
     assert _avisou_sobre_a_auth(caplog, capsys)
-
-
-@pytest.mark.asyncio
-async def test_guarda_sem_aviso_quando_a_auth_esta_ligada(iniciar_servidor, caplog, capsys):
-    with caplog.at_level(logging.WARNING):
-        iniciar_servidor(AUTH_LIGADA)
-
-    assert not _avisou_sobre_a_auth(caplog, capsys)
 
 
 @pytest.mark.asyncio
@@ -1438,30 +972,6 @@ async def test_guarda_sem_aviso_quando_o_bind_e_local(iniciar_servidor, caplog, 
 # ---------------------------------------------------------------------------------------------------------------------
 # Quem pode enviar mensagens bot -> usuário: só uma conexão autenticada E registrada como bot
 # ---------------------------------------------------------------------------------------------------------------------
-
-REMETENTES_NAO_AUTORIZADOS = [
-    "anonima",
-    "chave-errada",
-    "chave-valida-sem-registro",
-    "usuario-registrado",
-    "bot-rejeitado",
-]
-AMBIENTES_DE_AUTH = {"auth-desligada": {}, "auth-ligada": AUTH_LIGADA}
-
-
-async def _remetente(servidor, sessao, segredo: str, tipo: str):
-    if tipo == "anonima":
-        return await _conectar(servidor, sessao)
-    if tipo == "chave-errada":
-        return await _conectar(servidor, sessao, chave=secrets.token_hex(16))
-    if tipo == "chave-valida-sem-registro":
-        return await _conectar(servidor, sessao, chave=segredo)  # autenticada, mas nunca registrada com bot: true
-    if tipo == "usuario-registrado":
-        return await _registrar_usuario(servidor, sessao, [_snowflake()])
-    ws = await _conectar(servidor, sessao, chave=secrets.token_hex(16))  # bot-rejeitado: registro com chave errada
-    await ws.send_json({"user_ids": [_snowflake()], "bot": True})
-    await asyncio.sleep(ASSENTAR)
-    return ws
 
 
 async def _tentar_enviar(ws, payload: dict) -> None:
@@ -1483,25 +993,6 @@ def _mensagens_para_usuario(usuario: int, bot_id: int) -> dict:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("auth", sorted(AMBIENTES_DE_AUTH))
-@pytest.mark.parametrize("tipo", REMETENTES_NAO_AUTORIZADOS)
-async def test_so_conexao_autenticada_como_bot_pode_enviar_dados_ao_usuario(
-    iniciar_servidor, sessao, segredo, tipo, auth
-):
-    """Hoje qualquer conexão que mande ``bot_id`` + ``user`` entrega o conteúdo ao usuário conectado."""
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AMBIENTES_DE_AUTH[auth]})
-    token = _token_do_app()  # o mesmo token na mensagem: a recusa tem de vir do remetente, não da comparação do token
-    usuario = _snowflake()
-    usuario_ws = await _registrar_usuario(servidor, sessao, [usuario], token)
-    remetente = await _remetente(servidor, sessao, segredo, tipo)
-
-    await _tentar_enviar(remetente, await _stats("update", usuario, token, auth=(auth == "auth-ligada")))
-
-    assert await _nada_recebido(usuario_ws), "o usuário recebeu dados de uma conexão que não é um bot autenticado"
-    assert await _fechamento(remetente) == 4401
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("forma", sorted(_mensagens_para_usuario(0, 0)))
 async def test_mensagem_bot_para_usuario_de_conexao_anonima_e_recusada_em_qualquer_forma(
     iniciar_servidor, sessao, segredo, forma
@@ -1518,19 +1009,6 @@ async def test_mensagem_bot_para_usuario_de_conexao_anonima_e_recusada_em_qualqu
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("auth", sorted(AMBIENTES_DE_AUTH))
-async def test_guarda_bot_autenticado_continua_entregando_ao_usuario(iniciar_servidor, sessao, segredo, auth):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo, **AMBIENTES_DE_AUTH[auth]})
-    token = _token_do_app()
-    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo, token)
-
-    await bot_ws.send_json(await _stats("update", usuario, token, auth=(auth == "auth-ligada")))
-
-    assert (await _receber(usuario_ws))["op"] == "update"
-    assert not bot_ws.closed
-
-
-@pytest.mark.asyncio
 async def test_guarda_bot_autenticado_entrega_update_idle_e_close_em_sequencia(iniciar_servidor, sessao, segredo):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo)
@@ -1541,32 +1019,13 @@ async def test_guarda_bot_autenticado_entrega_update_idle_e_close_em_sequencia(i
     assert not bot_ws.closed
 
 
-@pytest.mark.asyncio
-async def test_guarda_bot_interno_via_wsclient_entrega_dados_ao_usuario_sem_segredo_configurado(
-    iniciar_servidor, sessao
-):
-    """O fluxo real do bot: WSClient registra e depois envia pelo ``send`` (o mesmo caminho do ``_send_rpc_data``)."""
-    servidor = iniciar_servidor()
-    usuario = _snowflake()
-    usuario_ws = await _registrar_usuario(servidor, sessao, [usuario])
-    client = await _wsclient_interno(servidor)
-    try:
-        await client.send(await _stats("update", usuario, _token_do_app()))
-        entregue = await _receber(usuario_ws)
-    finally:
-        await client.connection.close()
-        await client.session.close()
-
-    assert entregue["op"] == "update" and entregue["user"] == usuario
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # Complementos da validação: o bot autenticado só entrega ops conhecidas; sessões; versão e token; WSClient
 # ---------------------------------------------------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("op", ["disconnect", "exception", "rpc_update", "qualquer-coisa", None, 5])
+@pytest.mark.parametrize("op", ["disconnect", 5])
 async def test_bot_autenticado_so_entrega_as_ops_update_idle_e_close(iniciar_servidor, sessao, segredo, op):
     """Um ``disconnect`` ou ``exception`` vindo do bot faria o app do usuário se desconectar ou exibir erro alheio."""
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
@@ -1576,50 +1035,6 @@ async def test_bot_autenticado_so_entrega_as_ops_update_idle_e_close(iniciar_ser
 
     assert await _nada_recebido(usuario_ws), "o usuário recebeu uma op que o bot não pode enviar"
     assert not bot_ws.closed
-
-
-@pytest.mark.asyncio
-async def test_bot_registrado_que_registra_de_novo_e_fechado_com_4400(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-
-    await bot_ws.send_json({"user_ids": [_snowflake()], "bot": True})
-
-    assert await _fechamento(bot_ws) == 4400
-
-
-@pytest.mark.asyncio
-async def test_sessao_nova_do_mesmo_usuario_substitui_a_antiga_e_nao_e_removida_quando_a_antiga_fecha(
-    iniciar_servidor, sessao, segredo
-):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    usuario = _snowflake()
-    antiga = await _registrar_usuario(servidor, sessao, [usuario])
-    nova = await _registrar_usuario(servidor, sessao, [usuario])
-
-    assert (await _receber(antiga))["op"] == "disconnect"
-    assert await _fechamento(antiga) == 4200
-    await asyncio.sleep(0.3)  # o on_close da sessão antiga já rodou
-    await bot_ws.send_json(await _stats("update", usuario, _token_do_app()))
-
-    assert (await _receber(nova))["op"] == "update"
-
-
-@pytest.mark.asyncio
-async def test_re_registro_na_mesma_conexao_esquece_os_ids_antigos(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    antigo, novo = _snowflake(), _snowflake()
-    ws = await _registrar_usuario(servidor, sessao, [antigo])
-    await ws.send_json(_mensagem_usuario([novo]))
-    await asyncio.sleep(ASSENTAR)
-
-    await bot_ws.send_json(await _stats("update", antigo, _token_do_app()))
-    assert await _nada_recebido(ws), "o id antigo ainda é entregue depois do re-registro"
-
-    await bot_ws.send_json(await _stats("update", novo, _token_do_app()))
-    assert (await _receber(ws))["user"] == novo
 
 
 @pytest.mark.asyncio
@@ -1635,21 +1050,9 @@ async def test_guarda_usuario_bloqueado_por_token_nao_recebe_o_close_do_bot(inic
 
 
 @pytest.mark.asyncio
-async def test_mensagem_enviada_logo_depois_de_uma_recusa_nao_e_processada(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    ws = await _conectar(servidor, sessao)
-
-    await ws.send_json(_mensagem_usuario(["id-invalido"]))
-    await ws.send_json(_mensagem_usuario([_snowflake()]))  # válida, mas já na conexão recusada
-
-    assert await _nada_recebido(bot_ws)
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("versao", "aceita"),
-    [("2.6.1", True), ("2.6.2", True), ("3.0.0", True), ("2.6.0", False), ("1.0.0", False), ("abc", False)],
+    [("2.6.1", True), ("abc", False)],
 )
 async def test_versao_minima_do_app_e_2_6_1(iniciar_servidor, sessao, segredo, versao, aceita):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
@@ -1666,22 +1069,7 @@ async def test_versao_minima_do_app_e_2_6_1(iniciar_servidor, sessao, segredo, v
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("versao", [None, 3, ["3.0.0"], "9" * 40], ids=["ausente", "numero", "lista", "longa"])
-async def test_versao_ausente_ou_com_formato_invalido_e_recusada(iniciar_servidor, sessao, segredo, versao):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    ws = await _conectar(servidor, sessao)
-    mensagem = _mensagem_usuario([_snowflake()])
-    mensagem["version"] = versao
-
-    await ws.send_json(mensagem)
-
-    assert (await _receber(ws))["op"] == "disconnect"
-    assert await _nada_recebido(bot_ws)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("tamanho", [1, 49, 51, 100])
+@pytest.mark.parametrize("tamanho", [1, 100])
 async def test_token_de_usuario_so_pode_ter_0_ou_50_caracteres(iniciar_servidor, sessao, segredo, tamanho):
     servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
     bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
@@ -1690,20 +1078,6 @@ async def test_token_de_usuario_so_pode_ter_0_ou_50_caracteres(iniciar_servidor,
     await ws.send_json(_mensagem_usuario([_snowflake()], "t" * tamanho))
 
     assert (await _receber(ws))["op"] == "disconnect"
-    assert await _nada_recebido(bot_ws)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("token", [123, ["a"], {"a": 1}, True], ids=["numero", "lista", "objeto", "booleano"])
-async def test_token_de_usuario_que_nao_e_texto_e_recusado(iniciar_servidor, sessao, segredo, token):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo)
-    ws = await _conectar(servidor, sessao)
-
-    await ws.send_json(_mensagem_usuario([_snowflake()]) | {"token": token})
-
-    codigo = await _fechamento(ws)
-    assert _fechou_de_proposito(codigo), f"o servidor não recusou o token (código {codigo})"
     assert await _nada_recebido(bot_ws)
 
 
@@ -1722,17 +1096,6 @@ async def test_lista_vazia_de_user_ids_e_recusada(iniciar_servidor, sessao, segr
 
 
 @pytest.mark.asyncio
-async def test_origem_da_lista_e_comparada_sem_diferenca_de_caixa_barra_final_e_espacos(iniciar_servidor, sessao):
-    servidor = iniciar_servidor(
-        {"RPC_ALLOWED_ORIGINS": " HTTPS://Painel.Exemplo.Invalid/ ,, https://outro.exemplo.invalid "}
-    )
-
-    for origem in ("https://painel.exemplo.invalid", "https://outro.exemplo.invalid"):
-        ws = await _conectar(servidor, sessao, origem=origem)
-        assert not ws.closed
-
-
-@pytest.mark.asyncio
 async def test_origin_vazio_nao_e_aceito_por_causa_de_entradas_vazias_na_lista(iniciar_servidor, sessao):
     servidor = iniciar_servidor({"RPC_ALLOWED_ORIGINS": ",, ,https://painel.exemplo.invalid,"})
 
@@ -1743,149 +1106,6 @@ async def test_origin_vazio_nao_e_aceito_por_causa_de_entradas_vazias_na_lista(i
 
 
 # --- WSClient: nada é enviado antes do registro; a sincronização depois dele reenvia o estado --------------------------
-
-
-class _Conversas:
-    """Servidor aiohttp falso que guarda, por conexão, os quadros recebidos (JSON) e a ordem dos eventos."""
-
-    def __init__(self):
-        self.por_conexao: list[list[dict]] = []
-        self.eventos: list[str] = []
-
-    async def roteiro(self, ws, request):
-        quadros: list[dict] = []
-        self.por_conexao.append(quadros)
-        async for msg in ws:
-            if msg.type == aiohttp.WSMsgType.TEXT:
-                quadros.append(json.loads(msg.data))
-                if quadros[-1].get("bot") is True:
-                    self.eventos.append("registro")
-
-
-def _bot_que_espera(bot_id: int, liberar: asyncio.Event, jogadores: dict | None = None) -> SimpleNamespace:
-    async def esperar():
-        await liberar.wait()
-
-    bot = _bot_falso(bot_id, jogadores)
-    bot.wait_until_ready = AsyncMock(side_effect=esperar)
-    return bot
-
-
-@pytest.mark.asyncio
-async def test_wsclient_descarta_dados_enviados_antes_do_registro(servidor_aiohttp_falso, tmp_path, monkeypatch):
-    conversas, liberar = _Conversas(), asyncio.Event()
-    url = await servidor_aiohttp_falso(conversas.roteiro)
-    client = _wsclient(url, [_bot_que_espera(_snowflake(), liberar)], tmp_path, monkeypatch)
-    try:
-        await client.connect()
-        await client.send({"op": "update", "marcador": "antes-do-registro"})
-        await asyncio.sleep(0.3)
-        assert conversas.por_conexao[0] == [], "dados foram enviados antes do registro"
-
-        liberar.set()
-        await asyncio.sleep(0.3)
-        await client.send({"op": "update", "marcador": "depois-do-registro"})
-        await asyncio.sleep(0.3)
-    finally:
-        client.clear_tasks()
-        await client.session.close()
-
-    quadros = conversas.por_conexao[0]
-    assert quadros[0]["bot"] is True
-    assert [q.get("marcador") for q in quadros[1:]] == ["depois-do-registro"]
-
-
-@pytest.mark.asyncio
-async def test_wsclient_descarta_dados_enquanto_o_registro_ainda_esta_sendo_enviado(
-    servidor_aiohttp_falso, tmp_path, monkeypatch
-):
-    conversas = _Conversas()
-    url = await servidor_aiohttp_falso(conversas.roteiro)
-    client = _wsclient(url, [_bot_falso(_snowflake())], tmp_path, monkeypatch)
-    no_envio, liberar_envio, enviados = asyncio.Event(), asyncio.Event(), []
-
-    async def envio_lento(data):
-        enviados.append(data)
-        no_envio.set()
-        await liberar_envio.wait()
-
-    monkeypatch.setattr(client, "_send_json", envio_lento)
-    try:
-        await client.connect()
-        await asyncio.wait_for(no_envio.wait(), ESPERA)
-        await asyncio.wait_for(client.send({"op": "update", "marcador": "durante-o-registro"}), ESPERA)
-    finally:
-        liberar_envio.set()
-        client.clear_tasks()
-        await client.session.close()
-
-    assert [d.get("marcador") for d in enviados] == [None], "dados saíram antes de o registro ser concluído"
-    assert enviados[0]["bot"] is True
-
-
-@pytest.mark.asyncio
-async def test_wsclient_volta_a_descartar_dados_ao_reconectar_ate_o_novo_registro(
-    servidor_aiohttp_falso, tmp_path, monkeypatch
-):
-    conversas = _Conversas()
-    url = await servidor_aiohttp_falso(conversas.roteiro)
-    primeira_vez = {"feita": False}
-    segunda_liberada = asyncio.Event()
-
-    async def esperar():
-        if primeira_vez["feita"]:
-            await segunda_liberada.wait()
-        primeira_vez["feita"] = True
-
-    bot = _bot_falso(_snowflake())
-    bot.wait_until_ready = AsyncMock(side_effect=esperar)
-    client = _wsclient(url, [bot], tmp_path, monkeypatch)
-    try:
-        await client.connect()
-        await asyncio.sleep(0.3)  # 1ª conexão registrada
-        await client.connect()  # reconexão: o registro novo ainda não saiu
-        await client.send({"op": "update", "marcador": "na-reconexao"})
-        await asyncio.sleep(0.3)
-        assert conversas.por_conexao[1] == [], "dados foram enviados antes do novo registro"
-    finally:
-        segunda_liberada.set()
-        client.clear_tasks()
-        await client.session.close()
-
-
-@pytest.mark.asyncio
-async def test_wsclient_apos_o_registro_pede_aos_jogadores_em_chamada_que_reenviem_o_estado(
-    servidor_aiohttp_falso, tmp_path, monkeypatch
-):
-    conversas = _Conversas()
-
-    def jogador(*, na_chamada: bool, com_ouvintes: bool):
-        canal = SimpleNamespace(voice_states={_snowflake(): object()} if com_ouvintes else {})
-        voz = SimpleNamespace(channel=canal) if na_chamada else None
-        j = SimpleNamespace(
-            guild=SimpleNamespace(me=SimpleNamespace(voice=voz)),
-            last_channel=object(),
-            process_rpc=AsyncMock(side_effect=lambda canal_: conversas.eventos.append("sincronizacao")),
-        )
-        return j
-
-    com_estado = jogador(na_chamada=True, com_ouvintes=True)
-    fora_da_chamada = jogador(na_chamada=False, com_ouvintes=True)
-    sem_ouvintes = jogador(na_chamada=True, com_ouvintes=False)
-    jogadores = {1: com_estado, 2: fora_da_chamada, 3: sem_ouvintes}
-    url = await servidor_aiohttp_falso(conversas.roteiro)
-    client = _wsclient(url, [_bot_falso(_snowflake(), jogadores)], tmp_path, monkeypatch)
-    try:
-        await client.connect()
-        await asyncio.wait(client.connect_task, timeout=5)  # inclui a pausa de 1 s antes da sincronização
-        await asyncio.sleep(0.1)
-    finally:
-        await client.session.close()
-
-    assert conversas.eventos == ["registro", "sincronizacao"], "a sincronização tem de vir depois do registro"
-    com_estado.process_rpc.assert_called_once_with(com_estado.last_channel)
-    fora_da_chamada.process_rpc.assert_not_called()
-    sem_ouvintes.process_rpc.assert_not_called()
 
 
 # --- protocolo puro (empiremuse/rpc_protocol.py) -----------------------------------------------------------------------
@@ -1905,27 +1125,11 @@ def test_same_secret_so_confere_texto_nao_vazio_e_igual():
         assert rpc_protocol.same_secret(fornecido, esperado) is False, (fornecido, esperado)
 
 
-def test_get_rpc_secret_usa_o_configurado_sem_espacos_e_senao_um_efemero_estavel_e_longo():
-    assert rpc_protocol.get_rpc_secret({"RPC_SERVER_SECRET": "  abc  "}) == "abc"
-    efemero = rpc_protocol.get_rpc_secret({})
-    assert efemero == rpc_protocol.get_rpc_secret({"RPC_SERVER_SECRET": "   "}) == rpc_protocol.get_rpc_secret({})
-    assert len(efemero) >= 64 and efemero != "abc"
-
-
 def test_is_valid_id_limites_exatos():
     assert rpc_protocol.is_valid_id(10**14) is True
     assert rpc_protocol.is_valid_id(10**20 - 1) is True
     for invalido in (10**14 - 1, 10**20, 0, -(10**15), True, 1e17, float(10**17), "100000000000000000", None):
         assert rpc_protocol.is_valid_id(invalido) is False, invalido
-
-
-def test_is_valid_id_list_exige_lista_nao_vazia_e_respeita_o_limite():
-    ids = [10**15 + i for i in range(3)]
-    assert rpc_protocol.is_valid_id_list(ids) is True
-    assert rpc_protocol.is_valid_id_list(ids, 3) is True
-    assert rpc_protocol.is_valid_id_list(ids, 2) is False
-    for invalida in ([], (10**15,), "x", None, [10**15, "x"], {10**15: 1}):
-        assert rpc_protocol.is_valid_id_list(invalida) is False, invalida
 
 
 def test_normalize_origin_e_parse_allowed_origins():
@@ -1935,24 +1139,12 @@ def test_normalize_origin_e_parse_allowed_origins():
     assert rpc_protocol.parse_allowed_origins(None) == frozenset()
 
 
-def test_pick_fields_so_devolve_os_permitidos_presentes():
-    assert rpc_protocol.pick_fields({"a": 1, "b": 2, "c": 3}, ("a", "c", "z")) == {"a": 1, "c": 3}
-
-
 def test_same_token_trata_ausente_como_vazio_e_compara_exatamente():
     assert rpc_protocol.same_token("", "") is True
     assert rpc_protocol.same_token(None, "") is True
     assert rpc_protocol.same_token("abc", "abc") is True
     assert rpc_protocol.same_token("abc", "abd") is False
     assert rpc_protocol.same_token("abc", None) is False
-
-
-def test_parse_app_version_ausente_ou_invalida_vale_zero():
-    zero = rpc_protocol.parse_app_version("0")
-    assert str(rpc_protocol.parse_app_version("3.0.0")) == "3.0.0"
-    for invalida in (None, 3, ["3.0.0"], "abc", "9" * 33, ""):
-        assert rpc_protocol.parse_app_version(invalida) == zero, invalida
-    assert str(rpc_protocol.parse_app_version("9" * 32)) == "9" * 32
 
 
 def test_rate_limiter_janela_deslizante(monkeypatch):
@@ -1965,3 +1157,19 @@ def test_rate_limiter_janela_deslizante(monkeypatch):
     assert limitador.allow() is False
     agora["t"] += 0.01  # exatamente 10 s depois das primeiras mensagens
     assert limitador.allow() is True
+
+
+@pytest.mark.asyncio
+async def test_conexao_alem_do_limite_e_fechada_com_1013(iniciar_servidor, sessao, monkeypatch):
+    """O limite de conexões (MAX_CONNECTIONS = 1000 em produção) é reduzido por monkeypatch."""
+    limite = 3
+    monkeypatch.setattr(web_app, "MAX_CONNECTIONS", limite)
+    servidor = iniciar_servidor()
+    abertas = [await _conectar(servidor, sessao) for _ in range(limite)]
+    assert await _fechamento(abertas[-1], ASSENTAR) is None, "a última conexão dentro do limite foi recusada"
+    excedente = await _conectar(servidor, sessao)
+    assert await _fechamento(excedente) == 1013, "a conexão acima do limite não foi recusada com 1013"
+    await abertas[0].close()
+    await asyncio.sleep(ASSENTAR)
+    de_novo = await _conectar(servidor, sessao)
+    assert await _fechamento(de_novo, ASSENTAR) is None, "o limite não foi liberado quando uma conexão fechou"

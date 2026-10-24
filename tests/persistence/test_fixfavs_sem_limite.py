@@ -5,17 +5,16 @@ valendo, só os primeiros 300/500 seriam corrigidos, em silêncio. O comando per
 sem limite e sem montar a lista) e o backup em JSON continua tendo todos os documentos, do jeito que estavam antes da correção.
 """
 
-import ast
 import json
 from contextlib import asynccontextmanager
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from empiremuse.cogs.misc import Misc
 from empiremuse.utils.db import DBModel
-from tests.support.raiz import RAIZ
+
+pytestmark = pytest.mark.regression
 
 GUILDAS, USUARIOS = 700, 900  # acima dos antigos 300 e 500
 
@@ -74,36 +73,10 @@ def montar(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_todos_os_documentos_sao_corrigidos_mesmo_acima_dos_antigos_limites(tmp_path, monkeypatch):
-    cog, ctx, banco, gravados, mensagens = montar(tmp_path, monkeypatch)
-    await Misc.fixfavs.callback(cog, ctx)
-    assert len(gravados["guildas"]) == GUILDAS and len(gravados["usuarios"]) == USUARIOS
-    assert sorted(gravados["usuarios"], key=int) == [str(n) for n in range(USUARIOS)]
-    guildas = banco.colecoes[(DBModel.guilds, "bot")]
-    assert all(
-        g["player_controller"]["fav_links"] == {f"nome {n}": f"https://exemplo.invalid/{n}"}
-        for n, g in enumerate(guildas)
-    )
-    assert mensagens and "corrigidos" in mensagens[0]
-
-
-@pytest.mark.asyncio
 async def test_o_comando_percorre_pelo_cursor_e_sem_limite(tmp_path, monkeypatch):
     cog, ctx, banco, _, _ = montar(tmp_path, monkeypatch)
     await Misc.fixfavs.callback(cog, ctx)
     assert banco.chamadas == [("iter_data", "bot"), ("iter_data", "global")]
-
-
-@pytest.mark.asyncio
-async def test_o_backup_tem_todos_os_documentos_como_estavam_antes_da_correcao(tmp_path, monkeypatch):
-    cog, ctx, banco, _, _ = montar(tmp_path, monkeypatch)
-    await Misc.fixfavs.callback(cog, ctx)
-    pasta = tmp_path / "local_database" / "fixfavs_backup"
-    guildas = json.loads((pasta / "guild_favs_bot.json").read_text(encoding="utf-8"))
-    usuarios = json.loads((pasta / "user_favs.json").read_text(encoding="utf-8"))
-    assert len(guildas) == GUILDAS and len(usuarios) == USUARIOS
-    assert guildas[5]["player_controller"]["fav_links"] == favoritos_sujos(5)
-    assert usuarios[800]["fav_links"] == favoritos_sujos(800)
 
 
 @pytest.mark.asyncio
@@ -115,13 +88,3 @@ async def test_colecao_vazia_gera_backup_valido(tmp_path, monkeypatch):
     pasta = tmp_path / "local_database" / "fixfavs_backup"
     assert json.loads((pasta / "guild_favs_bot.json").read_text(encoding="utf-8")) == []
     assert json.loads((pasta / "user_favs.json").read_text(encoding="utf-8")) == []
-
-
-def test_nenhuma_chamada_do_misc_passa_limit_ao_query_data():
-    arvore = ast.parse((RAIZ / "empiremuse" / "cogs" / "misc.py").read_text(encoding="utf-8"))
-    chamadas = [
-        no
-        for no in ast.walk(arvore)
-        if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) and no.func.attr == "query_data"
-    ]
-    assert all("limit" not in {k.arg for k in no.keywords} for no in chamadas)

@@ -22,8 +22,19 @@ import pytest
 
 
 from tests.support.formatos_reais import BOT_ID, SERVIDOR, cog_de_sessoes
-from tests.persistence.test_formato_fila_salva import caminho_da_fila, ler as ler_fila, tres_faixas
-from tests.persistence.test_formato_sessao import gravar as gravar_sessao, jogador_completo
+from tests.support.formato_fila_salva import caminho_da_fila, ler as ler_fila, tres_faixas
+from tests.support.formato_sessao import gravar as gravar_sessao, jogador_completo
+from tests.persistence.test_formato_skin import (
+    dados_globais,
+    editor_sem_tela as _editor_sem_tela,
+    skin_realista,
+    texto_legado,
+)
+from tests.support.raiz import RAIZ
+
+editor_sem_tela = _editor_sem_tela  # fixture do editor de skin, de persistence/test_formato_skin.py
+
+ROOT = RAIZ
 
 COGS = [
     "music",

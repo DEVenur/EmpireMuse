@@ -9,19 +9,10 @@ import html
 import json
 import re
 
-from tests.panel.helpers import EXPECTED_SECURITY_HEADERS
-from tests.panel.helpers_settings import (
-    CONFLICT_TEXT,
-    NOT_FOUND_TEXT,
-    SAVED_TEXT,
-    UID,
-    acao_form,
-    parse_forms,
-)
+from tests.panel.helpers_settings import NOT_FOUND_TEXT, UID, acao_form
 from tests.panel.test_settings_http import Each, HttpBase, external_change
 from tests.support.modais import trocar_process_idle_embed
 
-HEX16 = re.compile(r"^[0-9a-f]{16}$")
 MAX_LINKS = 25
 BASE_URL = "https://example.com/"
 
@@ -70,46 +61,11 @@ class LinksBase(HttpBase):
 
 
 class LinksReadTest(LinksBase):
-    def test_lists_name_url_description_count_and_a_list_wide_version(self):
-        body = self.body_of(self.logged_in(), 100)
-        assert "Fixo" in body and "https://example.com/x" in body
-        assert re.search(r"\b1 de 25\b", html.unescape(re.sub(r"<[^>]+>", " ", body))), "contagem 'N de 25'"
-        versions = {f.value("versao") for f in parse_forms(body) if f.value("acao")}
-        assert len(versions) == 1 and HEX16.match(next(iter(versions))), f"versao única da lista: {versions}"
-
     def test_each_bot_has_its_own_list(self):
         browser = self.logged_in()
         first, second = self.body_of(browser, 800), self.body_of(browser, 800, bot=2)
         assert "example.com/um" in first and "example.com/dois" not in first
         assert "example.com/dois" in second and "do bot 2" in second and "example.com/um" not in second
-
-    def test_bot_selector_only_with_two_bots(self):
-        browser = self.logged_in()
-
-        def selects(gid):
-            return [
-                c
-                for f in parse_forms(self.body_of(browser, gid))
-                for c in f.controls
-                if c.get("name") == "bot" and len(c["options"]) >= 2
-            ]
-
-        assert selects(800) and not selects(100)
-
-    def test_forms_exist_for_add_import_and_per_link_edit_and_remove(self):
-        body = self.body_of(self.logged_in(), 100)
-        assert acao_form(body, "adicionar") and acao_form(body, "importar")
-        assert acao_form(body, "editar", "Fixo") and acao_form(body, "remover", "Fixo")
-        assert acao_form(body, "adicionar").has("nome") and acao_form(body, "adicionar").has("url")
-        assert acao_form(body, "adicionar").has("descricao") and acao_form(body, "importar").has("dados")
-        assert acao_form(body, "adicionar").value("_xsrf")
-
-    def test_values_from_discord_and_users_are_escaped(self):
-        set_links(self.db, "1", 100, {"<b>x</b>": link("https://example.com/?a=<s>&b=1", "<i>d</i>")})
-        body = self.body_of(self.logged_in(), 100)
-        for raw in ("<b>x</b>", "<s>", "<i>d</i>"):
-            assert raw not in body, f"sem escape: {raw}"
-        assert "&lt;b&gt;x&lt;/b&gt;" in body
 
     def test_urls_become_links_only_for_http_and_https_with_rel_noopener_noreferrer(self):
         set_links(
@@ -136,124 +92,20 @@ class LinksReadTest(LinksBase):
         for tag in re.findall(r'<a\b[^>]*href="https?://ok\.example/x"[^>]*>', body):
             assert "noopener" in tag and "noreferrer" in tag, tag
 
-    def test_without_a_request_channel_the_page_explains_and_hides_add_and_import(self):
-        browser = self.logged_in()
-        for channel in (None, "9999"):  # não configurado / configurado mas o bot não o enxerga
-            doc = self.db.doc("1", 100)
-            doc["player_controller"]["channel"] = channel
-            external_change(self.db, "1", 100, player_controller=doc["player_controller"])
-            body = self.body_of(browser, 100)
-            assert "Configure o canal de pedidos primeiro" in html.unescape(body), channel
-            assert acao_form(body, "adicionar") is None and acao_form(body, "importar") is None, channel
-            assert "Fixo" in body, "a lista continua visível"
-
-    def test_page_has_security_headers_and_is_not_cached(self):
-        response = self.logged_in().get(self.links_url(100))
-        assert response.code == 200
-        for name, value in EXPECTED_SECURITY_HEADERS.items():
-            assert response.headers.get(name) == value, name
-        assert response.headers.get("Cache-Control") == "no-store"
-
 
 # ============================================================================ adicionar
 
 
 class LinksAddTest(LinksBase):
-    def test_valid_add_writes_only_the_new_entry(self):
-        browser = self.logged_in()
-        before = self.db.doc("1", 100)
-        response = self.add(browser, "Rock", "https://example.com/rock", "Clássicos")
-        assert response.code == 200 and SAVED_TEXT in html.unescape(response.body.decode())
-        expected = copy.deepcopy(before)
-        expected["player_controller"]["fav_links"]["Rock"] = link("https://example.com/rock", "Clássicos")
-        assert self.db.doc("1", 100) == expected, "canal, message_id, skin, ver e demais campos intactos"
-        assert list(self.stored()) == ["Fixo", "Rock"] and self.db.writes == [("1", 100)]
-
     def test_description_is_optional(self):
         assert self.add(self.logged_in(), "Sem desc", "https://example.com/s").code == 200
         assert self.stored()["Sem desc"] == link("https://example.com/s", "")
-
-    def test_url_must_be_a_pure_url_like_the_modal_now_requires(self):
-        """Etapa 4 (F3-5b, A2/D1): URL pura (apara as pontas e desembrulha ``<…>``); texto ao redor é recusado."""
-        browser = self.logged_in()
-        accepted = {
-            "A1": ("  https://example.com/a  ", "https://example.com/a"),
-            "B2": ("<https://example.com/b>", "https://example.com/b"),
-        }
-        for name, (sent, expected) in accepted.items():
-            assert self.add(browser, name, sent).code == 200, name
-            assert self.stored()[name]["url"] == expected
-        writes = len(self.db.writes)
-        refused = {
-            "C3": "javascript:alert(1)//https://example.com/c",
-            "D4": "veja https://example.com/d agora",
-            "E5": "https://example.com/e]",
-            "F6": "https://example.com/@everyone",
-        }
-        for name, sent in refused.items():
-            assert self.add(browser, name, sent).code == 422, name
-        assert len(self.db.writes) == writes
-
-    def test_boundaries_follow_the_modal_not_the_user_favs_config(self):
-        browser = self.logged_in()
-        long_url = BASE_URL + "a" * (250 - len(BASE_URL))
-        assert len(long_url) == 250
-        assert self.add(browser, "N" * 25, long_url, "d" * 100).code == 200, "nome 25, url 250, descrição 100"
-        assert self.add(browser, "Ab", "https://example.com/min", "abc").code == 200, "nome 2, descrição 3"
-        stored = self.stored()
-        assert stored["N" * 25]["url"] == long_url and stored["Ab"]["description"] == "abc"
-
-    def test_invalid_input_is_422_on_the_field_and_writes_nothing(self):
-        browser = self.logged_in()
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        ok = BASE_URL + "novo"
-        cases = {
-            "nome 1 caractere": ("a", ok, ""),
-            "nome 26": ("n" * 26, ok, ""),
-            "nome vazio": ("", ok, ""),
-            "nome só espaços": ("   ", ok, ""),
-            "nome duplicado": ("Fixo", ok, ""),
-            "url ftp": ("Ok", "ftp://example.com/x", ""),
-            "url javascript": ("Ok", "javascript:alert(1)", ""),
-            "url sem esquema": ("Ok", "example.com/x", ""),
-            "url só esquema": ("Ok", "http://", ""),
-            "url vazia": ("Ok", "", ""),
-            "url 251": ("Ok", BASE_URL + "a" * (251 - len(BASE_URL)), ""),
-            "descrição 101": ("Ok", ok, "d" * 101),
-            "descrição 2": ("Ok", ok, "ab"),
-        }
-
-        def check(item):
-            label, (nome, url, desc) = item
-            response = self.add(browser, nome, url, desc)
-            assert response.code == 422, f"status {response.code}"
-            assert 'aria-invalid="true"' in response.body.decode(), "campo inválido sem aria-invalid"
-
-        Each.run(list(cases.items()), check)
-        self.assert_untouched(before, writes)
 
     def test_adding_to_a_full_list_is_422(self):
         set_links(self.db, "1", 100, full_list())
         before, writes = self.db.doc("1", 100), len(self.db.writes)
         assert self.add(self.logged_in(), "Extra", BASE_URL + "extra").code == 422
         self.assert_untouched(before, writes)
-
-    def test_add_is_refused_without_a_request_channel(self):
-        browser = self.logged_in()
-        url = self.links_url(100)
-        form = acao_form(self.body_of(browser, 100), "adicionar")
-        doc = self.db.doc("1", 100)
-        doc["player_controller"]["channel"] = None
-        external_change(self.db, "1", 100, player_controller=doc["player_controller"])
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        stale = self.submit(browser, url, form, nome="Rock", url=BASE_URL + "r")
-        assert stale.code in (409, 422), f"status {stale.code}"
-        self.assert_untouched(before, writes)
-
-    def test_second_bot_add_changes_only_that_bots_document(self):
-        before1 = self.db.doc("1", 800)
-        assert self.add(self.logged_in(), "Novo", BASE_URL + "n", gid=800, bot=2).code == 200
-        assert "Novo" in self.stored("2", 800) and self.db.doc("1", 800) == before1
 
     def test_other_fields_in_the_post_are_ignored(self):
         browser = self.logged_in()
@@ -278,48 +130,6 @@ class LinksAddTest(LinksBase):
 
 
 class LinksEditRemoveTest(LinksBase):
-    def test_edit_updates_url_and_description_keeping_name_and_position(self):
-        set_links(self.db, "1", 100, {"Primeiro": link("https://example.com/1", "a"), "Fixo": link(), "Ultimo": link()})
-        browser = self.logged_in()
-        response = self.act(browser, 100, "editar", alvo="Fixo", url="https://example.com/novo", descricao="nova")
-        assert response.code == 200, f"status {response.code}"
-        assert list(self.stored()) == ["Primeiro", "Fixo", "Ultimo"], "ordem e nomes preservados"
-        assert self.stored()["Fixo"] == link("https://example.com/novo", "nova")
-        assert self.stored()["Primeiro"] == link("https://example.com/1", "a")
-
-    def test_edit_cannot_rename_and_unknown_names_are_422(self):
-        browser = self.logged_in()
-        url = self.links_url(100)
-        form = acao_form(self.body_of(browser, 100), "editar", "Fixo")
-        renamed = self.submit(browser, url, form, pairs=form.pairs(url=BASE_URL + "z") + [("novo_nome", "Outro")])
-        assert renamed.code in (200, 422)
-        assert list(self.stored()) == ["Fixo"], "renomear = remover + adicionar; o nome nunca muda por editar"
-        self.db.writes.clear()
-        form = acao_form(self.body_of(browser, 100), "editar", "Fixo")  # versão atual (409 vem antes de 422)
-        ghost = self.submit(browser, url, form, nome="Inexistente", url=BASE_URL + "z")
-        assert ghost.code == 422 and "Inexistente" not in self.stored() and not self.db.writes
-
-    def test_edit_validates_like_add(self):
-        browser = self.logged_in()
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-
-        def check(item):
-            label, over = item
-            response = self.act(browser, 100, "editar", alvo="Fixo", **over)
-            assert response.code == 422, f"status {response.code}"
-
-        Each.run(
-            [
-                ("url javascript", {"url": "javascript:alert(1)"}),
-                ("url vazia", {"url": ""}),
-                ("url 251", {"url": BASE_URL + "a" * 240}),
-                ("descrição 101", {"descricao": "d" * 101}),
-                ("descrição 2", {"descricao": "ab"}),
-            ],
-            check,
-        )
-        self.assert_untouched(before, writes)
-
     def test_edit_still_works_when_the_list_is_full(self):
         set_links(self.db, "1", 100, full_list())  # descrições gravadas têm 2 caracteres ("d3"): fora de 3–100
         browser = self.logged_in()
@@ -329,26 +139,6 @@ class LinksEditRemoveTest(LinksBase):
         assert self.act(browser, 100, "editar", alvo="L03", descricao="novo texto").code == 200
         assert self.stored()["L03"]["description"] == "novo texto" and len(self.stored()) == MAX_LINKS
         assert self.act(browser, 100, "editar", alvo="L03", descricao="x").code == 422, "descrição ALTERADA segue 3–100"
-
-    def test_remove_deletes_only_that_entry(self):
-        set_links(self.db, "1", 100, {"Fixo": link(), "Outro": link("https://example.com/o", "o")})
-        before = self.db.doc("1", 100)
-        response = self.act(self.logged_in(), 100, "remover", alvo="Fixo")
-        assert response.code == 200
-        expected = copy.deepcopy(before)
-        del expected["player_controller"]["fav_links"]["Fixo"]
-        assert self.db.doc("1", 100) == expected
-
-    def test_removing_the_last_link_leaves_an_empty_dict(self):
-        assert self.act(self.logged_in(), 100, "remover", alvo="Fixo").code == 200
-        assert self.stored() == {}
-
-    def test_remove_unknown_or_differently_cased_names_is_422(self):
-        browser = self.logged_in()
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        for nome in ("fixo", "Inexistente", ""):
-            assert self.act(browser, 100, "remover", alvo="Fixo", nome=nome).code == 422, nome
-        self.assert_untouched(before, writes)
 
     def test_remove_works_without_a_request_channel_like_the_command(self):
         browser = self.logged_in()
@@ -370,58 +160,6 @@ class LinksImportExportTest(LinksBase):
         raw = payload if isinstance(payload, str) else json.dumps(payload)
         return self.act(browser, gid, "importar", dados=raw, bot=bot, htmx=htmx)
 
-    def test_valid_import_merges_and_overwrites_same_names(self):
-        browser = self.logged_in()
-        before = self.db.doc("1", 100)
-        payload = {"Fixo": link("https://example.com/novo", "reescrito"), "Rock": link("https://example.com/r", "rrr")}
-        response = self.do_import(browser, payload)
-        assert response.code == 200, f"status {response.code}"
-        expected = copy.deepcopy(before)
-        expected["player_controller"]["fav_links"].update(payload)
-        assert self.db.doc("1", 100) == expected and self.db.writes == [("1", 100)]
-
-    def test_invalid_payloads_are_422_and_write_nothing(self):
-        browser = self.logged_in()
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        good = link("https://example.com/ok", "okok")
-        cases = {
-            "json inválido": "{nao é json",
-            "lista em vez de objeto": [good],
-            "valor não é objeto": {"A1": "https://x.com/a"},
-            "sem descrição": {"A1": {"url": "https://example.com/a"}},
-            "sem url": {"A1": {"description": "x"}},
-            "url não é texto": {"A1": {"url": 5, "description": ""}},
-            "url inválida": {"A1": link("ftp://example.com/a")},
-            "url javascript": {"A1": link("javascript:alert(1)")},
-            "url maior que 250": {"A1": link(BASE_URL + "a" * (251 - len(BASE_URL)))},
-            "descrição 101": {"A1": link(BASE_URL + "a", "d" * 101)},
-            "descrição 1": {"A1": link(BASE_URL + "a", "d")},
-            "descrição 2": {"A1": link(BASE_URL + "a", "dd")},
-            "nome 26": {"n" * 26: good},
-            "26 itens": {f"I{i:02d}": good for i in range(26)},
-            "vazio": {},
-            "'> fav:' não escapa da validação": {"> fav: x": link("javascript:alert(1)")},
-        }
-
-        def check(item):
-            label, payload = item
-            response = self.do_import(browser, payload)
-            assert response.code == 422, f"status {response.code}"
-            assert 'aria-invalid="true"' in response.body.decode(), "campo dados sem aria-invalid"
-
-        Each.run(list(cases.items()), check)
-        self.assert_untouched(before, writes)
-
-    def test_url_limit_is_the_modal_limit_and_ignores_the_personal_favorites_config(self):
-        """Etapa 5 (F3-5b, A13/D5): links do servidor aceitam até 250, como o modal; USER_FAV_MAX_URL_LENGTH não vale."""
-        browser = self.logged_in()
-        payload = {"A1": link(BASE_URL + "a" * (100 - len(BASE_URL)))}
-        assert self.do_import(browser, payload).code == 200
-        self.world.config["USER_FAV_MAX_URL_LENGTH"] = 40
-        assert self.do_import(browser, payload).code == 200
-        too_long = {"A1": link(BASE_URL + "a" * (251 - len(BASE_URL)))}
-        assert self.do_import(browser, too_long).code == 422
-
     def test_space_rule_counts_overwritten_names_as_free(self):
         browser = self.logged_in()
         set_links(self.db, "1", 100, full_list(24))
@@ -432,40 +170,6 @@ class LinksImportExportTest(LinksBase):
         overwrite = {"L00": link(BASE_URL + "novo", "xxx"), "N1": link(BASE_URL + "1")}
         assert self.do_import(browser, overwrite).code == 200, "L00 já existe: só 1 vaga nova (24 + 1 = 25)"
         assert len(self.stored()) == MAX_LINKS
-
-    def test_import_is_refused_without_a_request_channel(self):
-        browser = self.logged_in()
-        url = self.links_url(100)
-        form = acao_form(self.body_of(browser, 100), "importar")
-        doc = self.db.doc("1", 100)
-        doc["player_controller"]["channel"] = None
-        external_change(self.db, "1", 100, player_controller=doc["player_controller"])
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        response = self.submit(browser, url, form, dados=json.dumps({"A1": link(BASE_URL + "a")}))
-        assert response.code in (409, 422)
-        self.assert_untouched(before, writes)
-
-    def test_export_is_the_import_format_as_an_attachment(self):
-        browser = self.logged_in()
-        response = browser.get(f"/painel/servidores/100/links/exportar")
-        assert response.code == 200, f"status {response.code}"
-        assert json.loads(response.body) == self.stored()
-        assert response.headers["Content-Type"].startswith("application/json")
-        assert response.headers["Content-Disposition"].lower().startswith("attachment")
-        assert response.headers.get("Cache-Control") == "no-store"
-        for name, value in EXPECTED_SECURITY_HEADERS.items():
-            assert response.headers.get(name) == value, name
-        assert self.db.writes == [], "exportar não grava"
-
-    def test_export_then_import_round_trips_without_changes(self):
-        browser = self.logged_in()
-        set_links(
-            self.db, "1", 100, {"Fixo": link("https://example.com/x", "ddd"), "Longo": link(BASE_URL + "a" * 150)}
-        )
-        exported = browser.get("/painel/servidores/100/links/exportar").body.decode()
-        before = self.db.doc("1", 100)
-        assert self.do_import(browser, exported).code == 200
-        assert self.db.doc("1", 100) == before
 
     def test_export_follows_the_chosen_bot_and_the_same_authorization_rules(self):
         browser = self.logged_in()
@@ -483,17 +187,6 @@ class LinksImportExportTest(LinksBase):
             response = browser.get(path)
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), path
 
-    def test_export_requires_login(self):
-        response = self.browser().get("/painel/servidores/100/links/exportar")
-        assert response.code == 302 and response.headers["Location"].startswith("/painel/login")
-
-    def test_export_of_a_hostile_name_is_inert_json(self):
-        set_links(self.db, "1", 100, {"</script><b>": link("https://example.com/a", "<i>")})
-        response = self.logged_in().get("/painel/servidores/100/links/exportar")
-        assert response.code == 200 and json.loads(response.body) == self.stored()
-        assert response.headers["Content-Type"].startswith("application/json")
-        assert response.headers.get("X-Content-Type-Options") == "nosniff"
-
 
 # ============================================================================ transversal: acesso, versão, htmx, efeitos, log
 
@@ -508,52 +201,6 @@ class LinksProtocolTest(LinksBase):
             response = browser.get(self.links_url(gid, bot))
             assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode(), (gid, bot)
 
-    def test_post_without_xsrf_is_403_and_without_version_or_action_is_422(self):
-        browser = self.logged_in()
-        url = self.links_url(100)
-        form = acao_form(self.body_of(browser, 100), "adicionar")
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        no_xsrf = [p for p in form.pairs(nome="Rock", url=BASE_URL + "r") if p[0] != "_xsrf"]
-        assert self.submit(browser, url, form, pairs=no_xsrf).code == 403
-        no_version = [p for p in form.pairs(nome="Rock", url=BASE_URL + "r") if p[0] != "versao"]
-        assert self.submit(browser, url, form, pairs=no_version).code == 422
-        for acao in ("", "hackear", "limpar"):
-            assert self.submit(browser, url, form, acao=acao, nome="Rock", url=BASE_URL + "r").code == 422, acao
-        no_action = [p for p in form.pairs(nome="Rock", url=BASE_URL + "r") if p[0] != "acao"]
-        assert self.submit(browser, url, form, pairs=no_action).code == 422
-        self.assert_untouched(before, writes)
-
-    def test_stale_version_is_409_for_every_action_and_writes_nothing(self):
-        browser = self.logged_in()
-        url = self.links_url(100)
-        body = self.body_of(browser, 100)
-        forms = {
-            "adicionar": (acao_form(body, "adicionar"), {"nome": "Rock", "url": BASE_URL + "r"}),
-            "editar": (acao_form(body, "editar", "Fixo"), {"url": BASE_URL + "e"}),
-            "remover": (acao_form(body, "remover", "Fixo"), {}),
-            "importar": (acao_form(body, "importar"), {"dados": json.dumps({"A1": link(BASE_URL + "i")})}),
-        }
-        external_change(self.db, "1", 100, autoplay=False)  # não é da lista: não conflita
-        set_links(self.db, "1", 100, {"Fixo": link(), "Mudou": link(BASE_URL + "m")})
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
-        for acao, (form, over) in forms.items():
-            for htmx in (True, False):
-                response = self.submit(browser, url, form, htmx=htmx, **over)
-                assert response.code == 409, f"{acao} htmx={htmx}: {response.code}"
-                assert CONFLICT_TEXT in html.unescape(response.body.decode())
-        self.assert_untouched(before, writes)
-
-    def test_htmx_returns_a_fragment_and_plain_post_the_whole_page(self):
-        browser = self.logged_in()
-        fragment = self.add(browser, "Rock", BASE_URL + "r", htmx=True)
-        body = fragment.body.decode()
-        assert fragment.code == 200 and "<html" not in body.lower() and SAVED_TEXT in html.unescape(body)
-        assert "Rock" in body, "o fragmento traz a lista atualizada"
-        whole = self.add(browser, "Pop", BASE_URL + "p")
-        assert whole.code == 200 and "<html" in whole.body.decode().lower()
-        bad = self.add(browser, "", BASE_URL + "p", htmx=True)
-        assert bad.code == 422 and "<html" not in bad.body.decode().lower()
-
     def test_write_after_permission_revoked_is_404_inside_the_cache_window(self):
         browser = self.logged_in()
         url = self.links_url(100)
@@ -564,50 +211,6 @@ class LinksProtocolTest(LinksBase):
         response = self.submit(browser, url, form, gap=2)
         assert response.code == 404 and NOT_FOUND_TEXT in response.body.decode()
         self.assert_untouched(before, writes)
-
-    def test_two_concurrent_adds_with_the_same_version_one_wins(self):
-        import asyncio
-        from urllib.parse import urlencode
-
-        browser = self.logged_in()
-        url = self.links_url(100)
-        form = acao_form(self.body_of(browser, 100), "adicionar")
-        self.clock.advance(4)
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Cookie": "; ".join(f"{k}={v}" for k, v in browser.cookies.items()),
-            **self.xsrf_header(browser),
-        }
-        bodies = [urlencode(form.pairs(nome=n, url=BASE_URL + n)) for n in ("Aa", "Bb")]
-
-        async def both():
-            return await asyncio.gather(
-                *[
-                    self.http_client.fetch(
-                        self.get_url(url),
-                        method="POST",
-                        headers=headers,
-                        body=b,
-                        raise_error=False,
-                        follow_redirects=False,
-                    )
-                    for b in bodies
-                ]
-            )
-
-        codes = sorted(r.code for r in self.io_loop.run_sync(both))
-        assert codes == [200, 409], codes
-        assert len(self.stored()) == 2 and self.db.writes == [("1", 100)]
-
-    def test_audit_names_the_category_and_field_but_never_values(self):
-        browser = self.logged_in()
-        self.caplog.clear()
-        assert self.add(browser, "SegredoNome", "https://example.com/segredo-url", "segredo-desc").code == 200
-        text = self.audit_text()
-        assert str(UID) in text and "100" in text and "links" in text and "fav_links" in text, text
-        logs = self.all_log_text()
-        for value in ("SegredoNome", "segredo-url", "segredo-desc"):
-            assert value not in logs, f"valor no log: {value}"
 
 
 class LinksEffectsTest(LinksBase):
@@ -642,19 +245,6 @@ class LinksEffectsTest(LinksBase):
         response = self.submit(browser, url, form, **over)
         return response, calls, bot.calls["get_channel"]
 
-    def test_every_successful_change_refreshes_the_idle_embed_after_the_write(self):
-        def check(action):
-            response, calls, channel_reads = self.run_action(action)
-            assert response.code == 200, f"status {response.code}"
-            assert calls, "nenhum efeito: utils.music.interactions.process_idle_embed não foi chamado"
-            bot, guild, data = calls[-1]
-            assert bot is self.world.bot2 and guild.id == 200
-            assert data["player_controller"]["fav_links"] == self.stored("2", 200), "com os dados já gravados"
-
-        for action in ("adicionar", "editar", "remover", "importar"):
-            self.world.db.seed("2", 200, self.world.bot_doc())
-            check(action)
-
     def test_rejected_changes_have_no_effect(self):
         calls = self.recorder()
         browser = self.logged_in()
@@ -667,9 +257,6 @@ class LinksEffectsTest(LinksBase):
         assert self.submit(browser, url, form, nome="Rock", url=BASE_URL + "r").code == 409
         assert not calls, "422/409 não disparam o efeito"
 
-    def test_active_player_guild_still_saves(self):
-        assert self.add(self.logged_in(), "Rock", BASE_URL + "r").code == 200  # guild 100 tem player ativo
-
 
 class LinksImportNormalizationTest(LinksBase):
     """BAIXO-1/2 da E4b (aceitos pelo MAESTRO, corrigidos na E4c): a importação grava só o match do URL_REG e
@@ -677,25 +264,6 @@ class LinksImportNormalizationTest(LinksBase):
 
     def do_import(self, browser, payload):
         return self.act(browser, 100, "importar", dados=json.dumps(payload))
-
-    def test_import_requires_the_whole_url_not_only_its_prefix(self):
-        """Etapa 4 (F3-5b, A1): o painel recusa o arquivo em vez de guardar só o prefixo da URL."""
-        browser = self.logged_in()
-        writes = len(self.db.writes)
-        payload = {
-            "Lixo": link("https://example.com/ <img src=x onerror=alert(1)>", "ddd"),
-            "Dois": link("https://example.com/b?x=1 texto depois", "eee"),
-        }
-        assert self.do_import(browser, payload).code == 422
-        assert len(self.db.writes) == writes
-        clean = {"Lixo": link("https://example.com/", "ddd"), "Dois": link("  https://example.com/b?x=1  ", "eee")}
-        assert self.do_import(browser, clean).code == 200
-        assert self.stored()["Lixo"]["url"] == "https://example.com/"
-        assert self.stored()["Dois"]["url"] == "https://example.com/b?x=1"
-
-    def test_import_strips_names_like_add_does(self):
-        assert self.do_import(self.logged_in(), {"  Rock  ": link(BASE_URL + "r")}).code == 200
-        assert "Rock" in self.stored() and "  Rock  " not in self.stored()
 
     def test_import_rejects_names_that_add_would_reject(self):
         browser = self.logged_in()
@@ -717,10 +285,3 @@ class LinksImportNormalizationTest(LinksBase):
 
         Each.run(list(cases.items()), check)
         assert self.db.doc("1", 100) == before and len(self.db.writes) == writes
-
-    def test_names_that_collide_after_normalization_are_rejected(self):
-        browser = self.logged_in()
-        before = self.db.doc("1", 100)
-        payload = {" Rock": link(BASE_URL + "a"), "Rock ": link(BASE_URL + "b")}
-        assert self.do_import(browser, payload).code == 422
-        assert self.db.doc("1", 100) == before

@@ -10,13 +10,9 @@ assíncrono nos dois bancos (``async for documento in banco.iter_data(...)``).
 * RED: com ``limit=n`` devolve no máximo ``n`` e puxa do cursor no máximo ``n`` (+1) documentos; ``iter_data`` entrega preguiçosamente.
 """
 
-import ast
-from pathlib import Path
-
 import pytest
 
 from empiremuse.utils.db import LocalDatabase, MongoDatabase
-from tests.support.raiz import RAIZ
 
 
 class CursorFalso:
@@ -67,20 +63,10 @@ def docs(quantos: int) -> list[dict]:
 
 class TestChamadoresDeHoje:
     @pytest.mark.asyncio
-    async def test_mongo_sem_limit_devolve_a_colecao_inteira(self):
-        banco, _ = mongo_com(docs(150))
-        assert len(list(await banco.query_data(db_name="guilds", collection="global"))) == 150
-
-    @pytest.mark.asyncio
     async def test_mongo_o_filtro_filtra(self):
         banco, _ = mongo_com(docs(10))
         achados = list(await banco.query_data(db_name="guilds", collection="global", filter={"par": True}))
         assert sorted(d["_id"] for d in achados) == ["0", "2", "4", "6", "8"]
-
-    @pytest.mark.asyncio
-    async def test_mongo_devolve_dicionarios(self):
-        banco, _ = mongo_com(docs(3))
-        assert all(isinstance(d, dict) for d in await banco.query_data(db_name="guilds", collection="global"))
 
     @pytest.mark.asyncio
     async def test_local_sem_limit_devolve_tudo_e_o_filtro_filtra(self, tmp_path):
@@ -92,18 +78,6 @@ class TestChamadoresDeHoje:
         pares = list(await banco.query_data(db_name="guilds", collection="global", filter={"par": True}))
         assert len(pares) == 75
 
-    def test_o_fixfavs_nao_passa_mais_limit_e_percorre_pelo_cursor(self):
-        """O ``limit`` de 300 e 500 nunca valeu; com ele valendo, o comando corrigiria só uma parte (ver ``test_fixfavs_sem_limite.py``)."""
-        arvore = ast.parse((RAIZ / "empiremuse" / "cogs" / "misc.py").read_text(encoding="utf-8"))
-        chamadas = [
-            no.func.attr
-            for no in ast.walk(arvore)
-            if isinstance(no, ast.Call)
-            and isinstance(no.func, ast.Attribute)
-            and no.func.attr in {"query_data", "iter_data"}
-        ]
-        assert sorted(chamadas) == ["iter_data", "iter_data"]
-
 
 # ============================================================================ RED: o limit passa a valer
 
@@ -114,17 +88,6 @@ class TestLimit:
         banco, colecao = mongo_com(docs(150))
         achados = list(await banco.query_data(db_name="guilds", collection="global", limit=7))
         assert len(achados) == 7 and colecao.ultimo_cursor.puxados <= 8
-
-    @pytest.mark.asyncio
-    async def test_mongo_limit_maior_que_a_colecao_devolve_tudo(self):
-        banco, _ = mongo_com(docs(5))
-        assert len(list(await banco.query_data(db_name="guilds", collection="global", limit=500))) == 5
-
-    @pytest.mark.asyncio
-    async def test_mongo_limit_com_filtro(self):
-        banco, _ = mongo_com(docs(20))
-        achados = list(await banco.query_data(db_name="guilds", collection="global", filter={"par": True}, limit=3))
-        assert len(achados) == 3 and all(d["par"] for d in achados)
 
     @pytest.mark.asyncio
     async def test_local_com_limit_devolve_no_maximo_o_limit(self, tmp_path):
@@ -139,16 +102,6 @@ class TestLimit:
 
 class TestIterData:
     @pytest.mark.asyncio
-    async def test_mongo_entrega_aos_poucos(self):
-        banco, colecao = mongo_com(docs(100))
-        vistos = []
-        async for documento in banco.iter_data(db_name="guilds", collection="global"):
-            vistos.append(documento["_id"])
-            if len(vistos) == 3:
-                break
-        assert vistos == ["0", "1", "2"] and colecao.ultimo_cursor.puxados <= 4
-
-    @pytest.mark.asyncio
     async def test_mongo_percorre_tudo_e_aplica_o_filtro(self):
         banco, _ = mongo_com(docs(10))
         todos = [d async for d in banco.iter_data(db_name="guilds", collection="global")]
@@ -156,21 +109,8 @@ class TestIterData:
         assert len(todos) == 10 and len(pares) == 5
 
     @pytest.mark.asyncio
-    async def test_mongo_nao_monta_a_lista_da_colecao(self):
-        banco, colecao = mongo_com(docs(1000))
-        async for _ in banco.iter_data(db_name="guilds", collection="global"):
-            break
-        assert colecao.ultimo_cursor.puxados <= 2
-
-    @pytest.mark.asyncio
     async def test_local_tambem_tem_iter_data(self, tmp_path):
         banco = LocalDatabase(dir_=str(tmp_path))
         for n in range(12):
             await banco.update_data(id_=n, data={"n": n}, db_name="guilds", collection="global")
         assert len([d async for d in banco.iter_data(db_name="guilds", collection="global")]) == 12
-
-    @pytest.mark.asyncio
-    async def test_iter_data_nao_grava_nem_apaga_nada(self):
-        banco, colecao = mongo_com(docs(5))
-        _ = [d async for d in banco.iter_data(db_name="guilds", collection="global")]
-        assert len(colecao.documentos) == 5

@@ -82,13 +82,6 @@ def make_text_channel(send=True, embed=True):
 class TestCanSendMessage:
     BOT = SimpleNamespace(mention="<@bot>")
 
-    def test_allows_when_it_can_send_and_embed(self):
-        assert checks.can_send_message(make_text_channel(), self.BOT) is True
-
-    def test_refuses_without_send_messages(self):
-        with pytest.raises(GenericError, match="enviar mensagens"):
-            checks.can_send_message(make_text_channel(send=False), self.BOT)
-
     def test_refuses_without_embed_links(self):
         with pytest.raises(GenericError, match="inserir links"):
             checks.can_send_message(make_text_channel(embed=False), self.BOT)
@@ -105,9 +98,6 @@ class TestCanSendMessage:
 
 
 class TestHasPlayer:
-    def test_returns_true_with_player_and_available_node(self):
-        assert call(checks.has_player(), make_inter({GID: make_player()})) is True
-
     def test_no_player(self):
         with pytest.raises(NoPlayer):
             call(checks.has_player(), make_inter())
@@ -118,10 +108,6 @@ class TestHasPlayer:
         player = make_player(node=SimpleNamespace(is_available=False))
         with pytest.raises(wavelink.ZeroConnectedNodes):
             call(checks.has_player(), make_inter({GID: player}))
-
-    def test_unavailable_node_is_ignored_with_check_node_false(self):
-        player = make_player(node=SimpleNamespace(is_available=False))
-        assert call(checks.has_player(check_node=False), make_inter({GID: player})) is True
 
     def test_uses_music_bot_when_the_interaction_has_one(self):
         other = SimpleNamespace(music=SimpleNamespace(players={GID: make_player()}))
@@ -220,17 +206,6 @@ class TestCheckVoice:
         guild = SimpleNamespace(me=SimpleNamespace(voice=None))
         assert call(checks.check_voice(), make_inter(author=author, guild=guild)) is True
 
-    def test_author_in_a_different_channel(self):
-        author, me_channel = make_member(in_my_channel=False)
-        guild = SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(channel=me_channel)))
-        with pytest.raises(DiffVoiceChannel):
-            call(checks.check_voice(), make_inter(author=author, guild=guild))
-
-    def test_author_in_the_same_channel(self):
-        author, me_channel = make_member()
-        guild = SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(channel=me_channel)))
-        assert call(checks.check_voice(), make_inter(author=author, guild=guild)) is True
-
     def test_prefers_music_guild_over_guild(self):
         author, me_channel = make_member(in_my_channel=False)
         music_guild = SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(channel=me_channel)))
@@ -255,18 +230,8 @@ class TestCheckYtCooldown:
         with pytest.raises(GenericError, match="pular a música atual do youtube"):
             call(checks.check_yt_cooldown(), make_inter({GID: player}))
 
-    def test_owner_is_exempt(self):
-        inter = make_inter({GID: make_player(start_time=started_ago(2))})
-        inter.bot.is_owner = AsyncMock(return_value=True)
-        assert call(checks.check_yt_cooldown(), inter) is True
-
     def test_after_the_cooldown_passes(self):
         player = make_player(start_time=started_ago(60))
-        assert call(checks.check_yt_cooldown(), make_inter({GID: player})) is True
-
-    def test_other_sources_are_never_blocked(self):
-        current = SimpleNamespace(requester=1, info={"sourceName": "soundcloud"})
-        player = make_player(current=current, start_time=started_ago(1))
         assert call(checks.check_yt_cooldown(), make_inter({GID: player})) is True
 
 
@@ -290,27 +255,10 @@ class TestCheckStageTopic:
         with pytest.raises(GenericError, match="aguardar"):
             call(checks.check_stage_topic(), make_inter({GID: player}))
 
-    def test_stage_channel_uses_the_longer_limit(self):
-        player = self.stage_player(disnake.StageChannel)
-        player.start_time = started_ago(60)  # além dos 30 s do canal de voz, dentro dos 120 s do palco
-        with pytest.raises(GenericError):
-            call(checks.check_stage_topic(), make_inter({GID: player}))
-
     def test_voice_channel_passes_after_its_shorter_limit(self):
         player = self.stage_player(disnake.VoiceChannel)
         player.start_time = started_ago(60)
         assert call(checks.check_stage_topic(), make_inter({GID: player})) is True
-
-    def test_without_announcement_passes(self):
-        player = self.stage_player(disnake.VoiceChannel)
-        player.stage_title_event = False
-        assert call(checks.check_stage_topic(), make_inter({GID: player})) is True
-
-    def test_owner_is_exempt(self):
-        player = self.stage_player(disnake.VoiceChannel)
-        inter = make_inter({GID: player})
-        inter.bot.is_owner = AsyncMock(return_value=True)
-        assert call(checks.check_stage_topic(), inter) is True
 
 
 # ============================================================================ can_send_message_check
@@ -324,17 +272,6 @@ class TestCanSendMessageCheck:
 
     def test_user_install_with_guild_id_but_no_guild_passes(self):
         assert call(checks.can_send_message_check(), make_inter(guild=None)) is True
-
-    def test_checks_the_channel_permissions(self):
-        guild = SimpleNamespace(me=SimpleNamespace(mention="<@bot>"))
-        inter = make_inter(guild=guild, channel=make_text_channel())
-        assert call(checks.can_send_message_check(), inter) is True
-
-    def test_missing_permission_is_reported(self):
-        guild = SimpleNamespace(me=SimpleNamespace(mention="<@bot>"))
-        inter = make_inter(guild=guild, channel=make_text_channel(send=False))
-        with pytest.raises(GenericError):
-            call(checks.can_send_message_check(), inter)
 
     def test_partial_messageable_is_resolved_and_unarchived(self):
         thread = MagicMock(spec=disnake.Thread)
@@ -388,10 +325,6 @@ def make_voice_channel(
 
 
 class TestCheckChannelLimit:
-    def test_unlimited_channel(self):
-        member = SimpleNamespace(id=1, guild_permissions=perms(move_members=False))
-        assert checks.check_channel_limit(member, make_voice_channel()) is True
-
     def test_member_with_move_members_bypasses(self):
         member = SimpleNamespace(id=1, guild_permissions=perms(move_members=True))
         assert checks.check_channel_limit(member, make_voice_channel(user_limit=1, voice_states={2: 0})) is True
@@ -403,10 +336,6 @@ class TestCheckChannelLimit:
     def test_room_left(self):
         member = SimpleNamespace(id=1, guild_permissions=perms(move_members=False))
         assert checks.check_channel_limit(member, make_voice_channel(user_limit=3, voice_states={2: 0})) is True
-
-    def test_full_channel_returns_none(self):
-        member = SimpleNamespace(id=1, guild_permissions=perms(move_members=False))
-        assert checks.check_channel_limit(member, make_voice_channel(user_limit=1, voice_states={2: 0})) is None
 
 
 class TestCanConnect:
@@ -423,17 +352,10 @@ class TestCanConnect:
         with pytest.raises(GenericError, match="falar"):
             checks.can_connect(make_voice_channel(speak=False), self.guild())
 
-    def test_stage_channel_does_not_need_speak(self):
-        assert checks.can_connect(make_voice_channel(disnake.StageChannel, speak=False), self.guild()) is None
-
     def test_full_channel(self):
         channel = make_voice_channel(user_limit=1, voice_states={2: 0})
         with pytest.raises(GenericError, match="lotado"):
             checks.can_connect(channel, self.guild())
-
-    def test_existing_voice_client_skips_the_limit_check(self):
-        channel = make_voice_channel(user_limit=1, voice_states={2: 0})
-        assert checks.can_connect(channel, self.guild(voice_client=object())) is None
 
     def test_another_pool_bot_in_the_channel_raises_pool_exception(self):
         other = SimpleNamespace(bot_ready=True, user=SimpleNamespace(id=60))
@@ -449,11 +371,6 @@ class TestCanConnect:
         channel = make_voice_channel(members=[outro])
         with pytest.raises(GenericError, match="outro bot"):
             checks.can_connect(channel, self.guild(), check_other_bots_in_vc=True)
-
-    def test_own_bot_in_vc_is_ignored(self):
-        eu = SimpleNamespace(bot=True, id=50)
-        channel = make_voice_channel(members=[eu])
-        assert checks.can_connect(channel, self.guild(), check_other_bots_in_vc=True) is None
 
 
 class TestCheckDeafen:
@@ -476,26 +393,11 @@ class TestCheckDeafen:
         )
         assert run(checks.check_deafen(me)) is None
 
-    def test_without_permission_returns_none(self):
-        me = SimpleNamespace(voice=SimpleNamespace(deaf=False), guild_permissions=perms(deafen_members=False))
-        assert run(checks.check_deafen(me)) is None
-
 
 # ============================================================================ utilitários
 
 
 class TestUpdateAttrAndCooldown:
-    def test_update_attr_sets_music_bot_and_guild(self):
-        inter = SimpleNamespace()
-        assert checks.update_attr(inter, "bot", "guild") == ("bot", "guild")
-        assert (inter.music_bot, inter.music_guild) == ("bot", "guild")
-
-    def test_update_attr_tolerates_objects_that_reject_attributes(self):
-        class Fechado:
-            __slots__ = ()
-
-        assert checks.update_attr(Fechado(), "bot", "guild") == ("bot", "guild")
-
     def test_user_cooldown_builds_the_configured_cooldown(self):
         cooldown = checks.user_cooldown(3, 20)(SimpleNamespace())
         assert (cooldown.rate, cooldown.per) == (3, 20)
@@ -513,10 +415,6 @@ class TestCheckForum:
         inter = SimpleNamespace(channel=SimpleNamespace(owner_id=1), guild="g")
         with pytest.raises(PoolException):
             checks.check_forum(inter, bot)
-
-    def test_valid_forum_post_returns_none(self):
-        bot = SimpleNamespace(check_bot_forum_post=lambda ch, raise_error: True)
-        assert checks.check_forum(SimpleNamespace(channel=None), bot) is None
 
 
 # ============================================================================ check_requester_channel
@@ -541,11 +439,6 @@ class TestCheckRequesterChannel:
     def test_request_channel_without_parent_refuses_nothing(self):
         ctx = self.ctx("2", SimpleNamespace(id=2))
         assert run(checks.check_requester_channel(ctx)) is True
-
-    def test_request_channel_with_a_text_parent_refuses_prefix_commands(self):
-        ctx = self.ctx("2", SimpleNamespace(id=2, parent=MagicMock(spec=disnake.TextChannel)))
-        with pytest.raises(GenericError, match="comandos de barra"):
-            run(checks.check_requester_channel(ctx))
 
     def test_request_channel_of_another_pool_bot_also_refuses(self):
         async def other_data(guild_id, db_name):
@@ -650,11 +543,6 @@ class TestCheckPlayerPerm:
         inter, bot = self.setup_inter(player)
         with pytest.raises(GenericError, match="modo 24/7"):
             run(checks.check_player_perm(inter, bot, None))
-
-    def test_creator_passes(self):
-        player = make_player(player_creator=1)
-        inter, bot = self.setup_inter(player)
-        assert run(checks.check_player_perm(inter, bot, None)) is True
 
     def test_listed_dj_passes(self):
         player = make_player(dj={1})

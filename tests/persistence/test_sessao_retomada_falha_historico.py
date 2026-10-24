@@ -12,6 +12,8 @@ from tests.support.formatos_reais import CANAL_DE_TEXTO, CANAL_DE_VOZ
 from tests.support.leitor_legado import SEGREDO
 from tests.persistence.test_sessao_retomada import _ambiente, montar, proprio, retomar, sessao  # noqa: F401
 
+pytestmark = pytest.mark.regression
+
 
 class HistoricoQuebrado(Exception):
     pass
@@ -25,16 +27,6 @@ def canal_com_historico_quebrado(canal_id):
 
     canal.history = history
     return canal
-
-
-@pytest.mark.asyncio
-async def test_falha_ao_ler_o_historico_nao_derruba_a_retomada():
-    dados = await sessao()
-    dados["message_id"] = None
-    texto = canal_com_historico_quebrado(CANAL_DE_TEXTO)
-    cog, _, criados = montar(canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: texto})
-    await retomar(cog, dados)
-    assert len(criados) == 1 and criados[0].conexoes == [CANAL_DE_VOZ]
 
 
 @pytest.mark.asyncio

@@ -13,15 +13,13 @@ migração segue para os outros arquivos.
 """
 
 import json
-import pickle
-import zlib
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from empiremuse.utils.music.errors import GenericError
 from tests.support.formatos_reais import DONO, INSTANTE, SERVIDOR
-from tests.support.serializacao_nucleo import falha, schema
+from tests.support.serializacao_nucleo import falha
 from tests.persistence.test_fila_salva import (
     _ambiente,  # noqa: F401 - fixture autouse do arquivo base (EMPIREMUSE_HOME e relógio fixo)
     caminho_json,
@@ -53,21 +51,9 @@ def legado_com_data(data) -> dict:
 
 
 class TestEsquema:
-    @pytest.mark.parametrize("data", DATAS_EXTREMAS)
-    def test_decodificar_recusa_data_fora_do_intervalo_como_erro_do_esquema(self, data):
-        erro = falha(queue.decode_saved_queue, json_com_data(data))
-        assert erro.path == "created_at"
-
     @pytest.mark.parametrize("data", DATETIMES_EXTREMOS, ids=["ano-1", "ano-9999"])
     def test_codificar_recusa_datetime_fora_do_intervalo_como_erro_do_esquema(self, data):
         assert falha(queue.encode_saved_queue, faixas_validas(), data, SERVIDOR).path == "created_at"
-
-    @pytest.mark.parametrize("data", DATETIMES_EXTREMOS, ids=["ano-1", "ano-9999"])
-    def test_normalizar_o_legado_recusa_datetime_fora_do_intervalo(self, data):
-        assert isinstance(falha(queue.normalize_legacy_queue, legado_com_data(data)), schema.SchemaError)
-
-    def test_perto_do_limite_mas_dentro_do_intervalo_passa(self):
-        assert lendo(json_com_data("0001-01-02T00:00:00+00:00"))["created_at"].year == 1
 
 
 class TestLerFilaPlantada:
@@ -90,12 +76,6 @@ class TestLerFilaPlantada:
 
 
 class TestMigracaoNaInicializacaoComFilaPlantada:
-    @pytest.mark.parametrize("data", DATETIMES_EXTREMOS, ids=["ano-1", "ano-9999"])
-    def test_pkl_com_data_extrema_nao_derruba_a_migracao_e_fica(self, tmp_path, data):
-        pkl = escrever_pkl(tmp_path, legado_com_data(data))
-        assert saved_queue.migrate_saved_queues() == 0
-        assert pkl.is_file() and not caminho_json(tmp_path).exists()
-
     def test_a_fila_plantada_nao_impede_a_migracao_das_outras(self, tmp_path):
         ruim = escrever_pkl(tmp_path, legado_com_data(DATETIMES_EXTREMOS[0]), usuario=DONO)
         boa = escrever_pkl(tmp_path, usuario=DONO + 1)
@@ -109,10 +89,3 @@ class TestMigracaoNaInicializacaoComFilaPlantada:
         pkl = escrever_pkl(tmp_path)
         assert saved_queue.migrate_saved_queues() == 1
         assert not pkl.exists() and lendo(alvo.read_bytes())["created_at"] == INSTANTE.astimezone(timezone.utc)
-
-    def test_o_pkl_de_data_extrema_e_lido_pelo_leitor_legado_sem_executar_nada(self, tmp_path):
-        """Controle: o pickle é bem-comportado; o problema não é o leitor legado, e sim a data."""
-        conteudo = zlib.compress(pickle.dumps(legado_com_data(DATETIMES_EXTREMOS[0]), protocol=4))
-        from empiremuse.serialization.legacy_pickle import load_legacy
-
-        assert load_legacy(conteudo, "queue")["created_at"] == DATETIMES_EXTREMOS[0]

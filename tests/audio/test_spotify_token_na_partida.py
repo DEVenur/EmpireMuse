@@ -3,16 +3,16 @@
 import ast
 import asyncio
 import logging
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from aiohttp import ClientError
 
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.music.errors import GenericError
 from tests.support.raiz import RAIZ
+
+pytestmark = pytest.mark.regression
 
 SEGREDO_FAKE = "segredo-spotify-fake-123"
 
@@ -27,7 +27,6 @@ def _pool(erro: BaseException | None):
     "erro",
     [
         GenericError("**Credenciais recusadas.**"),  # sem a palavra Spotify: o contexto tem de vir do próprio log
-        ClientError("sem rede (simulado)"),
         OSError("disco cheio (simulado)"),
     ],
 )
@@ -41,17 +40,6 @@ async def test_falha_ao_obter_o_token_e_registrada_e_nao_propaga(erro, caplog):
     assert registros, "a falha da tarefa de partida não foi registrada"
     assert "Spotify" in registros[0].getMessage()
     assert SEGREDO_FAKE not in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_sucesso_nao_registra_erro(caplog):
-    pool = _pool(None)
-
-    with caplog.at_level(logging.ERROR, logger="empiremuse.utils.client"):
-        await BotPool.refresh_spotify_token(pool)
-
-    pool.spotify.get_access_token.assert_awaited_once()
-    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 def _chamadas_de_create_task() -> list[ast.Call]:

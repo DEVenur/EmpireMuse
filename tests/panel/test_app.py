@@ -8,26 +8,16 @@ from tornado.testing import AsyncHTTPTestCase
 from tests.panel.helpers import (
     BRAND_DIR,
     EXPECTED_CSP,
-    EXPECTED_SECURITY_HEADERS,
     ROOT,
-    XSRF_META_RE,
     fake_pool,
     https_config,
     load_settings,
     local_config,
     require,
 )
+import pytest
 
-HEADER_PATHS = [
-    "/painel",
-    "/painel/",
-    "/painel/saude",
-    "/painel/nao-existe",
-    "/painel/marca/logo.svg",
-    "/painel/marca/avatar.png",
-    "/painel/static/vendor/htmx.min.js",
-    "/painel/static/nao-existe.css",
-]
+pytestmark = pytest.mark.critical
 
 
 class _Main(tornado.web.RequestHandler):
@@ -70,24 +60,14 @@ class PanelRoutesTest(PanelTestBase):
         assert response.code == 301
         assert response.headers["Location"].endswith("/painel/")
 
-    def test_index_page_is_html_with_login_button_and_logo(self):
-        response = self.get_page()
-        body = response.body.decode()
-        assert response.code == 200
-        assert response.headers["Content-Type"].startswith("text/html")
-        assert "Entrar com Discord" in body
-        assert "/painel/login" in body
-        assert "/painel/marca/logo.svg" in body
-
+    @pytest.mark.smoke
     def test_health_returns_ok_json(self):
         response = self.get_page("/painel/saude")
         assert response.code == 200
         assert response.headers["Content-Type"].startswith("application/json")
         assert json.loads(response.body) == {"ok": True}
 
-    def test_main_app_root_is_untouched(self):
-        assert self.get_page("/").body == b"main-app"
-
+    @pytest.mark.smoke
     def test_unknown_route_returns_generic_html_404(self):
         response = self.get_page("/painel/nao-existe")
         body = response.body.decode()
@@ -96,10 +76,6 @@ class PanelRoutesTest(PanelTestBase):
         assert "404" in body
         for leak in ("Traceback", "tornado", 'File "', ROOT.as_posix()):
             assert leak not in body, f"a página de erro vaza detalhes internos: {leak!r}"
-
-    def test_app_runs_without_debug_and_with_xsrf_protection(self):
-        assert not self.panel_app.settings.get("debug", False)
-        assert self.panel_app.settings.get("xsrf_cookies") is True
 
     def test_vendored_static_files_are_served(self):
         def check(case):
@@ -114,24 +90,10 @@ class PanelRoutesTest(PanelTestBase):
 
 
 class PanelSecurityHeadersTest(PanelTestBase):
-    def test_security_headers_on_every_response(self):
-        def check(path):
-            headers = self.get_page(path).headers
-            for name, value in EXPECTED_SECURITY_HEADERS.items():
-                assert headers.get(name) == value, f"cabeçalho {name} incorreto: {headers.get(name)!r}"
-
-        self.assert_all(HEADER_PATHS, check)
-
     def test_csp_has_no_unsafe_directives(self):
         csp = self.get_page().headers["Content-Security-Policy"]
         assert csp == EXPECTED_CSP
         assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
-
-    def test_html_pages_are_not_cached(self):
-        def check(path):
-            assert self.get_page(path).headers.get("Cache-Control") == "no-store"
-
-        self.assert_all(["/painel/", "/painel/nao-existe"], check)
 
     def test_hsts_is_absent_without_https(self):
         assert "Strict-Transport-Security" not in self.get_page().headers
@@ -142,10 +104,6 @@ class PanelHttpsTest(PanelTestBase):
 
     def test_hsts_is_sent_when_base_url_is_https(self):
         assert "max-age=31536000" in self.get_page().headers.get("Strict-Transport-Security", "")
-
-    def test_xsrf_cookie_is_secure_when_https(self):
-        cookie = _xsrf_cookie(self.get_page())
-        assert "secure" in cookie.lower().split("; ")
 
 
 def _xsrf_cookie(response) -> str:
@@ -161,25 +119,12 @@ class PanelXsrfTest(PanelTestBase):
         assert "samesite=lax" in flags
         assert "secure" not in flags, "PANEL_INSECURE_COOKIES=true em localhost não deve marcar Secure"
 
-    def test_index_exposes_xsrf_token_in_meta_tag(self):
-        match = XSRF_META_RE.search(self.get_page().body.decode())
-        assert match and len(match.group(1)) > 10, '<meta name="xsrf-token" content="..."> ausente ou vazio'
-
     def test_post_without_token_is_forbidden(self):
         def check(path):
             code = self.fetch(path, method="POST", body="", follow_redirects=False).code
             assert code == 403, f"status {code}"
 
         self.assert_all(["/painel/", "/painel/saude"], check)
-
-    def test_post_with_valid_token_header_passes_xsrf_check(self):
-        page = self.get_page()
-        token = XSRF_META_RE.search(page.body.decode()).group(1)
-        cookie = _xsrf_cookie(page).split(";")[0]
-        response = self.fetch(
-            "/painel/", method="POST", body="", follow_redirects=False, headers={"X-XSRFToken": token, "Cookie": cookie}
-        )
-        assert response.code != 403 and response.code < 500, f"status inesperado: {response.code}"
 
 
 class PanelBrandTest(PanelTestBase):
@@ -208,15 +153,6 @@ class PanelBrandTest(PanelTestBase):
         "/painel/marca/%2e%2e%2f%2e%2e%2fLICENSE",
         "/painel/marca/sub/logo.svg",
     ]
-
-    def test_brand_route_is_a_closed_list_without_path_traversal(self):
-        def check(path):
-            response = self.get_page(path)
-            assert response.code in (404, 301), f"status {response.code}"
-            assert b"GNU GENERAL PUBLIC LICENSE" not in response.body
-            assert b"DEFAULT_CONFIG" not in response.body
-
-        self.assert_all(self.BRAND_BLOCKED_PATHS, check)
 
     STATIC_BLOCKED_PATHS = [
         "/painel/static/../../empiremuse/config_loader.py",

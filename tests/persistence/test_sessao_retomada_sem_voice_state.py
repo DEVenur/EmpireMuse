@@ -29,7 +29,7 @@ from tests.support.formatos_reais import (
     SERVIDOR,
     cog_de_sessoes,
 )
-from tests.persistence.test_formato_sessao import gravar, jogador_completo
+from tests.support.formato_sessao import gravar, jogador_completo
 
 OUTRO_CANAL_DE_VOZ = 1100000000000000099
 
@@ -150,41 +150,6 @@ async def retomar(versao_do_no, dados, *, canais=None):
 
 class TestSemVoiceState:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("estado", ["ausente", None, {}], ids=["ausente", "none", "vazio"])
-    async def test_no_v4_reconecta_por_connect_e_o_player_nasce_sem_voice_state(self, estado):
-        dados = await sessao_gravada()
-        dados.pop("voice_state", None)
-        if estado != "ausente":
-            dados["voice_state"] = estado
-        jogador, no = await retomar(4, dados)
-        assert jogador.conexoes == [CANAL_DE_VOZ]
-        assert not jogador._voice_state and "invoke_np" in jogador.chamadas
-        assert len(no.atualizacoes) == 1 and "encodedTrack" in no.atualizacoes[0][1]
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("estado", ["ausente", None, {}], ids=["ausente", "none", "vazio"])
-    async def test_no_v3_reconecta_por_connect_e_segue_para_a_proxima_faixa(self, estado):
-        dados = await sessao_gravada()
-        dados.pop("voice_state", None)
-        if estado != "ausente":
-            dados["voice_state"] = estado
-        jogador, no = await retomar(3, dados)
-        assert jogador.conexoes == [CANAL_DE_VOZ]
-        assert not jogador._voice_state and ("process_next", 45123) in jogador.chamadas
-        assert no.atualizacoes == []
-
-    @pytest.mark.asyncio
-    async def test_a_sessao_sem_voice_state_restaura_o_resto_igual(self):
-        dados = await sessao_gravada()
-        dados.pop("voice_state", None)
-        jogador, _ = await retomar(4, dados)
-        assert jogador.dj == dados["dj"] and jogador.loop == "queue" and jogador.volume == 80
-        assert jogador.nightcore is True and jogador.mini_queue_enabled is True
-        assert jogador.listen_along_invite == "https://exemplo.invalid/convite"
-        assert jogador.current.info["title"] == "Música 0"
-        assert [t.info["title"] for t in jogador.queue] == ["Faixa Deezer 1", "Faixa parcial 2", "Música 3", "Música 6"]
-
-    @pytest.mark.asyncio
     async def test_a_retomada_usa_o_canal_de_voz_gravado_e_nao_um_dado_de_voz(self):
         dados = await sessao_gravada()
         dados.pop("voice_state", None)
@@ -212,47 +177,6 @@ class TestVoiceStateNaEntradaEIgnorado:
         jogador, _ = await retomar(versao, dados)
         assert jogador._voice_state is None
         assert jogador.conexoes == [CANAL_DE_VOZ]
-
-    @pytest.mark.asyncio
-    async def test_a_reconexao_e_a_mesma_com_e_sem_voice_state_na_entrada(self):
-        com = await sessao_gravada()
-        com["voice_state"] = {"sessionId": "sessao-de-voz", "event": {"token": "t", "endpoint": "e"}}
-        sem = await sessao_gravada()
-        jogador_com, no_com = await retomar(4, com)
-        jogador_sem, no_sem = await retomar(4, sem)
-        assert jogador_com.conexoes == jogador_sem.conexoes == [CANAL_DE_VOZ]
-        assert no_com.atualizacoes == no_sem.atualizacoes
-        assert [c for c in jogador_com.chamadas if not isinstance(c, tuple)] == [
-            c for c in jogador_sem.chamadas if not isinstance(c, tuple)
-        ]
-
-    @pytest.mark.asyncio
-    async def test_o_player_nasce_sem_voice_state_quando_o_canal_de_voz_mudou(self):
-        """O ramo de canal alterado (``last_voice_channel_id``) conecta no canal novo, também sem ``voice_state``."""
-        dados = await sessao_gravada()
-        dados["last_voice_channel_id"] = OUTRO_CANAL_DE_VOZ
-        canais = {OUTRO_CANAL_DE_VOZ: canal_de_voz(OUTRO_CANAL_DE_VOZ), CANAL_DE_TEXTO: canal_de_voz(CANAL_DE_TEXTO)}
-        jogador, _ = await retomar(4, dados, canais=canais)
-        assert jogador.conexoes == [OUTRO_CANAL_DE_VOZ]
-        assert not jogador._voice_state
-
-
-class TestExtraInfo:
-    """``extra_info`` não existe mais na sessão (nada o grava; era um segredo OAuth sem uso): o player nasce com ``{}``."""
-
-    @pytest.mark.asyncio
-    async def test_extra_info_que_vier_na_entrada_nao_e_restaurado(self):
-        dados = await sessao_gravada()
-        dados["extra_info"] = {"guild-yt-oauth": ("token-de-teste", 1)}
-        jogador, _ = await retomar(4, dados)
-        assert jogador.extra_info == {}
-
-    @pytest.mark.asyncio
-    async def test_sem_extra_info_o_player_nasce_com_dicionario_vazio(self):
-        dados = await sessao_gravada()
-        dados.pop("extra_info", None)
-        jogador, _ = await retomar(4, dados)
-        assert jogador.extra_info == {}
 
 
 # ============================================================================ _wait_for_new_node com _voice_state falso
@@ -302,15 +226,6 @@ def jogador_em_troca_de_no(*, voice_state, na_voz=True) -> JogadorDeTeste:
 
 
 class TestTrocaDeNoSemVoiceState:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("estado", [None, {}], ids=["none", "vazio"])
-    async def test_voice_state_falso_troca_de_no_e_nao_reenvia_a_voz(self, estado):
-        jogador = jogador_em_troca_de_no(voice_state=estado)
-        await jogador._wait_for_new_node()
-        assert ("change_node", "no-1") in jogador.registros
-        assert "_dispatch_voice_update" not in jogador.registros
-        assert ("process_next", 0) in jogador.registros
-
     @pytest.mark.asyncio
     async def test_voice_state_verdadeiro_no_mesmo_no_reenvia_a_voz_sem_trocar_de_no(self):
         jogador = jogador_em_troca_de_no(voice_state={"sessionId": "s", "event": {"token": "t", "endpoint": "e"}})

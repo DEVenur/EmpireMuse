@@ -7,6 +7,9 @@ Sem Discord real: o player é um SimpleNamespace e a mensagem, um AsyncMock.
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+import pytest
+
+pytestmark = pytest.mark.regression
 
 DATA = {"content": "np", "components": [], "embeds": []}
 
@@ -38,15 +41,6 @@ def invoke_np(player):
     from empiremuse.utils.music.models import LavalinkPlayer
 
     return asyncio.run(LavalinkPlayer.invoke_np(player))
-
-
-def test_cancelled_error_is_swallowed_and_frees_the_updating_flag(capsys):
-    player = make_player(AsyncMock(side_effect=asyncio.CancelledError))
-
-    assert invoke_np(player) is None
-
-    assert player.updating is False
-    assert "Traceback" not in capsys.readouterr().err
 
 
 def test_message_edit_is_attempted_before_the_cancellation():

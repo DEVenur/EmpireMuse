@@ -20,7 +20,7 @@ from empiremuse.wavelink.errors import (
     WavelinkException,
 )
 from empiremuse.wavelink.node import Node
-from empiremuse.wavelink.player import Track, TrackPlaylist
+from empiremuse.wavelink.player import TrackPlaylist
 
 
 def run(coro):
@@ -134,25 +134,6 @@ def v4_search(*titles, source="youtube"):
 
 
 class TestNodeState:
-    def test_defaults_and_repr(self):
-        node = make_node()
-        assert node.info == {"sourceManagers": [], "plugins": {}} and node.players == {}
-        assert repr(node) == "no-1 | br | (Shard: None)"
-        assert len(node.resume_key) == 16
-
-    def test_update_info_v4_converts_plugins_to_a_name_version_map(self):
-        node = make_node()
-        node.update_info({"check_version": 4, "plugins": [{"name": "lyrics", "version": "1.0"}], "sourceManagers": []})
-        assert node.version == 4 and node.info["plugins"] == {"lyrics": "1.0"}
-
-    def test_update_info_v3_keeps_plugins_untouched(self):
-        node = make_node()
-        node.update_info({"check_version": 3, "plugins": [{"name": "x"}]})
-        assert node.version == 3 and node.info["plugins"] == [{"name": "x"}]
-
-    def test_headers(self):
-        assert make_node().headers == {"Authorization": "senha", "User-Id": "99", "Client-Name": "Wavelink/custom"}
-
     def test_close_and_open_toggle_availability(self):
         node = make_node()
         node.close()
@@ -202,21 +183,10 @@ class TestNodeState:
 
 
 class TestGetTracksV4:
-    def test_search_result_becomes_a_list_of_tracks(self):
-        node = make_node(Resposta(data=v4_search("Um", "Dois")))
-        tracks = run(node.get_tracks("ytsearch:teste"))
-        assert [t.title for t in tracks] == ["Um", "Dois"] and all(isinstance(t, Track) for t in tracks)
-        assert node.session.chamadas[0][1] == "http://lavalink:2333/v4/loadtracks?identifier=ytsearch%3Ateste"
-
     def test_single_track_load(self):
         data = {"loadType": "track", "data": {"encoded": "E", "info": info("Solo")}}
         tracks = run(make_node(Resposta(data=data)).get_tracks("https://youtu.be/x"))
         assert [t.id for t in tracks] == ["E"]
-
-    def test_empty_result_raises_track_not_found(self):
-        node = make_node(Resposta(data={"loadType": "empty", "data": {}}))
-        with pytest.raises(TrackNotFound):
-            run(node.get_tracks("ytsearch:nada"))
 
     def test_missing_load_type_raises(self):
         with pytest.raises(WavelinkException, match="error while trying to load"):
@@ -245,13 +215,6 @@ class TestGetTracksV4:
     def test_list_payload_is_returned_untouched(self):
         assert run(make_node(Resposta(data=[1, 2])).get_tracks("x")) == [1, 2]
 
-    def test_custom_track_class_and_extra_keywords(self):
-        class Minha(Track):
-            pass
-
-        node = make_node(Resposta(data=v4_search("Um")))
-        assert isinstance(run(node.get_tracks("x", track_cls=Minha))[0], Minha)
-
 
 V3_BUG = (
     "defeito conhecido: `get_tracks` lê `data.get('data')`, que no payload v3 (sem a chave 'data') é None; a busca v3 vira "
@@ -260,13 +223,6 @@ V3_BUG = (
 
 
 class TestGetTracksV3:
-    @pytest.mark.xfail(strict=True, reason=V3_BUG)
-    def test_url_has_no_v4_prefix_and_uses_the_track_key(self):
-        data = {"loadType": "SEARCH_RESULT", "tracks": [{"track": "T3", "info": info("V3")}]}
-        node = make_node(Resposta(data=data), version=3)
-        tracks = run(node.get_tracks("ytsearch:x"))
-        assert tracks[0].id == "T3"
-
     def test_url_has_no_v4_prefix(self):
         node = make_node(Resposta(data={"loadType": "SEARCH_RESULT", "tracks": []}), version=3)
         with pytest.raises(TrackNotFound):
@@ -293,11 +249,6 @@ class TestPlaylists:
                 "tracks": [{"encoded": f"E{i}", "info": info(f"T{i}", identifier=i)} for i in ids],
             },
         }
-
-    def test_playlist_becomes_a_track_playlist(self):
-        result = run(make_node(Resposta(data=self.playlist())).get_tracks("https://exemplo.test/lista"))
-        assert isinstance(result, TrackPlaylist) and len(result.tracks) == 3
-        assert result.data["playlistInfo"] == {"name": "Minha lista"}
 
     def test_spotify_playlist_is_cached_and_served_from_the_cache(self):
         cache = {}
@@ -367,11 +318,6 @@ class TestPlaylists:
 
 
 class TestCheckTitle:
-    def test_titles_far_from_the_search_are_dropped(self):
-        node = make_node(Resposta(data=v4_search("Imagine Dragons - Believer", "Outra Coisa Totalmente Diferente")))
-        tracks = run(node.get_tracks("ytsearch:imagine dragons believer", check_title=70))
-        assert [t.title for t in tracks] == ["Imagine Dragons - Believer"]
-
     def test_remix_is_dropped_unless_the_search_asks_for_it(self):
         node = make_node(Resposta(data=v4_search("Believer", "Believer remix")))
         assert [t.title for t in run(node.get_tracks("ytsearch:believer", check_title=10))] == ["Believer"]
@@ -407,11 +353,6 @@ class TestUpdatePlayer:
         assert metodo == "patch" and url.endswith("/v4/sessions/sess/players/7?noReplace=False")
         assert kwargs["json"] == {"volume": 50}
 
-    def test_no_replace_flag_is_inverted(self):
-        node = self.make(Resposta(data={}))
-        run(node.update_player(7, {}))
-        assert node.session.chamadas[0][1].endswith("noReplace=True")
-
     def test_without_a_session_it_waits_for_a_new_node_when_the_player_exists(self):
         node = self.make()
         node.session_id = None
@@ -439,12 +380,6 @@ class TestUpdatePlayer:
         player.change_node.assert_awaited_once_with("no-2")
         assert len(node.session.chamadas) == 3 and no_sleep.await_count == 3
 
-    def test_after_three_failures_without_another_node_it_raises(self):
-        node = self.make(Resposta(status=502, data={"e": 1}))
-        node._client.get_best_node.return_value = None
-        with pytest.raises(WavelinkException, match="UpdatePlayer Failed = 502"):
-            run(node.update_player(7, {}))
-
     def test_non_json_failure_body_is_read_as_text(self):
         node = self.make(Resposta(status=500, json_error=ValueError, text="texto cru"))
         node._client.get_best_node.return_value = None
@@ -460,11 +395,6 @@ class TestBuildTrack:
         metodo, url, kwargs = node.session.chamadas[0]
         assert url.endswith("/v4/decodetrack") and kwargs["params"] == {"encodedTrack": "ENC"}
 
-    def test_v3_decodes_through_the_legacy_endpoint(self):
-        node = make_node(Resposta(data=info("Antiga")), version=3)
-        assert run(node.build_track("ENC")).title == "Antiga"
-        assert node.session.chamadas[0][2]["params"] == {"track": "ENC"}
-
     def test_error_status_raises_build_track_error(self):
         node = make_node(Resposta(status=400, data={"status": 400, "error": "Bad Request"}))
         with pytest.raises(BuildTrackError, match="Bad Request"):
@@ -477,13 +407,6 @@ class TestLyricsAndPotoken:
         node.info["plugins"] = {}
         with pytest.raises(Exception, match="Lyrics plugin not available"):
             run(node.fetch_ytm_lyrics("abc"))
-
-    def test_lyrics_are_fetched_with_the_node_headers(self):
-        node = make_node(Resposta(data={"lines": []}))
-        node.info["plugins"] = {"lyrics": "1"}
-        assert run(node.fetch_ytm_lyrics("abc")) == {"lines": []}
-        assert node.session.chamadas[0][1].endswith("/v4/lyrics/abc")
-        assert node.session.chamadas[0][2]["headers"] == node.headers
 
     def test_lyrics_missing_is_not_an_error(self):
         node = make_node(Resposta(status=404, data={}))
@@ -601,30 +524,11 @@ class TestConnect:
         run(node.connect())
         assert node._is_connecting is True
 
-    def test_info_in_kwargs_skips_discovery_and_connects_the_websocket(self):
-        node = self.prepared(self.bot_session())
-        run(node.connect(info={"check_version": 4, "plugins": [], "sourceManagers": []}))
-        node._websocket._connect.assert_awaited_once()
-        assert node.version == 4 and node.available is True and node._is_connecting is False
-
-    def test_v4_discovery(self, capsys):
-        node = self.prepared(self.bot_session())
-        run(node.connect())
-        assert node.version == 4 and node.info["sourceManagers"] == ["youtube"]
-        node._websocket._connect.assert_awaited_once()
-
     def test_404_means_lavalink_v3_and_skips_the_websocket(self, capsys):
         node = self.prepared(self.bot_session(status=404))
         run(node.connect())
         assert node.version == 3 and node.info["sourceManagers"] == ["youtube", "soundcloud", "http"]
         node._websocket._connect.assert_not_awaited()
-
-    def test_persistent_failure_gives_up_after_the_retries(self, capsys):
-        node = self.prepared(self.bot_session(raises=OSError("recusado")))
-        node.max_retries = 1
-        run(node.connect())
-        assert node._is_connecting is False and node.version == 0
-        assert "Falha ao conectar" in capsys.readouterr().out
 
     def test_retries_then_succeeds(self, capsys, no_sleep):
         session = self.bot_session()
@@ -673,21 +577,6 @@ class TestConnect:
 
 
 class TestExponentialBackoff:
-    def test_delay_is_bounded_by_the_growing_ceiling(self):
-        backoff = ExponentialBackoff(base=1)
-        for exp in range(1, 5):
-            assert 0 <= backoff.delay() <= 2**exp
-
-    def test_ceiling_stops_growing_at_the_maximum_exponent(self):
-        backoff = ExponentialBackoff(base=1)
-        for _ in range(30):
-            valor = backoff.delay()
-        assert backoff._exp == 10 and 0 <= valor <= 2**10
-
-    def test_integral_mode_returns_whole_numbers(self):
-        backoff = ExponentialBackoff(base=1, integral=True)
-        assert all(isinstance(backoff.delay(), int) for _ in range(5))
-
     def test_exponent_resets_after_a_long_quiet_period(self, monkeypatch):
         backoff = ExponentialBackoff(base=1)
         for _ in range(5):

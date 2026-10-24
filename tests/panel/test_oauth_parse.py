@@ -1,6 +1,9 @@
 """Ressalva do AppSec (E3): parse_managed_guilds descarta itens com `id` inválido sem quebrar a lista."""
 
 from tests.panel.helpers import require
+import pytest
+
+pytestmark = pytest.mark.critical
 
 
 def item(guild_id, **extra):
