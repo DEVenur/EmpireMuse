@@ -162,7 +162,7 @@ O comando exibirá a lista de manifestos contendo:
 > [!CAUTION]
 > **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG DE RELEASE `vX.Y.Z` JÁ PUBLICADA!**
 
-Apenas a tag de versão exata `X.Y.Z` (ex.: `1.1.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `1`), `X.Y` (ex.: `1.1`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, mover ou forçar a sobrescrita de uma tag de versão exata (`git push --force origin :vX.Y.Z`) quebra caches, quebra deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto.
+Apenas a tag de versão exata `X.Y.Z` (ex.: `1.1.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `1`), `X.Y` (ex.: `1.1`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
 
 Se for detectado qualquer defeito de código, falha de empacotamento ou inconsistência após a publicação:
 
