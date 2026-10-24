@@ -1,0 +1,19 @@
+# Override para produção atrás do Traefik v3 + Cloudflare.
+# Uso: docker compose -f docker-compose.yml -f deploy/docker-compose.traefik.yml up -d
+# Requer a criação prévia da rede externa 'proxy' (docker network create proxy) e a definição de EMPIREMUSE_DOMAIN no .env.
+# Baseado na arquitetura do Traefik com mTLS e Origin CA da Cloudflare:
+# https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/traefik
+
+services:
+  bot:
+    ports: !reset []
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.empiremuse.rule=Host(`${EMPIREMUSE_DOMAIN:?}`)
+      - traefik.http.services.empiremuse.loadbalancer.server.port=6000
+
+networks:
+  proxy:
+    external: true
