@@ -5,6 +5,7 @@ import json
 
 import disnake
 
+from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.interactions.common import (
     logger,
 )
@@ -12,6 +13,11 @@ from empiremuse.utils.music.interactions.common import (
 # Máximo de dígitos aceito em `queue_max_entries` numa skin importada; acima disso volta ao padrão.
 IMPORT_QUEUE_MAX_ENTRIES_DIGITS = 2
 DEFAULT_QUEUE_MAX_ENTRIES = 7
+QUEUE_MAX_ENTRIES_INVALID = "**A quantidade de músicas exibidas na lista precisa ser um número inteiro.**"
+IMPORT_SHAPE_REFUSED = (
+    "**Ocorreu um erro ao processar sua skin: o conteúdo precisa ser um objeto JSON "
+    'e o campo "embeds", quando presente, uma lista de embeds.**'
+)
 IMPORTED_SKIN_KEYS = ("embeds", "content", "queue_format", "queue_max_entries")
 
 
@@ -103,11 +109,32 @@ def _apply_author_footer(view, inter: disnake.ModalInteraction):
 
 
 def _apply_queue_setup(view, inter: disnake.ModalInteraction):
-    view.message_data["queue_format"] = inter.text_values["queue_format"]
     try:
-        view.message_data["queue_max_entries"] = int(inter.text_values["queue_max_entries"])
-    except TypeError:
-        pass
+        queue_max_entries = int(inter.text_values["queue_max_entries"])
+    except (TypeError, ValueError):
+        raise GenericError(QUEUE_MAX_ENTRIES_INVALID)
+
+    view.message_data["queue_format"] = inter.text_values["queue_format"]
+    view.message_data["queue_max_entries"] = queue_max_entries
+
+
+def _import_shape_is_valid(info: object) -> bool:
+    """A skin importada precisa ser um objeto e, se trouxer ``embeds``, uma lista de objetos (``null`` é recusado)."""
+    if not isinstance(info, dict):
+        return False
+
+    if "embeds" not in info:
+        return True
+
+    embeds = info["embeds"]
+    return isinstance(embeds, list) and all(isinstance(embed, dict) for embed in embeds)
+
+
+async def _refuse_import(inter: disnake.ModalInteraction, reason: str) -> bool:
+    """Recusa a importação sem tocar na skin: log só com o motivo (nunca o conteúdo) e aviso ao dono."""
+    logger.warning("Editor de skin: importação recusada (%s)", reason)
+    await inter.send(IMPORT_SHAPE_REFUSED, ephemeral=True)
+    return False
 
 
 async def _apply_import_skin(view, inter: disnake.ModalInteraction) -> bool:
@@ -122,6 +149,9 @@ async def _apply_import_skin(view, inter: disnake.ModalInteraction) -> bool:
         )
         return False
 
+    if not isinstance(info, dict):
+        return await _refuse_import(inter, "raiz não é um objeto")
+
     try:
         if len(str(info["queue_max_entries"])) > IMPORT_QUEUE_MAX_ENTRIES_DIGITS:
             info["queue_max_entries"] = DEFAULT_QUEUE_MAX_ENTRIES
@@ -133,6 +163,9 @@ async def _apply_import_skin(view, inter: disnake.ModalInteraction) -> bool:
             info["queue_format"] = view.message_data["queue_format"]
     except KeyError:
         pass
+
+    if not _import_shape_is_valid(info):
+        return await _refuse_import(inter, "embeds ausente ou fora do formato")
 
     for key in IMPORTED_SKIN_KEYS:
         try:
