@@ -9,8 +9,10 @@ services:
     ports: !reset []
     networks:
       - proxy
+      - default
     labels:
       - traefik.enable=true
+      - traefik.docker.network=proxy
       - traefik.http.routers.empiremuse.rule=Host(`${EMPIREMUSE_DOMAIN:?}`)
       - traefik.http.services.empiremuse.loadbalancer.server.port=6000
 

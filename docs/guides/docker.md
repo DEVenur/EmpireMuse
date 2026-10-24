@@ -122,7 +122,7 @@ Para implantar o EmpireMuse em um servidor de produção com proxy reverso geren
 Esta configuração segue as práticas de segurança do [Traefik com Cloudflare (docker-compose-cookbook)](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/traefik):
 - A VPS mantém apenas a porta **443** aberta, aceitando conexões exclusivamente da Cloudflare via mTLS (**Authenticated Origin Pulls**), certificado **Cloudflare Origin CA** e lista de IPs permitidos (`cloudflare-only`).
 - Nenhuma porta do bot é exposta no host (`ports: !reset []`). Toda a comunicação passa pela rede interna do Docker (`proxy`).
-- O cabeçalho `X-Real-IP` repassado pela Cloudflare é preservado para correta identificação dos visitantes no painel.
+- O cabeçalho `X-Real-IP` (definido via Transform Rule da Cloudflare e validado pelo Traefik contra faixas de IP confiáveis) é repassado com segurança ao painel para identificação auditável dos visitantes.
 
 #### Passo a Passo de Implantação:
 
@@ -149,7 +149,8 @@ Esta configuração segue as práticas de segurança do [Traefik com Cloudflare 
 
    # Configurações do RPC (Rich Presence):
    # O bot fala com o relé local internamente no contêiner, sem circular pela Cloudflare:
-   RPC_SERVER=ws://localhost:$PORT/ws
+   # (utilize aspas simples para impedir que o Docker Compose interpole a variável $PORT)
+   RPC_SERVER='ws://localhost:$PORT/ws'
    # Endereço público entregue aos clientes e exibido no comando /rich_presence:
    RPC_PUBLIC_URL=wss://muse.seudominio.com/ws
    ```
@@ -167,7 +168,7 @@ Esta configuração segue as práticas de segurança do [Traefik com Cloudflare 
    ```
 
 > [!NOTE]
-> O Traefik já define os entrypoints, certificados e middlewares (`cloudflare-only` e `secure-headers`) por padrão na entrada 443; o override do EmpireMuse declara apenas o roteamento de domínio (`Host`), a porta interna do serviço (`6000`) e a conexão à rede `proxy`.
+> O Traefik já define os entrypoints, certificados e middlewares (`cloudflare-only` e `secure-headers`) por padrão na entrada 443; o override do EmpireMuse declara o roteamento de domínio (`Host`), a porta interna do serviço (`6000`), a rede `proxy` (com a label `traefik.docker.network=proxy` para desambiguação de interfaces) e a rede interna `default` para alcançar o MongoDB quando o perfil `mongo` for utilizado.
 
 ---
 
