@@ -5,9 +5,8 @@ Guia prático para instalação e execução do **EmpireMuse** no painel de cont
 ---
 
 > [!WARNING]
-> **Egg ainda não verificado num painel real (teste em homologação pendente)**.
-> Este egg foi construído com validações estáticas e testes de conformidade, mas ainda não passou por testes ponta a ponta em uma instância ativa do Pterodactyl Wings.
-> Além disso, a imagem oficial `or4cu1o/empiremuse` será disponibilizada publicamente no Docker Hub acompanhando a **primeira release oficial** do projeto (`v0.1.0-rc.1` / `v0.1.0`).
+> **Validado pela documentação oficial do Pterodactyl em 2026-10-24; não verificado num painel real.**
+> Este egg foi revisado e alinhado conforme a especificação oficial de eggs Pterodactyl (`PTDL_v2`) e do projeto EmpireMuse, mas ainda não passou por testes ponta a ponta em uma instância ativa do Pterodactyl Wings.
 
 ---
 
@@ -39,7 +38,7 @@ O egg disponibiliza duas opções de imagem Docker:
 
 | Tag da Imagem | Descrição | Recomendação de Uso |
 | :--- | :--- | :--- |
-| `or4cu1o/empiremuse:0.1` | Fixada na série menor `0.1`. Recebe automaticamente atualizações e correções de bugs da linha 0.1 sem introduzir mudanças incompatíveis. | **Recomendada para produção.** |
+| `or4cu1o/empiremuse:1.0` | Fixada na série menor `1.0`. Recebe automaticamente atualizações e correções de bugs da linha 1.0 sem introduzir mudanças incompatíveis. | **Recomendada para produção.** |
 | `or4cu1o/empiremuse:latest` | Aponta sempre para a versão estável mais recente publicada. | Útil para quem deseja acompanhar todas as atualizações automaticamente. |
 
 > [!TIP]
@@ -70,6 +69,9 @@ O egg expõe diversas variáveis configuráveis na aba **Startup** do servidor. 
 - **`MONGO`** (*Opcional*): URI de conexão com cluster MongoDB externo (ex.: MongoDB Atlas ou contêiner dedicado). Se deixado em branco, o bot opera perfeitamente com persistência em disco local via TinyMongo.
 - **`RUN_LOCAL_LAVALINK`**: `true` para iniciar o servidor de áudio integrado no próprio contêiner, ou `false` caso você use nós Lavalink remotos.
 - **`LAVALINK_RAM_LIMIT`**: Limite máximo de memória RAM alocado à JVM do Lavalink (padrão: `120` MB).
+- **`ENABLE_JISHAKU`**: `false` por padrão. Habilita a extensão de depuração jishaku restrita aos donos do bot (`OWNER_IDS`). Mantenha desativado em produção por segurança.
+- **`RUN_RPC_SERVER`**: `false` por padrão. Habilita o servidor web interno Tornado necessário para o status rico e o painel web.
+- **`ENABLE_RPC_AUTH`**: `true` por padrão. Exige autenticação por token para conexões WebSocket ao relé RPC.
 
 ### 4.2 Segurança de Segredos e Permissões de Subusuários (`startup.read`)
 > [!CAUTION]
@@ -83,8 +85,8 @@ O egg expõe diversas variáveis configuráveis na aba **Startup** do servidor. 
 
 ### 5.1 Alocação de Porta Automática (`SERVER_PORT`)
 - No Pterodactyl, o Wings repassa a porta alocada ao servidor através da variável de ambiente interna `SERVER_PORT`.
-- O EmpireMuse detecta e resolve a porta automaticamente: se a variável `PORT` não estiver definida, o bot adota `SERVER_PORT` de forma transparente.
-- **NÃO crie uma variável de ambiente chamada `PORT`** nem sobrescreva manualmente a porta no egg, a menos que haja necessidade específica. A alocação principal do servidor no painel é suficiente.
+- O EmpireMuse detecta e resolve a porta automaticamente: se a variável `PORT` não estiver definida, o bot adota `SERVER_PORT` de forma transparente. Se nenhuma for definida, adota a porta padrão `6000` (PR #61).
+- **NÃO é necessário definir a variável `PORT`**, a menos que deseje forçar uma porta específica; a alocação principal do servidor no painel (`SERVER_PORT`) é adotada automaticamente.
 
 ### 5.2 Diretório de Dados (`/home/container`)
 - O Pterodactyl monta o armazenamento persistente do servidor no caminho `/home/container`.

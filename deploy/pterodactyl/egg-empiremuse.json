@@ -4,13 +4,13 @@
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-10-17T18:00:00-03:00",
+    "exported_at": "2026-10-24T10:00:00-03:00",
     "name": "EmpireMuse",
     "author": "EmpireCommunity",
-    "description": "Bot de música multi-instância para Discord em Python 3.13 com suporte a nós Lavalink externos e servidor local embutido. Não verificado num painel real (teste pendente). Memória mínima: 768 MB, recomendada: 1 GB.",
+    "description": "Bot de música multi-instância para Discord em Python 3.13 com suporte a nós Lavalink externos e servidor local embutido (porta padrão 6000). Validado pela documentação oficial do Pterodactyl em 2026-10-24; não verificado num painel real. Memória mínima: 768 MB, recomendada: 1 GB.",
     "features": null,
     "docker_images": {
-        "EmpireMuse 0.1": "or4cu1o/empiremuse:0.1",
+        "EmpireMuse 1.0": "or4cu1o/empiremuse:1.0",
         "EmpireMuse latest": "or4cu1o/empiremuse:latest"
     },
     "file_denylist": [],
@@ -246,6 +246,24 @@
             "rules": "required|in:true,false"
         },
         {
+            "name": "Intent de servidores (Guilds)",
+            "description": "Habilita a intent para receber eventos de servidores no Discord.",
+            "env_variable": "GUILDS_INTENT",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
+            "name": "Intent privilegiada de membros",
+            "description": "Habilita a intent privilegiada de membros (Server Members Intent) para rastreamento de entrada/saída.",
+            "env_variable": "MEMBERS_INTENT",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
             "name": "IDs dos donos do bot",
             "description": "Identificadores de usuários no Discord com permissão total de dono, separados por barra dupla.",
             "env_variable": "OWNER_IDS",
@@ -363,6 +381,15 @@
             "rules": "required|in:true,false"
         },
         {
+            "name": "Habilitar extensão de depuração Jishaku",
+            "description": "Carrega a extensão jishaku para comandos de depuração e avaliação restritos aos donos do bot (OWNER_IDS). Mantenha desativado em produção por segurança.",
+            "env_variable": "ENABLE_JISHAKU",
+            "default_value": "false",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
+        },
+        {
             "name": "Intervalo de rotação de presenças",
             "description": "Tempo em segundos entre alternâncias das frases de status configuradas no bot.",
             "env_variable": "PRESENCE_INTERVAL",
@@ -435,6 +462,15 @@
             "rules": "required|integer"
         },
         {
+            "name": "Limite de integrações por usuário",
+            "description": "Número máximo de integrações (Spotify, Last.fm, Deezer) cadastradas por usuário.",
+            "env_variable": "MAX_USER_INTEGRATIONS",
+            "default_value": "20",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer"
+        },
+        {
             "name": "Tamanho máximo do nome de favorito",
             "description": "Limite de caracteres para o nome personalizado de uma playlist salva nos favoritos.",
             "env_variable": "USER_FAV_MAX_NAME_LENGTH",
@@ -483,6 +519,15 @@
             "name": "Skin padrão do canal de pedidos",
             "description": "Identificador do tema visual padrão fixado no canal permanente de song-request.",
             "env_variable": "DEFAULT_STATIC_SKIN",
+            "default_value": "default",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string"
+        },
+        {
+            "name": "Skin padrão no modo ocioso",
+            "description": "Identificador do tema visual padrão utilizado quando o player está ocioso (idling).",
+            "env_variable": "DEFAULT_IDLING_SKIN",
             "default_value": "default",
             "user_viewable": true,
             "user_editable": true,
@@ -705,6 +750,15 @@
             "rules": "required|string"
         },
         {
+            "name": "Porta do servidor web e RPC",
+            "description": "Porta de escuta do servidor HTTP e relé RPC (padrão 6000). No Pterodactyl, deixe vazio para usar automaticamente a alocação principal (SERVER_PORT).",
+            "env_variable": "PORT",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
             "name": "Habilitar painel administrativo web",
             "description": "Ativa o painel de gerenciamento web com login seguro via Discord OAuth2.",
             "env_variable": "PANEL_ENABLED",
@@ -901,6 +955,15 @@
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string"
+        },
+        {
+            "name": "Scrobble Last.fm com metadados do YouTube Music",
+            "description": "Consultar metadados no YouTube Music para correções de título e artista durante o scrobble no Last.fm.",
+            "env_variable": "USE_YTM_TRACKINFO_SCROBBLE",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false"
         },
         {
             "name": "Presenças na categoria ouvindo",
