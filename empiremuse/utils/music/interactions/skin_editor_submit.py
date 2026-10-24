@@ -23,6 +23,139 @@ def _set_or_clear(embed: dict, key: str, value: dict | None):
     embed[key] = value
 
 
+def _apply_message_content(view, inter: disnake.ModalInteraction):
+    view.message_data["content"] = inter.text_values["message_content"]
+
+
+def _apply_add_embed(view, inter: disnake.ModalInteraction):
+    e = (
+        disnake.Embed(
+            title=inter.text_values["skin_embed_title"],
+            description=inter.text_values["skin_embed_description"],
+        )
+        .set_image(url=inter.text_values["image_url"])
+        .set_thumbnail(inter.text_values["thumbnail_url"])
+        .to_dict()
+    )
+
+    e["color"] = inter.text_values["skin_embed_color"].strip("#")
+
+    view.message_data["embeds"].append(e)
+    view.embed_index = len(view.message_data["embeds"]) - 1
+
+
+def _apply_edit_embed(view, inter: disnake.ModalInteraction):
+    embed = view.message_data["embeds"][view.embed_index]
+
+    embed["title"] = inter.text_values["skin_embed_title"]
+    embed["description"] = inter.text_values["skin_embed_description"]
+
+    image_url = inter.text_values["image_url"]
+    _set_or_clear(embed, "image", {"url": image_url} if image_url else None)
+
+    thumbnail_url = inter.text_values["thumbnail_url"]
+    _set_or_clear(embed, "thumbnail", {"url": thumbnail_url} if thumbnail_url else None)
+
+    embed["color"] = inter.text_values["skin_embed_color"].strip("#")
+
+
+def _apply_add_field(view, inter: disnake.ModalInteraction):
+    embed = view.message_data["embeds"][view.embed_index]
+    field = {"name": inter.text_values["add_field_name"], "value": inter.text_values["add_field_value"]}
+
+    if not embed.get("fields"):
+        embed["fields"] = [field]
+    else:
+        embed["fields"].append(field)
+
+    view.embed_field_index = len(embed["fields"]) - 1
+
+
+def _apply_edit_field(view, inter: disnake.ModalInteraction):
+    view.message_data["embeds"][view.embed_index]["fields"][view.embed_field_index] = {
+        "name": inter.text_values["edit_field_name"],
+        "value": inter.text_values["edit_field_value"],
+    }
+
+
+def _apply_author_footer(view, inter: disnake.ModalInteraction):
+    embed = view.message_data["embeds"][view.embed_index]
+
+    footer_text = inter.text_values["footer_text"]
+    _set_or_clear(
+        embed,
+        "footer",
+        {"text": footer_text, "icon_url": inter.text_values["footer_icon_url"]} if footer_text else None,
+    )
+
+    author_name = inter.text_values["set_author_name"]
+    _set_or_clear(
+        embed,
+        "author",
+        {
+            "name": author_name,
+            "url": inter.text_values["set_author_url"],
+            "icon_url": inter.text_values["set_author_icon"],
+        }
+        if author_name
+        else None,
+    )
+
+
+def _apply_queue_setup(view, inter: disnake.ModalInteraction):
+    view.message_data["queue_format"] = inter.text_values["queue_format"]
+    try:
+        view.message_data["queue_max_entries"] = int(inter.text_values["queue_max_entries"])
+    except TypeError:
+        pass
+
+
+async def _apply_import_skin(view, inter: disnake.ModalInteraction) -> bool:
+    """Importa o JSON enviado; devolve ``False`` se o conteúdo for inválido (nada muda na skin)."""
+    try:
+        info = json.loads(inter.text_values["skin"])
+    except (ValueError, RecursionError):
+        logger.exception("Editor de skin: JSON inválido na importação")
+        await inter.send(
+            "**Ocorreu um erro ao processar sua skin: confira se o conteúdo é um JSON válido.**",
+            ephemeral=True,
+        )
+        return False
+
+    try:
+        if len(str(info["queue_max_entries"])) > IMPORT_QUEUE_MAX_ENTRIES_DIGITS:
+            info["queue_max_entries"] = DEFAULT_QUEUE_MAX_ENTRIES
+    except (KeyError, TypeError):
+        pass
+
+    try:
+        if not isinstance(info["queue_format"], str):
+            info["queue_format"] = view.message_data["queue_format"]
+    except KeyError:
+        pass
+
+    for key in IMPORTED_SKIN_KEYS:
+        try:
+            view.message_data[key] = info[key]
+        except KeyError:
+            pass
+
+    view.embed_index = 0
+    view.embed_field_index = 0
+    return True
+
+
+MODAL_APPLIERS = {
+    "skin_editor_message_content": _apply_message_content,
+    "skin_editor_add_embed": _apply_add_embed,
+    "skin_editor_edit_embed": _apply_edit_embed,
+    "skin_editor_add_field": _apply_add_field,
+    "skin_editor_edit_field": _apply_edit_field,
+    "skin_editor_set_authorfooter": _apply_author_footer,
+    "skin_editor_setup_queue": _apply_queue_setup,
+}
+
+
 class SkinEditorSubmitMixin:
     """Aplica ao estado da skin o que o usuário enviou nos modais do editor."""
 
@@ -31,11 +164,11 @@ class SkinEditorSubmitMixin:
             await self.save_skin_from_modal(inter)
             return
 
-        applier = self._MODAL_APPLIERS.get(inter.custom_id)
+        applier = MODAL_APPLIERS.get(inter.custom_id)
 
         if inter.custom_id == "skin_editor_import_skin":
             self.ctx = inter
-            if not await self._apply_import_skin(inter):
+            if not await _apply_import_skin(self, inter):
                 return
 
         elif applier:
@@ -44,127 +177,3 @@ class SkinEditorSubmitMixin:
 
         self.update_components()
         await self.update_message(inter)
-
-    def _apply_message_content(self, inter: disnake.ModalInteraction):
-        self.message_data["content"] = inter.text_values["message_content"]
-
-    def _apply_add_embed(self, inter: disnake.ModalInteraction):
-        e = (
-            disnake.Embed(
-                title=inter.text_values["skin_embed_title"],
-                description=inter.text_values["skin_embed_description"],
-            )
-            .set_image(url=inter.text_values["image_url"])
-            .set_thumbnail(inter.text_values["thumbnail_url"])
-            .to_dict()
-        )
-
-        e["color"] = inter.text_values["skin_embed_color"].strip("#")
-
-        self.message_data["embeds"].append(e)
-        self.embed_index = len(self.message_data["embeds"]) - 1
-
-    def _apply_edit_embed(self, inter: disnake.ModalInteraction):
-        embed = self.message_data["embeds"][self.embed_index]
-
-        embed["title"] = inter.text_values["skin_embed_title"]
-        embed["description"] = inter.text_values["skin_embed_description"]
-
-        image_url = inter.text_values["image_url"]
-        _set_or_clear(embed, "image", {"url": image_url} if image_url else None)
-
-        thumbnail_url = inter.text_values["thumbnail_url"]
-        _set_or_clear(embed, "thumbnail", {"url": thumbnail_url} if thumbnail_url else None)
-
-        embed["color"] = inter.text_values["skin_embed_color"].strip("#")
-
-    def _apply_add_field(self, inter: disnake.ModalInteraction):
-        embed = self.message_data["embeds"][self.embed_index]
-        field = {"name": inter.text_values["add_field_name"], "value": inter.text_values["add_field_value"]}
-
-        if not embed.get("fields"):
-            embed["fields"] = [field]
-        else:
-            embed["fields"].append(field)
-
-        self.embed_field_index = len(embed["fields"]) - 1
-
-    def _apply_edit_field(self, inter: disnake.ModalInteraction):
-        self.message_data["embeds"][self.embed_index]["fields"][self.embed_field_index] = {
-            "name": inter.text_values["edit_field_name"],
-            "value": inter.text_values["edit_field_value"],
-        }
-
-    def _apply_author_footer(self, inter: disnake.ModalInteraction):
-        embed = self.message_data["embeds"][self.embed_index]
-
-        footer_text = inter.text_values["footer_text"]
-        _set_or_clear(
-            embed,
-            "footer",
-            {"text": footer_text, "icon_url": inter.text_values["footer_icon_url"]} if footer_text else None,
-        )
-
-        author_name = inter.text_values["set_author_name"]
-        _set_or_clear(
-            embed,
-            "author",
-            {
-                "name": author_name,
-                "url": inter.text_values["set_author_url"],
-                "icon_url": inter.text_values["set_author_icon"],
-            }
-            if author_name
-            else None,
-        )
-
-    def _apply_queue_setup(self, inter: disnake.ModalInteraction):
-        self.message_data["queue_format"] = inter.text_values["queue_format"]
-        try:
-            self.message_data["queue_max_entries"] = int(inter.text_values["queue_max_entries"])
-        except TypeError:
-            pass
-
-    async def _apply_import_skin(self, inter: disnake.ModalInteraction) -> bool:
-        """Importa o JSON enviado; devolve ``False`` se o conteúdo for inválido (nada muda na skin)."""
-        try:
-            info = json.loads(inter.text_values["skin"])
-        except (ValueError, RecursionError):
-            logger.exception("Editor de skin: JSON inválido na importação")
-            await inter.send(
-                "**Ocorreu um erro ao processar sua skin: confira se o conteúdo é um JSON válido.**",
-                ephemeral=True,
-            )
-            return False
-
-        try:
-            if len(str(info["queue_max_entries"])) > IMPORT_QUEUE_MAX_ENTRIES_DIGITS:
-                info["queue_max_entries"] = DEFAULT_QUEUE_MAX_ENTRIES
-        except (KeyError, TypeError):
-            pass
-
-        try:
-            if not isinstance(info["queue_format"], str):
-                info["queue_format"] = self.message_data["queue_format"]
-        except KeyError:
-            pass
-
-        for key in IMPORTED_SKIN_KEYS:
-            try:
-                self.message_data[key] = info[key]
-            except KeyError:
-                pass
-
-        self.embed_index = 0
-        self.embed_field_index = 0
-        return True
-
-    _MODAL_APPLIERS = {
-        "skin_editor_message_content": _apply_message_content,
-        "skin_editor_add_embed": _apply_add_embed,
-        "skin_editor_edit_embed": _apply_edit_embed,
-        "skin_editor_add_field": _apply_add_field,
-        "skin_editor_edit_field": _apply_edit_field,
-        "skin_editor_set_authorfooter": _apply_author_footer,
-        "skin_editor_setup_queue": _apply_queue_setup,
-    }
