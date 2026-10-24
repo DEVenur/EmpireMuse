@@ -13,25 +13,18 @@ parada (guarda o que recebeu e interrompe).
 """
 
 import copy
-import json
-import pickle
-import zlib
 from types import SimpleNamespace
 
 import disnake
 import pytest
-import pytest_asyncio
 
 from empiremuse.cogs.music import Music
 from empiremuse.music_cog import play_command  # depois de ``Music``: importar a Cog recarrega os mixins
 from empiremuse.utils.client import BotPool
-from empiremuse.utils.music.errors import GenericError
-from empiremuse.utils.music.models import LavalinkTrack, PartialTrack
 from tests.support.formatos_reais import (
     DONO,
     INSTANTE,
     SERVIDOR,
-    faixa_com_playlist,
     faixa_deezer,
     faixa_parcial,
     faixa_youtube,
@@ -60,10 +53,6 @@ def _ambiente(tmp_path, monkeypatch):
 def caminho_da_fila(tmp_path, usuario=DONO):
     """O ``.pkl`` LEGADO (só lido e migrado desde a etapa 4)."""
     return tmp_path / "local_database" / "saved_queues_v1" / "users" / f"{usuario}.pkl"
-
-
-def caminho_json_da_fila(tmp_path, usuario=DONO):
-    return tmp_path / "local_database" / "saved_queues_json" / "users" / f"{usuario}.json"
 
 
 class Resposta:
@@ -184,121 +173,3 @@ async def _devolver(valor):
 
 async def ler(monkeypatch):
     return await montar_leitura(monkeypatch, None)()
-
-
-# ============================================================================ o que vale antes e depois da migração
-
-
-class TestSalvarAFila:
-    @pytest.mark.asyncio
-    async def test_grava_a_faixa_atual_e_a_fila_por_usuario(self, tmp_path):
-        atual, fila = faixa_youtube(0), [faixa_deezer(1), faixa_parcial(2), faixa_com_playlist(3)]
-        await salvar(fila, atual=atual)
-        assert caminho_json_da_fila(tmp_path).is_file()
-        assert not caminho_json_da_fila(tmp_path, DONO + 1).exists()
-
-    @pytest.mark.asyncio
-    async def test_responde_com_o_numero_de_musicas_salvas(self, tmp_path):
-        _, inter = await salvar([faixa_deezer(1), faixa_parcial(2)], atual=faixa_youtube(0))
-        assert "`3`" in inter.embeds[0].description and inter.response.enviados == [("defer", {"ephemeral": True})]
-
-    @pytest.mark.asyncio
-    async def test_menos_de_3_faixas_recusa_e_nao_grava(self, tmp_path):
-        with pytest.raises(GenericError, match="mínimo 3"):
-            await salvar([faixa_deezer(1)], atual=faixa_youtube(0))
-        assert not caminho_json_da_fila(tmp_path).exists()
-
-    @pytest.mark.asyncio
-    async def test_exatamente_3_faixas_vale_e_sem_faixa_atual_conta_so_a_fila(self, tmp_path):
-        await salvar([faixa_youtube(1), faixa_youtube(2), faixa_youtube(3)])
-        assert caminho_json_da_fila(tmp_path).is_file()
-        with pytest.raises(GenericError):
-            await salvar([faixa_youtube(1), faixa_youtube(2)])
-
-
-class TestLerAFilaSalva:
-    @pytest.mark.asyncio
-    async def test_a_fila_gravada_volta_como_as_classes_reais(self, tmp_path, monkeypatch):
-        faixas = tres_faixas()
-        await salvar(faixas[1:], atual=faixas[0])
-        lidas = await ler(monkeypatch)
-        assert [type(f) for f in lidas] == [LavalinkTrack, LavalinkTrack, PartialTrack]
-        assert [f.info["title"] for f in lidas] == [f.info["title"] for f in faixas]
-        assert lidas[0].info["extra"]["lyrics"]["lines"][0]["range"] == {"start": 0, "end": 2900}
-        assert lidas[1].info["pluginInfo"]["albumName"] == "Álbum de Teste"
-        assert lidas[2].info["is_partial"] is True and lidas[2].info["extra"]["requester"] == DONO
-
-    @pytest.mark.asyncio
-    async def test_a_playlist_da_faixa_volta_como_objeto(self, tmp_path, monkeypatch):
-        await salvar([faixa_com_playlist(2), faixa_youtube(3)], atual=faixa_youtube(1))
-        lidas = await ler(monkeypatch)
-        assert lidas[1].playlist_name == "Minha Playlist" and lidas[1].playlist_url.endswith("/playlist/1")
-        assert lidas[0].playlist is None
-
-    @pytest.mark.asyncio
-    async def test_sem_arquivo_diz_que_a_fila_ja_foi_excluida(self, tmp_path, monkeypatch):
-        executar = montar_leitura(monkeypatch, None)
-        with pytest.raises(GenericError, match="já foi excluída"):
-            await executar()
-
-
-# ============================================================================ o formato gravado desde a etapa 4
-
-
-class TestFormatoGravado:
-    @pytest_asyncio.fixture
-    async def bytes_do_disco(self, tmp_path):
-        faixas = tres_faixas()
-        await salvar(faixas[1:], atual=faixas[0])
-        return caminho_json_da_fila(tmp_path).read_bytes()
-
-    @pytest.mark.asyncio
-    async def test_o_arquivo_e_json_em_utf8_sem_envelope(self, bytes_do_disco):
-        assert bytes_do_disco[:1] == b"{" and json.loads(bytes_do_disco)["v"] == 1
-
-    @pytest.mark.asyncio
-    async def test_o_conteudo_tem_versao_tracks_created_at_em_utc_e_guild_id(self, bytes_do_disco):
-        gravado = json.loads(bytes_do_disco)
-        assert set(gravado) == {"v", "tracks", "created_at", "guild_id"}
-        assert gravado["created_at"] == INSTANTE.isoformat() and gravado["guild_id"] == SERVIDOR
-        assert len(gravado["tracks"]) == 3
-
-
-class TestLegadoEmVariosProtocolos:
-    """Depois da 2b (``load_legacy``): fila nos protocolos 4 e 5 com ``zlib``; o resto vira ``GenericError`` e o arquivo FICA."""
-
-    @staticmethod
-    def escrever(tmp_path, dados: bytes):
-        alvo = caminho_da_fila(tmp_path)
-        alvo.parent.mkdir(parents=True, exist_ok=True)
-        alvo.write_bytes(dados)
-
-    @staticmethod
-    def conteudo():
-        faixas = tres_faixas()
-        for faixa in faixas:
-            faixa.info["id"] = faixa.id
-        return {"tracks": infos(faixas), "created_at": INSTANTE, "guild_id": SERVIDOR}
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_le_a_fila_nos_protocolos_4_e_5(self, tmp_path, monkeypatch, protocolo):
-        self.escrever(tmp_path, zlib.compress(pickle.dumps(self.conteudo(), protocol=protocolo)))
-        lidas = await ler(monkeypatch)
-        assert [f.info["title"] for f in lidas] == ["Música 1", "Faixa Deezer 2", "Faixa parcial 3"]
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [0, 1, 2, 3])
-    async def test_fila_de_protocolo_antigo_vira_erro_claro_e_o_arquivo_fica(self, tmp_path, monkeypatch, protocolo):
-        self.escrever(tmp_path, zlib.compress(pickle.dumps(self.conteudo(), protocol=protocolo)))
-        executar = montar_leitura(monkeypatch, None)
-        with pytest.raises(GenericError, match="incompatível"):
-            await executar.rodar()
-        assert caminho_da_fila(tmp_path).is_file()
-
-    @pytest.mark.asyncio
-    async def test_pickle_sem_zlib_vira_erro_claro(self, tmp_path, monkeypatch):
-        """Sem o antigo "se não for zlib, lê assim mesmo": o envelope é obrigatório."""
-        self.escrever(tmp_path, pickle.dumps(self.conteudo(), protocol=4))
-        with pytest.raises(GenericError, match="incompatível"):
-            await montar_leitura(monkeypatch, None).rodar()

@@ -20,8 +20,8 @@ from empiremuse.utils.db import LocalDatabase
 from empiremuse.utils.music import lavalink_server_list, local_lavalink as ll
 from tests.support.formatos_reais import BOT_ID, MongoEmMemoria, cog_de_sessoes
 from tests.persistence.test_formato_caches import gravar_o_cache_de_playlist, pool_vazio as pool_de_caches
-from tests.persistence.test_formato_fila_salva import salvar as salvar_fila, tres_faixas
-from tests.persistence.test_formato_sessao import jogador_completo
+from tests.support.formato_fila_salva import salvar as salvar_fila, tres_faixas
+from tests.support.formato_sessao import jogador_completo
 from tests.persistence.test_formato_skin import editor_sem_tela as _editor_sem_tela
 from tests.persistence.test_formato_skin import BotaoDeModo, InteracaoDoEditor, dados_globais, skin_realista
 

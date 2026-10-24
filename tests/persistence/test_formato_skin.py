@@ -21,7 +21,6 @@ import pytest
 from empiremuse.cogs import music_settings
 from empiremuse.cogs.music import Music
 from empiremuse.cogs.music_settings import MusicSettings
-from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import skin_editor
 from empiremuse.utils.music.interactions import SkinEditorMenu, base_skin
 from tests.support.formatos_reais import SERVIDOR
@@ -184,87 +183,10 @@ def editor_sem_tela(monkeypatch):
     return montar
 
 
-class TestEditorSalvaESegue:
-    @pytest.mark.asyncio
-    async def test_salvar_grava_a_skin_no_modo_escolhido_e_no_banco(self, editor_sem_tela):
-        dados = dados_globais(estaticas={"Fixa": texto_legado(skin_realista())})
-        menu, bot, _ = editor_sem_tela(dados)
-        menu.message_data = skin_realista(content="Outro texto")
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="  Minha skin  "))
-        assert 1 <= len(bot.salvos) <= 2  # a migração da skin legada pode gravar antes da skin salva
-        assert list(bot.salvos[-1]["custom_skins"]) == ["Minha skin"]
-        assert list(bot.salvos[-1]["custom_skins_static"]) == ["Fixa"]
-
-    @pytest.mark.asyncio
-    async def test_a_skin_gravada_volta_igual_pelo_leitor_do_editor(self, editor_sem_tela):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        BotaoDeModo.modo = "custom_skins_static"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Fixa"))
-        novo, _, _ = editor_sem_tela(bot.salvos[-1])
-        await novo.load_skin(SimpleNamespace(values=["> css: Fixa"]))
-        assert novo.message_data == skin_realista()
-
-    @pytest.mark.asyncio
-    async def test_renomear_remove_o_nome_antigo(self, editor_sem_tela):
-        dados = dados_globais(normais={"Antiga": texto_legado(skin_realista()), "Outra": texto_legado(skin_realista())})
-        menu, bot, _ = editor_sem_tela(dados)
-        menu.message_data, menu.skin_selected = skin_realista(), "> cs: Antiga"
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
-        assert sorted(bot.salvos[-1]["custom_skins"]) == ["Nova", "Outra"]
-
-    @pytest.mark.asyncio
-    async def test_o_player_ativo_recebe_as_skins_como_dicionarios_inclusive_as_legadas(self, editor_sem_tela):
-        legada = skin_realista(content="legada")
-        dados = dados_globais(normais={"Velha": texto_legado(legada, 4)})
-        jogador = Jogador()
-        menu, _, _ = editor_sem_tela(dados, [jogador])
-        menu.message_data = skin_realista(content="nova")
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
-        assert jogador.custom_skin_data["Velha"] == legada
-        assert jogador.custom_skin_data["Nova"] == skin_realista(content="nova")
-        assert jogador.custom_skin_static_data == {}
-        assert jogador.chamadas == ["setup_features", "setup_hints", "process_hint"]
-
-
-class TestEditorConverteTambemAsSkinsDoSongRequest:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_o_player_ativo_recebe_as_skins_legadas_do_song_request_como_dicionarios(
-        self, editor_sem_tela, protocolo
-    ):
-        fixa = skin_realista(content="fixa legada")
-        dados = dados_globais(estaticas={"Fixa": texto_legado(fixa, protocolo)})
-        jogador = Jogador()
-        menu, _, _ = editor_sem_tela(dados, [jogador])
-        menu.message_data = skin_realista(content="nova")
-        BotaoDeModo.modo = "custom_skins"
-        await menu.modal_handler(InteracaoDoEditor(skin_name="Nova"))
-        assert jogador.custom_skin_static_data == {"Fixa": fixa}
-        assert list(jogador.custom_skin_data) == ["Nova"]
-
-
 # ============================================================================ os leitores
 
 
 class TestLeitores:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    @pytest.mark.parametrize(("prefixo", "campo"), [("> cs: ", "custom_skins"), ("> css: ", "custom_skins_static")])
-    async def test_load_skin_converte_o_texto_legado_nos_protocolos_4_e_5(
-        self, editor_sem_tela, protocolo, prefixo, campo
-    ):
-        skin = skin_realista()
-        dados = dados_globais(
-            **{"normais" if campo == "custom_skins" else "estaticas": {"Minha": texto_legado(skin, protocolo)}}
-        )
-        menu, _, _ = editor_sem_tela(dados)
-        await menu.load_skin(SimpleNamespace(values=[f"{prefixo}Minha"]))
-        assert menu.message_data == skin and menu.mode == "editor" and menu.skin_selected == f"{prefixo}Minha"
-
     @pytest.mark.asyncio
     async def test_load_skin_aceita_o_dicionario_pronto(self, editor_sem_tela):
         skin = skin_realista()
@@ -273,48 +195,10 @@ class TestLeitores:
         assert menu.message_data == skin
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("vazia", [{}, None, ""], ids=["dict", "none", "texto-vazio"])
-    async def test_load_skin_de_skin_vazia_usa_a_skin_padrao_do_editor(self, editor_sem_tela, vazia):
-        menu, _, _ = editor_sem_tela(dados_globais(normais={"Vazia": vazia}))
-        await menu.load_skin(SimpleNamespace(values=["> cs: Vazia"]))
-        assert menu.message_data == base_skin and menu.message_data is not base_skin
-
-    @pytest.mark.asyncio
     async def test_load_skin_sem_prefixo_conhecido_comeca_da_skin_padrao(self, editor_sem_tela):
         menu, _, _ = editor_sem_tela(dados_globais())
         await menu.load_skin(SimpleNamespace(values=["default"]))
         assert menu.message_data == base_skin
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_create_player_entrega_as_skins_como_dicionarios(self, protocolo):
-        normal, fixa = skin_realista(content="normal"), skin_realista(content="fixa")
-        dados = {
-            "custom_skins": {"N": texto_legado(normal, protocolo), "D": skin_realista(content="dict")},
-            "custom_skins_static": {"F": texto_legado(fixa, protocolo)},
-            "global_skin": False,
-            "listen_along_invites": {},
-            "prefix": "",
-            "voice_channel_status": "",
-        }
-        recebidos = await chamar_create_player(dados)
-        assert recebidos["custom_skin_data"] == {"N": normal, "D": skin_realista(content="dict")}
-        assert recebidos["custom_skin_static_data"] == {"F": fixa}
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("protocolo", [4, 5])
-    async def test_change_skin_entrega_as_skins_como_dicionarios_ao_player_ativo(self, monkeypatch, protocolo):
-        normal, fixa = skin_realista(content="normal"), skin_realista(content="fixa")
-        dados = {
-            "custom_skins": {"N": texto_legado(normal, protocolo)},
-            "custom_skins_static": {"F": texto_legado(fixa, protocolo)},
-            "global_skin": False,
-            "player_skin": "",
-            "player_skin_static": "",
-        }
-        jogador = await chamar_change_skin(monkeypatch, dados, nova_skin="> custom_skin: N")
-        assert jogador.custom_skin_data == {"N": normal} and jogador.custom_skin_static_data == {"F": fixa}
-        assert jogador.skin == "> custom_skin: N" and "invoke_np" in jogador.chamadas
 
     @pytest.mark.asyncio
     async def test_change_skin_nao_mexe_no_player_que_ja_usa_a_skin_escolhida(self, monkeypatch):

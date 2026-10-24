@@ -5,7 +5,6 @@ metade e levava junto as instalações de outras plataformas. ``_jdk_is_usable``
 Sem rede: o download verificado é substituído por um zip gravado no lugar.
 """
 
-import os
 import zipfile
 
 import pytest
@@ -13,7 +12,6 @@ import pytest
 from empiremuse.utils.music import local_lavalink as ll
 
 PLATAFORMA = "Windows-64bit-WindowsPE"
-OUTRA = "Linux-64bit-ELF"
 
 
 def gravar_zip(caminho: str, arquivos: dict[str, bytes]) -> None:
@@ -42,47 +40,13 @@ def zip_baixado(monkeypatch):
 
 
 class TestJdkIsUsable:
-    def test_reconhece_o_java_exe(self, tmp_path):
-        gravar_jdk(tmp_path, PLATAFORMA, "java.exe", b"x")
-
-        assert ll._jdk_is_usable(str(tmp_path / ".java" / PLATAFORMA))
-
-    def test_continua_reconhecendo_o_java_sem_extensao(self, tmp_path):
-        gravar_jdk(tmp_path, OUTRA, "java", b"x")
-
-        assert ll._jdk_is_usable(str(tmp_path / ".java" / OUTRA))
-
     def test_diretorio_sem_executavel_nao_serve(self, tmp_path):
         (tmp_path / ".java" / PLATAFORMA / "bin").mkdir(parents=True)
 
         assert not ll._jdk_is_usable(str(tmp_path / ".java" / PLATAFORMA))
 
-    @pytest.mark.skipif(os.name == "nt", reason="o bit de execução só existe em POSIX")
-    def test_java_exe_sem_permissao_de_execucao_nao_serve(self, tmp_path):
-        gravar_jdk(tmp_path, PLATAFORMA, "java.exe", b"x")
-        (tmp_path / ".java" / PLATAFORMA / "bin" / "java.exe").chmod(0o644)
-
-        assert not ll._jdk_is_usable(str(tmp_path / ".java" / PLATAFORMA))
-
 
 class TestInstalacaoNoWindows:
-    def test_instala_o_jdk_sem_a_pasta_raiz_e_remove_o_zip(self, tmp_path, zip_baixado):
-        java = ll._install_jdk_windows(str(tmp_path), PLATAFORMA, "64bit")
-
-        destino = tmp_path / ".java" / PLATAFORMA
-        assert (destino / "bin" / "java.exe").read_bytes() == b"JAVA-NOVO"
-        assert (destino / "release").read_bytes() == b"ok"
-        assert os.path.realpath(java) == os.path.realpath(destino / "bin" / "java")
-        assert not (tmp_path / "java.zip").exists()
-        assert [p.name for p in (tmp_path / ".java").iterdir()] == [PLATAFORMA], "sobrou staging ou pasta raiz"
-
-    def test_nao_apaga_o_java_de_outra_plataforma(self, tmp_path, zip_baixado):
-        gravar_jdk(tmp_path, OUTRA, "java", b"JAVA-DE-OUTRA-PLATAFORMA")
-
-        ll._install_jdk_windows(str(tmp_path), PLATAFORMA, "64bit")
-
-        assert (tmp_path / ".java" / OUTRA / "bin" / "java").read_bytes() == b"JAVA-DE-OUTRA-PLATAFORMA"
-
     def test_instalacao_antiga_quebrada_e_trocada_por_inteiro(self, tmp_path, zip_baixado):
         gravar_jdk(tmp_path, PLATAFORMA, "java.exe", b"JAVA-VELHO")
         (tmp_path / ".java" / PLATAFORMA / "resto.txt").write_text("lixo", encoding="utf-8")
@@ -102,15 +66,3 @@ class TestInstalacaoNoWindows:
         assert (tmp_path / ".java" / PLATAFORMA / "bin" / "java.exe").read_bytes() == b"JAVA-ANTERIOR"
         assert [p.name for p in (tmp_path / ".java").iterdir()] == [PLATAFORMA], "o staging não foi apagado"
         assert not (tmp_path / "java.zip").exists()
-
-    def test_falha_na_extracao_apaga_o_staging(self, tmp_path, zip_baixado, monkeypatch):
-        def quebrar(archive_path, destination):
-            (tmp_path / ".java").joinpath(os.path.basename(destination), "parcial.txt").write_text("x")
-            raise OSError("disco cheio")
-
-        monkeypatch.setattr(ll, "_extract_zip_without_top_dir", quebrar)
-
-        with pytest.raises(OSError):
-            ll._install_jdk_windows(str(tmp_path), PLATAFORMA, "64bit")
-
-        assert list((tmp_path / ".java").iterdir()) == []

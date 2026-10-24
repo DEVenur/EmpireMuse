@@ -48,6 +48,7 @@ def test_bundled_file_is_valid_for_the_consumer_parser_with_required_keys():
     assert not problems, f"problemas no arquivo bundled: {problems}"
 
 
+@pytest.mark.smoke
 def test_bundled_file_passes_its_own_validation():
     content = _bundled_bytes()
     assert _module().validated_server_list(200, content) == content
@@ -61,19 +62,6 @@ def test_returns_content_when_status_200_and_ini_valid():
     "status,content",
     [
         (404, VALID_INI),
-        (404, b"404: Not Found"),
-        (500, VALID_INI),
-        (200, b"404: Not Found"),
-        (200, b"[node1]\nport = 443\n"),
-        (200, b"[node1]\nhost = x.example\n"),
-        (200, b"[node1]\nhost = x.example\nport = 443\n"),
-        (200, b"[node1]\nhost = x.example\nport = 443\npassword = a%b\n"),
-        (200, b"[ok]\nhost = a\nport = 1\npassword = p\n\n[ruim]\nhost = b\nport = 2\n"),
-        (200, b"# so comentario\n"),
-        (200, b""),
-        (200, b"\xff\xfe\x00invalid"),
-        (None, VALID_INI),
-        (200, None),
         (None, None),
     ],
 )

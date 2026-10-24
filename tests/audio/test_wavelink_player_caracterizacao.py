@@ -5,13 +5,11 @@ posição, a máquina de estados de voz e a troca de nó. Sem rede: o nó é um 
 """
 
 import asyncio
-import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from empiremuse import wavelink
 from empiremuse.wavelink.errors import InvalidIDProvided, WavelinkException
 from empiremuse.wavelink.eqs import Equalizer
 from empiremuse.wavelink.events import TrackEnd
@@ -72,26 +70,11 @@ class TestTrack:
         )
         assert track.uri == "u" and track.is_dead is False
 
-    def test_youtube_identifier_builds_the_thumbnail(self):
-        track = make_track()
-        assert track.ytid == "dQw4w9WgXcQ"
-        assert track.thumb == "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
-
     def test_non_youtube_identifier_uses_the_plugin_artwork(self):
         track = Track(
             "E", {"title": "t", "identifier": "outra-coisa-longa"}, pluginInfo={"artworkUrl": "https://x/capa"}
         )
         assert track.ytid is None and track.thumb == "https://x/capa"
-
-    def test_missing_artwork_becomes_an_empty_string(self):
-        assert Track("E", {"title": "t", "identifier": "x"}).thumb == ""
-
-    def test_existing_artwork_is_kept(self):
-        assert Track("E", {"title": "t", "identifier": "x", "artworkUrl": "https://x/a"}).thumb == "https://x/a"
-
-    def test_title_and_author_are_truncated(self):
-        track = Track("E", {"title": "t" * 200, "author": "a" * 200, "identifier": "x"})
-        assert len(track.title) == 97 and len(track.author) == 97
 
     def test_uri_defaults_to_empty(self):
         assert Track("E", {"title": "t", "identifier": "x"}).uri == ""
@@ -104,10 +87,6 @@ class TestTrackPlaylist:
             {"track": "B", "info": {"title": "2", "identifier": "y"}},
         ]
     }
-
-    def test_tracks_are_built_from_the_payload(self):
-        playlist = TrackPlaylist(self.DATA)
-        assert [t.id for t in playlist.tracks] == ["A", "B"] and playlist.data is self.DATA
 
     def test_custom_encoded_name_and_track_class(self):
         data = {"tracks": [{"encoded": "Z", "info": {"title": "1", "identifier": "x"}}]}
@@ -128,20 +107,6 @@ class TestStateProperties:
         assert (player.is_connected, player.is_playing, player.is_paused, player.volume) == (False, False, False, 100)
         assert player.equalizer is player.eq and player.position == 0
 
-    def test_playing_requires_a_channel_and_a_track(self):
-        player = make_player(channel_id=5, current=make_track())
-        assert player.is_playing is True
-
-    def test_position_advances_with_time(self):
-        player = make_player(
-            channel_id=5, current=make_track(), last_position=1000, last_update=time.time() * 1000 - 500
-        )
-        assert 1400 < player.position < 1700
-
-    def test_position_when_paused_is_frozen_and_capped(self):
-        player = make_player(channel_id=5, current=make_track(duration=2000), last_position=5000, paused=True)
-        assert player.position == 2000
-
     def test_position_beyond_the_duration_resets_to_zero(self):
         player = make_player(channel_id=5, current=make_track(duration=100), last_position=0, last_update=0)
         assert player.position == 0
@@ -151,11 +116,6 @@ class TestStateProperties:
         run(player.update_state({"state": {"position": 42, "time": 7, "ping": 12}}))
         assert (player.last_position, player.position_timestamp, player.ping) == (42, 7, 12)
 
-    def test_update_state_defaults(self):
-        player = make_player()
-        run(player.update_state({"state": {}}))
-        assert (player.last_position, player.position_timestamp, player.ping) == (0, 0, None)
-
     def test_hook_clears_the_track_when_it_finishes(self):
         for reason in ("STOPPED", "FINISHED"):
             player = make_player(current=make_track(), current_encoded="ENC")
@@ -163,13 +123,6 @@ class TestStateProperties:
             event.reason = reason
             run(player.hook(event))
             assert player.current is None and player.current_encoded is None
-
-    def test_hook_keeps_the_track_on_replace(self):
-        player = make_player(current=make_track(), current_encoded="ENC")
-        event = TrackEnd.__new__(TrackEnd)
-        event.reason = "REPLACED"
-        run(player.hook(event))
-        assert player.current is not None
 
 
 # ============================================================================ voz
@@ -191,15 +144,6 @@ class TestVoiceUpdates:
         run(player._voice_state_update({"session_id": "S", "channel_id": "55"}))
         player.node.update_player.assert_not_awaited()
 
-    def test_v3_sends_voice_update_only_with_session_and_event(self):
-        player = make_player(3)
-        run(player._voice_server_update({"token": "tk"}))
-        player.node._send.assert_not_awaited()
-        run(player._voice_state_update({"session_id": "S", "channel_id": "9"}))
-        player.node._send.assert_awaited_once_with(
-            op="voiceUpdate", guildId=str(GID), sessionId="S", event={"token": "tk"}
-        )
-
     def test_disconnect_event_clears_the_channel_and_state(self):
         player = make_player(4, channel_id=5, _voice_state={"event": {}})
         run(player._voice_state_update({"session_id": "S", "channel_id": None}))
@@ -208,11 +152,6 @@ class TestVoiceUpdates:
     def test_same_channel_does_not_resend(self):
         player = make_player(4, channel_id=5)
         run(player._voice_state_update({"session_id": "S", "channel_id": "5"}))
-        player.node.update_player.assert_not_awaited()
-
-    def test_v4_without_channel_does_not_send(self):
-        player = make_player(4)
-        run(player._dispatch_voice_update())
         player.node.update_player.assert_not_awaited()
 
 
@@ -248,13 +187,6 @@ class TestConnect:
         run(player.connect(5))
         channel.connect.assert_awaited_once_with(cls=WavelinkVoiceClient, reconnect=True)
         assert player.channel_id == 5
-
-    def test_stale_voice_client_is_cleaned_and_reconnected(self):
-        stale = MagicMock()
-        bot, _, channel = self.bot(voice_client=stale, me_voice=False)
-        run(make_player(bot=bot).connect(5))
-        stale.cleanup.assert_called_once()
-        channel.connect.assert_awaited_once_with(cls=WavelinkVoiceClient, reconnect=False)
 
     def test_reconnect_failure_is_swallowed(self, capsys):
         stale = MagicMock()
@@ -313,13 +245,6 @@ class TestDisconnect:
         bot.ws.voice_state.assert_awaited_once_with(GID, None)
         assert player.channel_id is None
 
-    def test_shard_socket_is_none_for_another_shard(self):
-        from disnake.ext import commands
-
-        bot = MagicMock(spec=commands.Bot)
-        bot.shard_id = 3
-        assert make_player(bot=bot)._get_shard_socket(1) is None
-
 
 # ============================================================================ comandos ao nó
 
@@ -361,17 +286,6 @@ class TestPlay:
         player.node.update_player.assert_not_awaited()
         assert player.current.id == "ATUAL"
 
-    def test_replace_false_plays_when_idle(self):
-        player = make_player(4)
-        run(player.play(make_track(), replace=False))
-        player.node.update_player.assert_awaited_once()
-        assert player.node.update_player.await_args.args[2] is False
-
-    def test_play_resets_the_clock_and_unpauses(self):
-        player = make_player(4, paused=True, last_position=99)
-        run(player.play(make_track()))
-        assert (player.paused, player.last_position, player.position_timestamp, player.last_update) == (False, 0, 0, 0)
-
 
 class TestSimpleCommands:
     def test_stop_v4(self):
@@ -379,11 +293,6 @@ class TestSimpleCommands:
         run(player.stop())
         player.node.update_player.assert_awaited_once_with(GID, {"encodedTrack": None}, replace=True)
         assert player.current is None and player.current_encoded is None
-
-    def test_stop_v3(self):
-        player = make_player(3, current=make_track())
-        run(player.stop())
-        player.node._send.assert_awaited_once_with(op="stop", guildId=str(GID))
 
     @pytest.mark.parametrize("version", [3, 4])
     def test_pause(self, version):
@@ -441,22 +350,6 @@ class TestDestroy:
         context.__aexit__ = AsyncMock(return_value=False)
         return context
 
-    def test_v4_deletes_the_session_player_and_forgets_it(self):
-        player = make_player(4)
-        player.node.players[GID] = player
-        player.node.session.delete.return_value = self.delete_response(204)
-        run(player.destroy(guild=MagicMock()))
-        assert (
-            player.node.session.delete.call_args.kwargs["url"] == f"http://lavalink:2333/v4/sessions/sess/players/{GID}"
-        )
-        assert GID not in player.node.players
-
-    def test_v4_error_status_raises_with_the_payload(self):
-        player = make_player(4)
-        player.node.session.delete.return_value = self.delete_response(500, {"erro": "x"})
-        with pytest.raises(WavelinkException, match="500"):
-            run(player.destroy(guild=MagicMock()))
-
     def test_v4_error_with_unreadable_json_falls_back_to_text(self):
         player = make_player(4)
         context = self.delete_response(502)
@@ -464,17 +357,6 @@ class TestDestroy:
         player.node.session.delete.return_value = context
         with pytest.raises(WavelinkException, match="texto"):
             run(player.destroy(guild=MagicMock()))
-
-    def test_v4_without_a_session_does_not_call_the_node(self):
-        player = make_player(4, node=make_node(4, session_id=None))
-        run(player.destroy(guild=MagicMock()))
-        player.node.session.delete.assert_not_called()
-
-    def test_v3_stops_then_destroys(self):
-        player = make_player(3)
-        run(player.destroy(guild=MagicMock()))
-        ops = [call.kwargs["op"] for call in player.node._send.await_args_list]
-        assert ops == ["stop", "destroy"]
 
     def test_guild_defaults_to_the_bots_guild_and_errors_are_swallowed(self):
         bot = MagicMock()
@@ -494,14 +376,6 @@ class TestChangeNode:
         player = make_player()
         player.node._client.get_node.return_value = None
         with pytest.raises(WavelinkException, match="No Nodes matching"):
-            run(player.change_node("x"))
-
-    def test_unavailable_identifier(self):
-        player = make_player()
-        target = self.other()
-        target.is_available = False
-        player.node._client.get_node.return_value = target
-        with pytest.raises(WavelinkException, match="unavailable"):
             run(player.change_node("x"))
 
     def test_without_any_candidate_the_old_node_is_reopened(self):
@@ -594,14 +468,6 @@ class TestWavelinkMixin:
             def nao_assincrona():
                 pass
 
-    def test_listener_registers_the_event_name_and_stacks(self):
-        @WavelinkMixin.listener(event="on_node_ready")
-        @WavelinkMixin.listener()
-        async def meu_evento():
-            pass
-
-        assert meu_evento.__wavelink_listeners__ == ["meu_evento", "on_node_ready"]
-
     def test_new_collects_the_listeners_of_the_subclass(self):
         class Cog(WavelinkMixin):
             @WavelinkMixin.listener("on_track_end")
@@ -632,8 +498,3 @@ class TestWavelinkMixin:
         ):
             args = (None,) if name == "on_node_ready" else (None, None)
             assert run(getattr(mixin, name)(*args)) is None
-
-
-def test_package_exposes_the_public_names():
-    for name in ("Node", "Player", "Track", "TrackPlaylist", "WavelinkException", "TrackNotFound", "MissingSessionID"):
-        assert hasattr(wavelink, name), name

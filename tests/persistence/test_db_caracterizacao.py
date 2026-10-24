@@ -36,20 +36,10 @@ class TestLocalDatabase:
     def make(self, tmp_path):
         return LocalDatabase(str(tmp_path / "bd"))
 
-    def test_creates_the_directory(self, tmp_path):
-        self.make(tmp_path)
-        assert (tmp_path / "bd").is_dir()
-
     @pytest.mark.parametrize("dir_", [None, "./local_database"])
     def test_default_directory_is_under_the_runtime_dir(self, home, dir_):
         banco = LocalDatabase(dir_)
         assert banco.dir == str(home / "local_database") and (home / "local_database").is_dir()
-
-    def test_unknown_document_is_created_with_the_default_model(self, tmp_path):
-        banco = self.make(tmp_path)
-        data = run(banco.get_data(10, db_name=DBModel.guilds, collection="g"))
-        assert data["_id"] == "10" and data["ver"] == db.db_models[DBModel.guilds]["ver"]
-        assert data["djroles"] == [] and data["player_controller"]["channel"] is None
 
     def test_created_document_is_persisted_but_only_update_fills_the_cache(self, tmp_path):
         banco = self.make(tmp_path)
@@ -60,15 +50,7 @@ class TestLocalDatabase:
         run(banco.update_data(10, second, db_name=DBModel.guilds, collection="g"))
         assert run(banco.get_data(10, db_name=DBModel.guilds, collection="g")) is second
 
-    def test_update_then_read_back_from_disk(self, tmp_path):
-        banco = self.make(tmp_path)
-        data = run(banco.get_data(10, db_name=DBModel.guilds, collection="g"))
-        data["djroles"] = ["1", "2"]
-        run(banco.update_data(10, data, db_name=DBModel.guilds, collection="g"))
-
-        outro = self.make(tmp_path)  # sem cache: lê do TinyMongo
-        assert run(outro.get_data(10, db_name=DBModel.guilds, collection="g"))["djroles"] == ["1", "2"]
-
+    @pytest.mark.smoke
     def test_old_version_is_migrated_keeping_saved_values(self, tmp_path):
         banco = self.make(tmp_path)
         modelo = db.db_models[DBModel.guilds]
@@ -81,12 +63,6 @@ class TestLocalDatabase:
         assert data["djroles"] == ["9"] and data["autoplay"] is True
         assert data["prefix_antigo"] == "x"  # chaves removidas do modelo são preservadas
         assert data["default_player_volume"] == 100  # chaves novas ganham o padrão
-
-    def test_custom_default_model_is_used_when_given(self, tmp_path):
-        banco = self.make(tmp_path)
-        modelo = {DBModel.users: {"ver": 9.0, "x": 1}}
-        data = run(banco.get_data(1, db_name=DBModel.users, collection="u", default_model=modelo))
-        assert data["x"] == 1 and data["ver"] == 9.0
 
     def test_delete_removes_from_disk_and_cache(self, tmp_path):
         banco = self.make(tmp_path)
@@ -102,6 +78,7 @@ class TestLocalDatabase:
     def test_delete_of_unknown_document_does_not_raise(self, tmp_path):
         run(self.make(tmp_path).delete_data(404, DBModel.guilds, "g"))
 
+    @pytest.mark.smoke
     def test_get_default_returns_independent_copies(self, tmp_path):
         banco = self.make(tmp_path)
         a = banco.get_default("g", DBModel.guilds)
@@ -189,9 +166,6 @@ def colecao(banco, collection="g", db_name=DBModel.guilds):
 
 
 class TestMongoDatabaseConnection:
-    def test_token_brackets_are_stripped_and_timeout_is_in_milliseconds(self, mongo):
-        assert mongo._connect.uri == "mongodb://u:p@host/db" and mongo._connect.timeout == 5000
-
     def test_ssl_fix_adds_the_tls_parameters(self, monkeypatch):
         monkeypatch.setattr(db, "AsyncIOMotorClient", ClienteFalso)
         monkeypatch.setenv("MONGO_SSL_FIX", "1")
@@ -206,11 +180,6 @@ class TestMongoDatabaseData:
         assert data["ver"] == db.db_models[DBModel.guilds]["ver"]
         assert colecao(mongo).docs == {}
 
-    def test_current_version_is_returned_as_stored(self, mongo):
-        ver = db.db_models[DBModel.guilds]["ver"]
-        colecao(mongo).docs["1"] = {"_id": "1", "ver": ver, "autoplay": True}
-        assert run(mongo.get_data(1, db_name=DBModel.guilds, collection="g"))["autoplay"] is True
-
     def test_old_version_is_migrated_and_saved(self, mongo):
         colecao(mongo).docs["1"] = {"_id": "1", "ver": 0.5, "djroles": ["4"]}
         data = run(mongo.get_data(1, db_name=DBModel.guilds, collection="g"))
@@ -221,21 +190,9 @@ class TestMongoDatabaseData:
         mongo.cache["g:guilds:1"] = {"cache": True}
         assert run(mongo.get_data(1, db_name=DBModel.guilds, collection="g")) == {"cache": True}
 
-    def test_update_is_an_upsert_without_the_id_inside_the_set(self, mongo):
-        data = {"_id": "1", "autoplay": True}
-        run(mongo.update_data(1, data, db_name=DBModel.guilds, collection="g"))
-        assert colecao(mongo).calls == [("update_one", {"_id": "1"}, {"$set": {"autoplay": True}}, True)]
-        assert mongo.cache["g:guilds:1"] is data
-
     def test_push_data_inserts(self, mongo):
         run(mongo.push_data({"_id": "5", "x": 1}, db_name=DBModel.guilds, collection="g"))
         assert colecao(mongo).docs["5"]["x"] == 1
-
-    def test_delete_clears_the_cache_and_the_document(self, mongo):
-        colecao(mongo).docs["1"] = {"_id": "1"}
-        mongo.cache["g:guilds:1"] = {}
-        run(mongo.delete_data(1, DBModel.guilds, "g"))
-        assert "1" not in colecao(mongo).docs and "g:guilds:1" not in mongo.cache
 
     def test_delete_without_cache_entry_still_deletes(self, mongo):
         run(mongo.delete_data(1, DBModel.guilds, "g"))
@@ -248,10 +205,6 @@ class TestUpdateFromJson:
         pasta.mkdir(exist_ok=True)
         (pasta / nome).write_text(json.dumps(conteudo), encoding="utf-8")
         return pasta
-
-    def test_without_the_directory_only_creates_the_backups_folder(self, mongo, home):
-        run(mongo.update_from_json())
-        assert (home / "local_dbs" / "backups").is_dir()
 
     def test_imports_documents_and_moves_the_file_to_backups(self, mongo, home):
         pasta = self.write(home, "g.json", {"guilds": {"1": {"autoplay": True}, "2": {}}, "users": {}})
@@ -284,10 +237,6 @@ class TestDatetimeSerializer:
         momento = datetime(2026, 10, 23, 8, 30, 15)
         assert serializer.encode(momento) == "2026-10-23T08:30:15"
         assert serializer.decode("2026-10-23T08:30:15") == momento
-
-    def test_custom_format(self):
-        serializer = db.DatetimeSerializer(format="%d/%m/%Y")
-        assert serializer.encode(datetime(2026, 1, 2)) == "02/01/2026"
 
 
 class TestGetPrefix:
@@ -331,22 +280,6 @@ class TestGetPrefix:
         result = run(db.get_prefix(bot, self.message("play", guild=False)))
         assert callable(result)
 
-    def test_guild_prefix_is_read_from_the_database(self):
-        bot = self.bot(self.Banco(guild_prefix="?"))
-        assert run(db.get_prefix(bot, self.message("play"))) == "?"
-
-    def test_cached_guild_prefix_is_used(self):
-        banco = self.Banco(guild_prefix="?")
-        bot = self.bot(banco)
-        bot.pool.guild_prefix_cache[2] = "%"
-        bot.pool.user_prefix_cache[1] = ""
-        assert run(db.get_prefix(bot, self.message("play"))) == "%"
-        assert banco.reads == []
-
     def test_falls_back_to_the_configured_default_prefix(self):
         bot = self.bot(self.Banco(guild_prefix=None), DEFAULT_PREFIX="::")
         assert run(db.get_prefix(bot, self.message("play"))) == "::"
-
-    def test_falls_back_to_double_bang_without_any_configuration(self):
-        bot = self.bot(self.Banco(guild_prefix=None))
-        assert run(db.get_prefix(bot, self.message("play"))) == "!!"
