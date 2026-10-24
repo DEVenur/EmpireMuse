@@ -8,6 +8,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Submódulos Git para Ecossistemas Satélites (PR #53)**:
+  - Adicionada configuração declarativa de submódulos Git via `.gitmodules` com URLs HTTPS públicas da organização `EmpireCommunity` para `repos/EmpireMuse-RPC-app` e `repos/EmpireMuse-LL-binaries`, fixados nos commits correspondentes da branch principal.
+  - Preservadas as regras de isolamento em `.gitignore` e `.dockerignore`, com atualização da lista fechada de pastas permitidas na raiz do repositório (`tests/repo/test_layout_raiz.py`) e inclusão de instruções de clonagem recursiva (`git clone --recurse-submodules` ou `git submodule update --init`) em `AGENTS.md` e `docs/development.md`.
 - **Código Curto de Erro para Suporte (Fase 3 / F3-6)**:
   - Criação do módulo `empiremuse/rules/error_code.py` com a função `new_error_code`, gerando identificador aleatório no formato `ERR-XXXXXX` com 6 caracteres hexadecimais via `secrets.token_hex` (sem timestamps, IDs de usuários ou tokens). A função `safe_error_code` assegura geração resiliente sem propagar exceções.
   - Exibição do código de erro ao usuário em falhas inesperadas no Discord (comandos de barra e prefixados, consultas de integrações no modal e editor de skin) e na página de erro 500 do painel web.
@@ -137,6 +140,24 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - Testes automatizados estruturais e de caracterização em `tests/test_caminhos_c22.py` cobrindo roteamento de caminhos, diretório de trabalho do subprocesso e guardas de cache.
 
 ### Alterado
+- **Divisão Modular de Arquivos Críticos em Pacotes e Mixins (KI-29, PRs #42, #44, #47, #49, #50, #51, #55, #57–#60, #62, #63)**:
+  - **Decomposição estrutural sem alteração comportamental**: os três maiores arquivos legados foram desmembrados em módulos temáticos coesos preservando 100% da API pública e contratos funcionais:
+    - `empiremuse/utils/music/interactions/` (PRs #44, #47, #49): `interactions.py` transformado em pacote com reexportação em `__init__.py` e submódulos dedicados (`common.py`, `view_modal.py`, `player_views.py`, `stage_title.py`, `favorites_texts.py`, `fav_modals.py`, `fav_menu.py` e `skin_editor.py`).
+    - `empiremuse/utils/music/models/` (PRs #51, #55, #57): `models.py` transformado em pacote com reexportação em `__init__.py`, isolando auxiliares (`helpers.py`), faixas (`tracks.py`) e o modelo central `LavalinkPlayer` em `player.py` composto por mixins especializados (`player_filters.py`, `player_state.py`, `player_message.py`, `player_voice.py`, `player_events.py`, `player_autoqueue.py` e `player_playback.py`).
+    - `empiremuse/music_cog/` (PRs #58, #59, #60, #62): a cog principal `cogs/music.py` teve sua lógica distribuída em 18 mixins temáticos sob `empiremuse/music_cog/` (mantidos fora de `cogs/` para evitar carregamento automático duplo pelo `load_modules`), com purga de `sys.modules` na carga para garantir isolamento estrito de cooldowns e concorrência por bot, compartilhamento de referências via `shared.py` e ordem de herança inversa à original para preservação exata da ordem dos comandos no Discord.
+  - **Rede de guardas e testes de equivalência (PRs #42, #50)**: criação de suítes de validação estática de AST e testes de caracterização (`test_api_publica_e_custom_ids.py`, `test_snapshot_comandos_music.py`, `test_carga_dos_cogs.py`, `test_monkeypatch_em_reexportacao.py` e `test_guardas_complementares.py` com listas douradas em `tests/repo/golden/`), verificando ausência de ciclos de importação, preservação de `custom_id` literais, integridade de árvores sintáticas contra mutação e estabilidade de decoradores.
+  - **Abertura do débito técnico residual KI-29b (PR #63)**: resolução formal do item KI-29 na documentação técnica (`docs/architecture.md`, `AGENTS.md` e `docs/known-issues.md`) e catálogo do débito **KI-29b**, mapeando os seis submódulos ainda com mais de 800 linhas (`play_command.py`, `queue_group.py`, `skin_editor.py`, `song_requests.py`, `player_controller.py`, `fav_menu.py`) e métodos complexos para saneamento futuro.
+- **Migração da Organização GitHub para EmpireCommunity (PR #46)**:
+  - Substituição da organização anterior `DiscordEmpireHub` pela organização definitiva `EmpireCommunity` (sem hífen) em todos os identificadores, arquivos de configuração, manifestos de deploy (`discloud.config`, `deploy/pterodactyl/egg-empiremuse.json`), Dockerfile, `.github/`, templates do painel web, documentação técnica e testes.
+  - Preservação da compatibilidade retroativa: URLs anteriores de releases de binários do `EmpireMuse-LL-binaries` sob `DiscordEmpireHub` continuam registradas e aceitas no conjunto de URLs oficiais ao lado das novas URLs da `EmpireCommunity`.
+- **Lockfiles Universais com Corte de Data e Sincronia na CI (PR #43, PR #46)**:
+  - Lockfiles `requirements-lock.txt` e `requirements-dev-lock.txt` compilados com `--universal` via `uv==0.13.1`, preservando marcadores de ambiente como `uvloop; sys_platform != 'win32'` e viabilizando instalação nativa tanto em ambientes Linux quanto Windows.
+  - Adoção de corte temporal de segurança (`--exclude-newer 2026-10-16T00:00:00Z`) contra riscos de supply chain e novo passo de verificação de integridade e sincronia na esteira de CI (`git diff --exit-code`).
+  - Isenções pontuais com timestamps fixos no passado para evitar quebras por releases futuros: `yt-dlp` (2026.10.21, adaptação contínua contra anti-bot do YouTube), `certifi` (2026.10.23, PYSEC-2026-4320), `brotli` (1.2.1, PYSEC-2026-4322 e PYSEC-2026-4323) e `brotlicffi` (1.2.1.0).
+- **Piso de Cobertura de Código e Validação na CI (KI-27, PRs #45, #48, #52)**:
+  - Expansão da suíte com 747 testes novos de caracterização cobrindo módulos críticos (`utils/music/checks.py`, `track_encoder`, `errors.parse_error`, `utils/db.py`, `utils/others.py`, `check_pool_bots`, contrato das 15 skins e `wavelink`), elevando a cobertura geral de 48,5% para 56,95%.
+  - Configuração do piso obrigatório `fail_under = 56` e escopo `source = ["empiremuse"]` no `pyproject.toml`, com medição ativa e bloqueante de cobertura integrada na esteira do GitHub Actions via `pytest-cov`.
+  - Implementação de calibração dinâmica de tetos de tempo (`fator_de_lentidao()` e `teto_de_tempo()` em `tests/support/leitor_legado.py`), ajustando limites relativos sob tracing de cobertura para eliminar falsos positivos em testes do leitor legado.
 - **Docker Compose de Produção e Porta Padrão 6000**:
   - `docker-compose.yml`: Atualizado para ambiente de produção utilizando imagem oficial do Docker Hub (`or4cu1o/empiremuse:latest`, recomendando fixar versão em prod), sem build local, `pull_policy: missing`, limites de memória (`1024m` sem swap), `pids_limit: 256`, `stop_grace_period: 30s` e rotação de logs estruturados (`json-file` 10 MB × 3) para bot e mongo.
   - Porta padrão do bot atualizada para `6000` (anteriormente `80` no carregador e `8080` no Dockerfile), vinculando a publicação por padrão estritamente ao loopback (`127.0.0.1:6000`) para integração com proxy reverso. Documentação e testes correspondentes atualizados.
@@ -325,6 +346,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
 
 ### Segurança
+- **Remediação de Vulnerabilidade no setuptools (PR #56, GHSA-xmj3-9gf7-h52w)**:
+  - Elevação do piso de dependência de `setuptools` para `>=84.1.0` em `requirements.txt` e no lockfile de produção (`requirements-lock.txt`) com isenção pontual (`--exclude-newer-package setuptools=2026-10-19T20:20:00Z`), sanando a vulnerabilidade de severidade baixa sinalizada pelo Dependabot contra a falha GHSA-xmj3-9gf7-h52w.
 - **Lock de dependências com hash e isolamento git (PR #40)**: adoção dos arquivos de lock `requirements-lock.txt` e `requirements-dev-lock.txt` gerados com hashes SHA-256 via `uv pip compile --generate-hashes`, instalados com `--require-hashes` na CI, Docker e release; dependências git (`disnake` e `jishaku`) foram isoladas em `requirements-git.txt`, fixadas por SHA completo de commit e instaladas com `--no-deps`, assegurando que nenhuma dependência transitiva entre sem hash.
 - **Padrões seguros no servidor RPC e relé (PR #35)**: `ENABLE_RPC_AUTH=true` e `RUN_RPC_SERVER=false` passam a ser os valores padrão em `DEFAULT_CONFIG`, `.example.env` e no egg do Pterodactyl, ativando autenticação por padrão e desativando a exposição de rede do servidor RPC em novas instalações. Quem já define essas chaves no `.env` não é impactado.
 - **Redação de segredos e permissões restritas em arquivos de log (PR #36)**: o token de webhook é mascarado preventivamente na gravação do arquivo de log, e o diretório `.logs` passa a ser criado com permissão estrita `0o700` (`0o600` para os arquivos de log).
@@ -373,4 +396,4 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/DiscordEmpireHub/EmpireMuse/commits/main
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/commits/main

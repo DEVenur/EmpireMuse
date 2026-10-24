@@ -199,7 +199,8 @@ uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00
 A regra padrão de corte temporal (`--exclude-newer 2026-10-16T00:00:00Z`) previne ataques de supply chain exigindo que pacotes tenham pelo menos 7 dias de maturação pública no PyPI. Cinco exceções temporárias com datas fixas no passado foram homologadas:
 - **`yt-dlp` (2026.10.21, corte `2026-10-21T22:00:00Z`)**: exceção temporária necessária para acompanhar atualizações contínuas de cifragem e contorno anti-bot do YouTube;
 - **`certifi` (2026.10.23, corte `2026-10-23T12:00:00Z`)**: versão atualizada exigida como requisito estrito de dependência do `yt-dlp`;
-- **`brotli` (1.2.1, corte `2026-10-22T15:00:00Z`)** e **`brotlicffi` (1.2.1.0, corte `2026-10-22T17:00:00Z`)**: versões anteriores continham vulnerabilidades conhecidas em rotinas de descompressão; a versão 1.2.1 corrige falhas de segurança prévias;
+- **`brotli` (1.2.1, corte `2026-10-22T15:00:00Z`)**: versões anteriores continham vulnerabilidades conhecidas em rotinas de descompressão (PYSEC-2026-4322 e PYSEC-2026-4323); a versão 1.2.1 corrige falhas de segurança prévias;
+- **`brotlicffi` (1.2.1.0, corte `2026-10-22T17:00:00Z`)**: bindings CFFI correspondentes à biblioteca brotli atualizada;
 - **`setuptools` (84.1.0, corte `2026-10-19T20:20:00Z`)**: correção de segurança de vulnerabilidade sinalizada pelo Dependabot (GHSA-xmj3-9gf7-h52w);
 - **Timestamps fixos no passado**: cada isenção é fixada exatamente no instante passado do release travado, evitando o risco de que datas futuras quebrem a sincronia da CI caso novos releases saiam antes da virada do corte;
 - **Diretriz para alertas e releases**: alerta do Dependabot → regerar o lock com isenção pontual (`--exclude-newer-package`) do pacote corrigido; a cada novo release do bot → mover o `--exclude-newer` geral para ~7 dias antes da data de release;
