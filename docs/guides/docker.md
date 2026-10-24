@@ -30,8 +30,8 @@ Para construir a imagem localmente a partir da raiz do repositório:
 docker build -t empiremuse:local .
 ```
 
-> [!NOTE]
-> A publicação da imagem oficial no registro `or4cu1o/empiremuse` estará disponível **em breve**, acompanhando a release oficial do projeto. Não utilize tags não homologadas.
+> [!IMPORTANT]
+> As tags flutuantes `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, testes e validações em homologação devem utilizar obrigatoriamente as imagens de release candidate publicadas ao fim de cada fase (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). Não utilize tags não homologadas.
 
 ### 2.2 Execução com `docker run`
 
@@ -66,7 +66,7 @@ O repositório inclui um arquivo [`docker-compose.yml`](../../docker-compose.yml
 
 Para executar o bot com o servidor Lavalink local integrado e persistência em banco local (TinyMongo):
 
-1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais;
+1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais (antes do lançamento da versão `2.0.0`, defina `EMPIREMUSE_IMAGE=or4cu1o/empiremuse:2.0.0-rc.1` no `.env`, pois a tag `latest` ainda não existe no registro);
 2. Execute:
    ```bash
    docker compose up -d
@@ -98,7 +98,7 @@ Você pode customizar o comportamento do Compose através do seu arquivo `.env` 
 
 | Variável | Valor Padrão | Descrição |
 | :--- | :--- | :--- |
-| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar uma tag específica, ex.: `or4cu1o/empiremuse:1`). |
+| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar a versão exata imutável `or4cu1o/empiremuse:2.0.0` ou a tag flutuante `:2` que acompanha a série 2.x; ambas passam a existir na 2.0.0. Até lá, utilize a release candidate `or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). |
 | `EMPIREMUSE_MEM_LIMIT` | `1024m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
 | `EMPIREMUSE_PORT` | `127.0.0.1:6000` | Mapeamento da porta HTTP exposta no host para o bot (padrão em loopback). |
 

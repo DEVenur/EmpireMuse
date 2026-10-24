@@ -7,6 +7,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [2.0.0] - em preparação
+
+Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) (zRitsu, GPL-2.0), modernizando a arquitetura para Python 3.13, reestruturando módulos monolíticos em mixins coesos, saneando dependências e endurecendo as diretrizes de segurança da aplicação. As publicações 1.x de teste foram retiradas e a primeira versão oficial do projeto é a **2.0.0**. Durante esta fase de homologação, ao fim de cada fase, o MAESTRO publica a próxima `v2.0.0-rc.N` (gerando imagens Docker multi-arquitetura `or4cu1o/empiremuse:2.0.0-rc.N`) até o lançamento da versão final `2.0.0` de produção.
+
 ### Adicionado
 - **Registro de Decisão Arquitetural (ADR-0003)**: formalização da justificativa do fork `zRitsu/jishaku` para Disnake, fixado por SHA e desativado por padrão (`docs/adr/0003-jishaku-fork.md`).
 - **Submódulos Git para Ecossistemas Satélites (PR #53)**:
@@ -416,4 +420,5 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/commits/main
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0-rc.1...HEAD
+[2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/commits/main
