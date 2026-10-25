@@ -202,7 +202,7 @@ A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente o
 | `PORT` | `6000` | Porta do servidor HTTP Tornado (status, RPC e painel). |
 
 > [!IMPORTANT]
-> No arquivo `.example.env`, variáveis operacionais do Lavalink (`RUN_LOCAL_LAVALINK`, `LAVALINK_OFFLINE`, `LAVALINK_JAVA_PATH` e `LAVALINK_HOME`) são mantidas comentadas propositalmente. No Docker, as variáveis definidas via `ENV` na imagem já possuem os valores corretos para o funcionamento imediato com o Lavalink embutido. Caso você descomente essas chaves com valores vazios ou `false` em seu arquivo `.env`, o Docker Compose sobrescreverá o ambiente do contêiner e desligará o Lavalink local. Fora do Docker, o comportamento padrão dessas chaves é garantido de forma idêntica pelo `config_loader` (`RUN_LOCAL_LAVALINK=False`).
+> No arquivo `.example.env`, as variáveis operacionais do Lavalink (`RUN_LOCAL_LAVALINK`, `LAVALINK_OFFLINE`, `LAVALINK_JAVA_PATH` e `LAVALINK_HOME`) são mantidas comentadas propositalmente. No Docker, as variáveis definidas via `ENV` na imagem já ativam o Lavalink local embutido (`RUN_LOCAL_LAVALINK=true`). Caso você descomente essas chaves com valores vazios ou `false` em seu arquivo `.env`, o Docker Compose sobrescreverá o ambiente do contêiner e desligará o Lavalink local. Fora do Docker, o comportamento padrão é mantido pelo `config_loader` com o Lavalink local desativado (`RUN_LOCAL_LAVALINK=False`).
 
 ### 4.2 Dimensionamento de Memória (RAM) e Recursos
 
