@@ -80,6 +80,18 @@ class FakeJava:
     terminate = kill = die
 
 
+class TestLogDoLavalinkSemCorpoDeRequisicao:
+    @pytest.mark.regression
+    @pytest.mark.parametrize("home_fora_do_runtime", [False, True], ids=["home-no-runtime", "home-fora-do-runtime"])
+    def test_o_java_nunca_grava_o_corpo_das_requisicoes_no_log(
+        self, runtime: Path, tmp_path: Path, home_fora_do_runtime: bool
+    ) -> None:
+        """O corpo das requisições (token OAuth do YouTube, sessão de voz) não pode ir ao spring.log, nem com LAVALINK_HOME fora do runtime."""
+        home = str(tmp_path / "somente-leitura") if home_fora_do_runtime else str(paths.RUNTIME_DIR)
+
+        assert "-Dlogging.request.includePayload=false" in linha_de_comando(home=home)
+
+
 class TestKI14CpuERam:
     @pytest.mark.asyncio
     async def test_o_pool_continua_repassando_as_memorias(self, runtime, monkeypatch):

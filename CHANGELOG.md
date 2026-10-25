@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Segurança
+- O Lavalink local não grava mais o corpo das requisições no log (`-Dlogging.request.includePayload=false` na linha de comando do Java, em `empiremuse/utils/music/local_lavalink.py`); método, caminho e cliente continuam registrados.
+
 ## [2.0.0] - em preparação
 
 Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) (zRitsu, GPL-2.0), modernizando a arquitetura para Python 3.13, reestruturando módulos monolíticos em mixins coesos, saneando dependências e endurecendo as diretrizes de segurança da aplicação. As publicações 1.x de teste foram retiradas e a primeira versão oficial do projeto é a **2.0.0**. Durante esta fase de homologação, ao fim de cada fase, o MAESTRO publica a próxima `v2.0.0-rc.N` (gerando imagens Docker multi-arquitetura `or4cu1o/empiremuse:2.0.0-rc.N`) até o lançamento da versão final `2.0.0` de produção.
