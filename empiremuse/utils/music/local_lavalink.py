@@ -29,6 +29,9 @@ JDK_STAGING_MAX_AGE = 3600  # segundos sem mudança para um staging do JDK ser t
 JDK_STAGING_NAME = re.compile(r"[\w-]+\.\w{8}\.tmp")  # <plataforma>.<8 caracteres do mkdtemp>.tmp, nunca a pasta final
 JDK_EXECUTABLES = ("java", "java.exe")  # bin/<nome> de um JDK instalado (Linux e Windows)
 LAVALINK_LOGS_SUBDIR = ".logs/lavalink"
+# O application.yml do Lavalink (SHA-256 fixo) liga o log do corpo das requisições, e com isso tokens (YouTube OAuth, sessão de
+# voz do Discord) iriam em texto puro para o spring.log. Propriedade de sistema tem precedência sobre o YAML e sobre o override.
+NO_REQUEST_PAYLOAD_LOG_ARG = "-Dlogging.request.includePayload=false"
 PLUGINS_OVERRIDE_RELATIVE = ".lavalink/plugins-override.yml"
 PLUGINS_OVERRIDE_CONTENT = "lavalink:\n  plugins: []\n"  # constante: sem hash, é regravada se divergir
 
@@ -628,7 +631,7 @@ def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, i
 
     # URI (e não o caminho cru): o Spring separa os locais por vírgula e o espaço quebraria o caminho
     override_arg = f"-Dspring.config.additional-location={Path(_ensure_plugins_override()).as_uri()}"
-    return [*args, *_logging_args(home), override_arg, "-jar", "Lavalink.jar"]
+    return [*args, *_logging_args(home), NO_REQUEST_PAYLOAD_LOG_ARG, override_arg, "-jar", "Lavalink.jar"]
 
 
 def run_lavalink(
