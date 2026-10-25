@@ -7,6 +7,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Corrigido
+- **Preservação de Padrões da Imagem Docker no `.example.env`**:
+  - Comentadas as variáveis `RUN_LOCAL_LAVALINK`, `LAVALINK_JAVA_PATH`, `LAVALINK_HOME` e `LAVALINK_OFFLINE` no `.example.env` para evitar que a cópia do arquivo de exemplo para `.env` sobrescreva os valores pré-configurados pela imagem oficial (`RUN_LOCAL_LAVALINK=true`, etc.) no Docker Compose.
+  - Documentado no `.example.env` e em `docs/guides/docker.md` o comportamento das variáveis da imagem e a equivalência fora do Docker via `DEFAULT_CONFIG`.
+
+### Documentação
+- **Guia de Docker para Gerenciadores de Arquivo Único (Hostinger e Similares)**:
+  - Adicionada seção em `docs/guides/docker.md` apontando para a receita de arquivo único mantida no [docker-compose-cookbook (`composes/empiremuse`)](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/empiremuse).
+  - Documentadas as restrições de gerenciadores web (limite de 256 caracteres por variável no painel, ausência de suporte a múltiplos arquivos compose e a `env_file`) e o suporte nativo a múltiplos bots via variáveis independentes (`TOKEN`, `TOKEN_2`..`TOKEN_5`).
+
 ## [2.0.0] - 2026-10-25
 
 Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) (zRitsu, GPL-2.0), modernizando a arquitetura para Python 3.13, reestruturando módulos monolíticos em mixins coesos, saneando dependências e endurecendo as diretrizes de segurança da aplicação. As publicações 1.x de teste foram retiradas e a primeira versão oficial do projeto é a **2.0.0**, lançada e homologada em produção na VPS após a validação das release candidates `2.0.0-rc.1` a `2.0.0-rc.5`. Com o lançamento estável, estão disponíveis as imagens Docker multi-arquitetura `or4cu1o/empiremuse:2.0.0`, `2.0`, `2` e `latest`.

@@ -172,6 +172,18 @@ Esta configuração segue as práticas de segurança do [Traefik com Cloudflare 
 > [!NOTE]
 > O Traefik já define os entrypoints, certificados e middlewares (`cloudflare-only` e `secure-headers`) por padrão na entrada 443; o override do EmpireMuse declara o roteamento de domínio (`Host`), a porta interna do serviço (`6000`), a rede `proxy` (com a label `traefik.docker.network=proxy` para desambiguação de interfaces) e a rede interna `default` para alcançar o MongoDB quando o perfil `mongo` for utilizado.
 
+### 3.6 Gerenciadores de Contêineres em Arquivo Único (Hostinger e Painéis Sem Suporte a `-f`)
+
+Em gerenciadores de Docker integrados a painéis de VPS (como o **Docker Manager da Hostinger**), existem restrições operacionais específicas:
+- **Arquivo Único**: Não é possível encadear múltiplos arquivos compose com `-f` (`docker compose -f docker-compose.yml -f ...`); toda a configuração do serviço precisa estar consolidada em um único arquivo `docker-compose.yml`.
+- **Sem `env_file`**: Nesses gerenciadores, a diretiva `env_file` não é suportada. O arquivo `.env` serve apenas para que o painel web interpole variáveis declaradas no compose sob a sintaxe `${VARIAVEL}`.
+- **Limite de 256 Caracteres por Variável**: No formulário de `.env` do painel web, cada valor aceita no máximo 256 caracteres, e o formulário recusa comentários em linha nos campos de valores.
+
+Para esse cenário de implantação em arquivo único atrás do Traefik, utilize a receita recomendada e mantida no repositório [**docker-compose-cookbook (`composes/empiremuse`)**](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/empiremuse):
+- O compose consolida todas as variáveis e padrões recomendados de forma *inline*, sem necessidade de overrides.
+- O `.env` gerencia apenas os segredos, domínio e tokens de bot.
+- **Múltiplos Bots (Um Token por Variável)**: Para operar múltiplos bots no mesmo pool sem estourar o limite de 256 caracteres de um único campo (evitando concatenar múltiplos tokens em uma única linha), declare variáveis independentes: `TOKEN=...`, `TOKEN_2=...`, `TOKEN_3=...` (até `TOKEN_5` ou mais). O EmpireMuse varre automaticamente todas as variáveis de ambiente em busca de tokens de bot do Discord válidos.
+
 ---
 
 ## 4. Variáveis de Ambiente e Recursos
@@ -188,6 +200,9 @@ A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente o
 | `LAVALINK_HOME` | `/opt/lavalink` | Diretório dos binários validados do Lavalink (`Lavalink.jar`, `application.yml`, `plugins/`). |
 | `LAVALINK_JAVA_PATH` | `/opt/java/openjdk/bin/java` | Caminho do executável do runtime Java 21 JRE pré-instalado. |
 | `PORT` | `6000` | Porta do servidor HTTP Tornado (status, RPC e painel). |
+
+> [!IMPORTANT]
+> No arquivo `.example.env`, variáveis operacionais do Lavalink (`RUN_LOCAL_LAVALINK`, `LAVALINK_OFFLINE`, `LAVALINK_JAVA_PATH` e `LAVALINK_HOME`) são mantidas comentadas propositalmente. No Docker, as variáveis definidas via `ENV` na imagem já possuem os valores corretos para o funcionamento imediato com o Lavalink embutido. Caso você descomente essas chaves com valores vazios ou `false` em seu arquivo `.env`, o Docker Compose sobrescreverá o ambiente do contêiner e desligará o Lavalink local. Fora do Docker, o comportamento padrão dessas chaves é garantido de forma idêntica pelo `config_loader` (`RUN_LOCAL_LAVALINK=False`).
 
 ### 4.2 Dimensionamento de Memória (RAM) e Recursos
 
