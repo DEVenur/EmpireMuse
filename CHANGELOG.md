@@ -7,12 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
-### Segurança
-- O Lavalink local não grava mais o corpo das requisições no log (`-Dlogging.request.includePayload=false` na linha de comando do Java, em `empiremuse/utils/music/local_lavalink.py`); método, caminho e cliente continuam registrados.
+## [2.0.0] - 2026-10-25
 
-## [2.0.0] - em preparação
-
-Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) (zRitsu, GPL-2.0), modernizando a arquitetura para Python 3.13, reestruturando módulos monolíticos em mixins coesos, saneando dependências e endurecendo as diretrizes de segurança da aplicação. As publicações 1.x de teste foram retiradas e a primeira versão oficial do projeto é a **2.0.0**. Durante esta fase de homologação, ao fim de cada fase, o MAESTRO publica a próxima `v2.0.0-rc.N` (gerando imagens Docker multi-arquitetura `or4cu1o/empiremuse:2.0.0-rc.N`) até o lançamento da versão final `2.0.0` de produção.
+Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot) (zRitsu, GPL-2.0), modernizando a arquitetura para Python 3.13, reestruturando módulos monolíticos em mixins coesos, saneando dependências e endurecendo as diretrizes de segurança da aplicação. As publicações 1.x de teste foram retiradas e a primeira versão oficial do projeto é a **2.0.0**, lançada e homologada em produção na VPS após a validação das release candidates `2.0.0-rc.1` a `2.0.0-rc.5`. Com o lançamento estável, estão disponíveis as imagens Docker multi-arquitetura `or4cu1o/empiremuse:2.0.0`, `2.0`, `2` e `latest`.
 
 ### Adicionado
 - **Override do Docker Compose para Produção com Traefik e Cloudflare**:
@@ -386,6 +383,7 @@ Esta versão representa uma reformulação ampla do [MuseHeart-MusicBot](https:/
 - **Bloqueio de links do Discord** (`ENABLE_DISCORD_URLS_PLAYBACK=false`): passa a cobrir `media.discordapp.net` e anexos efêmeros, e não gera erro com URLs malformadas.
 
 ### Segurança
+- **Log do Lavalink local sem corpo de requisições (PR #91)**: o Lavalink local não grava mais o corpo das requisições no log (`-Dlogging.request.includePayload=false` na linha de comando do Java, em `empiremuse/utils/music/local_lavalink.py`); método, caminho e cliente continuam registrados.
 - **Remediação de Vulnerabilidade no setuptools (PR #56, GHSA-xmj3-9gf7-h52w)**:
   - Elevação do piso de dependência de `setuptools` para `>=84.1.0` em `requirements.txt` e no lockfile de produção (`requirements-lock.txt`) com isenção pontual (`--exclude-newer-package setuptools=2026-10-19T20:20:00Z`), sanando a vulnerabilidade de severidade baixa sinalizada pelo Dependabot contra a falha GHSA-xmj3-9gf7-h52w.
 - **Lock de dependências com hash e isolamento git (PR #40)**: adoção dos arquivos de lock `requirements-lock.txt` e `requirements-dev-lock.txt` gerados com hashes SHA-256 via `uv pip compile --generate-hashes`, instalados com `--require-hashes` na CI, Docker e release; dependências git (`disnake` e `jishaku`) foram isoladas em `requirements-git.txt`, fixadas por SHA completo de commit e instaladas com `--no-deps`, assegurando que nenhuma dependência transitiva entre sem hash.
@@ -436,5 +434,5 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0-rc.1...HEAD
-[2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/commits/main
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/releases/tag/v2.0.0
