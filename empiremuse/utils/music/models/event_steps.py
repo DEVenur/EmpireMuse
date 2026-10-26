@@ -123,7 +123,8 @@ async def _he_track_start(self, event) -> None:
     try:
         await self.process_save_queue()
     except asyncio.CancelledError:
-        pass
+        # cancelamento da task do hook_events: não há o que limpar, só propagar
+        raise
     except Exception:
         traceback.print_exc()
 
