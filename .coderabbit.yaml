@@ -1,0 +1,192 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Configuração do CodeRabbit para o EmpireMuse (arquivo por repositório; não herda da organização).
+# Referência: https://docs.coderabbit.ai/reference/configuration
+# Problema que resolve: o CodeRabbit lê por padrão `.claude/rules/ecc/*` (80% de cobertura, TDD sempre), que o projeto
+# substituiu por `.claude/rules/empiremuse/*`; sem instruções explícitas ele cobra testes que a regra do projeto proíbe.
+# Custo: 1 arquivo a manter. Revisão desta configuração: 2027-01-24.
+
+language: pt-BR
+tone_instructions: >-
+  Revisor técnico objetivo, em pt-BR. Foco em bugs, segurança e regressões. Cite arquivo:linha, agrupe repetições
+  em um só comentário e não elogie.
+inheritance: false
+
+reviews:
+  profile: chill
+  # Falso de propósito: o modo `error` dos checks de pré-merge só sinaliza; o bloqueio de merge é da proteção de branch.
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  poem: false
+  in_progress_fortune: false
+  suggested_reviewers: false
+  suggested_labels: false
+  auto_apply_labels: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - main
+    ignore_title_keywords:
+      - "WIP"
+      - "[skip review]"
+
+  path_filters:
+    - "!requirements-lock.txt"
+    - "!requirements-dev-lock.txt"
+    - "!assets/**"
+    - "!empiremuse/panel/static/vendor/**"
+    - "!repos/**"
+    - "!local_database/**"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        - `AGENTS.md` e `.claude/rules/empiremuse/*` prevalecem sobre `.claude/rules/ecc/*` (AGENTS.md §7). Em especial,
+          `testing.md` do projeto vale no lugar do ECC: não há meta de 80% de cobertura nem TDD obrigatório (RED antes só
+          para correção de bug e regra pura). Não peça teste só para subir cobertura fora das áreas críticas.
+        - Nunca descreva em comentário público um detalhe explorável de vulnerabilidade; aponte o arquivo e peça o
+          relato privado conforme `.github/SECURITY.md`.
+    - path: "empiremuse/**/*.py"
+      instructions: |
+        - asyncio/disnake: `asyncio.CancelledError` nunca é engolido; nada bloqueante no loop de eventos; toda task
+          criada tem referência e é cancelada no descarregamento.
+        - Textos para o usuário em português do Brasil com acentuação; identificadores em inglês.
+        - Segredos (token, Mongo, webhooks, OAuth) nunca em log, embed ou mensagem de erro; erros tratados
+          explicitamente (sem `except:` nu nem `except Exception: pass`).
+    - path: "empiremuse/panel/**"
+      instructions: |
+        - OAuth2, sessão e CSRF corretos; escape em templates; validar toda entrada; `CF-Connecting-IP` só é confiável
+          com `PANEL_TRUST_PROXY` ativo.
+    - path: "empiremuse/web_app.py"
+      instructions: |
+        - Mensagens do WebSocket validadas por esquema, autenticação decidida pela configuração do servidor,
+          `check_origin` com allowlist e erros genéricos ao cliente.
+    - path: "empiremuse/{utils/music,wavelink,music_cog}/**"
+      instructions: |
+        - Contrato do Lavalink v3/v4 e NodeLink preservado; locks e estado do player consistentes; tasks canceladas
+          ao encerrar o player.
+    - path: "empiremuse/rules/**"
+      instructions: |
+        - Somente biblioteca padrão, funções puras e tipadas (mypy é checado neste pacote).
+    - path: "empiremuse/utils/db.py"
+      instructions: |
+        - Migração e compatibilidade entre MongoDB e TinyMongo (só operadores suportados pelos dois); nada de pickle.
+    - path: "tests/**"
+      instructions: |
+        - Aplicar `.claude/rules/empiremuse/testing.md`. Proibido: ler texto de docs, compose, Dockerfile ou workflows,
+          depender de tempo real ou `sleep`, testes tautológicos, snapshots e caracterização em massa. Casos que só
+          mudam o valor devem usar `parametrize` enxuto.
+    - path: "{Dockerfile,docker-compose*.yml,deploy/**}"
+      instructions: |
+        - Usuário não root, imagens por digest, downloads com URL versionada e SHA-256 verificado, sem segredos.
+    - path: ".github/workflows/**"
+      instructions: |
+        - Actions fixadas por SHA completo com comentário da versão, `permissions` mínimas e nenhum
+          `pull_request_target` executando código do PR.
+    - path: "requirements*.txt"
+      instructions: |
+        - `.claude/rules/empiremuse/security.md` §8: versão exata e hash no lock, nada de dependência VCS, wheel de
+          release por URL com `--hash`.
+    - path: "**/*.md"
+      instructions: |
+        - Português do Brasil com acentuação correta. `CHANGELOG.md` segue Keep a Changelog, com entradas em
+          `[Unreleased]`.
+    - path: "{AGENTS.md,CLAUDE.md,.claude/rules/**}"
+      instructions: |
+        - Regra nova ou alterada cumpre `governanca-de-regras.md`: cita o problema concreto, o custo em tempo/tokens, é
+          curta e traz data de revisão.
+    - path: ".example.env"
+      instructions: |
+        - Variável nova entra vazia, documentada e com o valor seguro como padrão; nunca valores reais.
+
+  pre_merge_checks:
+    docstrings:
+      mode: off
+    title:
+      mode: warning
+      requirements: >-
+        Conventional Commits: tipo (feat, fix, refactor, docs, test, chore, perf, ci), escopo opcional e descrição curta,
+        por exemplo `fix(lavalink): descrição`.
+    description:
+      mode: warning
+    issue_assessment:
+      mode: off
+    custom_checks:
+      - name: "CHANGELOG atualizado"
+        mode: warning
+        instructions: |
+          Se o PR altera arquivos em `empiremuse/`, o `Dockerfile` ou algum `requirements*.txt` (exceto só testes ou
+          documentação), o diff precisa incluir uma entrada na seção `[Unreleased]` de `CHANGELOG.md`. Passa se houver a
+          entrada ou se o PR não toca nesses caminhos; falha caso contrário.
+      - name: "Sem segredos nem detalhe explorável"
+        mode: error
+        instructions: |
+          Falha se o diff adiciona a um arquivo público (código, docs, comentários, testes ou CHANGELOG) um segredo real
+          (token, chave de API, senha, URL de webhook, string de conexão com credenciais) ou o passo a passo explorável
+          de uma vulnerabilidade ainda não corrigida. Valores sintéticos claramente falsos em testes e variáveis
+          vazias em `.example.env` passam.
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+
+  tools:
+    ruff:
+      enabled: true
+    actionlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    osvScanner:
+      enabled: true
+    zizmor:
+      enabled: true
+    github-checks:
+      enabled: true
+    pylint:
+      enabled: false
+    flake8:
+      enabled: false
+    languagetool:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".claude/rules/empiremuse/*.md"
+      - "docs/architecture.md"
+      - "docs/known-issues.md"
+  learnings:
+    scope: local
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
