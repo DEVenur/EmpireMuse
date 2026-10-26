@@ -7,13 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
-### Alterado
-- **Refatoração interna do player (KI-29b)**: `PlayerEventsMixin.hook_events` (323 linhas), `PlayerStateMixin.cleanup` (195) e `PlayerAutoqueueMixin.resolve_track` (159) viram orquestradores curtos que chamam etapas de módulo (`event_steps.py`, `state_steps.py` e `autoqueue_steps.py`), na mesma ordem de efeitos, sem mudança de comportamento.
-- **Dependências sem VCS (KI-30)**:
-  - `disnake` passa do commit git `96ed4459` para a versão estável `2.12.2` do PyPI, com hashes no `requirements-lock.txt`. O changelog 2.12.0–2.12.2 foi revisado: nenhuma das quebras (`Emoji.guild_id`, `SKU.subscriptions`, remoção do Python 3.8/3.9) afeta o código do projeto.
-  - `jishaku` passa do fork `zRitsu/jishaku` para o fork da organização `EmpireCommunity/EmpireMuse-jishaku` `v2.6.6.post2`, instalado pelo wheel da release por URL com hash SHA-256; novo submódulo `repos/EmpireMuse-jishaku`. `requirements-git.txt` e o passo correspondente do Dockerfile e do CI foram removidos.
-  - Ao carregar o jishaku (`ENABLE_JISHAKU=true`), o bot define `JISHAKU_MASK_SECRETS`, `JISHAKU_DM_ONLY` e `JISHAKU_OWNER_IDS` (a partir de `OWNER_IDS`, com `||` convertido em `,`); com `OWNER_IDS` vazio o jishaku **não é carregado** (aviso no log), para não liberar a equipe do aplicativo; `JISHAKU_NO_DM_TRACEBACK` foi removido, e os tracebacks voltam por DM.
-  - ADR-0003, `security.md` §8, `docs/development.md` e KI-30 atualizados.
+## [2.0.1] - 2026-10-26
+
+Esta versão de manutenção restaura a reprodução de faixas do SoundCloud através da inclusão do plugin Soundy no Lavalink local, conclui a eliminação de dependências instaladas via VCS Git em favor de pacotes verificados por hash SHA-256 (PyPI e release wheel da organização), finaliza a refatoração modular do player (KI-29b) e corrige falhas pontuais de estabilidade na fila e recuperação de buscas.
 
 ### Corrigido
 - **SoundCloud voltou a funcionar (`scsearch:` e URLs `soundcloud.com`)**:
@@ -23,11 +19,21 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Player (bugs preexistentes achados na refatoração da KI-29b)**:
   - A busca no YouTube deixava de funcionar até reiniciar o bot depois de qualquer falha na busca de uma música; agora os provedores do YouTube só são desligados pelas falhas conhecidas (vídeo indisponível, WebM não suportado, vídeo diferente do pedido).
   - Quando a reprodução de uma música falhava e o bot não tinha mais acesso ao canal de texto, o player travava em vez de seguir para a próxima música.
-  - O cancelamento do tratamento de eventos do player durante o salvamento da fila não se perdia mais silenciosamente.
+  - O cancelamento do tratamento de eventos do player durante o salvamento da fila não se perde mais silenciosamente.
   - O cache compartilhado de músicas de outras plataformas (Spotify, Deezer) guardava candidatas duplicadas; agora guarda só o resultado da busca.
 - **Preservação de Padrões da Imagem Docker no `.example.env`**:
   - Comentadas as variáveis `RUN_LOCAL_LAVALINK`, `LAVALINK_JAVA_PATH`, `LAVALINK_HOME` e `LAVALINK_OFFLINE` no `.example.env` para evitar que a cópia do arquivo de exemplo para `.env` sobrescreva os valores pré-configurados pela imagem oficial (`RUN_LOCAL_LAVALINK=true`, etc.) no Docker Compose.
   - Documentado no `.example.env` e em `docs/guides/docker.md` o comportamento das variáveis da imagem e a equivalência fora do Docker via `DEFAULT_CONFIG`.
+
+### Alterado
+- **Refatoração interna do player (KI-29b)**: `PlayerEventsMixin.hook_events` (323 linhas), `PlayerStateMixin.cleanup` (195) e `PlayerAutoqueueMixin.resolve_track` (159) viram orquestradores curtos que chamam etapas de módulo (`event_steps.py`, `state_steps.py` e `autoqueue_steps.py`), na mesma ordem de efeitos, sem mudança de comportamento.
+
+### Segurança
+- **Dependências sem VCS e proteção do jishaku (KI-30)**:
+  - `disnake` passa do commit git `96ed4459` para a versão estável `2.12.2` do PyPI, com hashes no `requirements-lock.txt`. O changelog 2.12.0–2.12.2 foi revisado: nenhuma das quebras (`Emoji.guild_id`, `SKU.subscriptions`, remoção do Python 3.8/3.9) afeta o código do projeto.
+  - `jishaku` passa do fork `zRitsu/jishaku` para o fork da organização `EmpireCommunity/EmpireMuse-jishaku` `v2.6.6.post2`, instalado pelo wheel da release por URL com hash SHA-256; novo submódulo `repos/EmpireMuse-jishaku`. `requirements-git.txt` e o passo correspondente do Dockerfile e do CI foram removidos.
+  - Ao carregar o jishaku (`ENABLE_JISHAKU=true`), o bot define `JISHAKU_MASK_SECRETS`, `JISHAKU_DM_ONLY` e `JISHAKU_OWNER_IDS` (a partir de `OWNER_IDS`, com `||` convertido em `,`); com `OWNER_IDS` vazio o jishaku **não é carregado** (aviso no log), prevenindo liberação indevida para a equipe do aplicativo; `JISHAKU_NO_DM_TRACEBACK` foi removido, e os tracebacks voltam por DM.
+  - ADR-0003, `security.md` §8, `docs/development.md` e KI-30 atualizados.
 
 ### Documentação
 - **Guia de Docker para Gerenciadores de Arquivo Único (Hostinger e Similares)**:
@@ -461,5 +467,6 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/releases/tag/v2.0.0
