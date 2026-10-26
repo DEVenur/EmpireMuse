@@ -741,8 +741,8 @@ dnspython==2.9.0 \
     # via
     #   -r requirements.txt
     #   pymongo
-empiremuse-jishaku @ https://github.com/EmpireCommunity/EmpireMuse-jishaku/releases/download/v2.6.6.post1/empiremuse_jishaku-2.6.6.post1-py3-none-any.whl \
-    --hash=sha256:ee097676a8343a5e0945db98067009e4bdce86c3686098214cbc37134cea5a6f
+empiremuse-jishaku @ https://github.com/EmpireCommunity/EmpireMuse-jishaku/releases/download/v2.6.6.post2/empiremuse_jishaku-2.6.6.post2-py3-none-any.whl \
+    --hash=sha256:0dcf875a2ddf0d344dbd32aac89f1d776c3a3b11fffc7d89a2e8b744ec8ef202
     # via -r requirements.txt
 frozenlist==1.8.0 \
     --hash=sha256:0325024fe97f94c41c08872db482cf8ac4800d80e79222c6b0b7b162d5b13686 \

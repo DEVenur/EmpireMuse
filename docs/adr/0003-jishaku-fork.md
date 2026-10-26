@@ -10,7 +10,7 @@ O pacote oficial `jishaku` do PyPI é feito para `discord.py`; o **EmpireMuse** 
 
 ## Decisão
 
-Adotamos o fork próprio **[EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku)** (submódulo `repos/EmpireMuse-jishaku`), distribuição `empiremuse-jishaku` (pacote importável `jishaku`), versão `2.6.6.post1` (base 2.6.6 do disnake-jishaku). A instalação é pelo **wheel da release por URL com `--hash` SHA-256** (`ee097676…5a6f`) no `requirements-lock.txt`, com as dependências (`braceexpand`, `click`, `disnake>=2.12,<3`, `import_expression>=1,<2`) também com hash. Não há mais dependência VCS (`requirements-git.txt` foi removido).
+Adotamos o fork próprio **[EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku)** (submódulo `repos/EmpireMuse-jishaku`), distribuição `empiremuse-jishaku` (pacote importável `jishaku`), versão `2.6.6.post2` (base 2.6.6 do disnake-jishaku). A instalação é pelo **wheel da release por URL com `--hash` SHA-256** (`0dcf875a…f202`) no `requirements-lock.txt`, com as dependências (`braceexpand`, `click`, `disnake>=2.12,<3`, `import_expression>=1,<2`) também com hash. Não há mais dependência VCS (`requirements-git.txt` foi removido).
 
 Salvaguardas mantidas e acrescentadas:
 
@@ -21,7 +21,7 @@ Salvaguardas mantidas e acrescentadas:
 ## Auditorias
 
 - **Segurança** (Cybersecurity Specialist, 2026-10-25): árvore do fork idêntica à de `zRitsu/jishaku@14d2dbd5` verificada antes das mudanças; recomendou migrar para a organização e endurecer segredos, ambiente do shell e restrição de donos. Veredito: aceitar com as salvaguardas acima.
-- **Revisão e padronização** (Backend, 2026-10-25): CI do fork (lint, testes em Python 3.10–3.14, wheel em instalação limpa), correções de compatibilidade com Python 3.13/3.14 e as melhorias de segurança acima; release `v2.6.6.post1` com `SHA256SUMS`.
+- **Revisão e padronização** (Backend, 2026-10-25): CI do fork (lint, testes em Python 3.10–3.14, wheel em instalação limpa), correções de compatibilidade com Python 3.13/3.14 e as melhorias de segurança acima; release `v2.6.6.post2` com `SHA256SUMS`.
 - Os relatórios completos ficam no ambiente privado do projeto, sem detalhes exploráveis.
 
 ## Alternativas Consideradas

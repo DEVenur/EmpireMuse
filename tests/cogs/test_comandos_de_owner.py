@@ -101,7 +101,7 @@ def test_jishaku_desligado_nao_carrega():
     bot.load_extension.assert_not_called()
 
 
-@pytest.mark.parametrize("owner_ids", ["", " || "])
+@pytest.mark.parametrize("owner_ids", ["", " || ", "abc||x1"])
 def test_jishaku_ligado_sem_owner_ids_nao_carrega(monkeypatch, owner_ids, caplog):
     monkeypatch.delenv("JISHAKU_OWNER_IDS", raising=False)
     bot = _bot_jishaku(True, owner_ids)
@@ -115,7 +115,7 @@ def test_jishaku_ligado_com_owner_ids_carrega_e_converte_separador(monkeypatch):
     monkeypatch.delenv("JISHAKU_OWNER_IDS", raising=False)
     monkeypatch.delenv("JISHAKU_MASK_SECRETS", raising=False)
     monkeypatch.delenv("JISHAKU_DM_ONLY", raising=False)
-    bot = _bot_jishaku(True, "111||222")
+    bot = _bot_jishaku(True, "111||abc||222")
 
     assert load_jishaku_if_enabled(bot) is True
     bot.load_extension.assert_called_once_with("jishaku")

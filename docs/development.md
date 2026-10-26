@@ -27,7 +27,7 @@ uv pip install --require-hashes -r requirements-lock.txt
 
 Observações:
 
-- `disnake` vem do PyPI (`disnake==2.12.2`) e o `jishaku` é o fork `empiremuse-jishaku` (release `v2.6.6.post1` de [EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku), submódulo `repos/EmpireMuse-jishaku`), instalado pelo wheel da release por URL. Ambos estão no `requirements-lock.txt` com hash SHA-256; não há dependência VCS.
+- `disnake` vem do PyPI (`disnake==2.12.2`) e o `jishaku` é o fork `empiremuse-jishaku` (release `v2.6.6.post2` de [EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku), submódulo `repos/EmpireMuse-jishaku`), instalado pelo wheel da release por URL. Ambos estão no `requirements-lock.txt` com hash SHA-256; não há dependência VCS.
 - As dependências do PyPI são travadas com hashes SHA-256 no arquivo de lock universal `requirements-lock.txt` (compilado via `uv pip compile --generate-hashes --universal --exclude-newer <corte>`), garantindo integridade criptográfica da cadeia de suprimentos (conforme `.claude/rules/empiremuse/security.md` §8).
 - **Suporte universal multiplataforma (Windows/Linux)**: os lockfiles utilizam resolução universal (`--universal`), preservando marcadores de ambiente como `uvloop==... ; sys_platform != 'win32'`. Isso viabiliza a instalação nativa tanto em ambientes Linux/Docker quanto no Windows (onde `uvloop` é automaticamente ignorado sem quebrar o processo).
 - **Janela de corte temporal (`--exclude-newer`)**: a compilação dos lockfiles adota corte temporal de segurança de aproximadamente 7 dias para mitigar riscos de supply chain de pacotes recém-publicados.
