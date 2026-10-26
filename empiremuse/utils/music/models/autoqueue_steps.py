@@ -494,7 +494,7 @@ async def _rt_query_results(self, track, query, req):
     except AttributeError:
         pass
 
-    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = req.tracks
+    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = result
 
     return result
 
