@@ -19,9 +19,9 @@ Nenhum (2026-10-26).
 
 ## Histórico
 
-Os itens KI-01 a KI-58 (exceto a KI-35) foram resolvidos entre a Fase 3 e a v2.0.2. A descrição de cada um está no
-[`CHANGELOG.md`](../CHANGELOG.md) e na versão anterior deste arquivo (`git log -p -- docs/known-issues.md`); testes e
-docs que citam um `KI-xx` apontam para esse histórico.
+Os itens KI-01 a KI-58 (exceto a KI-35) foram resolvidos entre a Fase 3 e a v2.0.2. A descrição completa de cada um está na
+versão anterior deste arquivo (`git log -p -- docs/known-issues.md`), e a maioria também é citada no
+[`CHANGELOG.md`](../CHANGELOG.md); testes e docs que citam um `KI-xx` apontam para esse histórico.
 
 ## Como registrar e corrigir
 

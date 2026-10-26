@@ -14,9 +14,8 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     pids_limit: 256
-    # 5 bots + Lavalink local (heap de até 512 MB): 2 GB com folga.
-    mem_limit: 2048m
-    memswap_limit: 2048m
+    mem_limit: 1024m
+    memswap_limit: 1024m
     environment:
       # Tokens dos bots: um por variável, valores só no .env.
       TOKEN: ${TOKEN:-}

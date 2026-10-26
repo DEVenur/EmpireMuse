@@ -15,7 +15,7 @@ O EmpireMuse segue rigorosamente o padrão de [Versionamento Semântico 2.0.0](h
 ### 1.1 Versão do Projeto
 
 - **Versionamento**: Em razão da reformulação profunda do bot frente ao upstream original, as publicações de teste da série 1.x foram retiradas e a primeira versão oficial do projeto é a **2.0.0** (as release candidates `2.0.0-rc.N` serviram só para homologar a 2.0.0).
-- **Tags da imagem**: Cada release estável publica a versão exata e imutável (`X.Y.Z`) e atualiza as tags flutuantes `X.Y`, `X` e `latest`.
+- **Tags da imagem**: Cada release estável publica a versão exata (`X.Y.Z`), que por política nunca é republicada (a imutabilidade de tags do Docker Hub não está ativada), e atualiza as tags flutuantes `X.Y`, `X` e `latest`.
 - **Releases de correção**: Saem como PATCH (`v2.0.1`, `v2.0.2`, …) pelo fluxo da seção 3, sem release candidate. Não há GitHub Release: a publicação é a imagem no Docker Hub.
 
 ---
@@ -128,8 +128,8 @@ flowchart TD
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
 - **Regras de Versionamento de Tags da Imagem**:
   - **Versão Final Estável** (`vX.Y.Z`, ex.: `v2.0.0`):
-    - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que é imutável, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
-  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v2.0.0-rc.1`):
+    - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que nunca é republicada, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
+  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v2.0.0-rc.1`; o workflow ainda aceita, mas o fluxo atual não usa RC, ver seção 1.1):
     - Publica **estritamente** a tag do pré-lançamento (`2.0.0-rc.1`), **sem alterar nem sobrescrever** as tags flutuantes `2`, `2.0`, `latest` nem as tags de versões estáveis anteriores.
 
 ---
@@ -166,7 +166,7 @@ O comando exibirá a lista de manifestos contendo:
 > [!CAUTION]
 > **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG DE RELEASE `vX.Y.Z` JÁ PUBLICADA!**
 
-Apenas a tag de versão exata `X.Y.Z` (ex.: `2.0.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `2`), `X.Y` (ex.: `2.0`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
+A tag de versão exata `X.Y.Z` (ex.: `2.0.0`) da imagem e as tags Git no repositório nunca são republicadas nem movidas (por política; no Git, reforçado pelo ruleset abaixo). As tags `X` (ex.: `2`), `X.Y` (ex.: `2.0`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
 
 Se for detectado qualquer defeito de código, falha de empacotamento ou inconsistência após a publicação:
 

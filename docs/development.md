@@ -40,6 +40,8 @@ Observações:
 cp .example.env .env
 ```
 
+Se usar a pasta `.runtime/` (seção 4, "Pasta de execução local"), o bot lê `.runtime/.env`: copie para lá (`cp .example.env .runtime/.env`).
+
 Edite o `.env` (se um valor tiver espaço, use aspas). **Nunca** versione o `.env`, o `config.json` nem
 qualquer token (`.env` e `config.json` já são ignorados pelo git; nunca use `git add -f` neles).
 
