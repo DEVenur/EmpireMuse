@@ -16,6 +16,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - ADR-0003, `security.md` §8, `docs/development.md` e KI-30 atualizados.
 
 ### Corrigido
+- **Músicas do Spotify/Deezer podiam tocar a versão errada**: quando a primeira busca de uma música em outra plataforma só trazia resultados inadequados (transmissões ao vivo ou com duração muito diferente), as buscas seguintes nunca eram feitas e o bot tocava o primeiro resultado ruim. Agora cada busca é tentada em ordem até achar uma faixa adequada, e só o resultado escolhido fica no cache compartilhado entre servidores.
 - **SoundCloud voltou a funcionar (`scsearch:` e URLs `soundcloud.com`)**:
   - A fonte nativa do lavaplayer retornava `loadType: error` ("Something went wrong while looking up the track") por falha no HLS fMP4 do SoundCloud (upstream lavaplayer#189 e #202 em aberto).
   - Imagem Docker e Lavalink local passam para a release `0.0.4` do `EmpireMuse-LL-binaries`, que inclui o plugin [Soundy](https://github.com/lowkwrs/soundy) 1.1.0 (MIT, compilado do commit `e2c5da8`; SHA-256 fixado em `Dockerfile` e `branding.LAVALINK_PLUGIN_SHA256`) e um `application.yml` com a fonte nativa do SoundCloud desligada e `logging.request.includePayload: false`. O `-Dlogging.request.includePayload=false` da imagem foi mantido (defesa em profundidade).
