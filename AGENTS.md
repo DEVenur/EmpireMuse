@@ -57,11 +57,12 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
 - `assets/`: Imagens re-hospedadas (previews, skins, ícones, tutoriais) e `SHA256SUMS`.
 - `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar e banner).
+- `deploy/`: Composes (`docker-compose.yml` base, override do Traefik e `docker-compose.hostinger.yml` + `env.example.hostinger` da produção na VPS), egg do Pterodactyl e exemplo do `lavalink.ini`.
 - `data/`: Dados estáticos do projeto (`lavalink_servers.ini`, lista de servidores Lavalink).
 - `docs/`: Documentação técnica, guias de setup e Registros de Decisão de Arquitetura (ADRs).
 - `docs/guides/`: Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web e Spotify).
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
-- `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
+- `docs/painel/`: Inventário dos serviços e configurações do painel web (`servicos-configuracoes.md`).
 - `tests/`: Testes automatizados (pytest), organizados por domínio em subpastas (ver docs/development.md, seção 6).
 - `repos/`: submódulos git (`EmpireMuse-RPC-app`, `EmpireMuse-LL-binaries`, `EmpireMuse-jishaku`); `git submodule update --init` para baixar.
 

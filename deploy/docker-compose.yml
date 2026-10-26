@@ -1,17 +1,20 @@
+# Compose base do EmpireMuse (Docker Compose com suporte a env_file e a vários arquivos -f).
+# Uso, a partir da raiz do repositório:
+#   docker compose -f deploy/docker-compose.yml --env-file .env up -d
+# O .env (e o .env.mongo do perfil mongo) ficam na raiz do repositório.
 name: empiremuse
 
 services:
   bot:
     container_name: empiremuse
-    # Imagem oficial do Docker Hub. As tags latest e :2 passam a existir com a publicação da 2.0.0.
-    # Em produção, recomenda-se fixar uma versão exata imutável (ex.: or4cu1o/empiremuse:2.0.0 ou digest;
-    # em homologação, ex.: or4cu1o/empiremuse:2.0.0-rc.1). A tag :2 é flutuante (atualizada na série 2.x).
+    # Imagem oficial do Docker Hub. Em produção, prefira fixar uma versão exata (ex.: or4cu1o/empiremuse:2.0.2
+    # ou digest). A tag :2 é flutuante (acompanha a série 2.x) e a latest aponta para a última versão estável.
     image: ${EMPIREMUSE_IMAGE:-or4cu1o/empiremuse:latest}
     pull_policy: missing
     restart: unless-stopped
     stop_grace_period: 30s
     pids_limit: 256
-    env_file: .env
+    env_file: ../.env
     mem_limit: ${EMPIREMUSE_MEM_LIMIT:-1024m}
     memswap_limit: ${EMPIREMUSE_MEM_LIMIT:-1024m}
     volumes:
@@ -40,7 +43,7 @@ services:
     volumes:
       - empiremuse-mongo:/data/db
     env_file:
-      - path: .env.mongo
+      - path: ../.env.mongo
         required: true
     logging:
       driver: json-file

@@ -28,8 +28,7 @@ docs/
 # Arquivos de container e deploy de outras plataformas
 Dockerfile
 .dockerignore
-docker-compose.yml
-docker-compose.override.yml
+docker-compose*.yml
 deploy/
 
 # Caches de runtime e arquivos temporarios

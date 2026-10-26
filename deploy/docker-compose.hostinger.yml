@@ -1,0 +1,168 @@
+# Compose de produção usado na VPS (Hostinger, Docker Manager), atrás do Traefik + Cloudflare.
+# Ao usar: copie para o diretório do projeto no gerenciador (ex.: /docker/empiremuse) como docker-compose.yml e
+# preencha o .env a partir de deploy/env.example.hostinger (renomeado para .env).
+# O Docker Manager da Hostinger roda um arquivo único, sem env_file: toda a configuração fica inline aqui e o .env
+# só interpola os segredos em ${...} (cada valor com até 256 caracteres). Detalhes: docs/guides/docker.md, seção 3.6.
+# A cada release, atualize a tag da imagem abaixo (fluxo em docs/guides/release.md).
+name: empiremuse
+
+services:
+  bot:
+    container_name: empiremuse
+    image: or4cu1o/empiremuse:2.0.2
+    pull_policy: missing
+    restart: unless-stopped
+    stop_grace_period: 30s
+    pids_limit: 256
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    environment:
+      # Tokens dos bots: um por variável, valores só no .env.
+      TOKEN: ${TOKEN:-}
+      TOKEN_2: ${TOKEN_2:-}
+      TOKEN_3: ${TOKEN_3:-}
+      TOKEN_4: ${TOKEN_4:-}
+      TOKEN_5: ${TOKEN_5:-}
+
+      # Segredos e credenciais: valores só no .env.
+      OWNER_IDS: ${OWNER_IDS:-}
+      MONGO: ${MONGO:-}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      LASTFM_KEY: ${LASTFM_KEY:-}
+      LASTFM_SECRET: ${LASTFM_SECRET:-}
+      PANEL_OAUTH_CLIENT_ID: ${PANEL_OAUTH_CLIENT_ID:-}
+      PANEL_OAUTH_CLIENT_SECRET: ${PANEL_OAUTH_CLIENT_SECRET:-}
+      PANEL_COOKIE_SECRET: ${PANEL_COOKIE_SECRET:-}
+      RPC_SERVER_SECRET: ${RPC_SERVER_SECRET:-}
+      YOUTUBE_OAUTH_REFRESH_TOKEN: ${YOUTUBE_OAUTH_REFRESH_TOKEN:-}
+      BOT_ADD_REMOVE_LOG: ${BOT_ADD_REMOVE_LOG:-}
+      ERROR_REPORT_WEBHOOK: ${ERROR_REPORT_WEBHOOK:-}
+      AUTO_ERROR_REPORT_WEBHOOK: ${AUTO_ERROR_REPORT_WEBHOOK:-}
+
+      # Configuração (sem segredos).
+      DEFAULT_PREFIX: "!"
+      AUTO_DOWNLOAD_LAVALINK_SERVERLIST: "false"
+      PLAYER_SESSIONS_MONGODB: "true"
+      SENSITIVE_INFO_WARN: "false"
+      SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT: "3"
+      BANS_INTENT: "false"
+      DM_MESSAGES_INTENT: "false"
+      DM_REACTIONS_INTENT: "false"
+      DM_TYPING_INTENT: "false"
+      GUILD_MESSAGES_INTENT: "true"
+      GUILD_REACTIONS_INTENT: "false"
+      GUILD_SCHEDULED_EVENTS_INTENT: "false"
+      GUILD_TYPING_INTENT: "false"
+      EMOJIS_AND_STICKERS_INTENT: "true"
+      INTEGRATIONS_INTENT: "true"
+      INVITES_INTENT: "true"
+      VOICE_STATES_INTENT: "true"
+      WEBHOOKS_INTENT: "false"
+      PRESENCES_INTENT: "false"
+      MESSAGE_CONTENT_INTENT: "true"
+      KILL_ON_429: "true"
+      ENABLE_COMMANDS_COOLDOWN: "true"
+      COMMAND_LOG: "false"
+      SUPPORT_SERVER: "https://discord.gg/KgtyNg9U6H"
+      AUTO_SYNC_COMMANDS: "true"
+      BOT_ADD_REMOVE_LOG_CHANNEL_ID: "01389041396324765827"
+      EMBED_COLOR: "8B5CF6"
+      SOURCE_REPO: "https://github.com/EmpireCommunity/EmpireMuse.git"
+      INTERACTION_COMMAND_ONLY: "false"
+      ENABLE_JISHAKU: "false"
+      PRESENCE_INTERVAL: "900"
+      INVITE_PERMISSIONS: "332892794064"
+      ENABLE_LOGGER: "false"
+      GIT_DIR: "./.git"
+      GUILD_DEAFEN_WARN: "true"
+      LAVALINK_SERVER_LIST: "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main/data/lavalink_servers.ini"
+      LAVALINK_RECONNECT_RETRIES: "30"
+      FORCE_USE_DEEZER_CLIENT: "false"
+      MAX_USER_FAVS: "10"
+      USER_FAV_MAX_NAME_LENGTH: "35"
+      USER_FAV_MAX_URL_LENGTH: "90"
+      IDLE_TIMEOUT: "180"
+      WAIT_FOR_MEMBERS_TIMEOUT: "180"
+      DEFAULT_SKIN: "default"
+      DEFAULT_STATIC_SKIN: "default"
+      IGNORE_SKINS: ""
+      IGNORE_STATIC_SKINS: ""
+      EXTRA_HINTS: ""
+      HINT_RATE: "4"
+      VOTE_SKIP_AMOUNT: "3"
+      PREFIXED_POOL_TIMEOUT: "4"
+      ENABLE_DISCORD_URLS_PLAYBACK: "true"
+      PLAYER_INFO_BACKUP_INTERVAL: "45"
+      MONGO_TIMEOUT: "30"
+      PLAYER_INFO_BACKUP_INTERVAL_MONGO: "300"
+      QUEUE_MAX_ENTRIES: "0"
+      ENABLE_DEFER_TYPING: "true"
+      VOICE_CHANNEL_LATENCY_RECONNECT: "200"
+      PLAYLIST_CACHE_SIZE: "500"
+      PLAYLIST_CACHE_TTL: "1800"
+      ENABLE_SONGREQUEST_MENTION: "true"
+      RUN_RPC_SERVER: "true"
+      ENABLE_RPC_COMMAND: "false"
+      RPC_SERVER: "ws://localhost:$$PORT/ws"
+      RPC_PUBLIC_URL: "wss://muse.empirecommunity.org/ws"
+      ENABLE_RPC_AUTH: "true"
+      RPC_ALLOWED_ORIGINS: ""
+      WEB_BIND_ADDRESS: "0.0.0.0"
+      PANEL_ENABLED: "true"
+      PANEL_BASE_URL: "https://muse.empirecommunity.org"
+      PANEL_SESSION_TTL_HOURS: "12"
+      PANEL_SESSION_IDLE_MINUTES: "60"
+      PANEL_TRUST_PROXY: "true"
+      PANEL_INSECURE_COOKIES: "false"
+      YOUTUBE_TRACK_COOLDOWN: "20"
+      RUN_LOCAL_LAVALINK: "true"
+      CONNECT_LOCAL_LAVALINK: "true"
+      PREFER_YOUTUBE_NATIVE_PLAYBACK: "true"
+      ONLY_USE_NATIVE_SEARCH_PROVIDERS: "true"
+      SEARCH_PROVIDERS: "ytsearch ytmsearch scsearch"
+      LAVALINK_ADDITIONAL_SLEEP: "0"
+      LAVALINK_INITIAL_RAM: "30"
+      LAVALINK_RAM_LIMIT: "512"
+      LAVALINK_CPU_CORES: "1"
+      LAVALINK_FILE_URL: ""
+      LAVALINK_FILE_SHA256: ""
+      LAVALINK_JAVA_PATH: "/opt/java/openjdk/bin/java"
+      LAVALINK_HOME: "/opt/lavalink"
+      LAVALINK_OFFLINE: "true"
+      LISTENING_PRESENCES: ""
+      WATCHING_PRESENCES: ""
+      PLAYING_PRESENCES: ""
+      CUSTOM_STATUS_PRESENCES: ""
+      STREAMING_PRESENCES: ""
+    volumes:
+      - empiremuse-data:/data
+    # Produção atrás do Traefik (https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/traefik):
+    # sem porta publicada; o Traefik alcança o bot pela rede externa "proxy".
+    networks:
+      - proxy
+      - default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.empiremuse.rule=Host(`muse.empirecommunity.org`)
+      - traefik.http.services.empiremuse.loadbalancer.server.port=6000
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  empiremuse-data:
+
+networks:
+  proxy:
+    external: true

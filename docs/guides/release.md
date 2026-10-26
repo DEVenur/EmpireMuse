@@ -12,16 +12,12 @@ O EmpireMuse segue rigorosamente o padrão de [Versionamento Semântico 2.0.0](h
 - **MINOR** (`0.Y.0`): Novas funcionalidades mantendo compatibilidade retroativa.
 - **PATCH** (`0.0.Z`): Correções de bugs, ajustes de documentação ou atualizações pontuais sem quebra de compatibilidade.
 
-### 1.1 Versão do Projeto e Release Candidates
+### 1.1 Versão do Projeto
 
-- **Versionamento**: O projeto adota [Semantic Versioning (SemVer)](https://semver.org/lang/pt-BR/). Em razão da reformulação profunda do bot frente ao upstream original, as publicações de teste da série 1.x foram retiradas e a primeira versão oficial do projeto é a **2.0.0**.
-- **Disponibilidade das Tags**: As tags flutuantes `latest` e `2` (e `2.0`) só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, o registro mantém exclusivamente as tags de release candidate (`2.0.0-rc.N`, atualmente `2.0.0-rc.1`).
-- **Fluxo de Release Candidates (`-rc.N`)**:
-  - Ao fim de cada fase, o **MAESTRO** publica a próxima `v2.0.0-rc.N` (com `N` sequencial: `v2.0.0-rc.1`, `v2.0.0-rc.2`, etc.).
-  - A publicação de uma release candidate compila e gera **estritamente a imagem com a tag exata** (`or4cu1o/empiremuse:2.0.0-rc.N`), **sem alterar nem promover** as tags flutuantes (`latest`, `2` ou `2.0`).
-  - O objetivo das release candidates é validar cenários de deploy e plataformas externas (como o *egg* do Pterodactyl, Docker Compose e a plataforma Discloud) diretamente na infraestrutura real.
-- **Promoção para a Versão Final (`2.0.0`)**:
-  - A versão final estável `2.0.0` (tag `v2.0.0`) sairá **a partir do mesmo commit da última release candidate validada no deploy da VPS**, promovendo as tags flutuantes oficiais (`2.0.0`, `2.0`, `2` e `latest`).
+- **Versionamento**: Em razão da reformulação profunda do bot frente ao upstream original, as publicações de teste da série 1.x foram retiradas e a primeira versão oficial do projeto é a **2.0.0** (as release candidates `2.0.0-rc.N` serviram só para homologar a 2.0.0).
+- **Tags da imagem**: Cada release estável publica a versão exata (`X.Y.Z`), que por política nunca é republicada (a imutabilidade de tags do Docker Hub não está ativada), e atualiza as tags flutuantes `X.Y`, `X` e `latest`.
+- **Releases de correção**: Saem como PATCH (`v2.0.1`, `v2.0.2`, …) pelo fluxo da seção 3, sem release candidate. Não há GitHub Release: a publicação é a imagem no Docker Hub.
+- **Quando publicar**: A imagem só é gerada pelo push de uma tag `vX.Y.Z`; merge na `main` não gera imagem. Os merges se acumulam na seção `[Unreleased]` do `CHANGELOG.md` e viram **uma** release só quando há atualização que justifique uma imagem nova (correção ou recurso que muda o bot em execução). Mudanças de documentação, CI, testes e ajustes pequenos esperam a próxima release, e trabalhos paralelos em branches separadas são publicados juntos, numa release só, em vez de uma por merge.
 
 ---
 
@@ -64,7 +60,6 @@ Para manter a integridade do histórico do Git e a rastreabilidade das alteraç�
    ### Adicionado
    ...
    ```
-   *(No caso de Release Candidate, utilize o formato `## [2.0.0-rc.1] - YYYY-MM-DD`)*;
 3. Crie uma nova seção `## [Unreleased]` vazia no topo, pronta para os próximos ciclos de desenvolvimento.
 
 ### Passo 2: Submeter via Pull Request para a branch `main`
@@ -78,20 +73,11 @@ Para manter a integridade do histórico do Git e a rastreabilidade das alteraç�
 
 ### Passo 3: Criar a Tag Anotada no commit da `main`
 
-Para uma **Release Candidate** (publicada pelo MAESTRO ao fim de cada fase, com `N` sequencial):
-
-```bash
-git checkout main
-git pull origin main
-git tag -a v2.0.0-rc.N -m "Release candidate v2.0.0-rc.N"
-```
-
-Para a **Versão Final Estável `2.0.0`** (apontando obrigatoriamente para o commit da última RC homologada na VPS, garantindo integridade mesmo se novos commits tiverem entrado na `main`):
+Somente administradores podem criar tags `v*` (ruleset *Tags de release*). Depois do CI verde na `main`, crie a tag anotada no commit de merge do PR do `CHANGELOG.md`, conferindo antes as tags já existentes no Git e no Docker Hub:
 
 ```bash
 git fetch origin --tags
-VALIDATED_COMMIT="$(git rev-parse v2.0.0-rc.N^{})"
-git tag -a v2.0.0 "$VALIDATED_COMMIT" -m "Release v2.0.0"
+git tag -a vX.Y.Z <commit-de-merge> -m "Release vX.Y.Z"
 ```
 
 ### Passo 4: Enviar a Tag para o Repositório Remoto
@@ -99,8 +85,17 @@ git tag -a v2.0.0 "$VALIDATED_COMMIT" -m "Release v2.0.0"
 Envie a tag Git criada para o GitHub para disparar automaticamente o pipeline de release:
 
 ```bash
-git push origin v2.0.0
+git push origin vX.Y.Z
 ```
+
+### Passo 5: Implantar na VPS de Produção
+
+A produção roda na VPS da Hostinger (Docker Manager), com o compose de [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml) (ver [`docker.md`](docker.md), seção 3.6):
+
+1. Confira a imagem publicada (seção 5);
+2. Atualize a tag `image:` do compose na VPS para `or4cu1o/empiremuse:X.Y.Z`, guardando antes um backup do arquivo (`docker-compose.yml.bak-AAAAMMDD-HHMMSS`), e a do `deploy/docker-compose.hostinger.yml` no repositório no próximo PR;
+3. O dono reimplanta o projeto pelo painel da Hostinger;
+4. Valide em produção: logs da subida, reprodução (YouTube e SoundCloud), painel e RPC.
 
 ---
 
@@ -111,7 +106,7 @@ O arquivo de workflow [`.github/workflows/release.yml`](../../.github/workflows/
 ```mermaid
 flowchart TD
     A["Push da tag vX.Y.Z"] --> B["verify-tag: Valida ancestralidade com origin/main"]
-    A --> C["test: Lint, compilação e pytest"]
+    A --> C["verify-ci: Confere o CI verde do commit"]
     B --> D["docker: Build multi-arch e push"]
     C --> D
     D --> E["Docker Hub: or4cu1o/empiremuse"]
@@ -121,10 +116,9 @@ flowchart TD
 - Executa `git merge-base --is-ancestor HEAD origin/main`.
 - **Garantia de segurança**: Se a tag apontar para um commit que não pertence ao histórico da branch `origin/main` (por exemplo, uma tag acidental em uma branch de feature ou trabalho isolado), o workflow falha imediatamente e aborta a esteira, impedindo a publicação indevida de imagens.
 
-### 4.2 Testes Automatizados (`test`)
-- Prepara o ambiente com Python 3.13 e `uv` fixado em `0.13.1`;
-- Executa a suíte de lint (`ruff check .`), conferência de formatação (`ruff format --check .`), validação de compilação de bytecode (`compileall`) e a suíte completa de testes (`pytest`).
-- Se qualquer teste falhar, a imagem não é construída nem publicada.
+### 4.2 Conferência do CI (`verify-ci`)
+- Não roda os testes de novo: consulta o workflow **CI** do commit da tag (`gh run list --workflow CI --commit <sha>`).
+- Se não houver nenhuma execução do CI concluída com sucesso para esse commit, a imagem não é construída nem publicada.
 
 ### 4.3 Build e Push da Imagem (`docker`)
 - Configura emulação **QEMU** e **Docker Buildx** para compilação multi-plataforma nativa;
@@ -135,8 +129,8 @@ flowchart TD
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
 - **Regras de Versionamento de Tags da Imagem**:
   - **Versão Final Estável** (`vX.Y.Z`, ex.: `v2.0.0`):
-    - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que é imutável, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
-  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v2.0.0-rc.1`):
+    - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que nunca é republicada, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
+  - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v2.0.0-rc.1`; o workflow ainda aceita, mas o fluxo atual não usa RC, ver seção 1.1):
     - Publica **estritamente** a tag do pré-lançamento (`2.0.0-rc.1`), **sem alterar nem sobrescrever** as tags flutuantes `2`, `2.0`, `latest` nem as tags de versões estáveis anteriores.
 
 ---
@@ -152,7 +146,7 @@ Em um terminal independente (ou sem autenticação no Docker Hub), teste o downl
 docker pull or4cu1o/empiremuse:2.0.0
 ```
 
-*(Substitua `2.0.0` pela tag publicada, como `2.0.0-rc.1` ou `2`)*.
+*(Substitua `2.0.0` pela tag publicada, como `2.0.2` ou `2`)*.
 
 ### 5.2 Inspeção do Manifesto Multi-Arquitetura
 Utilize o comando `docker buildx imagetools inspect` para verificar as arquiteturas publicadas e os atestados de segurança:
@@ -173,12 +167,11 @@ O comando exibirá a lista de manifestos contendo:
 > [!CAUTION]
 > **NUNCA REAPROVEITE OU SOBRESCREVA UMA TAG DE RELEASE `vX.Y.Z` JÁ PUBLICADA!**
 
-Apenas a tag de versão exata `X.Y.Z` (ex.: `2.0.0`) e as tags Git no repositório são estritamente imutáveis. As tags `X` (ex.: `2`), `X.Y` (ex.: `2.0`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
+A tag de versão exata `X.Y.Z` (ex.: `2.0.0`) da imagem e as tags Git no repositório nunca são republicadas nem movidas (por política; no Git, reforçado pelo ruleset abaixo). As tags `X` (ex.: `2`), `X.Y` (ex.: `2.0`) e `latest` são **tags flutuantes** mantidas intencionalmente atualizadas para apontar para o release estável mais recente da série. No entanto, apagar uma tag remota (`git push origin :vX.Y.Z`) ou forçar a sua sobrescrita/movimentação (`git push --force origin vX.Y.Z`) quebra caches, invalida deploys reproduzíveis e compromete a rastreabilidade e integridade do projeto. Além disso, o ruleset de proteção do repositório (*Tags de release*) restringe a criação, atualização forçada e exclusão de tags `v*` exclusivamente a administradores do repositório.
 
 Se for detectado qualquer defeito de código, falha de empacotamento ou inconsistência após a publicação:
 
 1. Trate o problema normalmente via branch de correção (`fix/...`) e submeta o Pull Request para a `main`;
 2. Após o merge na `main`, incremente o número da versão conforme as regras do SemVer:
-   - Se o erro ocorreu em um Release Candidate (ex.: `v2.0.0-rc.1`), publique a versão subsequente `v2.0.0-rc.2`;
-   - Se o erro ocorreu em uma versão final estável (ex.: `v2.0.0`), publique uma versão corretiva de patch `v2.0.1`;
+   - Se o erro ocorreu em uma versão estável (ex.: `v2.0.2`), publique a versão corretiva de patch seguinte (`v2.0.3`);
 3. Crie e envie a nova tag Git no commit atualizado da `main`.

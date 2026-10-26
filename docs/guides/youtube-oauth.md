@@ -23,7 +23,7 @@ Como o catálogo do YouTube é o provedor primário de reprodução do EmpireMus
 
 No plugin oficial de reprodução do YouTube (`youtube-plugin`, snapshot fixado `2be8e542`), o **cliente `TV` é o único que suporta autenticação via OAuth** (`Tv.supportsOAuth() == true`). Clientes móveis ou web ignoram o token e operam sempre em modo anônimo.
 
-A partir da release **0.0.3** do [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries):
+A partir da release **0.0.3** do [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) (a atual é a **0.0.4**, com a mesma configuração):
 - O `application.yml` padrão inclui o cliente `TV` na lista de clientes homologados (`MUSIC, TV, ANDROID_VR, WEB, WEBEMBEDDED, TVHTML5_SIMPLY`);
 - A configuração `plugins.youtube.oauth.enabled` permanece desativada (`false`) por padrão para não gerar tentativas de autenticação inválidas;
 - O nível de log da classe `dev.lavalink.youtube.http.YoutubeOauth2Handler` vem fixado em `WARN`, prevenindo que tokens apareçam nos registros do terminal ou em arquivos de log.
@@ -71,7 +71,7 @@ O EmpireMuse possui um módulo integrado (`modules/ll_yt_oauth.py`) que implemen
 
 Caso prefira gerar o token manualmente sem utilizar a interface do Discord:
 
-1. Na release 0.0.3, o log de autenticação do plugin vem suprimido em `WARN`. Para visualizar a solicitação de emparelhamento no console, execute o Lavalink local temporariamente definindo no terminal:
+1. Desde a release 0.0.3, o log de autenticação do plugin vem suprimido em `WARN`. Para visualizar a solicitação de emparelhamento no console, execute o Lavalink local temporariamente definindo no terminal:
    ```bash
    LOGGING_LEVEL_DEV_LAVALINK_YOUTUBE_HTTP_YOUTUBEOAUTH2HANDLER=INFO PLUGINS_YOUTUBE_OAUTH_ENABLED=true java -jar Lavalink.jar
    ```
@@ -110,7 +110,7 @@ Se você utiliza um nó Lavalink externo em outra máquina ou VPS (onde o bot n�
 > [!WARNING]
 > **NUNCA ative o nível de log `DEBUG` para o pacote `dev.lavalink.youtube` em produção.**
 > O plugin do YouTube imprime o token de autorização completo no log quando executado em modo de depuração.
-> Mantenha sempre o nível padrão configurado na release 0.0.3 (`WARN` para `YoutubeOauth2Handler`).
+> Mantenha sempre o nível padrão configurado nas releases (`WARN` para `YoutubeOauth2Handler`).
 
 ---
 

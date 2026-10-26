@@ -86,7 +86,7 @@ reviews:
         - Aplicar `.claude/rules/empiremuse/testing.md`. Proibido: ler texto de docs, compose, Dockerfile ou workflows,
           depender de tempo real ou `sleep`, testes tautológicos, snapshots e caracterização em massa. Casos que só
           mudam o valor devem usar `parametrize` enxuto.
-    - path: "{Dockerfile,docker-compose*.yml,deploy/**}"
+    - path: "{Dockerfile,deploy/**}"
       instructions: |
         - Usuário não root, imagens por digest, downloads com URL versionada e SHA-256 verificado, sem segredos.
     - path: ".github/workflows/**"
@@ -101,10 +101,6 @@ reviews:
       instructions: |
         - Português do Brasil com acentuação correta. `CHANGELOG.md` segue Keep a Changelog, com entradas em
           `[Unreleased]`.
-    - path: "{AGENTS.md,CLAUDE.md,.claude/rules/**}"
-      instructions: |
-        - Regra nova ou alterada cumpre `governanca-de-regras.md`: cita o problema concreto, o custo em tempo/tokens, é
-          curta e traz data de revisão.
     - path: ".example.env"
       instructions: |
         - Variável nova entra vazia, documentada e com o valor seguro como padrão; nunca valores reais.
