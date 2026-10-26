@@ -14,6 +14,7 @@ inheritance: false
 
 reviews:
   profile: chill
+  # Falso de propósito: o modo `error` dos checks de pré-merge só sinaliza; o bloqueio de merge é da proteção de branch.
   request_changes_workflow: false
   high_level_summary: true
   review_status: true
