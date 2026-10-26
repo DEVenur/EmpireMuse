@@ -10,7 +10,7 @@ O **EmpireMuse** necessitava de uma interface web para que administradores de se
 
 O projeto já utiliza o servidor HTTP e WebSocket **Tornado** (`web_app.py`) no mesmo processo do bot para exibir a página de status e realizar o relé de dados para o aplicativo de Rich Presence (RPC). Além disso, os ambientes comuns de implantação do bot (VPS econômicas com 512 MB a 1 GB de RAM, contêineres Docker e serviços de hospedagem gerenciada) operam sob fortes restrições de memória e frequentemente oferecem apenas uma única porta pública exposta.
 
-Uma pesquisa aprofundada de mercado e ecossistema (`docs/painel/pesquisa-externa.md`) revelou que **não existe dashboard de bot Discord pronto e sustentável** que combine Python/disnake/Tornado com licença de código aberto compatível com a **GPL-2.0** do EmpireMuse:
+Uma pesquisa aprofundada de mercado e ecossistema, feita na etapa de levantamento do painel, revelou que **não existe dashboard de bot Discord pronto e sustentável** que combine Python/disnake/Tornado com licença de código aberto compatível com a **GPL-2.0** do EmpireMuse:
 - Dashboards populares de referência (ex.: MrAugu, LachlanDev, ZyroX) são acoplados a Node.js/`discord.js`, exigem builds de frontend em React/Next.js ou utilizam processos externos;
 - Projetos em Python encontrados no ecossistema (como Red-Dashboard) utilizam licenças incompatíveis (AGPL-3.0) ou estão arquivados;
 - Outros projetos alternativos adotam licenças restritivas comerciais (Elastic License 2.0 no Zeppelin, "Shareware" CC BY-NC-SA no Discord-Dashboard) ou não possuem licença declarada.

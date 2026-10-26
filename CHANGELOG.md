@@ -11,6 +11,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Configuração do CodeRabbit (`.coderabbit.yaml`)**:
   - Revisão em pt-BR, perfil `chill`, sem herdar da organização, com instruções por caminho e dizendo explicitamente que `AGENTS.md` e `.claude/rules/empiremuse/*` prevalecem sobre `.claude/rules/ecc/*` (sem meta de 80% de cobertura nem TDD obrigatório).
   - Ignora locks, `assets/`, estáticos vendorizados do painel e submódulos; ferramentas de lint e de segurança ativadas; checks de pré-merge para título (Conventional Commits), CHANGELOG e segredos.
+- **Compose de produção da VPS (`deploy/docker-compose.hostinger.yml` e `deploy/env.example.hostinger`)**: o compose de arquivo único usado na VPS da Hostinger (atrás do Traefik + Cloudflare) e o modelo do `.env` só com os segredos (valores vazios); ao usar, são renomeados para `docker-compose.yml` e `.env`.
+
+### Alterado
+- **Composes em `deploy/`**: o `docker-compose.yml` base sai da raiz para `deploy/docker-compose.yml` (lê o `.env` e o `.env.mongo` da raiz; uso: `docker compose -f deploy/docker-compose.yml --env-file .env up -d`), ao lado do override do Traefik.
+- **Documentação**: `release.md` descreve o fluxo de patch atual (sem release candidate, `verify-ci` no lugar de `test` e o passo de implantação na VPS); `docker.md` e `pterodactyl.md` sem o aviso de tags "a partir da 2.0.0"; LL-binaries 0.0.4 em `youtube-oauth.md`, `development.md` e `atualizar-lavalink.md`; título do ADR-0003 no índice dos ADRs.
+- **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
+
+### Removido
+- **Pesquisas da etapa P-0 do painel** (`docs/painel/pesquisa-backend.md`, `pesquisa-externa.md` e `pesquisa-frontend.md`), superadas pelo painel pronto e pelo ADR-0002.
+- **Regra `governanca-de-regras.md`** e a instrução correspondente no `.coderabbit.yaml`.
 
 ## [2.0.2] - 2026-10-26
 

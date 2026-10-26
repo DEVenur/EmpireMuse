@@ -413,7 +413,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `assets/` | Imagens re-hospedadas (previews, skins, ícones, tutoriais) + `SHA256SUMS`; servidas via `ASSETS_BASE_URL` | — |
 | `data/lavalink_servers.ini` | Lista de servidores Lavalink públicos (origem: gist do upstream, com crédito no cabeçalho) | — |
 | `docs/guides/` | Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web, Spotify e Docker) | — |
-| `docs/painel/` | Pesquisas técnicas e inventários de requisitos do painel web | — |
+| `docs/painel/` | Inventário dos serviços e configurações do painel web (`servicos-configuracoes.md`) | — |
 | `tests/` | Testes automatizados (pytest e pytest-cov); testes de marca, regras e painel web | — |
 
 ## 11. Implantação

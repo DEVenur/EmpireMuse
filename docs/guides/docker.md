@@ -31,7 +31,7 @@ docker build -t empiremuse:local .
 ```
 
 > [!IMPORTANT]
-> As tags flutuantes `or4cu1o/empiremuse:latest` e `or4cu1o/empiremuse:2` só passam a existir no Docker Hub com a publicação oficial da versão estável `2.0.0`. Até lá, testes e validações em homologação devem utilizar obrigatoriamente as imagens de release candidate publicadas ao fim de cada fase (`or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). Não utilize tags não homologadas.
+> O Docker Hub publica a versão exata e imutável (`or4cu1o/empiremuse:X.Y.Z`, ex.: `2.0.2`) e as tags flutuantes `X.Y`, `X` (`2`) e `latest`. Em produção, prefira a versão exata ou a `:2`.
 
 ### 2.2 Execução com `docker run`
 
@@ -57,7 +57,7 @@ docker run -d \
 
 ## 3. Docker Compose
 
-O repositório inclui um arquivo [`docker-compose.yml`](../../docker-compose.yml) pronto para uso, oferecendo orquestração declarativa, isolamento seguro e suporte opcional a banco de dados MongoDB em contêiner dedicado.
+Os arquivos de compose ficam em [`deploy/`](../../deploy/): o base [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml), o override do Traefik (seção 3.5) e o de produção da VPS na Hostinger (seção 3.6). O base está pronto para uso, oferecendo orquestração declarativa, isolamento seguro e suporte opcional a banco de dados MongoDB em contêiner dedicado.
 
 > [!WARNING]
 > A orquestração via Docker Compose foi validada estruturalmente com `docker compose config` e testes estáticos, mas **ainda não foi testada com o bot conectado (teste real pendente)** (validação com instância real agendada para a etapa D-16).
@@ -66,10 +66,10 @@ O repositório inclui um arquivo [`docker-compose.yml`](../../docker-compose.yml
 
 Para executar o bot com o servidor Lavalink local integrado e persistência em banco local (TinyMongo):
 
-1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais (antes do lançamento da versão `2.0.0`, defina `EMPIREMUSE_IMAGE=or4cu1o/empiremuse:2.0.0-rc.1` no `.env`, pois a tag `latest` ainda não existe no registro);
-2. Execute:
+1. Certifique-se de que o arquivo `.env` na raiz do projeto está preenchido com suas credenciais;
+2. Execute, a partir da raiz do repositório (o compose lê o `.env` e o `.env.mongo` da raiz):
    ```bash
-   docker compose up -d
+   docker compose -f deploy/docker-compose.yml --env-file .env up -d
    ```
 
 ### 3.2 Executando com MongoDB Dedicado (Perfil `mongo`)
@@ -89,7 +89,7 @@ Para utilizar um contêiner oficial do MongoDB (`mongo:8.0.34`, fixado por diges
    > O parâmetro `?authSource=admin` é necessário na URL de conexão porque o usuário root inicial do Mongo é criado no banco de autenticação `admin`.
 3. Inicie a stack ativando o perfil `mongo`:
    ```bash
-   docker compose --profile mongo up -d
+   docker compose -f deploy/docker-compose.yml --env-file .env --profile mongo up -d
    ```
 
 ### 3.3 Variáveis de Configuração do Compose
@@ -98,7 +98,7 @@ Você pode customizar o comportamento do Compose através do seu arquivo `.env` 
 
 | Variável | Valor Padrão | Descrição |
 | :--- | :--- | :--- |
-| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar a versão exata imutável `or4cu1o/empiremuse:2.0.0` ou a tag flutuante `:2` que acompanha a série 2.x; ambas passam a existir na 2.0.0. Até lá, utilize a release candidate `or4cu1o/empiremuse:2.0.0-rc.N`, atualmente `2.0.0-rc.1`). |
+| `EMPIREMUSE_IMAGE` | `or4cu1o/empiremuse:latest` | Nome da imagem Docker a ser utilizada (em produção recomenda-se fixar a versão exata imutável `or4cu1o/empiremuse:2.0.2` ou a tag flutuante `:2` que acompanha a série 2.x). |
 | `EMPIREMUSE_MEM_LIMIT` | `1024m` | Limite de memória do contêiner do bot (cobre processo Python e heap do Java). |
 | `EMPIREMUSE_PORT` | `127.0.0.1:6000` | Mapeamento da porta HTTP exposta no host para o bot (padrão em loopback). |
 
@@ -107,7 +107,7 @@ Você pode customizar o comportamento do Compose através do seu arquivo `.env` 
 
 ### 3.4 Garantias de Segurança do Compose
 
-O arquivo `docker-compose.yml` aplica uma política rigorosa de segurança defensiva:
+O arquivo `deploy/docker-compose.yml` aplica uma política rigorosa de segurança defensiva:
 
 - **Exposição Mínima de Portas**: Apenas a porta HTTP 6000 do bot é publicada no host (vinculada a `127.0.0.1` por padrão). O Lavalink (vinculado estritamente em `127.0.0.1` dentro do contêiner) e o serviço `mongo` (porta 27017 acessível exclusivamente na rede interna do Compose) **nunca** têm portas publicadas para fora.
 - **Sistema de Arquivos Somente Leitura**: O contêiner do bot roda com `read_only: true`. Diretórios temporários de escrita utilizam `/tmp` montado em memória (`tmpfs`).
@@ -164,9 +164,9 @@ Esta configuração segue as práticas de segurança do [Traefik com Cloudflare 
    ```
 
 4. **Inicialização com Override do Compose**:
-   Inicie a stack combinando o `docker-compose.yml` base com o arquivo de override:
+   Inicie a stack combinando o `deploy/docker-compose.yml` base com o arquivo de override:
    ```bash
-   docker compose -f docker-compose.yml -f deploy/docker-compose.traefik.yml up -d
+   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.traefik.yml --env-file .env up -d
    ```
 
 > [!NOTE]
@@ -179,7 +179,12 @@ Em gerenciadores de Docker integrados a painéis de VPS (como o **Docker Manager
 - **Sem `env_file`**: Nesses gerenciadores, a diretiva `env_file` não é suportada. O arquivo `.env` serve apenas para que o painel web interpole variáveis declaradas no compose sob a sintaxe `${VARIAVEL}`.
 - **Limite de 256 Caracteres por Variável**: No formulário de `.env` do painel web, cada valor aceita no máximo 256 caracteres, e o formulário recusa comentários em linha nos campos de valores.
 
-Para esse cenário de implantação em arquivo único atrás do Traefik, utilize a receita recomendada e mantida no repositório [**docker-compose-cookbook (`composes/empiremuse`)**](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/empiremuse):
+Para esse cenário de implantação em arquivo único atrás do Traefik, o repositório traz o compose usado na produção do EmpireMuse (VPS na Hostinger, atrás do Traefik + Cloudflare):
+
+- [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml): copie para o diretório do projeto no gerenciador (ex.: `/docker/empiremuse`) como `docker-compose.yml`. A cada release, atualize a tag da imagem.
+- [`deploy/env.example.hostinger`](../../deploy/env.example.hostinger): renomeie para `.env` e preencha só os segredos.
+
+Ele segue a receita genérica mantida no repositório [**docker-compose-cookbook (`composes/empiremuse`)**](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/empiremuse):
 - O compose consolida todas as variáveis e padrões recomendados de forma *inline*, sem necessidade de overrides.
 - O `.env` gerencia apenas os segredos, domínio e tokens de bot.
 - **Múltiplos Bots (Um Token por Variável)**: Para operar múltiplos bots no mesmo pool sem estourar o limite de 256 caracteres de um único campo (evitando concatenar múltiplos tokens em uma única linha), declare variáveis independentes: `TOKEN=...`, `TOKEN_2=...`, `TOKEN_3=...` (até `TOKEN_5` ou mais). O EmpireMuse varre automaticamente todas as variáveis de ambiente em busca de tokens de bot do Discord válidos.
