@@ -475,8 +475,8 @@ async def _rt_query_results(self, track, query, req):
         )
     except Exception as e:
         if track.info["sourceName"] == "youtube" and any(
-            e in str(e)
-            for e in (
+            msg in str(e)
+            for msg in (
                 "This video is not available",
                 "YouTube WebM streams are currently not supported.",
                 "Video returned by YouTube isn't what was requested",
@@ -494,7 +494,7 @@ async def _rt_query_results(self, track, query, req):
     except AttributeError:
         pass
 
-    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = req.tracks
+    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = result
 
     return result
 
