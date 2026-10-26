@@ -24,15 +24,17 @@ RUN apt-get update && \
 
 WORKDIR /opt/lavalink
 
-ARG LL_BINARIES_URL="https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3"
+ARG LL_BINARIES_URL="https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.4"
 ARG LAVALINK_JAR_SHA256="8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a"
-ARG LAVALINK_APPLICATION_YML_SHA256="a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95"
+ARG LAVALINK_APPLICATION_YML_SHA256="39ca3e7813e0db338535b0e098dd084ea22c278bb74a8ddeac92f1fc65f8bb46"
 ARG YT_PLUGIN_NAME="youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar"
 ARG YT_PLUGIN_SHA256="b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0"
 ARG LAVASRC_PLUGIN_NAME="lavasrc-plugin-4.8.3.jar"
 ARG LAVASRC_PLUGIN_SHA256="4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3"
 ARG LAVALINK_FILTER_PLUGIN_NAME="lavalink-2.6.1.jar"
 ARG LAVALINK_FILTER_PLUGIN_SHA256="1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3"
+ARG SOUNDY_PLUGIN_NAME="soundy-plugin-1.1.0.jar"
+ARG SOUNDY_PLUGIN_SHA256="9568b5930969346b1afba89df8c0c6d373c2b553e087af09fb3c190f252a3cc9"
 
 RUN mkdir -p /opt/lavalink/plugins && \
     curl --proto '=https' --tlsv1.2 -fSL --retry 3 "${LL_BINARIES_URL}/Lavalink.jar" -o /opt/lavalink/Lavalink.jar && \
@@ -40,12 +42,14 @@ RUN mkdir -p /opt/lavalink/plugins && \
     curl --proto '=https' --tlsv1.2 -fSL --retry 3 "${LL_BINARIES_URL}/${YT_PLUGIN_NAME}" -o "/opt/lavalink/plugins/${YT_PLUGIN_NAME}" && \
     curl --proto '=https' --tlsv1.2 -fSL --retry 3 "${LL_BINARIES_URL}/${LAVASRC_PLUGIN_NAME}" -o "/opt/lavalink/plugins/${LAVASRC_PLUGIN_NAME}" && \
     curl --proto '=https' --tlsv1.2 -fSL --retry 3 "${LL_BINARIES_URL}/${LAVALINK_FILTER_PLUGIN_NAME}" -o "/opt/lavalink/plugins/${LAVALINK_FILTER_PLUGIN_NAME}" && \
-    printf "%s  /opt/lavalink/Lavalink.jar\n%s  /opt/lavalink/application.yml\n%s  /opt/lavalink/plugins/%s\n%s  /opt/lavalink/plugins/%s\n%s  /opt/lavalink/plugins/%s\n" \
+    curl --proto '=https' --tlsv1.2 -fSL --retry 3 "${LL_BINARIES_URL}/${SOUNDY_PLUGIN_NAME}" -o "/opt/lavalink/plugins/${SOUNDY_PLUGIN_NAME}" && \
+    printf "%s  /opt/lavalink/Lavalink.jar\n%s  /opt/lavalink/application.yml\n%s  /opt/lavalink/plugins/%s\n%s  /opt/lavalink/plugins/%s\n%s  /opt/lavalink/plugins/%s\n%s  /opt/lavalink/plugins/%s\n" \
       "${LAVALINK_JAR_SHA256}" \
       "${LAVALINK_APPLICATION_YML_SHA256}" \
       "${YT_PLUGIN_SHA256}" "${YT_PLUGIN_NAME}" \
       "${LAVASRC_PLUGIN_SHA256}" "${LAVASRC_PLUGIN_NAME}" \
       "${LAVALINK_FILTER_PLUGIN_SHA256}" "${LAVALINK_FILTER_PLUGIN_NAME}" \
+      "${SOUNDY_PLUGIN_SHA256}" "${SOUNDY_PLUGIN_NAME}" \
       > /tmp/checksums.txt && \
     sha256sum -c /tmp/checksums.txt && \
     rm -f /tmp/checksums.txt && \

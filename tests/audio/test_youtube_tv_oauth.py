@@ -4,7 +4,7 @@ Contrato: BRIEFING-FASE2.md ("Trilha A2" e notas seguintes). Interpretações: .
 Sem rede, sem Java, sem Discord e sem produção: `subprocess.Popen` é um dublê e tudo roda em tmp_path.
 
 API exigida do Backend (nomes fixados pelos testes):
-  utils/branding.py        LAVALINK_BINARIES_URL -> release 0.0.3; LAVALINK_APPLICATION_YML_SHA256 = hash do yml 0.0.3;
+  utils/branding.py        LAVALINK_BINARIES_URL -> release 0.0.4; LAVALINK_APPLICATION_YML_SHA256 = hash do yml 0.0.4;
                            LAVALINK_APPLICATION_YML_KNOWN_SHA256 inclui os yml 0.0.1 e 0.0.2 (substituídos na atualização).
   config_loader.py         DEFAULT_CONFIG["YOUTUBE_OAUTH_REFRESH_TOKEN"] = "" (segredo, texto).
   .example.env             YOUTUBE_OAUTH_REFRESH_TOKEN= (vazio).
@@ -33,10 +33,10 @@ pytestmark = pytest.mark.critical
 
 ROOT = RAIZ
 STAGING_ENV = os.environ.get("EMPIREMUSE_STAGING")
-RELEASE_003 = Path(STAGING_ENV) / "ll-binaries-0.0.3" if STAGING_ENV else None
+RELEASE_004 = Path(STAGING_ENV) / "ll-binaries-0.0.4" if STAGING_ENV else None
 
-BASE_003 = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3"
-YML_003_SHA256 = "a342d5575fac9c394faaaecaae17df1c8fc759dc8a8937ff839aeabb07cb6b95"
+BASE_004 = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.4"
+YML_004_SHA256 = "39ca3e7813e0db338535b0e098dd084ea22c278bb74a8ddeac92f1fc65f8bb46"
 
 OAUTH_ENV_VARS = (
     "PLUGINS_YOUTUBE_OAUTH_ENABLED",
@@ -58,16 +58,16 @@ def assert_no_token(where: str, *texts) -> None:
         pytest.fail(f"o refresh token vazou em: {where}", pytrace=False)
 
 
-# ============================================================================ (1) branding -> release 0.0.3
+# ============================================================================ (1) branding -> release 0.0.4
 
 
-class TestBrandingRelease003:
-    def test_application_yml_hash_is_the_003_one(self):
-        assert branding.LAVALINK_APPLICATION_YML_SHA256 == YML_003_SHA256
+class TestBrandingRelease004:
+    def test_application_yml_hash_is_the_004_one(self):
+        assert branding.LAVALINK_APPLICATION_YML_SHA256 == YML_004_SHA256
 
-    def test_plugin_urls_are_built_from_the_003_base(self):
+    def test_plugin_urls_are_built_from_the_004_base(self):
         for name in branding.LAVALINK_PLUGIN_SHA256:
-            assert f"{branding.LAVALINK_BINARIES_URL}/{name}".startswith(BASE_003 + "/")
+            assert f"{branding.LAVALINK_BINARIES_URL}/{name}".startswith(BASE_004 + "/")
 
 
 # ============================================================================ (2) configuração do segredo
@@ -332,28 +332,28 @@ class TestNoOutputSinkReceivesTheToken:
         )
 
 
-# ============================================================================ (5) application.yml 0.0.3
+# ============================================================================ (5) application.yml 0.0.4
 
 
 @pytest.fixture(scope="module")
-def release_003():
-    if not RELEASE_003 or not RELEASE_003.is_dir():
-        pytest.skip("artefatos da release 0.0.3 ausentes; defina a variável EMPIREMUSE_STAGING para habilitar")
-    return RELEASE_003
+def release_004():
+    if not RELEASE_004 or not RELEASE_004.is_dir():
+        pytest.skip("artefatos da release 0.0.4 ausentes; defina a variável EMPIREMUSE_STAGING para habilitar")
+    return RELEASE_004
 
 
 @pytest.fixture(scope="module")
-def yml_003(release_003):
+def yml_004(release_004):
     from ruamel.yaml import YAML
 
-    return YAML(typ="safe").load((release_003 / "application.yml").read_text("utf-8"))
+    return YAML(typ="safe").load((release_004 / "application.yml").read_text("utf-8"))
 
 
-class TestApplicationYml003:
-    def test_youtube_oauth_handler_logger_is_at_warn(self, yml_003):
-        level = yml_003["logging"]["level"]
+class TestApplicationYml004:
+    def test_youtube_oauth_handler_logger_is_at_warn(self, yml_004):
+        level = yml_004["logging"]["level"]
         assert level.get("dev.lavalink.youtube.http.YoutubeOauth2Handler") == "WARN"
 
-    def test_the_yml_has_no_other_secret_than_the_known_local_password(self, release_003):
-        text = (release_003 / "application.yml").read_text("utf-8")
+    def test_the_yml_has_no_other_secret_than_the_known_local_password(self, release_004):
+        text = (release_004 / "application.yml").read_text("utf-8")
         assert "refreshToken" not in text and "refresh_token" not in text.lower()

@@ -8,9 +8,9 @@ Quando configurado para execução local, o próprio bot gerencia o download de 
 
 ---
 
-## 1. Stack e Versões Homologadas (Release 0.0.3)
+## 1. Stack e Versões Homologadas (Release 0.0.4)
 
-O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins espelhados com hashes fixados. A release **0.0.3** mantém os mesmos binários estáveis do Lavalink 4.2.2 e plugins da 0.0.2, introduzindo um `application.yml` atualizado com suporte ao cliente `TV` (essencial para contornar bloqueios anti-bot), OAuth desativado por padrão e nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN` (evitando vazamento de tokens nos logs):
+O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins espelhados com hashes fixados. A release **0.0.4** mantém o Lavalink 4.2.2 e os plugins da 0.0.3 e acrescenta o plugin **Soundy** (SoundCloud), com um `application.yml` que desliga a fonte nativa do SoundCloud e fixa `logging.request.includePayload: false`. Desde a 0.0.3, o `application.yml` traz `application.yml` atualizado com suporte ao cliente `TV` (essencial para contornar bloqueios anti-bot), OAuth desativado por padrão e nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN` (evitando vazamento de tokens nos logs):
 
 | Componente | Versão / Tag | Origem e Observações |
 | :--- | :--- | :--- |
@@ -19,9 +19,10 @@ O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins es
 | **youtube-plugin** | Snapshot `2be8e542` | Build fixado pós-1.18.2 com correções críticas para clientes mobile/web e suporte a cifra remota. |
 | **LavaSrc** | **4.8.3** | Provedor de metadados e suporte a plataformas externas (Spotify e Deezer). |
 | **Lyrics** | **2.6.1** | Plugin oficial de letras de músicas (`dev.schlaubi.lyrics`). |
+| **Soundy** | **1.1.0** (`lowkwrs/soundy@e2c5da8`, MIT) | Fonte do SoundCloud (`scsearch:` e URLs `soundcloud.com`) com suporte a HLS fMP4, compilada do commit fixado; receita de recompilação no README do espelho. |
 
 Os artefatos homologados são distribuídos no espelho oficial da organização:
-- **Repositório de Binários**: [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/tag/0.0.3)
+- **Repositório de Binários**: [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/tag/0.0.4)
 
 ---
 
@@ -59,7 +60,7 @@ O parâmetro `LAVALINK_FILE_URL` define a origem do binário `Lavalink.jar`:
 - Um aviso informativo é registrado no log e a sua configuração customizada é integralmente respeitada. Arquivos oficiais de versões anteriores são migrados de forma automática para a versão atual.
 
 ### Plugins Espelhados sem Download em Tempo de Execução
-- Os jars dos três plugins homologados são baixados pelo bot diretamente para o diretório `plugins/` com conferência de hash SHA-256.
+- Os jars dos quatro plugins homologados (`youtube-plugin`, LavaSrc, Lyrics e Soundy) são baixados pelo bot diretamente para o diretório `plugins/` com conferência de hash SHA-256.
 - O `application.yml` declara os plugins com as mesmas versões dos jars locais, garantindo que o Lavalink não precise fazer requisições dinâmicas a repositórios externos (como o Maven Central) durante a inicialização.
 
 ---
@@ -74,13 +75,13 @@ O parâmetro `LAVALINK_FILE_URL` define a origem do binário `Lavalink.jar`:
 
 ### 3.2. Bloqueio Anti-bot e Autenticação OAuth Opcional
 Desde agosto de 2026, o YouTube intensificou restrições automáticas contra clientes externos e scrapers ("Sign in to confirm you're not a bot", "This video requires login"):
-1. **Padrão Seguro**: O `application.yml` oficial da release 0.0.3 mantém `plugins.youtube.oauth.enabled: false` e o nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN`. Isso previne que tokens ou credenciais sejam impressos nos arquivos de log e evita ciclos contínuos de erro HTTP 400 quando não há conta vinculada.
+1. **Padrão Seguro**: O `application.yml` oficial da release 0.0.4 mantém `plugins.youtube.oauth.enabled: false` e o nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN`. Isso previne que tokens ou credenciais sejam impressos nos arquivos de log e evita ciclos contínuos de erro HTTP 400 quando não há conta vinculada.
 2. **OAuth com Conta Descartável**: Caso seu servidor sofra bloqueios de IP na reprodução do YouTube, é possível ativar a autenticação OAuth vinculando uma **conta Google descartável** através da variável `YOUTUBE_OAUTH_REFRESH_TOKEN` no `.env`.
    - Consulte o guia completo e passo a passo em: [Guia de Configuração do YouTube OAuth](youtube-oauth.md).
 
-### 3.3. Ordem de Busca e Limitação do SoundCloud
+### 3.3. Ordem de Busca e SoundCloud
 - A variável `SEARCH_PROVIDERS` tem como padrão `"ytsearch ytmsearch scsearch"`, priorizando o catálogo padrão do YouTube e do YouTube Music.
-- **Limitação Conhecida do SoundCloud**: O lavaplayer upstream apresenta falha conhecida na detecção de formatos de transmissões HLS do SoundCloud (`Did not detect any supported formats`), sem correção disponibilizada até o momento. O provedor `scsearch` é mantido apenas como último recurso de fallback.
+- **SoundCloud via Soundy**: a fonte nativa do lavaplayer falha no HLS fMP4 do SoundCloud (`Did not detect any supported formats`; upstream [lavaplayer#189](https://github.com/lavalink-devs/lavaplayer/issues/189) e [#202](https://github.com/lavalink-devs/lavaplayer/pull/202) em aberto). Por isso o `application.yml` mantém `lavalink.server.sources.soundcloud: false` e o plugin Soundy (`plugins.soundy.enabled: true`) registra o prefixo `scsearch:` e as URLs `soundcloud.com`. Se você usa um `application.yml` personalizado, replique essas duas chaves.
 
 ---
 
@@ -132,7 +133,7 @@ Ao publicar uma nova versão dos binários homologados no repositório [EmpireCo
 1. **Publicação dos Artefatos**:
    - Compilar ou obter os artefatos oficiais homologados (`Lavalink.jar`, `application.yml` e jars dos plugins).
    - Gerar o arquivo `SHA256SUMS` com os hashes SHA-256 de todos os arquivos.
-   - Publicar a release no GitHub sob a tag semântica (ex.: `0.0.3`) contendo todos os binários e o arquivo `SHA256SUMS`.
+   - Publicar a release no GitHub sob a tag semântica (ex.: `0.0.4`) contendo todos os binários e o arquivo `SHA256SUMS`.
 2. **Atualização do `utils/branding.py`**:
    - Atualizar a constante `LAVALINK_BINARIES_URL` para apontar para a nova tag de release.
    - Atualizar os hashes fixos `LAVALINK_JAR_SHA256`, `LAVALINK_APPLICATION_YML_SHA256` e o dicionário `LAVALINK_PLUGIN_SHA256` com base no `SHA256SUMS` conferido.

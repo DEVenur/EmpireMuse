@@ -11,6 +11,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Refatoração interna do player (KI-29b)**: `PlayerEventsMixin.hook_events` (323 linhas), `PlayerStateMixin.cleanup` (195) e `PlayerAutoqueueMixin.resolve_track` (159) viram orquestradores curtos que chamam etapas de módulo (`event_steps.py`, `state_steps.py` e `autoqueue_steps.py`), na mesma ordem de efeitos, sem mudança de comportamento.
 
 ### Corrigido
+- **SoundCloud voltou a funcionar (`scsearch:` e URLs `soundcloud.com`)**:
+  - A fonte nativa do lavaplayer retornava `loadType: error` ("Something went wrong while looking up the track") por falha no HLS fMP4 do SoundCloud (upstream lavaplayer#189 e #202 em aberto).
+  - Imagem Docker e Lavalink local passam para a release `0.0.4` do `EmpireMuse-LL-binaries`, que inclui o plugin [Soundy](https://github.com/lowkwrs/soundy) 1.1.0 (MIT, compilado do commit `e2c5da8`; SHA-256 fixado em `Dockerfile` e `branding.LAVALINK_PLUGIN_SHA256`) e um `application.yml` com a fonte nativa do SoundCloud desligada e `logging.request.includePayload: false`. O `-Dlogging.request.includePayload=false` da imagem foi mantido (defesa em profundidade).
+  - O `application.yml` da 0.0.3 passa a ser reconhecido como oficial e é atualizado sozinho; arquivos personalizados continuam intocados.
 - **Preservação de Padrões da Imagem Docker no `.example.env`**:
   - Comentadas as variáveis `RUN_LOCAL_LAVALINK`, `LAVALINK_JAVA_PATH`, `LAVALINK_HOME` e `LAVALINK_OFFLINE` no `.example.env` para evitar que a cópia do arquivo de exemplo para `.env` sobrescreva os valores pré-configurados pela imagem oficial (`RUN_LOCAL_LAVALINK=true`, etc.) no Docker Compose.
   - Documentado no `.example.env` e em `docs/guides/docker.md` o comportamento das variáveis da imagem e a equivalência fora do Docker via `DEFAULT_CONFIG`.
