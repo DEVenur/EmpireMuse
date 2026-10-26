@@ -6,7 +6,7 @@ construída com o ambiente isolado em tmp_path e as opções chegam pelas variá
 Segredos e IDs são montados em tempo de execução.
 
 Convenção: ``test_guarda_*`` caracterizam o comportamento atual (passam hoje e precisam continuar passando); os demais
-falham hoje pelo motivo descrito na docstring. O app desktop (repos/EmpireMuse-RPC-app) é só lido, nunca alterado.
+falham hoje pelo motivo descrito na docstring. O app desktop (irmão EmpireMuse-RPC-app) é só lido, nunca alterado.
 """
 
 import ast
@@ -40,8 +40,8 @@ from tests.support.raiz import RAIZ
 pytestmark = pytest.mark.critical
 
 ROOT = RAIZ
-APP_DESKTOP = ROOT / "repos" / "EmpireMuse-RPC-app" / "rpc_client.py"
-SO_COM_APP_DESKTOP = pytest.mark.skipif(not APP_DESKTOP.is_file(), reason="repos/EmpireMuse-RPC-app ausente")
+APP_DESKTOP = ROOT.parent / "EmpireMuse-RPC-app" / "rpc_client.py"
+SO_COM_APP_DESKTOP = pytest.mark.skipif(not APP_DESKTOP.is_file(), reason="clone irmão ../EmpireMuse-RPC-app ausente")
 
 VERSAO_APP = "3.0.0"
 ESPERA = 2.0  # teto de espera por um evento do servidor

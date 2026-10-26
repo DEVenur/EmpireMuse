@@ -27,7 +27,7 @@ uv pip install --require-hashes -r requirements-lock.txt
 
 Observações:
 
-- `disnake` vem do PyPI (`disnake==2.12.2`) e o `jishaku` é o fork `empiremuse-jishaku` (release `v2.6.6.post2` de [EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku), submódulo `repos/EmpireMuse-jishaku`), instalado pelo wheel da release por URL. Ambos estão no `requirements-lock.txt` com hash SHA-256; não há dependência VCS.
+- `disnake` vem do PyPI (`disnake==2.12.2`) e o `jishaku` é o fork `empiremuse-jishaku` (release `v2.6.6.post2` de [EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku)), instalado pelo wheel da release por URL. Ambos estão no `requirements-lock.txt` com hash SHA-256; não há dependência VCS.
 - As dependências do PyPI são travadas com hashes SHA-256 no arquivo de lock universal `requirements-lock.txt` (compilado via `uv pip compile --generate-hashes --universal --exclude-newer <corte>`), garantindo integridade criptográfica da cadeia de suprimentos (conforme `.claude/rules/empiremuse/security.md` §8).
 - **Suporte universal multiplataforma (Windows/Linux)**: os lockfiles utilizam resolução universal (`--universal`), preservando marcadores de ambiente como `uvloop==... ; sys_platform != 'win32'`. Isso viabiliza a instalação nativa tanto em ambientes Linux/Docker quanto no Windows (onde `uvloop` é automaticamente ignorado sem quebrar o processo).
 - **Janela de corte temporal (`--exclude-newer`)**: a compilação dos lockfiles adota corte temporal de segurança de aproximadamente 7 dias para mitigar riscos de supply chain de pacotes recém-publicados.
@@ -233,28 +233,35 @@ node ~/.claude/plugins/cache/ecc/ecc/<versão>/scripts/install-apply.js --target
 - Regras do Claude Code ficam em `.claude/rules/ecc/` (alvo `claude-project`). Revise o diff antes de
   commitar e não misture a atualização do ECC com mudanças de código.
 
-## 8. Workspace multipasta e repositórios irmãos (`repos/`)
+## 8. Workspace multipasta e repositórios irmãos
 
-Para facilitar o desenvolvimento integrado entre o bot principal e seus ecossistemas satélites, o repositório adota um layout com arquivo de workspace multipasta para VS Code / Cursor:
+Os ecossistemas satélites do bot **não são submódulos**: são clones independentes, **irmãos** do repositório principal, na raiz do workspace:
 
-- `EmpireMuse.code-workspace`: arquivo de configuração na raiz que mapeia:
-  1. `.` — o repositório principal do **EmpireMuse**;
-  2. `repos/EmpireMuse-LL-binaries` — repositório dos binários e plugins do Lavalink;
-  3. `repos/EmpireMuse-RPC-app` — aplicativo de presença rica (RPC) para desktop.
-- **Isolamento e Ignorados**: a pasta `repos/` (bem como `worktrees/`, `.arquivo/` e `.local/`) é estritamente ignorada no `.gitignore`, excluída de builds no `.dockerignore` e omitida das métricas de cobertura no `pyproject.toml`.
-- **Desempenho da IDE**: o workspace configura exclusões de indexação e busca (`search.exclude`) para pastas pesadas ou locais como `.venv`, `.java`, `local_database`, `worktrees`, `repos`, `.arquivo` e `.local`.
-- **Submódulos dos irmãos**: os repositórios irmãos em `repos/` são submódulos Git do projeto. Para inicializá-los ou atualizá-los (caso o clone não tenha sido feito com `--recurse-submodules`):
+```text
+<raiz-do-workspace>/
+├── EmpireMuse/              # este repositório
+├── EmpireMuse-LL-binaries/  # binários e plugins do Lavalink
+├── EmpireMuse-RPC-app/      # aplicativo de presença rica (RPC) para desktop
+└── EmpireMuse-jishaku/      # fork do jishaku para o disnake
+```
+
+- **Clonar os irmãos** (a partir da raiz do workspace, ao lado de `EmpireMuse/`). Para abrir o `EmpireMuse.code-workspace` os três precisam estar clonados; sem o workspace, clone só os que for usar:
   ```bash
-  git submodule update --init
+  git clone https://github.com/EmpireCommunity/EmpireMuse-LL-binaries.git
+  git clone https://github.com/EmpireCommunity/EmpireMuse-RPC-app.git
+  git clone https://github.com/EmpireCommunity/EmpireMuse-jishaku.git
   ```
-  A CI não baixa os submódulos e os testes que dependem deles são pulados automaticamente.
+  A CI não baixa os irmãos e os testes que dependem deles são pulados automaticamente (hoje, só os que leem o `rpc_client.py` do app desktop).
+- `EmpireMuse.code-workspace`: arquivo na raiz do repositório que mapeia `.` (o EmpireMuse) e `../EmpireMuse-LL-binaries`, `../EmpireMuse-RPC-app` e `../EmpireMuse-jishaku`.
+- **Isolamento e ignorados**: `worktrees/`, `.arquivo/` e `.local/` são ignorados no `.gitignore`, excluídos de builds no `.dockerignore` e omitidos das métricas de cobertura no `pyproject.toml`.
+- **Desempenho da IDE**: o workspace configura exclusões de indexação e busca (`search.exclude`) para pastas pesadas ou locais como `.venv`, `.java`, `local_database`, `worktrees`, `.arquivo` e `.local`.
 
 ## 9. Padrão de Git Worktrees e Isolamento de Branches
 
 Para permitir o trabalho paralelo e simultâneo de múltiplos agentes autônomos e desenvolvedores sem colisão de estado ou sujeira no ambiente, o projeto adota compulsoriamente o padrão de **Git Worktrees**:
 
 ### Diretrizes de Isolamento
-- **Árvore principal intocável**: A árvore de trabalho principal (`/home/admin/projects/EmpireMuse`) permanece **permanentemente na branch `main`**. Desenvolvedores e agentes **NUNCA** devem trocar de branch na raiz da árvore principal (`git checkout <branch>` ou `git switch <branch>`).
+- **Árvore principal intocável**: A árvore de trabalho principal (a pasta do clone principal) permanece **permanentemente na branch `main`**. Desenvolvedores e agentes **NUNCA** devem trocar de branch na raiz da árvore principal (`git checkout <branch>` ou `git switch <branch>`).
 - **Diretório `worktrees/`**: Todas as branches de novas funcionalidades (`feat/*`), correções (`fix/*`), refatorações (`refactor/*`) ou tarefas paralelas devem ser desenvolvidas em worktrees dedicadas criadas dentro de `worktrees/` (exemplo: `worktrees/fix-nome-da-tarefa`). Esse diretório é estritamente ignorado no `.gitignore`, no `.dockerignore` e nas métricas de cobertura.
 
 ### Ciclo Operacional

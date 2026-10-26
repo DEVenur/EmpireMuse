@@ -64,7 +64,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `docs/painel/`: Inventário dos serviços e configurações do painel web (`servicos-configuracoes.md`).
 - `tests/`: Testes automatizados (pytest), organizados por domínio em subpastas (ver docs/development.md, seção 6).
-- `repos/`: submódulos git (`EmpireMuse-RPC-app`, `EmpireMuse-LL-binaries`, `EmpireMuse-jishaku`); `git submodule update --init` para baixar.
+- Repositórios satélites (`EmpireMuse-RPC-app`, `EmpireMuse-LL-binaries`, `EmpireMuse-jishaku`): clones irmãos na raiz do workspace, ao lado desta pasta (não são submódulos); ver docs/development.md, seção 8.
 
 ---
 
@@ -135,7 +135,7 @@ O desenvolvimento cooperativo de múltiplos agentes é coordenado através do ca
 
 - **Isolamento de Escopo e Padrão de Git Worktrees**:
   - Cada agente deve modificar **estritamente os arquivos atribuídos à sua tarefa**. Alterações em arquivos de outros agentes devem ser solicitadas no relatório.
-  - **Árvore principal intocável**: Agentes autônomos e desenvolvedores **NUNCA** trocam de branch na árvore principal (`/home/admin/projects/EmpireMuse`), que permanece permanentemente em `main`.
+  - **Árvore principal intocável**: Agentes autônomos e desenvolvedores **NUNCA** trocam de branch na árvore principal (a pasta do clone principal), que permanece permanentemente em `main`.
   - **Uso obrigatório de Worktrees**: Demandas que exijam branches de funcionalidades (`feat/*`), correções (`fix/*`), refatorações (`refactor/*`) ou trabalho paralelo devem operar exclusivamente em uma worktree dedicada sob `worktrees/` (criada a partir de `main`: `git worktree add worktrees/<nome-da-branch> -b <nome-da-branch> origin/main`). O diretório `worktrees/` é estritamente ignorado pelo git.
   - **Limpeza pós-merge**: Após a conclusão e merge do PR correspondente pelo MAESTRO, a worktree deve ser limpa a partir da raiz com `git worktree remove worktrees/<nome-da-branch>`, a branch local excluída com `git branch -d <nome-da-branch>` e as referências limpas com `git worktree prune`.
 - **Mediação e Prevenção de Loops**: Caso qualquer agente tente a mesma solução mais de duas vezes sem sucesso ou entre em loop, sua execução é interrompida imediatamente e o impasse é encaminhado para avaliação do **Devil's Advocate**.
@@ -183,8 +183,8 @@ Uma funcionalidade, correção ou tarefa só é considerada **concluída** após
 - **Claude Code**: Carrega automaticamente `.claude/rules/ecc/{common,python,java}` e `.claude/rules/empiremuse/*`.
 - **Antigravity CLI**: Descobre e carrega `AGENTS.md` na raiz do repositório e utiliza o pacote local `.agents/` (não versionado; regenerável via script indicado em `docs/development.md`).
 - **Ordem de Precedência**: As regras específicas do EmpireMuse ([`.claude/rules/empiremuse/*`](.claude/rules/empiremuse/) e este `AGENTS.md`) possuem **precedência absoluta** sobre as diretrizes genéricas do ECC caso haja divergência.
-- **Repositórios Irmãos (`repos/*`)**:
-  - Para agentes ou sessões abertas dentro de `repos/*`, as regras e convenções do repositório filho prevalecem sobre as do repositório pai (`EmpireMuse`).
+- **Repositórios Irmãos (`../EmpireMuse-*`)**:
+  - Para agentes ou sessões abertas dentro de um repositório irmão (clone ao lado deste, na raiz do workspace), as regras e convenções do repositório filho prevalecem sobre as do repositório pai (`EmpireMuse`).
   - Commits, branches e PRs de alterações feitas nos ecossistemas satélites devem ser realizados **estritamente dentro do próprio repositório filho** correspondente.
 
 ---
