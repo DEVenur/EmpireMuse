@@ -34,7 +34,7 @@ Salvaguardas mantidas e acrescentadas:
 
 - Positivas: instalação verificável por hash, controle direto de correções e releases, sem VCS no build.
 - Negativas: o projeto passa a manter o fork; atualizações são feitas por nova release e novo hash no lock, com diff revisado.
-- Risco residual: indisponibilidade do GitHub Releases no build (mitigado pelo hash e pelo repositório do fork com o código-fonte).
+- Risco residual: indisponibilidade do GitHub Releases no build. O hash só garante a integridade do wheel depois de baixado e o repositório do fork não substitui o artefato da release no build; o risco **não é mitigado** (não há mirror com fallback).
 
 ## Atualização (2026-10-26)
 

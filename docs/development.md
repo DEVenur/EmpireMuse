@@ -245,7 +245,7 @@ Os ecossistemas satélites do bot **não são submódulos**: são clones indepen
 └── EmpireMuse-jishaku/      # fork do jishaku para o disnake
 ```
 
-- **Clonar os irmãos** (a partir da raiz do workspace, ao lado de `EmpireMuse/`; só os que você for usar):
+- **Clonar os irmãos** (a partir da raiz do workspace, ao lado de `EmpireMuse/`). Para abrir o `EmpireMuse.code-workspace` os três precisam estar clonados; sem o workspace, clone só os que for usar:
   ```bash
   git clone https://github.com/EmpireCommunity/EmpireMuse-LL-binaries.git
   git clone https://github.com/EmpireCommunity/EmpireMuse-RPC-app.git
