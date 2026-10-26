@@ -2,18 +2,22 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import traceback
 from typing import Union, List
 
 import disnake
 
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.others import send_idle_embed
 
 from empiremuse.utils.music.models.tracks import (
     LavalinkTrack,
     PartialTrack,
+)
+from empiremuse.utils.music.models.state_steps import (
+    _cu_cancel_tasks,
+    _cu_close_player_message,
+    _cu_static_session,
+    _cu_voice_channel,
 )
 
 
@@ -21,51 +25,12 @@ class PlayerStateMixin:
     async def cleanup(self, inter: disnake.MessageInteraction = None):
         self.played.clear()
 
-        try:
-            self.reconnect_voice_channel_task.cancel()
-        except Exception:
-            pass
-
-        try:
-            self.members_timeout_task.cancel()
-        except Exception:
-            pass
-
-        try:
-            self.auto_skip_track_task.cancel()
-        except Exception:
-            pass
-
-        try:
-            self._queue_updater_task.cancel()
-        except Exception:
-            pass
-
-        try:
-            self.message_updater_task.cancel()
-        except Exception:
-            pass
-        self.message_updater_task = None
-
-        try:
-            self._new_node_task.cancel()
-        except Exception:
-            pass
-        self._new_node_task = None
-
-        try:
-            self.idle_task.cancel()
-        except Exception:
-            pass
-        self.idle_task = None
+        _cu_cancel_tasks(self)
 
         if self.guild.me:
             self.bot.loop.create_task(self.update_stage_topic(reconnect=False, clear=True))
 
-            try:
-                vc = self.guild.voice_client.channel
-            except Exception:
-                vc = self.last_channel
+            vc = _cu_voice_channel(self)
 
             try:
                 await self.process_rpc(vc, close=True)
@@ -73,144 +38,10 @@ class PlayerStateMixin:
                 traceback.print_exc()
 
             if self.static:
-                try:
-                    await send_idle_embed(inter or self.message, self.command_log, bot=self.bot)
-                except Exception:
-                    traceback.print_exc()
-                    pass
+                await _cu_static_session(self, inter)
 
-                await self.channel_cleanup()
-
-            else:
-                try:
-                    if self.has_thread or self.static:
-                        try:
-                            if inter.message.id == self.message.id:
-                                func = inter.response.edit_message
-                            else:
-                                func = self.message.edit
-                        except AttributeError:
-                            try:
-                                func = self.message.edit
-                            except AttributeError:
-                                func = None
-
-                        if func:
-                            try:
-                                await func(
-                                    allowed_mentions=self.allowed_mentions,
-                                    **self.get_skin(disable=True)
-                                    if (
-                                        not self.static
-                                        and (
-                                            disnake.utils.utcnow()
-                                            - datetime.datetime.fromtimestamp(self.uptime, datetime.timezone.utc)
-                                        ).total_seconds()
-                                        > 15
-                                    )
-                                    else {
-                                        "embed": disnake.Embed(
-                                            description=self.command_log, color=self.bot.get_color(self.guild.me)
-                                        )
-                                    },
-                                )
-                                channel: disnake.Thread = self.bot.get_channel(self.message.id)
-
-                                if channel.parent.permissions_for(self.guild.me).send_messages_in_threads:
-                                    try:
-                                        await channel.send(
-                                            embed=disnake.Embed(
-                                                color=self.bot.get_color(self.guild.me),
-                                                description="**A sessão de pedido de música da conversa atual foi encerrada.**",
-                                            )
-                                        )
-                                    except Exception:
-                                        pass
-
-                                if (
-                                    channel.owner.id == self.bot.user.id
-                                    or channel.parent.permissions_for(self.guild.me).manage_threads
-                                ):
-                                    kwargs = {"archived": True, "locked": True}
-                                else:
-                                    kwargs = {}
-
-                                await channel.edit(**kwargs)
-                            except Exception:
-                                print(
-                                    f"Falha ao arquivar thread do servidor: {self.guild.name}\n{traceback.format_exc()}"
-                                )
-
-                    elif inter:
-                        kw = {}
-
-                        if self.lyric_embed and self.message and self.message.components:
-                            self.lyric_embed.description += f"\n🛑 ⠂{self.command_log}"
-
-                            components = []
-
-                            for component in self.message.components:
-                                for item in component.children:
-                                    if isinstance(item, disnake.Button):
-                                        item = disnake.ui.Button().from_component(item)
-                                    elif isinstance(item, disnake.SelectMenu):
-                                        item = disnake.ui.Select().from_component(item)
-                                    item.disabled = True
-                                    components.append(item)
-
-                            kw = {"embed": self.lyric_embed, "components": components}
-
-                        if inter.message.id == self.message.id:
-                            func = inter.response.edit_message
-                            if (
-                                not kw
-                                and (
-                                    disnake.utils.utcnow()
-                                    - datetime.datetime.fromtimestamp(self.uptime, datetime.timezone.utc)
-                                ).total_seconds()
-                                > 15
-                            ):
-                                kw = self.get_skin(disable=True)
-                                try:
-                                    del kw["flags"]
-                                except Exception:
-                                    pass
-                        else:
-                            try:
-                                func = self.message.edit
-                            except Exception:
-                                func = None
-
-                        if func:
-                            if not kw:
-                                kw = {
-                                    "embed": disnake.Embed(
-                                        description=f"🛑 ⠂{self.command_log}", color=self.bot.get_color(self.guild.me)
-                                    ),
-                                    "view": None,
-                                }
-
-                            await func(**kw)
-
-                    elif self.controller_mode is True:
-                        if not self.current:
-                            await self.destroy_message()
-                            return
-
-                        kw = {}
-
-                        if self.lyric_embed and self.message and self.message.components:
-                            self.lyric_embed.description += f"\n🛑 ⠂{self.command_log}"
-                            kw = {"embed": self.lyric_embed, "components": []}
-
-                            for c in disnake.ui.View(timeout=0).from_message(self.message).children:
-                                c.disabled = True
-                                kw["components"].append(c)
-
-                        await self.message.edit(**kw or self.get_skin(disable=True))
-
-                except Exception:
-                    traceback.print_exc()
+            elif await _cu_close_player_message(self, inter):
+                return
 
         self.queue.clear()
 
