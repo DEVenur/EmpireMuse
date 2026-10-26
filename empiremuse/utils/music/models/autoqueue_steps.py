@@ -393,3 +393,168 @@ def _aq_queue_results(self, req):
 
     req.t = t
     req.tracks = tracks
+
+
+# Sentinelas de `_rt_query_results` (um resultado vazio ou `None` da busca é um resultado válido).
+_RT_RESTARTED = object()
+_RT_QUERY_FAILED = object()
+
+
+def _rt_cache_key(track):
+    return f"{track.info['sourceName']}:{track.author}-{track.single_title}"
+
+
+def _rt_provider_queries(self, track):
+    search_queries = []
+    for sp in self.node.partial_providers:
+        if track.info["sourceName"] == "youtube" and sp.startswith(("ytsearch:", "ytmsearch:")) and not self.native_yt:
+            continue
+
+        if "{isrc}" in sp:
+            if isrc := track.info.get("isrc"):
+                search_queries.append(sp.replace("{isrc}", isrc))
+            continue
+        search_queries.append(sp.replace("{title}", track.single_title).replace("{author}", ", ".join(track.authors)))
+    return search_queries
+
+
+def _rt_search_queries(self, track, force):
+    """Consultas de busca da faixa parcial; `None` quando ela não deve ser resolvida agora."""
+
+    if track.info["sourceName"] == "http":
+        search_queries = [track.uri or track.search_uri]
+    elif (
+        track.info["sourceName"] == "youtube"
+        and not force
+        and (not self.native_yt or not self.node.prefer_youtube_native_playback)
+    ):
+        return None
+    else:
+        search_queries = []
+
+    if not search_queries:
+        if (
+            not force
+            and track.info["sourceName"] in self.node.info.get("sourceManagers", [])
+            and (not self.node.only_use_native_search_providers or track.info["sourceName"] in native_sources)
+        ):
+            search_queries = [track.uri]
+        else:
+            search_queries = _rt_provider_queries(self, track)
+
+    return search_queries
+
+
+def _rt_drop_youtube_providers(self):
+    cog = self.bot.get_cog("Music")
+    cog.remove_provider(self.node.search_providers, ["ytsearch", "ytmsearch"])
+    cog.remove_provider(
+        self.node.partial_providers,
+        [
+            'ytsearch:"{isrc}"',
+            'ytsearch:"{title} - {author}"',
+            'ytmsearch:"{isrc}"',
+            'ytmsearch:"{title} - {author}"',
+        ],
+    )
+    self.native_yt = False
+
+
+async def _rt_query_results(self, track, query, req):
+    """Resultado da busca de `query` (do cache ou do nó), `_RT_QUERY_FAILED` se falhou ou `_RT_RESTARTED`."""
+
+    if result := self.bot.pool.partial_track_cache.get(_rt_cache_key(track)):
+        return result
+
+    try:
+        result = await self.node.get_tracks(
+            query,
+            track_cls=LavalinkTrack,
+            playlist_cls=LavalinkPlaylist,
+            check_title=60 if query.startswith(("ytmsearch", "ytsearch", "scsearch")) else 75,
+        )
+    except Exception as e:
+        if track.info["sourceName"] == "youtube" and any(
+            e in str(e)
+            for e in (
+                "This video is not available",
+                "YouTube WebM streams are currently not supported.",
+                "Video returned by YouTube isn't what was requested",
+                "The video returned is not what was requested.",
+            )
+        ):
+            _rt_drop_youtube_providers(self)
+            await self.resolve_track(track)
+            return _RT_RESTARTED
+        req.exceptions.append(e)
+        return _RT_QUERY_FAILED
+
+    try:
+        result = result.tracks
+    except AttributeError:
+        pass
+
+    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = req.tracks
+
+    return result
+
+
+def _rt_pick_candidate(track, result, req):
+    """Primeira faixa de `result` que serve para a parcial (sem stream, sem tags excluídas, duração próxima)."""
+
+    try:
+        if result[0].info["sourceName"] == "bandcamp":
+            req.check_duration = False
+    except Exception:
+        pass
+
+    has_exclude_tags = any(tag for tag in exclude_tags if tag.lower() in track.title.lower())
+
+    req.tracks.extend(result)
+
+    for t in result:
+        if t.is_stream:
+            continue
+
+        if not has_exclude_tags and any(tag for tag in exclude_tags if tag.lower() in t.title.lower()):
+            continue
+
+        if req.check_duration and not ((t.duration - 10000) < track.duration < (t.duration + 10000)):
+            continue
+
+        return t
+
+    return None
+
+
+def _rt_apply_selected_track(track, selected_track):
+    track.id = selected_track.id
+    track.info["id"] = selected_track.id
+    track.info["length"] = selected_track.duration
+    if track.info["sourceName"] == "last.fm":
+        track.info["pluginInfo"] = selected_track.info.get("pluginInfo", {})
+        track.info["author"] = selected_track.author
+        track.info["title"] = selected_track.title
+        track.info["sourceName"] = selected_track.info["sourceName"]
+        track.info["uri"] = selected_track.info["uri"]
+    else:
+        track.info["sourceNameOrig"] = selected_track.info["sourceName"]
+        if not track.info["author"]:
+            track.info["author"] = selected_track.author
+    if not track.duration:
+        track.info["duration"] = selected_track.duration
+    if not track.thumb:
+        track.info["artworkUrl"] = selected_track.thumb
+
+
+async def _rt_report_failure(self, track, e):
+    error_code = log_unexpected_error(
+        logger, e, f"obtenção de informação da PartialTrack {track.uri or track.search_uri}"
+    )
+    embed = disnake.Embed(
+        description=f"**Falha ao obter informação de PartialTrack:\n[{track.title}]({track.uri or track.search_uri})**"
+        f"{error_code_text(error_code)}\n"
+        f"**Servidor de música:** `{self.node.identifier}`",
+        color=disnake.Colour.red(),
+    )
+    await self.report_error(embed, track)

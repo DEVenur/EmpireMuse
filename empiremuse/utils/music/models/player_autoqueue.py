@@ -38,8 +38,15 @@ from empiremuse.utils.music.models.autoqueue_steps import (
     _aq_lastfm_tracks,
     _aq_report_failure,
     _aq_queue_results,
+    _rt_apply_selected_track,
+    _rt_pick_candidate,
+    _rt_query_results,
+    _rt_report_failure,
+    _rt_search_queries,
+    _RT_QUERY_FAILED,
+    _RT_RESTARTED,
 )
-from empiremuse.utils.music.models.step_state import AutoqueueState
+from empiremuse.utils.music.models.step_state import AutoqueueState, ResolveTrackState
 
 
 class PlayerAutoqueueMixin:
@@ -108,158 +115,37 @@ class PlayerAutoqueueMixin:
         if track.id:
             return
 
-        check_duration = bool(track.duration)
+        req = ResolveTrackState(check_duration=bool(track.duration))
 
         try:
-            exceptions = []
-            selected_track = None
-            tracks = []
+            search_queries = _rt_search_queries(self, track, force)
 
-            if track.info["sourceName"] == "http":
-                search_queries = [track.uri or track.search_uri]
-            elif (
-                track.info["sourceName"] == "youtube"
-                and not force
-                and (not self.native_yt or not self.node.prefer_youtube_native_playback)
-            ):
+            if search_queries is None:
                 return
-            else:
-                search_queries = []
-
-            if not search_queries:
-                if (
-                    not force
-                    and track.info["sourceName"] in self.node.info.get("sourceManagers", [])
-                    and (not self.node.only_use_native_search_providers or track.info["sourceName"] in native_sources)
-                ):
-                    search_queries = [track.uri]
-                else:
-                    search_queries = []
-                    for sp in self.node.partial_providers:
-                        if (
-                            track.info["sourceName"] == "youtube"
-                            and sp.startswith(("ytsearch:", "ytmsearch:"))
-                            and not self.native_yt
-                        ):
-                            continue
-
-                        if "{isrc}" in sp:
-                            if isrc := track.info.get("isrc"):
-                                search_queries.append(sp.replace("{isrc}", isrc))
-                            continue
-                        search_queries.append(
-                            sp.replace("{title}", track.single_title).replace("{author}", ", ".join(track.authors))
-                        )
 
             for query in search_queries:
-                if not (
-                    result := self.bot.pool.partial_track_cache.get(
-                        f"{track.info['sourceName']}:{track.author}-{track.single_title}"
-                    )
-                ):
-                    try:
-                        result = await self.node.get_tracks(
-                            query,
-                            track_cls=LavalinkTrack,
-                            playlist_cls=LavalinkPlaylist,
-                            check_title=60 if query.startswith(("ytmsearch", "ytsearch", "scsearch")) else 75,
-                        )
-                    except Exception as e:
-                        if track.info["sourceName"] == "youtube" and any(
-                            e in str(e)
-                            for e in (
-                                "This video is not available",
-                                "YouTube WebM streams are currently not supported.",
-                                "Video returned by YouTube isn't what was requested",
-                                "The video returned is not what was requested.",
-                            )
-                        ):
-                            cog = self.bot.get_cog("Music")
-                            cog.remove_provider(self.node.search_providers, ["ytsearch", "ytmsearch"])
-                            cog.remove_provider(
-                                self.node.partial_providers,
-                                [
-                                    'ytsearch:"{isrc}"',
-                                    'ytsearch:"{title} - {author}"',
-                                    'ytmsearch:"{isrc}"',
-                                    'ytmsearch:"{title} - {author}"',
-                                ],
-                            )
-                            self.native_yt = False
-                            await self.resolve_track(track)
-                            return
-                        exceptions.append(e)
-                        continue
+                result = await _rt_query_results(self, track, query, req)
 
-                    try:
-                        result = result.tracks
-                    except AttributeError:
-                        pass
-
-                    self.bot.pool.partial_track_cache[
-                        f"{track.info['sourceName']}:{track.author}-{track.single_title}"
-                    ] = tracks
-
-                try:
-                    if result[0].info["sourceName"] == "bandcamp":
-                        check_duration = False
-                except Exception:
-                    pass
-
-                has_exclude_tags = any(tag for tag in exclude_tags if tag.lower() in track.title.lower())
-
-                tracks.extend(result)
-
-                for t in result:
-                    if t.is_stream:
-                        continue
-
-                    if not has_exclude_tags and any(tag for tag in exclude_tags if tag.lower() in t.title.lower()):
-                        continue
-
-                    if check_duration and not ((t.duration - 10000) < track.duration < (t.duration + 10000)):
-                        continue
-
-                    selected_track = t
-                    break
-
-                if selected_track:
-                    break
-
-            if not selected_track:
-                try:
-                    selected_track = tracks[0]
-                except Exception:
-                    if exceptions:
-                        print("Falha ao resolver PartialTrack:\n" + "\n".join(repr(e) for e in exceptions))
+                if result is _RT_RESTARTED:
                     return
 
-            track.id = selected_track.id
-            track.info["id"] = selected_track.id
-            track.info["length"] = selected_track.duration
-            if track.info["sourceName"] == "last.fm":
-                track.info["pluginInfo"] = selected_track.info.get("pluginInfo", {})
-                track.info["author"] = selected_track.author
-                track.info["title"] = selected_track.title
-                track.info["sourceName"] = selected_track.info["sourceName"]
-                track.info["uri"] = selected_track.info["uri"]
-            else:
-                track.info["sourceNameOrig"] = selected_track.info["sourceName"]
-                if not track.info["author"]:
-                    track.info["author"] = selected_track.author
-            if not track.duration:
-                track.info["duration"] = selected_track.duration
-            if not track.thumb:
-                track.info["artworkUrl"] = selected_track.thumb
+                if result is _RT_QUERY_FAILED:
+                    continue
+
+                req.selected_track = _rt_pick_candidate(track, result, req)
+
+                if req.selected_track:
+                    break
+
+            if not req.selected_track:
+                try:
+                    req.selected_track = req.tracks[0]
+                except Exception:
+                    if req.exceptions:
+                        print("Falha ao resolver PartialTrack:\n" + "\n".join(repr(e) for e in req.exceptions))
+                    return
+
+            _rt_apply_selected_track(track, req.selected_track)
 
         except Exception as e:
-            error_code = log_unexpected_error(
-                logger, e, f"obtenção de informação da PartialTrack {track.uri or track.search_uri}"
-            )
-            embed = disnake.Embed(
-                description=f"**Falha ao obter informação de PartialTrack:\n[{track.title}]({track.uri or track.search_uri})**"
-                f"{error_code_text(error_code)}\n"
-                f"**Servidor de música:** `{self.node.identifier}`",
-                color=disnake.Colour.red(),
-            )
-            await self.report_error(embed, track)
+            await _rt_report_failure(self, track, e)
