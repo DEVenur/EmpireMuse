@@ -19,6 +19,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
 
 ### Removido
+- **Submódulos git** (`.gitmodules` e os links em `repos/`): `EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app` e `EmpireMuse-jishaku` passam a ser clones irmãos na raiz do workspace; ignores, workspace do VS Code, cobertura, `.coderabbit.yaml`, `AGENTS.md`, `docs/development.md`, ADR-0003 e o teste do RPC atualizados.
 - **Pesquisas da etapa P-0 do painel** (`docs/painel/pesquisa-backend.md`, `pesquisa-externa.md` e `pesquisa-frontend.md`), superadas pelo painel pronto e pelo ADR-0002.
 - **Regra `governanca-de-regras.md`** e a instrução correspondente no `.coderabbit.yaml`.
 

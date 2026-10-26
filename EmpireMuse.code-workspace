@@ -6,11 +6,15 @@
     },
     {
       "name": "EmpireMuse-LL-binaries",
-      "path": "repos/EmpireMuse-LL-binaries"
+      "path": "../EmpireMuse-LL-binaries"
     },
     {
       "name": "EmpireMuse-RPC-app",
-      "path": "repos/EmpireMuse-RPC-app"
+      "path": "../EmpireMuse-RPC-app"
+    },
+    {
+      "name": "EmpireMuse-jishaku",
+      "path": "../EmpireMuse-jishaku"
     }
   ],
   "settings": {
@@ -20,7 +24,6 @@
       ".java": true,
       "local_database": true,
       "worktrees": true,
-      "repos": true,
       ".arquivo": true,
       ".local": true
     }

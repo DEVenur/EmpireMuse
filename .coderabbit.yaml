@@ -43,7 +43,6 @@ reviews:
     - "!requirements-dev-lock.txt"
     - "!assets/**"
     - "!empiremuse/panel/static/vendor/**"
-    - "!repos/**"
     - "!local_database/**"
     - "!**/*.min.js"
     - "!**/*.min.css"

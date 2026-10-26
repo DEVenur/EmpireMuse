@@ -10,7 +10,7 @@ O pacote oficial `jishaku` do PyPI é feito para `discord.py`; o **EmpireMuse** 
 
 ## Decisão
 
-Adotamos o fork próprio **[EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku)** (submódulo `repos/EmpireMuse-jishaku`), distribuição `empiremuse-jishaku` (pacote importável `jishaku`), versão `2.6.6.post2` (base 2.6.6 do disnake-jishaku). A instalação é pelo **wheel da release por URL com `--hash` SHA-256** (`0dcf875a…f202`) no `requirements-lock.txt`, com as dependências (`braceexpand`, `click`, `disnake>=2.12,<3`, `import_expression>=1,<2`) também com hash. Não há mais dependência VCS (`requirements-git.txt` foi removido).
+Adotamos o fork próprio **[EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku)** distribuição `empiremuse-jishaku` (pacote importável `jishaku`), versão `2.6.6.post2` (base 2.6.6 do disnake-jishaku). A instalação é pelo **wheel da release por URL com `--hash` SHA-256** (`0dcf875a…f202`) no `requirements-lock.txt`, com as dependências (`braceexpand`, `click`, `disnake>=2.12,<3`, `import_expression>=1,<2`) também com hash. Não há mais dependência VCS (`requirements-git.txt` foi removido).
 
 Salvaguardas mantidas e acrescentadas:
 
@@ -34,4 +34,8 @@ Salvaguardas mantidas e acrescentadas:
 
 - Positivas: instalação verificável por hash, controle direto de correções e releases, sem VCS no build.
 - Negativas: o projeto passa a manter o fork; atualizações são feitas por nova release e novo hash no lock, com diff revisado.
-- Risco residual: indisponibilidade do GitHub Releases no build (mitigado pelo hash e pelo submódulo com o código-fonte).
+- Risco residual: indisponibilidade do GitHub Releases no build (mitigado pelo hash e pelo repositório do fork com o código-fonte).
+
+## Atualização (2026-10-26)
+
+O fork deixou de ser submódulo (`repos/EmpireMuse-jishaku`): passou a ser um clone irmão na raiz do workspace, sem `.gitmodules`. A decisão não muda: o pin é o wheel da release `v2.6.6.post2` com hash SHA-256 no `requirements-lock.txt`; o clone irmão serve apenas para desenvolver o fork. O mesmo vale para `EmpireMuse-LL-binaries` e `EmpireMuse-RPC-app`.

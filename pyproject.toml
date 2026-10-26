@@ -14,7 +14,6 @@ markers = [
 [tool.coverage.run]
 source = ["empiremuse"]
 omit = [
-    'repos/*',
     'worktrees/*',
     '.arquivo/*',
     '.local/*',
@@ -29,7 +28,6 @@ fail_under = 56
 target-version = "py313"
 line-length = 120
 extend-exclude = [
-    "repos",
     "worktrees",
     ".arquivo",
     ".local",
