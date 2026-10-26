@@ -460,10 +460,17 @@ def _rt_drop_youtube_providers(self):
     self.native_yt = False
 
 
-async def _rt_query_results(self, track, query, req):
-    """Resultado da busca de `query` (do cache ou do nó), `_RT_QUERY_FAILED` se falhou ou `_RT_RESTARTED`."""
+def _rt_cached_result(self, track):
+    """Resultado guardado para esta faixa por outro servidor, ou `None` (vazio conta como ausente)."""
 
-    if result := self.bot.pool.partial_track_cache.get(_rt_cache_key(track)):
+    return self.bot.pool.partial_track_cache.get(_rt_cache_key(track)) or None
+
+
+async def _rt_query_results(self, track, query, req):
+    """Resultado da busca de `query` (do cache na 1ª consulta, senão do nó), `_RT_QUERY_FAILED` ou `_RT_RESTARTED`."""
+
+    if req.cached is not None:
+        result, req.cached = req.cached, None
         return result
 
     try:
@@ -494,8 +501,6 @@ async def _rt_query_results(self, track, query, req):
     except AttributeError:
         pass
 
-    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = result
-
     return result
 
 
@@ -509,6 +514,9 @@ def _rt_pick_candidate(track, result, req):
         pass
 
     has_exclude_tags = any(tag for tag in exclude_tags if tag.lower() in track.title.lower())
+
+    if req.first_result is None and result:
+        req.first_result = result
 
     req.tracks.extend(result)
 
@@ -525,6 +533,13 @@ def _rt_pick_candidate(track, result, req):
         return t
 
     return None
+
+
+def _rt_cache_selected_result(self, track, req):
+    """Guarda para os outros servidores só o resultado que levou à faixa escolhida (nunca o que foi rejeitado)."""
+
+    source = req.selected_result if req.selected_result is not None else req.first_result
+    self.bot.pool.partial_track_cache[_rt_cache_key(track)] = source
 
 
 def _rt_apply_selected_track(track, selected_track):
