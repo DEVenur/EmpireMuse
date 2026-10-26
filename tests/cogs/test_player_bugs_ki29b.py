@@ -163,3 +163,30 @@ class TestBugsDoPlayerKi29b:
 
         [em_cache] = p.bot.pool.partial_track_cache.values()
         assert em_cache == [stream]
+
+    @pytest.mark.asyncio
+    async def test_resolve_track_consulta_o_proximo_provedor_quando_a_primeira_consulta_so_traz_rejeitadas(
+        self, monkeypatch
+    ):
+        def resultado(id_, *, stream):
+            return SimpleNamespace(
+                title="Parcial",
+                is_stream=stream,
+                id=id_,
+                duration=0,
+                author="Artista",
+                thumb="",
+                info={"sourceName": "soundcloud"},
+            )
+
+        stream, valida = resultado("s1", stream=True), resultado("v1", stream=False)
+        por_consulta = {'scsearch:"Parcial - Artista"': [stream], 'scsearch:"Artista Parcial"': [valida]}
+        p = jogador(monkeypatch)
+        p.node.partial_providers = ['scsearch:"{title} - {author}"', 'scsearch:"{author} {title}"']
+        p.node.get_tracks = AsyncMock(side_effect=lambda consulta, **k: por_consulta[consulta])
+        track = parcial("spotify")
+
+        await p.resolve_track(track)
+
+        assert p.node.get_tracks.await_count == 2
+        assert track.id == "v1"
