@@ -88,6 +88,13 @@ def load_jishaku_if_enabled(bot) -> bool:
     """Carrega a extensão jishaku (eval e shell do owner) só com ``ENABLE_JISHAKU=true``; desligada por padrão."""
     if not bot.config["ENABLE_JISHAKU"]:
         return False
+    # Endurecimento do fork empiremuse-jishaku; setdefault preserva o que o operador definiu no ambiente.
+    os.environ.setdefault("JISHAKU_MASK_SECRETS", "true")
+    os.environ.setdefault("JISHAKU_DM_ONLY", "true")
+    # Lista vazia no fork nega todo mundo: só restringe quando OWNER_IDS tem IDs (o dono do aplicativo precisa estar nela).
+    owner_ids = [i.strip() for i in (bot.config.get("OWNER_IDS") or "").split("||") if i.strip()]
+    if owner_ids:
+        os.environ.setdefault("JISHAKU_OWNER_IDS", ",".join(owner_ids))
     bot.load_extension("jishaku")
     return True
 
@@ -790,7 +797,6 @@ class BotPool:
             {
                 "GIT_DIR": self.config["GIT_DIR"],
                 "JISHAKU_HIDE": "true",
-                "JISHAKU_NO_DM_TRACEBACK": "true",
                 "JISHAKU_NO_UNDERSCORE": "true",
             }
         )

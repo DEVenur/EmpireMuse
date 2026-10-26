@@ -6,3 +6,6 @@
 	path = repos/EmpireMuse-LL-binaries
 	url = https://github.com/EmpireCommunity/EmpireMuse-LL-binaries.git
 
+[submodule "EmpireMuse-jishaku"]
+	path = repos/EmpireMuse-jishaku
+	url = https://github.com/EmpireCommunity/EmpireMuse-jishaku.git

@@ -9,6 +9,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Alterado
 - **Refatoração interna do player (KI-29b)**: `PlayerEventsMixin.hook_events` (323 linhas), `PlayerStateMixin.cleanup` (195) e `PlayerAutoqueueMixin.resolve_track` (159) viram orquestradores curtos que chamam etapas de módulo (`event_steps.py`, `state_steps.py` e `autoqueue_steps.py`), na mesma ordem de efeitos, sem mudança de comportamento.
+- **Dependências sem VCS (KI-30)**:
+  - `disnake` passa do commit git `96ed4459` para a versão estável `2.12.2` do PyPI, com hashes no `requirements-lock.txt`. O changelog 2.12.0–2.12.2 foi revisado: nenhuma das quebras (`Emoji.guild_id`, `SKU.subscriptions`, remoção do Python 3.8/3.9) afeta o código do projeto.
+  - `jishaku` passa do fork `zRitsu/jishaku` para o fork da organização `EmpireCommunity/EmpireMuse-jishaku` `v2.6.6.post1`, instalado pelo wheel da release por URL com hash SHA-256; novo submódulo `repos/EmpireMuse-jishaku`. `requirements-git.txt` e o passo correspondente do Dockerfile e do CI foram removidos.
+  - Ao carregar o jishaku (`ENABLE_JISHAKU=true`), o bot define `JISHAKU_MASK_SECRETS`, `JISHAKU_DM_ONLY` e `JISHAKU_OWNER_IDS` (a partir de `OWNER_IDS`); `JISHAKU_NO_DM_TRACEBACK` foi removido, e os tracebacks voltam por DM.
+  - ADR-0003, `security.md` §8, `docs/development.md` e KI-30 atualizados.
 
 ### Corrigido
 - **SoundCloud voltou a funcionar (`scsearch:` e URLs `soundcloud.com`)**:

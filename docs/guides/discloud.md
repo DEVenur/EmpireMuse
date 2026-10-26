@@ -34,7 +34,7 @@ APT=tools
 - **`VERSION=latest`**: Utiliza a imagem mais recente disponibilizada pela Discloud.
   > [!NOTE]
   > No teste realizado em **24 de outubro de 2026**, a Discloud executou **Python 3.15** sob a opção `VERSION=latest` (a versão 3.13 não é oferecida individualmente na plataforma, que disponibiliza apenas 3.11, versões legadas ou `latest`). Como `latest` seleciona a versão mais recente disponibilizada pela plataforma, recomenda-se revalidar o runtime nos logs da aplicação a cada deploy. A suíte e os módulos do EmpireMuse foram validados e são compatíveis com esse ambiente.
-- **`APT=tools`**: Instala ferramentas essenciais do sistema operacional (como `git`), requeridas pelo `pip` para clonar e instalar dependências git declaradas em `requirements.txt` (`disnake` e `jishaku`).
+- **`APT=tools`**: Instala ferramentas essenciais do sistema operacional (como `git`); o `requirements.txt` não declara mais dependências via Git.
 
 ---
 

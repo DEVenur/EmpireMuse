@@ -1,4 +1,4 @@
-git+https://github.com/DisnakeDev/disnake.git@96ed4459eff7f7b8a841f62e5d542d44dc721895
+disnake==2.12.2
 python-dotenv
 user_agent
 requests>=2.31.0
@@ -8,7 +8,7 @@ tinymongo[serialization]
 dnspython>=2.6.1
 psutil
 aiofiles
-git+https://github.com/zRitsu/jishaku.git@14d2dbd51d61382c687af8d8655f54f41674c0eb
+empiremuse-jishaku @ https://github.com/EmpireCommunity/EmpireMuse-jishaku/releases/download/v2.6.6.post1/empiremuse_jishaku-2.6.6.post1-py3-none-any.whl
 packaging
 yt-dlp[default,curl-cffi]>=2025.08.11
 tornado>=6.4.2

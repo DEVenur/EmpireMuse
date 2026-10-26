@@ -111,8 +111,9 @@ paths:
 
 - Toda dependência tem **versão exata** (`==`) e **hash** no arquivo de lock (por exemplo,
   `uv pip compile --generate-hashes`), e a instalação usa `--require-hashes`.
-- Dependências via git são fixadas por SHA completo de commit, nunca por branch. Prefira release
-  publicada no PyPI.
+- Prefira release publicada no PyPI. Dependência que não está no PyPI entra como wheel de release por
+  **URL com `--hash`** no lock (nunca por nome nem VCS); VCS só em último caso, fixado por SHA completo
+  de commit, nunca por branch. Hoje não há dependência VCS.
 - Antes de adicionar ou atualizar uma dependência: justifique no PR (uso real, manutenção ativa,
   licença compatível com GPL-2.0) e rode `pip-audit -r requirements.txt` sem vulnerabilidades
   altas ou críticas pendentes. Dependências sem uso são removidas.
