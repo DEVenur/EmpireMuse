@@ -60,7 +60,7 @@ O parâmetro `LAVALINK_FILE_URL` define a origem do binário `Lavalink.jar`:
 - Um aviso informativo é registrado no log e a sua configuração customizada é integralmente respeitada. Arquivos oficiais de versões anteriores são migrados de forma automática para a versão atual.
 
 ### Plugins Espelhados sem Download em Tempo de Execução
-- Os jars dos três plugins homologados são baixados pelo bot diretamente para o diretório `plugins/` com conferência de hash SHA-256.
+- Os jars dos quatro plugins homologados (`youtube-plugin`, LavaSrc, Lyrics e Soundy) são baixados pelo bot diretamente para o diretório `plugins/` com conferência de hash SHA-256.
 - O `application.yml` declara os plugins com as mesmas versões dos jars locais, garantindo que o Lavalink não precise fazer requisições dinâmicas a repositórios externos (como o Maven Central) durante a inicialização.
 
 ---
