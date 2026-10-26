@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Alterado
+- **Refatoração interna do player (KI-29b)**: `PlayerEventsMixin.hook_events` (323 linhas), `PlayerStateMixin.cleanup` (195) e `PlayerAutoqueueMixin.resolve_track` (159) viram orquestradores curtos que chamam etapas de módulo (`event_steps.py`, `state_steps.py` e `autoqueue_steps.py`), na mesma ordem de efeitos, sem mudança de comportamento.
+
 ### Corrigido
 - **Preservação de Padrões da Imagem Docker no `.example.env`**:
   - Comentadas as variáveis `RUN_LOCAL_LAVALINK`, `LAVALINK_JAVA_PATH`, `LAVALINK_HOME` e `LAVALINK_OFFLINE` no `.example.env` para evitar que a cópia do arquivo de exemplo para `.env` sobrescreva os valores pré-configurados pela imagem oficial (`RUN_LOCAL_LAVALINK=true`, etc.) no Docker Compose.

@@ -60,3 +60,20 @@ class ProcessNextState:
         self.encoded_track = None
         self.error_code = None
         self.track = None
+
+
+class ResolveTrackState:
+    """Variáveis que passam de uma etapa para outra (antes, locais de `resolve_track`)."""
+
+    __slots__ = (
+        "check_duration",
+        "exceptions",
+        "selected_track",
+        "tracks",
+    )
+
+    def __init__(self, *, check_duration):
+        self.check_duration = check_duration
+        self.exceptions = []
+        self.selected_track = None
+        self.tracks = []

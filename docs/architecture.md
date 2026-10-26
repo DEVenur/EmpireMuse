@@ -177,11 +177,12 @@ importável como antes. O núcleo (`__init__`, propriedades, `connect`, `set_pau
 | `player_autoqueue.py` | `PlayerAutoqueueMixin`: `get_autoqueue_tracks`, `resolve_track` |
 | `player_playback.py` | `PlayerPlaybackMixin`: `process_next`, `_process_next`, `play`, modo ocioso |
 | `tracks.py` | `PartialTrack`, `PartialPlaylist`, `LavalinkTrack`, `LavalinkPlaylist` |
-| `np_steps.py`, `autoqueue_steps.py`, `playback_steps.py` | etapas `_np_*` de `invoke_np`, `_aq_*` de `get_autoqueue_tracks` e `_pn_*` de `_process_next` |
-| `step_state.py` | `NpState`, `AutoqueueState` e `ProcessNextState`: as variáveis que passam de uma etapa para outra |
+| `np_steps.py`, `autoqueue_steps.py`, `playback_steps.py` | etapas `_np_*` de `invoke_np`, `_aq_*` de `get_autoqueue_tracks`, `_rt_*` de `resolve_track` e `_pn_*` de `_process_next` |
+| `event_steps.py`, `state_steps.py` | etapas `_he_*` de `hook_events` (um tratador por evento do Lavalink) e `_cu_*` de `cleanup` (encerramento da mensagem do player) |
+| `step_state.py` | `NpState`, `AutoqueueState`, `ProcessNextState` e `ResolveTrackState`: as variáveis que passam de uma etapa para outra |
 | `helpers.py` | `CustomYTDL`, `music_mode`, `lavalink_text`, `exclude_tags`, `logger`, … |
 
-Os três métodos mais longos do player (KI-29b, PR 3) seguem o mesmo padrão do `/play`: `invoke_np`, `get_autoqueue_tracks` e `_process_next` ficam como orquestradores (até 60 linhas) e chamam etapas, que são funções de módulo `(self, req)` em `np_steps.py`, `autoqueue_steps.py` e `playback_steps.py`; o estado compartilhado mora em `step_state.py`. Testes chamam esses métodos com um `self` falso, por isso as etapas não são métodos.
+Os métodos mais longos do player (KI-29b) seguem o mesmo padrão do `/play`: `invoke_np`, `get_autoqueue_tracks`, `_process_next`, `hook_events`, `cleanup` e `resolve_track` ficam como orquestradores (até 60 linhas) e chamam etapas, que são funções de módulo (`(self, req)` ou `(self, ...)`) em `np_steps.py`, `autoqueue_steps.py`, `playback_steps.py`, `event_steps.py` e `state_steps.py`; o estado compartilhado mora em `step_state.py`. Testes chamam esses métodos com um `self` falso, por isso as etapas não são métodos.
 
 `PartialTrack` (`empiremuse/utils/music/models/tracks.py`) é a faixa de outra plataforma resolvida só ao tocar. `music_mode(bot)` apenas devolve
 `wavelink.Client(bot=bot)` (`music_mode` em `empiremuse/utils/music/models/helpers.py`). O logger do pacote continua chamado
