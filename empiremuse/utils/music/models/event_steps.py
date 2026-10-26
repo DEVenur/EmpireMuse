@@ -65,6 +65,9 @@ def _he_cancel_message_updater(self) -> None:
 
 
 def _he_can_send_in_text_channel(self):
+    if not self.text_channel:
+        return False
+
     if isinstance(self.text_channel, disnake.Thread):
         return self.text_channel.parent.permissions_for(self.guild.me).send_messages_in_threads
     return self.text_channel.permissions_for(self.guild.me).send_messages
