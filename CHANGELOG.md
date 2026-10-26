@@ -7,12 +7,18 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-26
+
+Esta versão de manutenção corrige o fallback de busca de faixas parciais (Spotify e Deezer), assegurando que o bot consulte os provedores subsequentes quando a primeira busca retornar apenas faixas inadequadas.
+
+### Corrigido
+- **Músicas do Spotify/Deezer podiam tocar a versão errada**: quando a primeira busca de uma música em outra plataforma só trazia resultados inadequados (transmissões ao vivo ou com duração muito diferente), as buscas seguintes nunca eram feitas e o bot tocava o primeiro resultado ruim. Agora cada busca é tentada em ordem até achar uma faixa adequada, e só o resultado escolhido fica no cache compartilhado entre servidores.
+
 ## [2.0.1] - 2026-10-26
 
 Esta versão de manutenção restaura a reprodução de faixas do SoundCloud através da inclusão do plugin Soundy no Lavalink local, conclui a eliminação de dependências instaladas via VCS Git em favor de pacotes verificados por hash SHA-256 (PyPI e release wheel da organização), finaliza a refatoração modular do player (KI-29b) e corrige falhas pontuais de estabilidade na fila e recuperação de buscas.
 
 ### Corrigido
-- **Músicas do Spotify/Deezer podiam tocar a versão errada**: quando a primeira busca de uma música em outra plataforma só trazia resultados inadequados (transmissões ao vivo ou com duração muito diferente), as buscas seguintes nunca eram feitas e o bot tocava o primeiro resultado ruim. Agora cada busca é tentada em ordem até achar uma faixa adequada, e só o resultado escolhido fica no cache compartilhado entre servidores.
 - **SoundCloud voltou a funcionar (`scsearch:` e URLs `soundcloud.com`)**:
   - A fonte nativa do lavaplayer retornava `loadType: error` ("Something went wrong while looking up the track") por falha no HLS fMP4 do SoundCloud (upstream lavaplayer#189 e #202 em aberto).
   - Imagem Docker e Lavalink local passam para a release `0.0.4` do `EmpireMuse-LL-binaries`, que inclui o plugin [Soundy](https://github.com/lowkwrs/soundy) 1.1.0 (MIT, compilado do commit `e2c5da8`; SHA-256 fixado em `Dockerfile` e `branding.LAVALINK_PLUGIN_SHA256`) e um `application.yml` com a fonte nativa do SoundCloud desligada e `logging.request.includePayload: false`. O `-Dlogging.request.includePayload=false` da imagem foi mantido (defesa em profundidade).
@@ -468,6 +474,7 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/releases/tag/v2.0.0
