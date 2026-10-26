@@ -16,7 +16,7 @@ Salvaguardas mantidas e acrescentadas:
 
 1. **Desligado por padrão**: só carrega com `ENABLE_JISHAKU=true`.
 2. **Auditoria de operação**: comandos de dono são registrados em log estruturado (`legacy_cmds.py`).
-3. **Endurecimento do fork** (opt-in no fork; o EmpireMuse as ativa em `load_jishaku_if_enabled`): `JISHAKU_MASK_SECRETS=true` (mascara token e segredos do ambiente na saída), `JISHAKU_DM_ONLY=true` e `JISHAKU_OWNER_IDS` a partir de `OWNER_IDS` quando houver IDs (o dono do aplicativo precisa estar na lista, pois lista vazia nega todos). O `jsk sh` roda com ambiente mínimo. Tracebacks voltam por DM (`JISHAKU_NO_DM_TRACEBACK` foi removido).
+3. **Endurecimento do fork** (opt-in no fork; o EmpireMuse as ativa em `load_jishaku_if_enabled`): `JISHAKU_MASK_SECRETS=true` (mascara token e segredos do ambiente na saída), `JISHAKU_DM_ONLY=true` e `JISHAKU_OWNER_IDS` a partir de `OWNER_IDS`. Com `OWNER_IDS` vazio o jishaku **não é carregado** (aviso no log): sem a lista o fork cairia no `is_owner` do aplicativo e liberaria a equipe dele; o dono do aplicativo precisa constar em `OWNER_IDS`. O `jsk sh` roda com ambiente mínimo. Tracebacks voltam por DM (`JISHAKU_NO_DM_TRACEBACK` foi removido).
 
 ## Auditorias
 

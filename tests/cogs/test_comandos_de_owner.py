@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -87,10 +88,37 @@ def test_log_de_execucao_registra_autor_e_comando_sem_segredo(monkeypatch, caplo
     assert SEGREDO not in registro and "saída qualquer" not in registro
 
 
-@pytest.mark.parametrize("ligado", [False, True])
-def test_jishaku_so_carrega_com_a_flag(ligado):
+def _bot_jishaku(ligado, owner_ids):
     bot = MagicMock()
-    bot.config = {"ENABLE_JISHAKU": ligado}
+    bot.config = {"ENABLE_JISHAKU": ligado, "OWNER_IDS": owner_ids}
+    return bot
 
-    assert load_jishaku_if_enabled(bot) is ligado
-    assert bot.load_extension.called is ligado
+
+def test_jishaku_desligado_nao_carrega():
+    bot = _bot_jishaku(False, "1||2")
+
+    assert load_jishaku_if_enabled(bot) is False
+    bot.load_extension.assert_not_called()
+
+
+@pytest.mark.parametrize("owner_ids", ["", " || "])
+def test_jishaku_ligado_sem_owner_ids_nao_carrega(monkeypatch, owner_ids, caplog):
+    monkeypatch.delenv("JISHAKU_OWNER_IDS", raising=False)
+    bot = _bot_jishaku(True, owner_ids)
+
+    assert load_jishaku_if_enabled(bot) is False
+    bot.load_extension.assert_not_called()
+    assert "OWNER_IDS" in caplog.text
+
+
+def test_jishaku_ligado_com_owner_ids_carrega_e_converte_separador(monkeypatch):
+    monkeypatch.delenv("JISHAKU_OWNER_IDS", raising=False)
+    monkeypatch.delenv("JISHAKU_MASK_SECRETS", raising=False)
+    monkeypatch.delenv("JISHAKU_DM_ONLY", raising=False)
+    bot = _bot_jishaku(True, "111||222")
+
+    assert load_jishaku_if_enabled(bot) is True
+    bot.load_extension.assert_called_once_with("jishaku")
+    assert os.environ["JISHAKU_OWNER_IDS"] == "111,222"
+    assert os.environ["JISHAKU_MASK_SECRETS"] == "true"
+    assert os.environ["JISHAKU_DM_ONLY"] == "true"

@@ -133,7 +133,7 @@ Na primeira execução:
 - sem `MONGO`, a pasta `local_database/` é criada no diretório de dados (`empiremuse/utils/db.py`);
 - com `RUN_RPC_SERVER=true`, a página de status responde em `http://localhost:<PORT>/`.
 
-Pare com `Ctrl+C`. O `jishaku` só é carregado com `ENABLE_JISHAKU=true` (`load_jishaku_if_enabled` em `empiremuse/utils/client.py`, desligado por padrão) e serve para depuração interativa por donos. Ao carregá-lo, o bot define `JISHAKU_MASK_SECRETS=true`, `JISHAKU_DM_ONLY=true` e, se `OWNER_IDS` tiver IDs, `JISHAKU_OWNER_IDS` com eles (o dono do aplicativo precisa estar na lista); o operador pode sobrescrever pelo ambiente. Os tracebacks voltam por DM.
+Pare com `Ctrl+C`. O `jishaku` só é carregado com `ENABLE_JISHAKU=true` (`load_jishaku_if_enabled` em `empiremuse/utils/client.py`, desligado por padrão) e serve para depuração interativa por donos. Ao carregá-lo, o bot define `JISHAKU_MASK_SECRETS=true`, `JISHAKU_DM_ONLY=true` e `JISHAKU_OWNER_IDS` com os IDs de `OWNER_IDS` (o dono do aplicativo precisa estar na lista). Com `OWNER_IDS` vazio o jishaku não é carregado (aviso no log). O operador pode sobrescrever `MASK_SECRETS` e `DM_ONLY` pelo ambiente. Os tracebacks voltam por DM.
 
 ## 5. Lavalink (servidor de áudio)
 

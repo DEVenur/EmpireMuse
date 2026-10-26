@@ -88,13 +88,18 @@ def load_jishaku_if_enabled(bot) -> bool:
     """Carrega a extensão jishaku (eval e shell do owner) só com ``ENABLE_JISHAKU=true``; desligada por padrão."""
     if not bot.config["ENABLE_JISHAKU"]:
         return False
+    # Sem OWNER_IDS o fork cairia no is_owner da aplicação e liberaria a equipe do app: nesse caso não carrega.
+    owner_ids = [i.strip() for i in (bot.config.get("OWNER_IDS") or "").split("||") if i.strip()]
+    if not owner_ids:
+        logger.warning(
+            "ENABLE_JISHAKU=true, mas OWNER_IDS está vazio: o jishaku não foi carregado. "
+            "Defina OWNER_IDS (inclusive o seu ID) para restringir quem pode usá-lo."
+        )
+        return False
     # Endurecimento do fork empiremuse-jishaku; setdefault preserva o que o operador definiu no ambiente.
     os.environ.setdefault("JISHAKU_MASK_SECRETS", "true")
     os.environ.setdefault("JISHAKU_DM_ONLY", "true")
-    # Lista vazia no fork nega todo mundo: só restringe quando OWNER_IDS tem IDs (o dono do aplicativo precisa estar nela).
-    owner_ids = [i.strip() for i in (bot.config.get("OWNER_IDS") or "").split("||") if i.strip()]
-    if owner_ids:
-        os.environ.setdefault("JISHAKU_OWNER_IDS", ",".join(owner_ids))
+    os.environ["JISHAKU_OWNER_IDS"] = ",".join(owner_ids)
     bot.load_extension("jishaku")
     return True
 
