@@ -9,7 +9,7 @@ Como preparar o ambiente para desenvolver e testar o EmpireMuse. Para entender o
 |---|---|---|
 | Python | **3.13** | O ambiente validado usa 3.13 (`audioop-lts` só é exigido a partir dele, `requirements.txt:30`). |
 | [uv](https://docs.astral.sh/uv/) | recente | Gerenciador de venv/pacotes recomendado. |
-| Git | qualquer | Necessário: `disnake` e `jishaku` são instalados de repositórios Git (`requirements.txt:1` e `requirements.txt:11`). |
+| Git | qualquer | Só para clonar o repositório e os submódulos; nenhuma dependência Python é instalada via Git. |
 | Java | **17+** | **Só** se for rodar o Lavalink local. Sem Java 17+, o bot tenta baixar um JDK sozinho (`validate_java` e `run_lavalink` em `empiremuse/utils/music/local_lavalink.py`). |
 | Aplicação no Discord | — | Token do bot em <https://discord.com/developers/applications>, com as *Privileged Intents* ativadas (a falta delas é detectada e explicada na inicialização, `BotPool.start_bot` em `empiremuse/utils/client.py`). |
 
@@ -23,18 +23,15 @@ uv venv --python 3.13
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
 uv pip install --require-hashes -r requirements-lock.txt
-uv pip install --no-deps -r requirements-git.txt
 ```
 
 Observações:
 
-- As dependências via Git (`disnake` e `jishaku`) são fixadas por SHA completo de commit em `requirements-git.txt` (`requirements-git.txt:3` e `requirements-git.txt:4`).
+- `disnake` vem do PyPI (`disnake==2.12.2`) e o `jishaku` é o fork `empiremuse-jishaku` (release `v2.6.6.post2` de [EmpireCommunity/EmpireMuse-jishaku](https://github.com/EmpireCommunity/EmpireMuse-jishaku), submódulo `repos/EmpireMuse-jishaku`), instalado pelo wheel da release por URL. Ambos estão no `requirements-lock.txt` com hash SHA-256; não há dependência VCS.
 - As dependências do PyPI são travadas com hashes SHA-256 no arquivo de lock universal `requirements-lock.txt` (compilado via `uv pip compile --generate-hashes --universal --exclude-newer <corte>`), garantindo integridade criptográfica da cadeia de suprimentos (conforme `.claude/rules/empiremuse/security.md` §8).
 - **Suporte universal multiplataforma (Windows/Linux)**: os lockfiles utilizam resolução universal (`--universal`), preservando marcadores de ambiente como `uvloop==... ; sys_platform != 'win32'`. Isso viabiliza a instalação nativa tanto em ambientes Linux/Docker quanto no Windows (onde `uvloop` é automaticamente ignorado sem quebrar o processo).
 - **Janela de corte temporal (`--exclude-newer`)**: a compilação dos lockfiles adota corte temporal de segurança de aproximadamente 7 dias para mitigar riscos de supply chain de pacotes recém-publicados.
 - O arquivo `requirements.txt` permanece como especificação de alto nível do projeto e ponto de entrada para plataformas gerenciadas (como a Discloud).
-- O `disnake` está fixado em um commit Git anterior à 2.12.0 (`requirements-git.txt:3`); a atualização para a
-  versão estável está planejada para fases futuras.
 - Dependências obsoletas expurgadas (Bloco C2): 8 bibliotecas declaradas sem nenhum uso no código (`aiosqlite`, `syncedlyrics`, `pylrc`, `undetected-chromedriver`, `nest_asyncio`, `curl_cffi`, `emoji`, `regex`) foram removidas de `requirements.txt`, saneando a superfície de dependências e resolvendo o item KI-05 (ver [`known-issues.md`](known-issues.md)).
 
 ## 3. Configuração
@@ -136,8 +133,7 @@ Na primeira execução:
 - sem `MONGO`, a pasta `local_database/` é criada no diretório de dados (`empiremuse/utils/db.py`);
 - com `RUN_RPC_SERVER=true`, a página de status responde em `http://localhost:<PORT>/`.
 
-Pare com `Ctrl+C`. O `jishaku` é carregado em cada bot (`BotPool.setup` em `empiremuse/utils/client.py`) e serve para depuração
-interativa por usuários donos.
+Pare com `Ctrl+C`. O `jishaku` só é carregado com `ENABLE_JISHAKU=true` (`load_jishaku_if_enabled` em `empiremuse/utils/client.py`, desligado por padrão) e serve para depuração interativa por donos. Ao carregá-lo, o bot define `JISHAKU_MASK_SECRETS=true`, `JISHAKU_DM_ONLY=true` e `JISHAKU_OWNER_IDS` com os IDs de `OWNER_IDS` (o dono do aplicativo precisa estar na lista). Com `OWNER_IDS` vazio o jishaku não é carregado (aviso no log). O operador pode sobrescrever `JISHAKU_MASK_SECRETS` e `JISHAKU_DM_ONLY` pelo ambiente. Os tracebacks voltam por DM.
 
 ## 5. Lavalink (servidor de áudio)
 
@@ -191,7 +187,7 @@ Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.tx
 
 ```bash
 # Lock universal de produção
-uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --exclude-newer-package setuptools=2026-10-19T20:20:00Z --no-emit-package disnake --no-emit-package disnake-jishaku requirements.txt -o requirements-lock.txt
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --exclude-newer-package setuptools=2026-10-19T20:20:00Z requirements.txt -o requirements-lock.txt
 
 # Lock universal de desenvolvimento
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt

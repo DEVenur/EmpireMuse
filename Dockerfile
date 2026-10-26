@@ -61,7 +61,7 @@ RUN mkdir -p /opt/lavalink/plugins && \
 FROM ${PYTHON_IMAGE} AS python-builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git build-essential && \
+    apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=uv-stage /uv /uvx /bin/
@@ -69,9 +69,8 @@ COPY --from=uv-stage /uv /uvx /bin/
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements-lock.txt requirements-git.txt /tmp/
-RUN uv pip install --no-cache --require-hashes -r /tmp/requirements-lock.txt && \
-    uv pip install --no-cache --no-deps -r /tmp/requirements-git.txt
+COPY requirements-lock.txt /tmp/
+RUN uv pip install --no-cache --require-hashes -r /tmp/requirements-lock.txt
 
 # -----------------------------------------------------------------------------
 # Estágio 3: Imagem final de runtime (não-root, enxuta, código somente leitura)
@@ -112,7 +111,6 @@ COPY main.py ./
 COPY assets/ ./assets/
 COPY data/ ./data/
 COPY requirements.txt ./
-COPY requirements-git.txt ./
 COPY requirements-lock.txt ./
 COPY LICENSE ./
 COPY CREDITS.md ./

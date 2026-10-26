@@ -84,10 +84,36 @@ def read_guild_bots() -> Dict[str, List[str]]:
         return {}
 
 
+def parse_owner_ids(raw: Optional[str]) -> list[int]:
+    """IDs numéricos de ``OWNER_IDS`` (separados por ``||``); vazios são ignorados e inválidos, descartados com aviso."""
+    ids = []
+    for item in (raw or "").split("||"):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            ids.append(int(item))
+        except ValueError:
+            logger.warning("Owner_ID inválido: %s", item)
+    return ids
+
+
 def load_jishaku_if_enabled(bot) -> bool:
     """Carrega a extensão jishaku (eval e shell do owner) só com ``ENABLE_JISHAKU=true``; desligada por padrão."""
     if not bot.config["ENABLE_JISHAKU"]:
         return False
+    # Sem OWNER_IDS o fork cairia no is_owner da aplicação e liberaria a equipe do app: nesse caso não carrega.
+    owner_ids = parse_owner_ids(bot.config.get("OWNER_IDS"))
+    if not owner_ids:
+        logger.warning(
+            "ENABLE_JISHAKU=true, mas OWNER_IDS não tem nenhum ID válido: o jishaku não foi carregado. "
+            "Defina OWNER_IDS (inclusive o seu ID) para restringir quem pode usá-lo."
+        )
+        return False
+    # Endurecimento do fork empiremuse-jishaku; setdefault preserva o que o operador definiu no ambiente.
+    os.environ.setdefault("JISHAKU_MASK_SECRETS", "true")
+    os.environ.setdefault("JISHAKU_DM_ONLY", "true")
+    os.environ["JISHAKU_OWNER_IDS"] = ",".join(str(i) for i in owner_ids)
     bot.load_extension("jishaku")
     return True
 
@@ -790,7 +816,6 @@ class BotPool:
             {
                 "GIT_DIR": self.config["GIT_DIR"],
                 "JISHAKU_HIDE": "true",
-                "JISHAKU_NO_DM_TRACEBACK": "true",
                 "JISHAKU_NO_UNDERSCORE": "true",
             }
         )
@@ -1120,14 +1145,7 @@ class BotCore(commands.AutoShardedBot):
         self.interaction_id: Optional[int] = None
         self.wavelink_node_reconnect_tasks = {}
 
-        for i in self.config["OWNER_IDS"].split("||"):
-            if not i:
-                continue
-
-            try:
-                self.env_owner_ids.add(int(i))
-            except ValueError:
-                print(f"Owner_ID inválido: {i}")
+        self.env_owner_ids.update(parse_owner_ids(self.config["OWNER_IDS"]))
 
     async def edit_voice_channel_status(self, status: Optional[str], *, channel_id: int, reason: Optional[str] = None):
         # Obtido do discord.py: https://github.com/Rapptz/discord.py/blob/9ce733321b445db245924bfd21fedf20a01a570b/discord/http.py#L1166

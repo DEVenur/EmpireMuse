@@ -17,7 +17,7 @@ A avaliação foi conduzida sob o princípio mandatário estipulado pelo projeto
 **Decidimos manter o Python 3.13 como stack tecnológica do EmpireMuse e realizar um saneamento profundo da base existente**, em vez de executar uma reescrita completa em Node/TypeScript.
 
 Como parte desta decisão:
-1. Planejar a atualização do `disnake` do commit git `96ed4459` para a versão estável **2.12.2** (lançada em 08/10/2026), condicionada à validação de compatibilidade (testes de fumaça, incluindo o fork do `jishaku` em `requirements.txt:11`) antes de oficializar na fase de saneamento.
+1. **[Concluído]** `disnake` migrado do commit git `96ed4459` para a versão estável **2.12.2** do PyPI (com hashes no lock), junto com o fork `empiremuse-jishaku` (KI-30).
 2. Planejar e executar a introdução de tipagem estática gradual, criação de suites de testes automatizados unitários/integração com `pytest`, eliminação de exceções genéricas e refatoração modular dos cogs monolíticos (como `modules/music.py` e `utils/music/models.py`).
 
 ### Fatos e Fundamentos Técnicos da Decisão

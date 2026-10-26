@@ -368,7 +368,7 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 | **Last.fm** | `empiremuse/utils/music/lastfm_tools.py`, `empiremuse/cogs/lastfm.py` | Scrobble e perfil; exige `LASTFM_KEY/SECRET`. |
 | **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models/helpers.py`), `BotPool.__init__` em `empiremuse/utils/client.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
 | **YouTube OAuth / PoToken** | `empiremuse/cogs/ll_yt_oauth.py`, `Node.refresh_potoken` em `empiremuse/wavelink/node.py`, `empiremuse/utils/music/youtube_trusted_session_generator.py` | Autenticação do plugin `youtube-plugin` do Lavalink e geração de `poToken` (`nodriver`). |
-| **Discord** | `disnake` (commit git fixado, `requirements.txt:1`) | Slash/prefix/menus de contexto; `AutoShardedBot`. |
+| **Discord** | `disnake` (2.12.2 do PyPI, `requirements.txt:1`) | Slash/prefix/menus de contexto; `AutoShardedBot`. |
 
 ## 10. Módulos → responsabilidade → tamanho
 

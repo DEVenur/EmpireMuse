@@ -63,7 +63,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `docs/identidade-visual.md`: Diretrizes da identidade visual "Nebulosa", especificações de arte e guia de configuração no Discord.
 - `docs/painel/`: Pesquisas técnicas e inventários de requisitos do painel web.
 - `tests/`: Testes automatizados (pytest), organizados por domínio em subpastas (ver docs/development.md, seção 6).
-- `repos/`: submódulos git (`EmpireMuse-RPC-app`, `EmpireMuse-LL-binaries`); `git submodule update --init` para baixar.
+- `repos/`: submódulos git (`EmpireMuse-RPC-app`, `EmpireMuse-LL-binaries`, `EmpireMuse-jishaku`); `git submodule update --init` para baixar.
 
 ---
 
@@ -74,7 +74,6 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
   uv venv --python 3.13
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
   uv pip install --require-hashes -r requirements-lock.txt
-  uv pip install --no-deps -r requirements-git.txt
   cp .example.env .env
   ```
 - **Execução do Bot**:
