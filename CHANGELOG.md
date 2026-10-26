@@ -15,6 +15,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - A fonte nativa do lavaplayer retornava `loadType: error` ("Something went wrong while looking up the track") por falha no HLS fMP4 do SoundCloud (upstream lavaplayer#189 e #202 em aberto).
   - Imagem Docker e Lavalink local passam para a release `0.0.4` do `EmpireMuse-LL-binaries`, que inclui o plugin [Soundy](https://github.com/lowkwrs/soundy) 1.1.0 (MIT, compilado do commit `e2c5da8`; SHA-256 fixado em `Dockerfile` e `branding.LAVALINK_PLUGIN_SHA256`) e um `application.yml` com a fonte nativa do SoundCloud desligada e `logging.request.includePayload: false`. O `-Dlogging.request.includePayload=false` da imagem foi mantido (defesa em profundidade).
   - O `application.yml` da 0.0.3 passa a ser reconhecido como oficial e é atualizado sozinho; arquivos personalizados continuam intocados.
+- **Player (bugs preexistentes achados na refatoração da KI-29b)**:
+  - A busca no YouTube deixava de funcionar até reiniciar o bot depois de qualquer falha na busca de uma música; agora os provedores do YouTube só são desligados pelas falhas conhecidas (vídeo indisponível, WebM não suportado, vídeo diferente do pedido).
+  - Quando a reprodução de uma música falhava e o bot não tinha mais acesso ao canal de texto, o player travava em vez de seguir para a próxima música.
+  - O cancelamento do tratamento de eventos do player durante o salvamento da fila não se perdia mais silenciosamente.
+  - O cache compartilhado de músicas de outras plataformas (Spotify, Deezer) guardava candidatas duplicadas; agora guarda só o resultado da busca.
 - **Preservação de Padrões da Imagem Docker no `.example.env`**:
   - Comentadas as variáveis `RUN_LOCAL_LAVALINK`, `LAVALINK_JAVA_PATH`, `LAVALINK_HOME` e `LAVALINK_OFFLINE` no `.example.env` para evitar que a cópia do arquivo de exemplo para `.env` sobrescreva os valores pré-configurados pela imagem oficial (`RUN_LOCAL_LAVALINK=true`, etc.) no Docker Compose.
   - Documentado no `.example.env` e em `docs/guides/docker.md` o comportamento das variáveis da imagem e a equivalência fora do Docker via `DEFAULT_CONFIG`.
