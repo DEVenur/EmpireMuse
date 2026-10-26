@@ -66,14 +66,20 @@ class ResolveTrackState:
     """Variáveis que passam de uma etapa para outra (antes, locais de `resolve_track`)."""
 
     __slots__ = (
+        "cached",
         "check_duration",
         "exceptions",
+        "first_result",
+        "selected_result",
         "selected_track",
         "tracks",
     )
 
     def __init__(self, *, check_duration):
+        self.cached = None
         self.check_duration = check_duration
         self.exceptions = []
+        self.first_result = None
+        self.selected_result = None
         self.selected_track = None
         self.tracks = []

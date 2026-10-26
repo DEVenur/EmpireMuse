@@ -39,6 +39,8 @@ from empiremuse.utils.music.models.autoqueue_steps import (
     _aq_report_failure,
     _aq_queue_results,
     _rt_apply_selected_track,
+    _rt_cache_selected_result,
+    _rt_cached_result,
     _rt_pick_candidate,
     _rt_query_results,
     _rt_report_failure,
@@ -123,6 +125,8 @@ class PlayerAutoqueueMixin:
             if search_queries is None:
                 return
 
+            req.cached = _rt_cached_result(self, track)
+
             for query in search_queries:
                 result = await _rt_query_results(self, track, query, req)
 
@@ -135,6 +139,7 @@ class PlayerAutoqueueMixin:
                 req.selected_track = _rt_pick_candidate(track, result, req)
 
                 if req.selected_track:
+                    req.selected_result = result
                     break
 
             if not req.selected_track:
@@ -145,6 +150,7 @@ class PlayerAutoqueueMixin:
                         print("Falha ao resolver PartialTrack:\n" + "\n".join(repr(e) for e in req.exceptions))
                     return
 
+            _rt_cache_selected_result(self, track, req)
             _rt_apply_selected_track(track, req.selected_track)
 
         except Exception as e:
