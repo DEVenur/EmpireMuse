@@ -5,7 +5,7 @@ Sem rede, sem Java e sem produção: `requests.get` é um dublê que só atende 
 
 Comportamento exigido de ``prepare_lavalink_files``/``run_lavalink`` (a API não muda):
   - URL vazia/None/só espaços  -> URL oficial ATUAL do branding, hash oficial, sem exigir LAVALINK_FILE_SHA256, sem aviso;
-  - URL oficial de versão anterior do espelho (EmpireMuse-LL-binaries 0.0.1/0.0.2/0.0.3 e o nome antigo LL-binaries
+  - URL oficial de versão anterior do espelho (EmpireMuse-LL-binaries 0.0.1/0.0.2/0.0.3/0.0.4 e o nome antigo LL-binaries
     0.0.1/0.0.2) -> baixa da URL oficial ATUAL com o hash oficial ATUAL (ignora o hash configurado) e registra UMA linha de
     aviso (logging.WARNING) sugerindo esvaziar a variável;
   - qualquer outra URL -> segue exigindo HTTPS + LAVALINK_FILE_SHA256, e é baixada exatamente como foi informada.
@@ -134,14 +134,15 @@ ALL_KNOWN_OFFICIAL_URLS = [
     f"{NEW_REPO}/0.0.1/Lavalink.jar",
     f"{NEW_REPO}/0.0.2/Lavalink.jar",
     f"{NEW_REPO}/0.0.3/Lavalink.jar",
+    f"{NEW_REPO}/0.0.4/Lavalink.jar",
     f"{OLD_EMPIREMUSE_REPO}/0.0.1/Lavalink.jar",
     f"{OLD_EMPIREMUSE_REPO}/0.0.2/Lavalink.jar",
     f"{OLD_EMPIREMUSE_REPO}/0.0.3/Lavalink.jar",
     f"{OLD_REPO}/0.0.1/Lavalink.jar",
     f"{OLD_REPO}/0.0.2/Lavalink.jar",
 ]
-# "Antiga" = oficial e DIFERENTE da atual (hoje a 0.0.3 é a atual: fixá-la no .env não é versão antiga, não avisa).
-# Calculado contra o branding real, então continua válido quando a atual passar a ser a 0.0.4.
+# "Antiga" = oficial e DIFERENTE da atual (hoje a 0.0.4 é a atual: fixá-la no .env não é versão antiga, não avisa).
+# Calculado contra o branding real, então continua válido quando a atual passar a ser a próxima.
 LEGACY_OFFICIAL_URLS = [u for u in ALL_KNOWN_OFFICIAL_URLS if u != branding.LAVALINK_JAR_URL]
 PINNED_CURRENT_URLS = [u for u in ALL_KNOWN_OFFICIAL_URLS if u == branding.LAVALINK_JAR_URL]
 
