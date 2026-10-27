@@ -27,7 +27,7 @@ def linha_com(texto: str, prefixo: str) -> str:
 
 @pytest.mark.asyncio
 class TestRegiaoDoNo:
-    async def descricao_do_no(self, monkeypatch, regiao: str) -> str:
+    async def descricao_do_no(self, monkeypatch, regiao: str, cpu_cores: object = 2, versao: object = 4) -> str:
         from empiremuse.cogs import music_settings
         from empiremuse.cogs.music_settings import MusicSettings
 
@@ -47,7 +47,7 @@ class TestRegiaoDoNo:
             uptime=1000,
         )
         no = SimpleNamespace(
-            identifier="no-1", stats=stats, is_available=True, players={}, region=regiao, version=4, website=None
+            identifier="no-1", stats=stats, is_available=True, players={}, region=regiao, version=versao, website=None
         )
         bot = MagicMock()
         bot.music.nodes = {"no-1": no}
@@ -70,6 +70,24 @@ class TestRegiaoDoNo:
 
         linha = linha_com(texto, "Região:")
         assert linha.count("`") == 2 and links_alheios(linha) == [] and marcas_soltas(linha) == 0
+
+    async def test_cpu_cores_from_the_node_json_stays_inside_one_code_span(self, monkeypatch):
+        texto = await self.descricao_do_no(monkeypatch, "frankfurt", cpu_cores=NOME_COM_MARCAS)
+
+        linha = linha_com(texto, "CPU Cores:")
+        assert linha.count("`") == 2 and links_alheios(linha) == [] and marcas_soltas(linha) == 0
+
+    async def test_the_node_version_stays_inside_one_code_span(self, monkeypatch):
+        texto = await self.descricao_do_no(monkeypatch, "frankfurt", versao=NOME_COM_MARCAS)
+
+        linha = linha_com(texto, "Versão do Lavalink:")
+        assert linha.count("`") == 2 and links_alheios(linha) == [] and marcas_soltas(linha) == 0
+
+    async def test_ordinary_cores_and_version_are_unchanged(self, monkeypatch):
+        texto = await self.descricao_do_no(monkeypatch, "frankfurt")
+
+        assert linha_com(texto, "CPU Cores:") == "CPU Cores: `2`"
+        assert linha_com(texto, "Versão do Lavalink:") == "Versão do Lavalink: `v4`"
 
     async def test_an_ordinary_region_is_unchanged(self, monkeypatch):
         texto = await self.descricao_do_no(monkeypatch, "frankfurt")

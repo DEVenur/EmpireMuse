@@ -140,8 +140,8 @@ EXCECOES_S4B: dict[str, tuple[str, int]] = {
         22,
     ),
     "empiremuse/cogs/music_settings.py": (
-        "nome de skin já validado (Vigil, 1104/1110/1122/1129) e números/status do nodeinfo (extra)",
-        7,
+        "nome de skin já validado (Vigil, 1104/1110/1122/1129) e números/status do nodeinfo (extra); o cpu_cores (1426) NÃO está aqui: vem cru do JSON do nó",
+        6,
     ),
     "empiremuse/music_cog/play_enqueue.py": (
         "query já passa por fix_characters (Vigil, 422) e time_format condicional (extra)",
