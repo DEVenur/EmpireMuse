@@ -56,6 +56,7 @@ DEFAULT_CONFIG = {
     "PREFIXED_POOL_TIMEOUT": 4,
     "ENABLE_COMMANDS_COOLDOWN": True,
     "GIT_DIR": "./.git",
+    "UPDATE_PROXY_SOCKET": "",
     ################
     ### Database ###
     ################
@@ -191,6 +192,19 @@ DEFAULT_CONFIG = {
 
 DEFAULT_PORT = 6000
 MAX_PORT = 65535
+
+
+def normalize_update_proxy_socket(value: object) -> str:
+    """Caminho ABSOLUTO do socket do proxy de atualização, ou ``""``. Relativo ou de outro tipo é ignorado com um aviso
+    que cita a chave e não o valor (o caminho pode revelar a estrutura do host)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        path = value.strip()
+        if path == "" or path.startswith("/"):
+            return path
+    logger.warning("UPDATE_PROXY_SOCKET ignorado: use um caminho absoluto (começando com /) ou deixe vazio.")
+    return ""
 
 
 def resolve_port(configured: str | int | None = None) -> int:
@@ -357,6 +371,8 @@ def load_config():
             raise Exception(f"Você usou uma configuração inválida! {i}: {CONFIG[i]}\n{repr(e)}")
 
     CONFIG["RPC_SERVER"] = CONFIG["RPC_SERVER"].replace("$PORT", str(resolve_port(CONFIG.get("PORT"))))
+
+    CONFIG["UPDATE_PROXY_SOCKET"] = normalize_update_proxy_socket(CONFIG["UPDATE_PROXY_SOCKET"])
 
     if CONFIG["WAIT_FOR_MEMBERS_TIMEOUT"] < 60:
         CONFIG["WAIT_FOR_MEMBERS_TIMEOUT"] = 60
