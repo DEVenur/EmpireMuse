@@ -448,3 +448,61 @@ async def test_when_the_official_version_cannot_be_read_it_says_so(cog, ambiente
     texto = await Owner.update.callback(cog, ctx_painel())
 
     assert "Não consegui consultar" in texto and not cog.bot.pool.update_lock.locked()
+
+
+# ============================================================================ defer do painel antes de qualquer I/O de rede
+
+
+def modo_com_consulta_registrada(modo: str, ambiente, monkeypatch, ctx) -> None:
+    """Prepara o modo e troca a consulta de rede por uma que anota quantos ``defer`` já tinham sido aguardados."""
+    vistos = ctx.defers_na_rede = []
+
+    async def consulta(*args, **kwargs):
+        vistos.append(ctx.response.defer.await_count)
+        return PLANO if modo == "git" else PARA
+
+    if modo == "git":
+        (ambiente.projeto / ".git").mkdir()
+        monkeypatch.setattr(legacy_cmds, "plan_git_update", consulta)
+        return
+    if modo == "painel":
+        monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
+    monkeypatch.setattr(legacy_cmds, "latest_official_version", consulta)
+    monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", lambda tag: "## [2.1.0]\n- novidade\n")
+
+
+@pytest.mark.parametrize("modo", ["git", "manual", "painel"])
+async def test_the_panel_interaction_is_deferred_once_before_any_network_io(cog, ambiente, monkeypatch, modo):
+    """O painel só tem 3 s para responder: o defer vem antes da consulta de versão/plano (git ls-remote, API)."""
+    ctx = ctx_painel()
+    modo_com_consulta_registrada(modo, ambiente, monkeypatch, ctx)
+
+    await Owner.update.callback(cog, ctx)
+
+    assert ctx.defers_na_rede == [1]
+    ctx.response.defer.assert_awaited_once()
+
+
+async def test_the_git_offer_from_the_panel_only_sends_the_ephemeral_confirmation(cog, ambiente, monkeypatch):
+    ctx = ctx_painel()
+    modo_com_consulta_registrada("git", ambiente, monkeypatch, ctx)
+
+    texto = await Owner.update.callback(cog, ctx)
+
+    ctx.response.defer.assert_awaited_once()
+    assert ctx.followup.send.await_args.kwargs["ephemeral"] is True
+    assert texto == "Confirmação enviada só para você."
+
+
+@pytest.mark.parametrize("modo", ["git", "manual"])
+async def test_a_prefix_command_is_never_deferred(cog, ambiente, monkeypatch, modo):
+    ctx = ctx_prefixo()
+    ctx.response = MagicMock(defer=AsyncMock())
+    ctx.defer = AsyncMock()
+    modo_com_consulta_registrada(modo, ambiente, monkeypatch, ctx)
+
+    await Owner.update.callback(cog, ctx)
+
+    ctx.response.defer.assert_not_awaited()
+    ctx.defer.assert_not_awaited()
+    assert ctx.defers_na_rede == [0]

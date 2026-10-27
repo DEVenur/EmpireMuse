@@ -70,3 +70,24 @@ def test_a_small_clock_skew_into_the_future_is_still_valid(tmp_path):
     write_pending(tmp_path, pendente(AGORA + 299))
 
     assert read_pending(tmp_path, AGORA) is not None
+
+
+@pytest.fixture
+def sem_flags_do_posix(monkeypatch):
+    """Windows não tem ``O_NONBLOCK``/``O_NOFOLLOW``/``O_CLOEXEC``: a leitura não pode depender deles."""
+    for nome in ("O_NONBLOCK", "O_NOFOLLOW", "O_CLOEXEC"):
+        monkeypatch.delattr(os, nome, raising=False)
+
+
+def test_a_valid_pending_update_is_read_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix):
+    write_pending(tmp_path, pendente(AGORA - 60))
+
+    lido = read_pending(tmp_path, AGORA)
+
+    assert lido is not None and lido.to_version == Version(2, 1, 0)
+
+
+def test_a_non_regular_file_is_still_discarded_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix):
+    pending_path(tmp_path).mkdir()
+
+    assert read_pending(tmp_path, AGORA) is None
