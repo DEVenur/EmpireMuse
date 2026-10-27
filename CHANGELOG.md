@@ -21,6 +21,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Compose de produção da VPS (`deploy/docker-compose.hostinger.yml` e `deploy/env.example.hostinger`)**: o compose de arquivo único usado na VPS da Hostinger (atrás do Traefik + Cloudflare) e o modelo do `.env` só com os segredos (valores vazios); ao usar, são renomeados para `docker-compose.yml` e `.env`.
 
 ### Alterado
+- **`update` do modo git: estado gravado antes do checkout (item 18, fase P2)**: o estado da atualização passa a ser gravado antes do checkout; se o processo cair ou for interrompido no meio, a próxima subida tenta restaurar a versão anterior antes de carregar o bot. Se a reversão falhar, o estado permanece para nova tentativa.
 - **`update` do modo git**: deixa de seguir a branch e o `origin` do clone e usa só o repositório oficial. Aceita apenas tags anotadas `vX.Y.Z` mais novas que a versão atual e contidas na `main`; roda `git` sem shell, com ambiente mínimo e configuração endurecida (hooks desligados, `fsckObjects`, sem herdar `~/.gitconfig`), instala as dependências com hashes, roda um smoke de importação e, se algo falhar, volta ao commit anterior e reinstala o lock anterior ("revertido"). `updatelog` e `exportsource` também passam a rodar sem shell.
 - **Novo avatar da marca**: `assets/brand/avatar.png` (1024×1024) passa a ser a arte "EmpireMuse 1" (garota chibi com fones, coroa e asas sobre um campo de estrelas violeta), no lugar da arte da nebulosa. O `discloud.config` e o guia da Discloud seguem apontando para o mesmo caminho.
 - **Cobertura crítica**: `empiremuse/updater/*`, `empiremuse/health.py` e `empiremuse/version.py` entram na lista de áreas com cobertura mínima de 90% no `ci.yml`.
@@ -36,6 +37,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
 
 ### Segurança
+- **Last.FM sobre HTTPS (S-30)**: as chamadas à API e o link de autorização passam a usar HTTPS, as credenciais vão no corpo do POST (que não segue redirecionamentos) e os erros de rede do Last.FM são registrados sem a URL.
 - **Update git endurecido (item 18, fase P2)**: tag leve, tag fora da `main`, tag que mudou de SHA, árvore suja e `requires-python` incompatível são recusados antes do checkout; `SOURCE_REPO`/`origin` hostis são ignorados; nenhum subprocesso do update vê `TOKEN`, `MONGO` nem variáveis `GIT_*`.
 - **Logs sem cabeçalhos de requisição (S-28)**: erros de conexão e de busca no Lavalink, Spotify e Deezer passam a registrar só o status HTTP ou o tipo do erro, sem os cabeçalhos da requisição (que incluíam a senha do Lavalink).
 - **`pip` removido da imagem de runtime** (Dockerfile do EmpireMuse): menos superfície no contêiner final. Quem instala pacotes em runtime (como `jsk pip` com `ENABLE_JISHAKU=true`) deixa de poder fazê-lo; a produção roda com o jishaku desligado.

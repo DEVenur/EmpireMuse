@@ -329,3 +329,28 @@ async def test_calling_on_pool_ready_twice_sends_only_once(runtime):
     await ao_ficar_pronto(pool, runtime)
 
     outro.canal.send.assert_awaited_once()
+
+
+# ============================================================================ D9: ``applying`` não é subida concluída
+
+
+async def test_deliver_update_notice_ignores_an_applying_mark_and_keeps_the_file(runtime):
+    bot = bot_falso()
+    write_pending(runtime, pendente(boots=0, status="applying"))
+    antes = pending_path(runtime).read_bytes()
+
+    await entregar(pool_com(bot), runtime, PARA)
+
+    bot.canal.send.assert_not_awaited()
+    assert pending_path(runtime).read_bytes() == antes
+
+
+async def test_on_pool_ready_neither_marks_ready_nor_sends_nor_deletes_an_applying_mark(runtime):
+    bot = bot_falso()
+    write_pending(runtime, pendente(boots=0, status="applying"))
+    antes = pending_path(runtime).read_bytes()
+
+    await ao_ficar_pronto(pool_com(bot), runtime)
+
+    bot.canal.send.assert_not_awaited()
+    assert pending_path(runtime).read_bytes() == antes

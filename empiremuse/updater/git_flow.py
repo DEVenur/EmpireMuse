@@ -38,6 +38,7 @@ from empiremuse.updater.state import (
     PendingUpdate,
     SeenTagsError,
     UpdateRequest,
+    clear_pending,
     read_seen_tags,
     write_pending,
     write_seen_tags,
@@ -67,6 +68,10 @@ _WINDOWS_ENV_KEYS = ("SystemRoot", "COMSPEC", "TEMP", "TMP", "USERPROFILE")
 
 class UpdateError(Exception):
     """Falha esperada do update; a mensagem (pt-BR) é segura para ir ao Discord."""
+
+
+class UpdateRollbackFailed(UpdateError):
+    """A atualização falhou e a reversão também: o pendente ``applying`` fica e o ``boot_guard`` reverte no próximo início."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -411,12 +416,29 @@ async def apply_git_update(
 ) -> PendingUpdate:
     """Troca o código pelo commit da tag, instala o lock e testa; qualquer falha reverte e levanta ``UpdateError``.
 
-    No sucesso grava o pendente (``boots=0``) e o devolve; quem chamou encerra o pool com ``EXIT_RESTART``.
+    O pendente ``applying`` (``prev_sha``, ``boots=0``) é gravado ANTES do primeiro ``checkout``: se o processo morrer ou
+    a reversão falhar, a árvore meio aplicada não fica sem proteção e o ``boot_guard`` a reverte no próximo início. A
+    reversão roda sob ``asyncio.shield`` e só um restore bem-sucedido apaga o pendente; restore falho levanta
+    ``UpdateRollbackFailed`` (o chamador reinicia com ``EXIT_RESTART``). No sucesso o mesmo pendente passa a ``pending``
+    (``boots=0``) e é devolvido; quem chamou encerra o pool com ``EXIT_RESTART``.
     """
     repo_dir = Path(repo_dir)
     if not (_SHA1.fullmatch(plan.target_commit) and _SHA1.fullmatch(plan.prev_sha)):
         raise UpdateError("O plano de atualização é inválido.")
     git = _Git(repo_dir, allow_protocol, runner)
+    applying = PendingUpdate(
+        flow="git",
+        from_version=plan.current,
+        to_version=plan.target,
+        bot_id=request.bot_id,
+        channel_id=request.channel_id,
+        requested_by=request.requested_by,
+        created_at=now(),
+        prev_sha=plan.prev_sha,
+        boots=0,
+        status="applying",
+    )
+    write_pending(runtime_dir, applying)  # fora do try: se a escrita falhar, nenhum git roda e a árvore fica intacta
     try:
         await git(
             "checkout",
@@ -427,33 +449,59 @@ async def apply_git_update(
         )
         await _install_dependencies(runner, repo_dir, python)
         await _smoke_test(runner, repo_dir, python)
-        pending = PendingUpdate(
-            flow="git",
-            from_version=plan.current,
-            to_version=plan.target,
-            bot_id=request.bot_id,
-            channel_id=request.channel_id,
-            requested_by=request.requested_by,
-            created_at=now(),
-            prev_sha=plan.prev_sha,
-        )
-        write_pending(runtime_dir, pending)  # dentro do bloco: sem o pendente o boot_guard não protege o código novo
+        pending = dataclasses.replace(applying, status="pending")
+        write_pending(runtime_dir, pending)
     except UpdateError as failure:
-        try:
-            await restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
-        except UpdateError:
-            logger.error("update: a reversão para %s falhou", plan.prev_sha)
-            raise UpdateError(
-                f"A atualização falhou ({failure}) e a reversão automática também. Confira o servidor à mão: o clone pode estar na versão {plan.target}."
-            ) from failure
+        await _revert_or_keep(plan, repo_dir, runtime_dir, python, runner, allow_protocol, failure)
         raise UpdateError(
             f"A atualização falhou ({failure}); o código foi revertido para a versão {plan.current}."
         ) from failure
-    except Exception, asyncio.CancelledError:
-        # Cancelamento, erro do disco ao gravar o pendente...: o checkout novo não pode ficar aplicado sem proteção.
-        try:
-            await restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
-        except Exception:  # a falha do restore não pode esconder a exceção original
-            logger.error("update: a reversão para %s falhou", plan.prev_sha, exc_info=True)
+    except (Exception, asyncio.CancelledError) as failure:
+        # Cancelamento, erro do disco...: o checkout novo não pode ficar aplicado sem proteção.
+        await _revert_or_keep(plan, repo_dir, runtime_dir, python, runner, allow_protocol, failure)
         raise  # sempre a exceção original (nunca engole o CancelledError)
     return pending
+
+
+def _safe_failure(failure: BaseException) -> str:
+    """Texto de log de uma falha: a mensagem só para ``UpdateError`` (escrita para o Discord, sem segredos); senão o tipo."""
+    return str(failure) if isinstance(failure, UpdateError) else type(failure).__name__
+
+
+async def _revert_or_keep(
+    plan: GitPlan,
+    repo_dir: Path,
+    runtime_dir: Path,
+    python: str,
+    runner: Runner,
+    allow_protocol: str,
+    failure: BaseException,
+) -> None:
+    """Volta ao ``prev_sha`` sob ``asyncio.shield`` e, só com o restore OK, apaga o pendente ``applying``.
+
+    Restore falho: o ``applying`` FICA (o ``boot_guard`` reverte no próximo início) e levanta ``UpdateRollbackFailed``;
+    para um ``CancelledError`` o cancelamento é que continua subindo. Cancelado durante o restore: o restore segue em
+    segundo plano e o ``applying`` fica no disco.
+    """
+    try:
+        await asyncio.shield(
+            restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as restore_failure:
+        # Sem exc_info: o traceback encadeado traria a mensagem da falha original, que pode citar a saída de um comando.
+        logger.error(
+            "update: a reversão para %s falhou (%s); falha original: %s",
+            plan.prev_sha,
+            _safe_failure(restore_failure),
+            _safe_failure(failure),
+        )
+        if isinstance(failure, asyncio.CancelledError):
+            raise failure from restore_failure
+        detail = f" ({failure})" if isinstance(failure, UpdateError) else ""
+        raise UpdateRollbackFailed(
+            f"A atualização falhou{detail} e a reversão automática também. O bot volta para a versão {plan.current} "
+            f"no próximo início; reiniciando agora. O clone pode estar na versão {plan.target} até lá."
+        ) from failure
+    clear_pending(runtime_dir)

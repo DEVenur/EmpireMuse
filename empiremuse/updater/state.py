@@ -30,8 +30,9 @@ PENDING_MAX_FUTURE_SECONDS = 300
 MAX_TIMESTAMP = 2**40  # ano ~36812; o que passa disso não é um instante, é arquivo corrompido ou forjado
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
+MAX_RESTORE_ATTEMPTS = 3  # tentativas de reversão do boot_guard antes de desistir (D11)
 FLOWS = ("git", "docker")
-STATUSES = ("pending", "ready", "rolled_back")
+STATUSES = ("applying", "pending", "ready", "rolled_back")
 
 _SHA1 = re.compile(r"[0-9a-f]{40}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -54,7 +55,8 @@ class UpdateRequest:
 class PendingUpdate:
     """Atualização em andamento; ``prev_sha`` vale no fluxo git e ``digest`` no fluxo Docker (o outro fica ``None``).
 
-    ``status``: ``pending`` (subindo; o ``boot_guard`` conta), ``ready`` (o pool ficou saudável; o aviso ainda não saiu) ou
+    ``status``: ``applying`` (só git: apply em andamento, árvore possivelmente meio aplicada; o ``boot_guard`` reverte já),
+    ``pending`` (subindo; o ``boot_guard`` conta), ``ready`` (o pool ficou saudável; o aviso ainda não saiu) ou
     ``rolled_back`` (o ``boot_guard`` reverteu o código).
     """
 
@@ -69,6 +71,7 @@ class PendingUpdate:
     digest: str | None = None
     boots: int = 0
     status: str = "pending"
+    restore_attempts: int = 0
     v: int = PENDING_VERSION
 
     def to_json(self) -> dict[str, Any]:
@@ -86,6 +89,7 @@ class PendingUpdate:
         }
         if self.flow == "git":
             data["prev_sha"] = self.prev_sha
+            data["restore_attempts"] = self.restore_attempts
         else:
             data["digest"] = self.digest
         return data
@@ -108,12 +112,13 @@ def parse_pending(data: object) -> PendingUpdate | None:
     if not isinstance(data, dict):
         return None
     flow = data.get("flow")
-    if flow not in FLOWS or set(data) != _KEYS_BY_FLOW[flow]:
+    if flow not in FLOWS or set(data) - {"restore_attempts"} != _KEYS_BY_FLOW[flow]:
         return None
     from_version = parse_version(data["from_version"]) if isinstance(data["from_version"], str) else None
     to_version = parse_version(data["to_version"]) if isinstance(data["to_version"], str) else None
     created_at = data["created_at"]
     boots = data["boots"]
+    attempts = data.get("restore_attempts", 0)  # ausente = 0 (pendentes gravados antes da D11)
     valid = (
         data["v"] == PENDING_VERSION
         and not isinstance(data["v"], bool)
@@ -125,6 +130,10 @@ def parse_pending(data: object) -> PendingUpdate | None:
         and not isinstance(boots, bool)
         and 0 <= boots <= MAX_BOOTS
         and data["status"] in STATUSES
+        and (data["status"] != "applying" or (flow == "git" and boots == 0))
+        and isinstance(attempts, int)
+        and not isinstance(attempts, bool)
+        and 0 <= attempts <= (MAX_RESTORE_ATTEMPTS if flow == "git" else 0)
     )
     if not valid:
         return None
@@ -147,6 +156,7 @@ def parse_pending(data: object) -> PendingUpdate | None:
         digest=digest if flow == "docker" else None,
         boots=boots,
         status=data["status"],
+        restore_attempts=attempts,
     )
 
 
@@ -222,7 +232,8 @@ def read_pending(runtime_dir: Path, now: float) -> PendingUpdate | None:
         logger.warning("Arquivo de atualização pendente com data no futuro; descartado.")
         clear_pending(runtime_dir)
         return None
-    if now - pending.created_at > PENDING_MAX_AGE_SECONDS:
+    # ``applying`` nunca expira por idade: uma árvore meio aplicada continua perigosa depois de um dia desligado.
+    if pending.status != "applying" and now - pending.created_at > PENDING_MAX_AGE_SECONDS:
         logger.warning("Arquivo de atualização pendente com mais de 24 h; descartado.")
         clear_pending(runtime_dir)
         return None

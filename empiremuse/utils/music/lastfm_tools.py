@@ -9,9 +9,13 @@ from cachetools import TTLCache
 
 from empiremuse import paths
 from empiremuse.serialization.cache import LASTFM_MAX_BYTES
+from empiremuse.utils.safe_error import HTTPStatusError
 from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
 
 logger = logging.getLogger(__name__)
+
+
+SECRET_PARAMS = frozenset({"sk", "token", "api_sig"})  # parâmetros que só trafegam no corpo de um POST
 
 
 class LastFmException(Exception):
@@ -52,9 +56,13 @@ class LastFM:
         return hashlib.md5(sig.encode("utf-8")).hexdigest()
 
     async def request_lastfm(self, params: dict):
+        if SECRET_PARAMS & params.keys():
+            return await self.post_lastfm(
+                params
+            )  # sk, token e api_sig não podem ir na URL: o str do erro do aiohttp a traz
         params["format"] = "json"
         async with ClientSession() as session:
-            async with session.get("http://ws.audioscrobbler.com/2.0/", params=params) as response:
+            async with session.get("https://ws.audioscrobbler.com/2.0/", params=params) as response:
                 if (data := await response.json()).get("error"):
                     raise LastFmException(data)
                 return data
@@ -62,7 +70,13 @@ class LastFM:
     async def post_lastfm(self, params: dict):
         params["format"] = "json"
         async with ClientSession() as session:
-            async with session.post("http://ws.audioscrobbler.com/2.0/", params=params) as response:
+            # As credenciais (api_key, api_sig, sk) vão no corpo do POST, não na URL.
+            # Sem seguir redirecionamento: um 307/308 reenviaria o corpo (com as credenciais) para outro endereço.
+            async with session.post(
+                "https://ws.audioscrobbler.com/2.0/", data=params, allow_redirects=False
+            ) as response:
+                if 300 <= response.status < 400:
+                    raise HTTPStatusError(response.status)
                 if (data := await response.json()).get("error"):
                     raise LastFmException(data)
                 return data
@@ -217,15 +231,14 @@ class LastFM:
         return (await self.request_lastfm(params))["similarartists"]["artist"]
 
     async def user_info(self, session_key: str):
-        return (
-            await self.request_lastfm(
-                params={
-                    "method": "user.getInfo",
-                    "api_key": self.api_key,
-                    "sk": session_key,
-                }
-            )
-        )["user"]
+        # Sem o parâmetro ``user`` é uma chamada autenticada: o Last.FM identifica o usuário pelo sk e exige a assinatura.
+        params = {
+            "method": "user.getInfo",
+            "api_key": self.api_key,
+            "sk": session_key,
+        }
+        params["api_sig"] = self.generate_api_sig(params)
+        return (await self.request_lastfm(params=params))["user"]
 
     async def user_recent_tracks(self, user: str, limit: int = 50):
         return (
