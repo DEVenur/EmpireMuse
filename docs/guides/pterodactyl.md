@@ -56,7 +56,7 @@ O consumo de memória varia significativamente conforme o modo de operação do 
 - **Com Lavalink Local Integrado (`RUN_LOCAL_LAVALINK=true`)**:
   - **Mínimo absoluto**: `768 MB`.
   - **Recomendado**: `1 GB` (ou `1024 MB`).
-  - *Contexto*: Esse espaço acomoda com segurança o processo do bot em Python 3.13, o heap da JVM do Java 21 (`LAVALINK_INITIAL_RAM` padrão 30 MB até `LAVALINK_RAM_LIMIT` padrão 120 MB) e as bibliotecas nativas de áudio.
+  - *Contexto*: Esse espaço acomoda com segurança o processo do bot em Python 3.14, o heap da JVM do Java 21 (`LAVALINK_INITIAL_RAM` padrão 30 MB até `LAVALINK_RAM_LIMIT` padrão 120 MB) e as bibliotecas nativas de áudio.
   - *(Valores exatos medidos em carga real serão incorporados em revisões posteriores desta documentação).*
 - **Sem Lavalink Local (`RUN_LOCAL_LAVALINK=false`)**:
   - Consumo reduzido (recomendado `384 MB` a `512 MB`), pois o bot utilizará nós Lavalink remotos e externos, não executando a JVM do Java no contêiner.

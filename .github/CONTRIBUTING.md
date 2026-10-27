@@ -9,7 +9,7 @@ Agradecemos o seu interesse em contribuir para o **EmpireMuse**! Este documento 
 Antes de submeter alterações de código, familiarize-se com a documentação do projeto e configure o ambiente local:
 
 - 🏗️ **[Arquitetura do Sistema](../docs/architecture.md)**: Visão geral dos componentes, fluxo de áudio com Lavalink, roteamento do `BotPool` e persistência.
-- 🛠️ **[Guia de Desenvolvimento e Setup Local](../docs/development.md)**: Requisitos (Python 3.13, `uv`, Java 17+), instalação e execução passo a passo.
+- 🛠️ **[Guia de Desenvolvimento e Setup Local](../docs/development.md)**: Requisitos (Python 3.14, `uv`, Java 17+), instalação e execução passo a passo.
 - ⚠️ **[Problemas Conhecidos e Backlog Técnico](../docs/known-issues.md)**: Mapeamento de bugs catalogados, débitos e comportamentos sob saneamento.
 
 ---

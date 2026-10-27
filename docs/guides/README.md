@@ -21,7 +21,7 @@ Documentação técnica e tutoriais de configuração para administradores e des
 
 ## Outras Documentações do Projeto
 
-- **[Guia de Desenvolvimento Local](../development.md)**: Preparação do ambiente Python 3.13 com `uv`, execução do bot, suíte de testes e padrão de Git Worktrees.
+- **[Guia de Desenvolvimento Local](../development.md)**: Preparação do ambiente Python 3.14 com `uv`, execução do bot, suíte de testes e padrão de Git Worktrees.
 - **[Arquitetura do Sistema](../architecture.md)**: Mapeamento aprofundado dos módulos, ciclo de vida do `BotPool`, fluxo de áudio com Lavalink v4 e persistência de dados.
 - **[Guia de Contribuição](../../.github/CONTRIBUTING.md)**: Convenções de código, formatação com `ruff` e fluxo de trabalho com Pull Requests.
 - **[Política de Segurança](../../.github/SECURITY.md)**: Práticas de proteção de credenciais e canal para relato privado de vulnerabilidades.

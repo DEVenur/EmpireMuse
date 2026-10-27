@@ -39,3 +39,7 @@ Salvaguardas mantidas e acrescentadas:
 ## Atualização (2026-10-26)
 
 O fork deixou de ser submódulo (`repos/EmpireMuse-jishaku`): passou a ser um clone irmão na raiz do workspace, sem `.gitmodules`. A decisão não muda: o pin é o wheel da release `v2.6.6.post2` com hash SHA-256 no `requirements-lock.txt`; o clone irmão serve apenas para desenvolver o fork. O mesmo vale para `EmpireMuse-LL-binaries` e `EmpireMuse-RPC-app`.
+
+## Atualização (2026-10-27)
+
+Runtime atualizado para Python 3.14 no item 6; o pin do fork não muda nesta fase.

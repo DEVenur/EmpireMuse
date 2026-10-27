@@ -71,3 +71,7 @@ Esta decisão arquitetural deverá ser formalmente revista se qualquer uma das s
 1. A biblioteca `disnake` permanecer **12 meses consecutivos sem nenhum release estável ou commits ativos de manutenção** no repositório upstream.
 2. A equipe de mantenedores passar a ser composta majoritariamente por desenvolvedores especializados em TypeScript/Node.js, sem capacidade ou interesse em manter código Python.
 3. O Discord introduzir um recurso obrigatório e essencial ao funcionamento operacional do bot cuja implementação oficial ou tempestiva ocorra unicamente no ecossistema `discord.js`.
+
+## Atualização (2026-10-27)
+
+Runtime atualizado para Python 3.14 no item 6; a decisão de manter Python não muda.

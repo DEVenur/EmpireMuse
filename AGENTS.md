@@ -7,7 +7,7 @@
 ## 1. O Projeto
 
 - **Nome**: **EmpireMuse** (organização GitHub: [EmpireCommunity/EmpireMuse](https://github.com/EmpireCommunity/EmpireMuse)).
-- **Descrição**: Bot de música multi-instância para Discord em **Python 3.13**, utilizando o framework **disnake** e processamento de áudio 100% externo em servidores **Lavalink v3/v4** ou NodeLink.
+- **Descrição**: Bot de música multi-instância para Discord em **Python 3.14**, utilizando o framework **disnake** e processamento de áudio 100% externo em servidores **Lavalink v3/v4** ou NodeLink.
 - **Origem e Licença**: Obra derivada do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu**, sob licença **GPL-2.0**.
 - **Aviso Mandatório**: É obrigatório preservar o arquivo `LICENSE` e todos os créditos e avisos de direitos autorais ao autor original em todos os arquivos pertinentes.
 - **Documentação de Referência**:
@@ -72,7 +72,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 
 - **Setup do Ambiente Virtual e Instalação** (detalhes em [`docs/development.md`](docs/development.md)):
   ```bash
-  uv venv --python 3.13
+  uv venv --python 3.14
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
   uv pip install --require-hashes -r requirements-lock.txt
   cp .example.env .env
