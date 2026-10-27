@@ -333,3 +333,226 @@ class TestTrava:
         agg.flush()
 
         assert linhas(emitidos) == ["↻ nó A caiu — repetida 399× em 60 s"]
+
+
+# ============================================================================ K8 — código de erro (ERR-…) × agregação
+
+E = logging.ERROR
+MAX_CODED_REPEATS = 50
+
+
+def exc_text_de(caminho: str = "A", mensagem: str = "boom", fonte: str = "chamar()") -> str:
+    """``exc_text`` já redigido de um traceback: a impressão digital usa só as linhas ``  File "…", line N, in f``."""
+    return (
+        "Traceback (most recent call last):\n"
+        f'  File "/app/{caminho}.py", line 10, in funcao\n    {fonte}\n'
+        f'  File "/app/{caminho}.py", line 20, in interna\n    levantar()\n'
+        f"ValueError: {mensagem}"
+    )
+
+
+def com_codigo(codigo="ERR-AAAAAA", *, caminho="A", mensagem="boom", fonte="chamar()", exc=True, nivel=E):
+    """Registro de erro inesperado como o produtor o cria (``extra={"error_code": …}``) e o filtro de redação o deixa."""
+    texto = "Erro inesperado em cmd" + (f" [{codigo}]" if isinstance(codigo, str) and codigo.startswith("ERR-") else "")
+    record = registro(texto, nivel=nivel, nome="empiremuse.errors")
+    record.empiremuse_template = "Erro inesperado em %s%s"
+    record.empiremuse_exc_type = "builtins.ValueError" if exc else None
+    record.empiremuse_redacted = True
+    record.exc_text = exc_text_de(caminho, mensagem, fonte) if exc else None
+    record.stack_info = "Stack (most recent call last):\n  File x" if exc else None
+    if codigo is not None:
+        record.error_code = codigo
+    return record
+
+
+class TestCodigoDeErro:
+    def test_the_second_coded_error_of_the_same_path_is_one_line_with_its_code_and_a_pointer_to_the_first(
+        self, agg, emitidos
+    ):
+        primeira = com_codigo("ERR-AAAAAA")
+        segunda = com_codigo("ERR-BBBBBB", mensagem="boom B")
+
+        assert agg.filter(primeira) is True
+        assert primeira.exc_text.startswith("Traceback (most recent call last)")
+        assert agg.filter(segunda) is True
+
+        assert (
+            segunda.getMessage()
+            == "Erro inesperado em cmd [ERR-BBBBBB] — ValueError: boom B — traceback igual ao de ERR-AAAAAA"
+        )
+        assert segunda.exc_text is None and segunda.stack_info is None and not segunda.args
+        agg.flush()
+        assert emitidos == []  # as linhas com código não entram na contagem
+
+    def test_the_last_line_of_the_original_traceback_is_cut_at_300_characters(self, agg):
+        agg.filter(com_codigo("ERR-AAAAAA"))
+        longa = com_codigo("ERR-BBBBBB", mensagem="x" * 1000)
+
+        agg.filter(longa)
+
+        mensagem = longa.getMessage()
+        assert "x" * 100 in mensagem and "x" * 301 not in mensagem and "traceback igual ao de ERR-AAAAAA" in mensagem
+
+    def test_the_first_occurrence_keeps_its_traceback_untouched(self, agg):
+        primeira = com_codigo("ERR-AAAAAA")
+        texto, pilha = primeira.exc_text, primeira.stack_info
+
+        agg.filter(primeira)
+
+        assert (primeira.exc_text, primeira.stack_info) == (
+            texto,
+            pilha,
+        ) and "traceback igual" not in primeira.getMessage()
+
+    def test_the_same_record_through_the_second_handler_is_not_rewritten_twice(self, agg):
+        agg.filter(com_codigo("ERR-AAAAAA"))
+        segunda = com_codigo("ERR-BBBBBB")
+
+        agg.filter(segunda)
+        primeira_leitura = segunda.getMessage()
+        assert agg.filter(segunda) is True
+
+        assert segunda.getMessage() == primeira_leitura and segunda.getMessage().count("traceback igual ao de") == 1
+
+    def test_without_a_traceback_difference_a_different_call_site_is_a_different_key(self, agg, emitidos):
+        a = com_codigo("ERR-AAAAAA", caminho="A")
+        b = com_codigo("ERR-BBBBBB", caminho="B")
+
+        assert agg.filter(a) is True and agg.filter(b) is True
+
+        assert a.exc_text and b.exc_text
+        assert "traceback igual" not in a.getMessage() and "traceback igual" not in b.getMessage()
+
+    def test_k8b_without_codes_two_call_sites_with_the_same_template_and_type_are_both_full(self, agg):
+        a, b = com_codigo(None, caminho="A"), com_codigo(None, caminho="B")
+
+        assert agg.filter(a) is True and agg.filter(b) is True
+
+        assert a.exc_text and b.exc_text
+
+    def test_k8b_a_different_line_in_the_same_file_is_a_different_call_site(self, agg):
+        a, b = com_codigo(None), com_codigo(None)
+        b.exc_text = b.exc_text.replace("line 20", "line 21")
+
+        assert agg.filter(a) is True and agg.filter(b) is True
+
+    def test_k8c_same_path_with_different_exception_messages_is_the_same_key(self, agg, relogio, emitidos):
+        assert agg.filter(com_codigo(None, mensagem="boom 1")) is True
+        assert agg.filter(com_codigo(None, mensagem="boom 2")) is False
+        assert agg.filter(com_codigo(None, mensagem="boom 3", fonte="outra()")) is False
+
+        relogio.avancar(61)
+        agg.tick()
+
+        assert [r.getMessage() for r in emitidos] == ["↻ Erro inesperado em cmd — repetida 2× em 60 s"]
+
+    def test_the_fingerprint_ignores_the_source_lines_and_the_final_message_line(self, agg):
+        assert agg.filter(com_codigo(None, fonte="a()", mensagem="m1")) is True
+        assert agg.filter(com_codigo(None, fonte="b(1, 2)", mensagem="m2")) is False
+
+    def test_k8d_a_burst_of_sixty_coded_errors_gives_one_full_forty_nine_lines_and_a_summary_of_ten(
+        self, agg, relogio, emitidos
+    ):
+        registros = [com_codigo(f"ERR-{n:06X}") for n in range(60)]
+
+        resultados = [agg.filter(r) for r in registros]
+
+        assert resultados == [True] * MAX_CODED_REPEATS + [False] * 10
+        assert registros[0].exc_text and "traceback igual" not in registros[0].getMessage()
+        for n, record in enumerate(registros[1:MAX_CODED_REPEATS], start=1):
+            assert record.exc_text is None and f"ERR-{n:06X}" in record.getMessage()
+            assert record.getMessage().endswith("traceback igual ao de ERR-000000")
+        assert emitidos == []
+        relogio.avancar(61)
+        agg.tick()
+        (resumo,) = emitidos
+        assert resumo.getMessage() == (
+            f"↻ {registros[0].getMessage()} — repetida 10× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)"
+        )
+
+    def test_exactly_fifty_coded_errors_in_the_window_leave_no_summary(self, agg, relogio, emitidos):
+        for n in range(MAX_CODED_REPEATS):
+            assert agg.filter(com_codigo(f"ERR-{n:06X}")) is True
+
+        relogio.avancar(61)
+        agg.tick()
+        agg.flush()
+
+        assert emitidos == []
+
+    def test_the_fifty_first_coded_error_is_suppressed_and_counted(self, agg, relogio, emitidos):
+        for n in range(MAX_CODED_REPEATS):
+            agg.filter(com_codigo(f"ERR-{n:06X}"))
+
+        assert agg.filter(com_codigo("ERR-FFFFFF")) is False
+        relogio.avancar(61)
+        agg.tick()
+
+        assert (
+            emitidos[0]
+            .getMessage()
+            .endswith("repetida 1× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)")
+        )
+
+    def test_a_new_window_starts_over_with_a_full_traceback_and_a_new_first_code(self, agg, relogio):
+        agg.filter(com_codigo("ERR-AAAAAA"))
+        agg.filter(com_codigo("ERR-BBBBBB"))
+        relogio.avancar(61)
+
+        nova = com_codigo("ERR-CCCCCC")
+        depois = com_codigo("ERR-DDDDDD")
+
+        assert agg.filter(nova) is True and nova.exc_text and "traceback igual" not in nova.getMessage()
+        agg.filter(depois)
+        assert depois.getMessage().endswith("traceback igual ao de ERR-CCCCCC")
+
+    @pytest.mark.parametrize(
+        "invalido",
+        [
+            "ERR-zzz",
+            "x\nERR-AAAAAA",
+            123,
+            None,
+            "",
+            "ERR-AAAAA",
+            "ERR-AAAAAAA",
+            "err-aaaaaa",
+            "ERR-AAAAAA\n",
+            " ERR-AAAAAA",
+        ],
+        ids=repr,
+    )
+    def test_k8e_an_invalid_code_is_treated_as_no_code(self, agg, relogio, emitidos, invalido):
+        primeira = com_codigo(None)
+        segunda = com_codigo(invalido)
+        if invalido is None:
+            segunda.error_code = None  # atributo presente com None
+
+        assert agg.filter(primeira) is True
+        assert agg.filter(segunda) is False
+
+        relogio.avancar(61)
+        agg.tick()
+        assert [r.getMessage() for r in emitidos] == ["↻ Erro inesperado em cmd — repetida 1× em 60 s"]
+
+    def test_k8e_the_invalid_code_text_is_never_copied_into_the_output(self, agg, relogio, emitidos):
+        agg.filter(com_codigo(None))
+        agg.filter(com_codigo("x\nERR-AAAAAA"))
+        relogio.avancar(61)
+        agg.tick()
+
+        assert all("ERR-AAAAAA" not in r.getMessage() for r in emitidos)
+
+    def test_k8f_a_thousand_errors_without_a_code_give_one_full_and_a_summary_of_999(self, agg, relogio, emitidos):
+        resultados = [agg.filter(com_codigo(None, mensagem=f"boom {n}")) for n in range(1000)]
+
+        assert resultados[0] is True and not any(resultados[1:])
+        relogio.avancar(61)
+        agg.tick()
+        assert [r.getMessage() for r in emitidos] == ["↻ Erro inesperado em cmd — repetida 999× em 60 s"]
+
+    def test_info_and_debug_with_a_code_are_never_aggregated(self, agg):
+        for nivel in (logging.INFO, logging.DEBUG):
+            resultados = [agg.filter(com_codigo(f"ERR-{n:06X}", nivel=nivel)) for n in range(5)]
+
+            assert all(resultados)

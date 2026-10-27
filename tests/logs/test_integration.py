@@ -329,3 +329,115 @@ class TestAgregacao:
 
         for texto in destinos.ambos():
             assert "repetida 2×" in texto
+
+
+# ============================================================================ K8g — código de erro ponta a ponta
+
+
+def falha_com_codigo(codigo: str, mensagem: str = "boom") -> None:
+    """Mesmo caminho de chamada a cada vez (mesmas linhas ``File … line N, in f``), como um comando que falha sempre no mesmo ponto."""
+    try:
+        _levanta(mensagem)
+    except ValueError:
+        logging.getLogger("empiremuse.errors").error(
+            "Erro inesperado em cmd [%s]", codigo, exc_info=True, extra={"error_code": codigo}
+        )
+
+
+def _levanta(mensagem: str) -> None:
+    raise ValueError(mensagem)
+
+
+def ponto_a() -> None:
+    _levanta("x")
+
+
+def ponto_b() -> None:
+    _levanta("y")
+
+
+class TestCodigoDeErroPonteAPonta:
+    def test_two_coded_errors_of_the_same_path_give_one_traceback_and_one_pointer_line_in_each_destination(
+        self, montar
+    ):
+        destinos = montar()
+
+        falha_com_codigo("ERR-AAAAAA", "boom A")
+        falha_com_codigo("ERR-BBBBBB", "boom B")
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 1
+            assert texto.count("ERR-AAAAAA") == 2 and texto.count("ERR-BBBBBB") == 1
+            assert texto.count("traceback igual ao de ERR-AAAAAA") == 1
+            assert "ValueError: boom B — traceback igual ao de ERR-AAAAAA" in texto
+            assert len(cabecalhos(texto)) == 2
+
+    def test_the_coded_line_is_the_same_text_in_the_console_and_in_the_file(self, montar):
+        destinos = montar()
+        falha_com_codigo("ERR-AAAAAA")
+        falha_com_codigo("ERR-BBBBBB")
+
+        def linha_codificada(texto):
+            (linha,) = [x for x in texto.splitlines() if "ERR-BBBBBB" in x]
+            return linha.split("empiremuse.errors: ", 1)[1]
+
+        assert linha_codificada(destinos.texto_console) == linha_codificada(destinos.texto_arquivo)
+
+    def test_each_record_is_decided_once_so_no_destination_gets_the_pointer_twice(self, montar):
+        destinos = montar()
+        for n in range(5):
+            falha_com_codigo(f"ERR-{n:06X}")
+
+        for texto in destinos.ambos():
+            assert texto.count("traceback igual ao de ERR-000000") == 4
+            assert "traceback igual ao de ERR-000000 — traceback igual" not in texto
+
+    def test_a_burst_of_sixty_coded_errors_leaves_one_traceback_forty_nine_lines_and_the_summary(self, montar, relogio):
+        destinos = montar()
+
+        for n in range(60):
+            falha_com_codigo(f"ERR-{n:06X}")
+        relogio.avancar(61)
+        tick_logging()
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 1
+            assert texto.count("traceback igual ao de ERR-000000") == 49 + 1  # 49 linhas + o resumo
+            assert texto.count("repetida 10× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)") == 1
+            assert all(f"ERR-{n:06X}" in texto for n in range(50))
+
+    def test_every_code_of_the_first_fifty_survives_in_the_file(self, montar):
+        destinos = montar()
+
+        for n in range(50):
+            falha_com_codigo(f"ERR-{n:06X}")
+
+        arquivo = destinos.texto_arquivo
+        assert all(f"ERR-{n:06X}" in arquivo for n in range(50))
+
+    def test_errors_from_two_call_sites_are_both_full(self, montar):
+        destinos = montar()
+        log = logging.getLogger("empiremuse.errors")
+
+        for ponto in (ponto_a, ponto_b):
+            try:
+                ponto()
+            except ValueError:
+                log.error("Erro inesperado em cmd", exc_info=True)
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
+
+    def test_a_forged_code_in_extra_cannot_inject_a_line_or_a_pointer(self, montar):
+        destinos = montar()
+        log = logging.getLogger("empiremuse.errors")
+
+        for codigo in ("ERR-AAAAAA", "x\nERR-FORJADO"):
+            try:
+                _levanta("boom")
+            except ValueError:
+                log.error("Erro inesperado em cmd", exc_info=True, extra={"error_code": codigo})
+        flush_logging()
+
+        for texto in destinos.ambos():
+            assert "ERR-FORJADO" not in texto and len(cabecalhos(texto)) == 2
