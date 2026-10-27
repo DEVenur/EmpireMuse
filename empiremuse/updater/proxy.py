@@ -29,6 +29,7 @@ import socketserver
 import stat
 import struct
 import sys
+import sysconfig
 import threading
 import urllib.parse
 from collections.abc import Iterable, Mapping, Sequence
@@ -430,15 +431,54 @@ def inspect_view(data: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def isolation_problems(flags: Any, module_names: Iterable[str]) -> list[str]:
-    """Problemas que impedem a subida: falta ``-I`` ou ``-S``, ou há módulo fora da biblioteca padrão carregado."""
+_PACKAGE_DIRECTORIES = frozenset({"site-packages", "dist-packages"})
+
+
+def _stdlib_roots() -> tuple[str, ...]:
+    """Pastas da biblioteca padrão do interpretador (puras e de plataforma, com ``lib-dynload`` dentro), já resolvidas."""
+    paths = {sysconfig.get_path("stdlib"), sysconfig.get_path("platstdlib")}
+    return tuple(sorted({os.path.realpath(path) for path in paths if path}))
+
+
+def _from_stdlib(name: str, module: Any, roots: Sequence[str]) -> bool:
+    """O módulo é do próprio interpretador: embutido, congelado, ou arquivo (resolvido) dentro da pasta da stdlib.
+
+    Decide pela ORIGEM, não pelo nome: o CPython 3.15 carrega ``_missing_stdlib_info`` (que não está em
+    ``sys.stdlib_module_names``) quando um import opcional falha, e um módulo de terceiros pode ter nome de stdlib.
+    ``site-packages`` e ``dist-packages`` ficam de fora mesmo quando moram dentro da pasta da stdlib.
+    """
+    if name in sys.builtin_module_names:
+        return True
+    if getattr(getattr(module, "__spec__", None), "origin", None) in ("built-in", "frozen"):
+        return True
+    filename = getattr(module, "__file__", None)
+    if not isinstance(filename, str):
+        return False
+    real = os.path.realpath(filename)
+    for root in roots:
+        if real.startswith(root + os.sep):
+            return not _PACKAGE_DIRECTORIES & set(real[len(root) + 1 :].split(os.sep))
+    return False
+
+
+def isolation_problems(flags: Any, modules: Mapping[str, Any]) -> list[str]:
+    """Problemas que impedem a subida: falta ``-I`` ou ``-S``, ou há módulo carregado que não é do interpretador.
+
+    ``modules`` é o ``sys.modules`` (nome → módulo); o ``__main__`` (o próprio script) é ignorado.
+    """
     problems: list[str] = []
     if not flags.isolated:
         problems.append("falta o modo isolado (-I)")
     if not flags.no_site:
         problems.append("falta -S: o site do venv não pode rodar")
-    allowed = set(sys.stdlib_module_names) | {"__main__"}
-    foreign = sorted({name.partition(".")[0] for name in module_names} - allowed)
+    roots = _stdlib_roots()
+    foreign = sorted(
+        {
+            name.partition(".")[0]
+            for name, module in modules.items()
+            if module is not None and name != "__main__" and not _from_stdlib(name, module, roots)
+        }
+    )
     if foreign:
         problems.append("módulos fora da biblioteca padrão: " + ", ".join(foreign))
     return problems
@@ -799,7 +839,7 @@ def serve(config: Config) -> int:
 
 def main(environ: Mapping[str, str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", stream=sys.stderr)
-    problems = isolation_problems(sys.flags, tuple(sys.modules))
+    problems = isolation_problems(sys.flags, dict(sys.modules))
     if problems:
         print("updater-proxy: ambiente inseguro: " + "; ".join(problems), file=sys.stderr)
         return EXIT_UNSAFE_RUNTIME
