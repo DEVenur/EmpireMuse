@@ -1423,9 +1423,9 @@ class MusicSettings(commands.Cog):
                 txt += (
                     f"RAM: `{used}/{free}`\n"
                     f"RAM Total: `{total}`\n"
-                    f"CPU Cores: `{cpu_cores}`\n"
+                    f"CPU Cores: {md_code(cpu_cores)}\n"
                     f"Uso de CPU: `{cpu_usage}%`\n"
-                    f"Versão do Lavalink: `v{node.version}`\n"
+                    f"Versão do Lavalink: {md_code(f'v{node.version}')}\n"
                     f"Uptime: <t:{int((disnake.utils.utcnow() - datetime.timedelta(milliseconds=node.stats.uptime)).timestamp())}:R>\n"
                 )
 
