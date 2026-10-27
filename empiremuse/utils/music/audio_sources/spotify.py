@@ -414,7 +414,7 @@ class SpotifyClient:
                         pass
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                        f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in result["artists"]
                     )
 
                     try:
@@ -469,7 +469,7 @@ class SpotifyClient:
             ]
 
             t.info["extra"]["authors_md"] = ", ".join(
-                f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in result["artists"]
             )
 
             try:
@@ -536,7 +536,7 @@ class SpotifyClient:
                 ]
 
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in track["artists"]
+                    f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in track["artists"]
                 )
 
                 try:
