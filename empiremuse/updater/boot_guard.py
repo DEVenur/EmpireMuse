@@ -2,7 +2,7 @@
 
 Roda em ``__main__.main()`` ANTES de importar o ``BotPool`` (um erro de import no código novo derrubaria o bot antes de
 qualquer outra proteção). Só stdlib no import. Só age quando existe um pendente do fluxo git: cada subida soma um ``boots``;
-o pendente é apagado pelo aviso pós-boot quando o bot fica pronto, então só quem nunca fica pronto chega ao limite. O fluxo
+quando o pool fica saudável o pendente vira ``ready`` (e o aviso pós-boot o apaga), então só quem nunca fica pronto chega ao limite. O fluxo
 Docker não é tocado (quem desfaz é o auxiliar, com ``--wait``).
 """
 

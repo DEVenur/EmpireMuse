@@ -257,7 +257,7 @@ class BotPool:
 
     async def check_pool_ready(self) -> None:
         """Na primeira vez em que o pool fica saudável chama ``on_pool_ready`` (update: pendente vira ``ready`` e o aviso sai)."""
-        if self.update_ready_checked or not self.pool_is_healthy():
+        if self.update_ready_checked or self.killing_state is True or not self.pool_is_healthy():
             return
         self.update_ready_checked = True
         try:

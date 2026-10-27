@@ -2,7 +2,7 @@
 
 ``update-pending.json`` (0600, escrita atômica) existe enquanto há uma atualização em andamento: com ele presente, um
 segundo ``update`` é recusado. Tudo que vem do arquivo é validado campo a campo na leitura (versões, SHAs, digest e ids);
-um arquivo inválido, de esquema diferente ou com mais de 24 h é apagado com um aviso sem o conteúdo.
+um arquivo inválido, de esquema diferente, com mais de 24 h ou com data no futuro é apagado com um aviso sem o conteúdo.
 ``update-state.json`` guarda tag → SHA do objeto da tag já vista (fluxo git): uma tag que muda de SHA aborta o update.
 """
 
@@ -14,6 +14,7 @@ import logging
 import math
 import os
 import re
+import stat
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ PENDING_FILE = "update-pending.json"
 SEEN_TAGS_FILE = "update-state.json"
 PENDING_VERSION = 1
 PENDING_MAX_AGE_SECONDS = 24 * 3600
+PENDING_MAX_FUTURE_SECONDS = 300
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
 FLOWS = ("git", "docker")
@@ -155,8 +157,12 @@ def _write_json_atomic(path: Path, data: object) -> None:
 
 
 def _read_json(path: Path) -> object:
-    """JSON do arquivo (até ``MAX_FILE_BYTES``); levanta ``OSError``/``ValueError`` se ausente, grande demais ou inválido."""
-    with open(path, "rb") as file:
+    """JSON do arquivo regular (até ``MAX_FILE_BYTES``); levanta ``OSError``/``ValueError`` se ausente, de outro tipo, grande demais ou inválido."""
+    # O_NONBLOCK não deixa um FIFO travar a abertura (o boot_guard roda antes do bot); O_NOFOLLOW recusa link simbólico.
+    descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    with os.fdopen(descriptor, "rb") as file:
+        if not stat.S_ISREG(os.fstat(file.fileno()).st_mode):
+            raise ValueError("não é um arquivo regular")
         raw = file.read(MAX_FILE_BYTES + 1)
     if len(raw) > MAX_FILE_BYTES:
         raise ValueError("arquivo grande demais")
@@ -188,6 +194,10 @@ def read_pending(runtime_dir: Path, now: float) -> PendingUpdate | None:
         pending = parse_pending(data)
     if pending is None:
         logger.warning("Arquivo de atualização pendente inválido; descartado.")
+        clear_pending(runtime_dir)
+        return None
+    if pending.created_at > now + PENDING_MAX_FUTURE_SECONDS:
+        logger.warning("Arquivo de atualização pendente com data no futuro; descartado.")
         clear_pending(runtime_dir)
         return None
     if now - pending.created_at > PENDING_MAX_AGE_SECONDS:

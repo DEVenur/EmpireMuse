@@ -503,6 +503,7 @@ class Owner(commands.Cog):
     async def _apply_git_update(self, plan, request: UpdateRequest, interaction: disnake.MessageInteraction) -> None:
         """Roda depois do clique em Confirmar: aplica, avisa o resultado e, se deu certo, encerra o processo com 75."""
         restart = False
+        self._stop_ready_check()  # o pendente que o apply vai gravar é do processo NOVO; este não pode marcá-lo como pronto
         try:
             progress = disnake.Embed(colour=self.bot.get_color(), description=f"⏳ Atualizando para {plan.target}...")
             await interaction.response.edit_message(embed=progress, view=None)
@@ -522,6 +523,13 @@ class Owner(commands.Cog):
             self._release_update_lock()
         if restart:
             await self._restart_process()
+
+    def _stop_ready_check(self) -> None:
+        """Desliga a checagem de ``ready`` deste processo (que vai ser trocado): marca como feita e cancela o watcher."""
+        pool = self.bot.pool
+        pool.update_ready_checked = True
+        if pool.update_watch_task:
+            pool.update_watch_task.cancel()
 
     async def _restart_process(self) -> None:
         """Encerra o pool com o código de reinício (75) e, com o servidor web no ar, também o laço dele (senão o processo não sai)."""

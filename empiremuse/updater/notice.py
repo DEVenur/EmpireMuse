@@ -98,11 +98,11 @@ async def _send(bot: Any, pending: PendingUpdate, embed: disnake.Embed) -> bool:
 
 
 def _sender(pool: Any, pending: PendingUpdate) -> Any | None:
-    """O bot que pediu, se ainda está em ``pool.bots`` e pronto; senão o primeiro bot pronto do pool (ou ``None``)."""
-    ready = [bot for bot in pool.bots if bot.bot_ready]
-    for bot in ready:
-        if getattr(bot.user, "id", None) == pending.bot_id:
+    """O bot que pediu, se está pronto (inclusive um bot de guild); senão o primeiro bot pronto de ``pool.bots`` (ou ``None``)."""
+    for bot in pool.get_all_bots():
+        if bot.bot_ready and getattr(bot.user, "id", None) == pending.bot_id:
             return bot
+    ready = [bot for bot in pool.bots if bot.bot_ready]
     return ready[0] if ready else None
 
 
