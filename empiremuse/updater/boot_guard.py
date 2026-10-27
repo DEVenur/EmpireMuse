@@ -56,7 +56,10 @@ def run(
             "meio restaurado.",
             MAX_RESTORE_ATTEMPTS,
         )
-        _save(runtime_dir, dataclasses.replace(pending, status="rolled_back", restore_attempts=GAVE_UP_ATTEMPTS))
+        if not _save(
+            runtime_dir, dataclasses.replace(pending, status="rolled_back", restore_attempts=GAVE_UP_ATTEMPTS)
+        ):
+            return  # sem como gravar a desistência, todo boot releria o teto e sairia com 75: um laço; a subida segue
         raise SystemExit(EXIT_RESTART)
     attempt = dataclasses.replace(pending, restore_attempts=pending.restore_attempts + 1)
     if not _save(runtime_dir, attempt):  # antes do restore: um restore que derruba o processo também conta
