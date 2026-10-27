@@ -101,7 +101,7 @@ A produção roda na VPS da Hostinger (Docker Manager), com o compose de [`deplo
 
 ## 4. O que o Workflow de Release Faz
 
-O arquivo de workflow [`.github/workflows/release.yml`](../../.github/workflows/release.yml) é acionado exclusivamente no push de tags no formato `v*.*.*`. Ele é dividido em três fases coordenadas:
+O arquivo de workflow [`.github/workflows/release.yml`](../../.github/workflows/release.yml) é acionado exclusivamente no push de tags no formato `v*.*.*`. Ele é dividido em quatro fases coordenadas:
 
 ```mermaid
 flowchart TD
@@ -109,7 +109,8 @@ flowchart TD
     A --> C["verify-ci: Confere o CI verde do commit"]
     B --> D["docker: Build multi-arch e push"]
     C --> D
-    D --> E["Docker Hub: or4cu1o/empiremuse"]
+    D --> E["Docker Hub: or4cu1o/empiremuse (imagem assinada)"]
+    D --> F["github-release: Release com image-digest.txt"]
 ```
 
 ### 4.1 Validação de Tag (`verify-tag`)
@@ -127,11 +128,21 @@ flowchart TD
 - **Segurança da Cadeia de Suprimentos (Supply Chain)**:
   - **SBOM** (`sbom: true`): Gera e anexa o inventário de software (Software Bill of Materials) diretamente ao registro;
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
+- **Versão dentro da imagem**: o `build-args` passa `EMPIREMUSE_VERSION` (a versão da tag, sem o `v`) para o Dockerfile, e o bot a lê para saber que versão está rodando (`empiremuse/version.py`). Builds locais ficam com `dev`;
+- **Assinatura (cosign keyless)**: só o job `docker` tem `id-token: write`. Depois do push, o job valida o digest (`^sha256:[0-9a-f]{64}$`), assina `or4cu1o/empiremuse@<digest>` pela identidade OIDC do GitHub (Sigstore, sem chave guardada) e roda `cosign verify` no mesmo digest, exigindo a identidade deste `release.yml` numa tag `vX.Y.Z[-rc.N]`. Se assinar ou verificar falhar, o job falha e a versão não é anunciada (fail-closed). O digest sai como saída do job;
 - **Regras de Versionamento de Tags da Imagem**:
   - **Versão Final Estável** (`vX.Y.Z`, ex.: `v2.0.0`):
     - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que nunca é republicada, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
   - **Release Candidate** (`vX.Y.Z-rc.N`, ex.: `v2.0.0-rc.1`; o workflow ainda aceita, mas o fluxo atual não usa RC, ver seção 1.1):
     - Publica **estritamente** a tag do pré-lançamento (`2.0.0-rc.1`), **sem alterar nem sobrescrever** as tags flutuantes `2`, `2.0`, `latest` nem as tags de versões estáveis anteriores.
+
+### 4.4 GitHub Release com o digest (`github-release`)
+- Roda depois do `docker`, com `contents: write` e nenhuma outra permissão (nenhum outro job ganha permissão nova);
+- Cria a GitHub Release da tag (`gh release create --verify-tag`), com as notas tiradas da seção `## [X.Y.Z]` do `CHANGELOG.md` (release estável sem a seção falha) e o asset `image-digest.txt`, que tem exatamente uma linha `sha256:<64 hex>`. Tags `-rc.N` saem marcadas como pré-lançamento;
+- O asset é enviado já na criação: com **releases imutáveis** ligadas no repositório (pré-requisito do auto-update), uma release criada assim não pode mais ter o asset trocado. O bot só oferece versões que tenham essa release.
+
+> [!IMPORTANT]
+> Antes de publicar uma versão que o auto-update deva oferecer, ligue **Releases imutáveis** em *Settings > General* do repositório; só as releases criadas depois ficam imutáveis.
 
 ---
 
@@ -159,6 +170,18 @@ O comando exibirá a lista de manifestos contendo:
 - Plataforma `linux/amd64`;
 - Plataforma `linux/arm64`;
 - Camadas de atestação (`application/vnd.in-toto+json`) referentes ao SBOM e Provenance.
+
+### 5.3 Verificação da Assinatura e do Digest
+Para conferir a assinatura como uma pessoa (o workflow já fez a mesma checagem), instale o [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) e rode, trocando `X.Y.Z` pela versão:
+
+```bash
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/EmpireCommunity/EmpireMuse/.github/workflows/release.yml@refs/tags/vX.Y.Z" \
+  or4cu1o/empiremuse:X.Y.Z
+```
+
+O digest fixado da versão está no asset `image-digest.txt` da GitHub Release (`gh release download vX.Y.Z -p image-digest.txt -O -`). Use-o para fixar a imagem como `or4cu1o/empiremuse:X.Y.Z@sha256:<digest>` em um compose.
 
 ---
 
