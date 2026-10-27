@@ -3,6 +3,7 @@
 ``BootReport`` e ``check_new_version`` vêm de ``empiremuse.logs.boot`` (contrato 3.12). A captura é um handler SEM filtros no root (vê o
 registro cru, antes do redator): o que o código mandou ao log, não o que o redator limpou. Relógio e rede injetados; nada dorme.
 """
+# ruff: noqa: F811 - as fixtures importadas de test_secret_sources são usadas como parâmetro
 
 import ast
 import asyncio
@@ -33,6 +34,7 @@ from tests.support.raiz import RAIZ
 pytestmark = pytest.mark.critical
 
 RAIZ_DO_BOT = RAIZ / "empiremuse"
+LOAD_MODULES_REAL = client.BotCore.load_modules  # antes de qualquer teste trocar o ``BotCore`` por um dublê
 
 
 class Captura(logging.Handler):
@@ -41,9 +43,23 @@ class Captura(logging.Handler):
     def __init__(self) -> None:
         super().__init__(level=logging.DEBUG)
         self.registros: list[logging.LogRecord] = []
+        self.fotos: list[SimpleNamespace] = []
 
     def emit(self, record: logging.LogRecord) -> None:
         self.registros.append(record)
+        # o ``SanitizeAndRedact`` dos outros handlers muda o mesmo registro depois (zera o ``exc_info``): a foto é imutável
+        self.fotos.append(
+            SimpleNamespace(
+                name=record.name,
+                levelno=record.levelno,
+                mensagem=record.getMessage(),
+                exc_tipo=record.exc_info[0] if record.exc_info else None,
+            )
+        )
+
+    def limpar(self) -> None:
+        self.registros.clear()
+        self.fotos.clear()
 
     def do_logger(self, prefixo: str) -> list[logging.LogRecord]:
         return [r for r in self.registros if r.name == prefixo or r.name.startswith(prefixo + ".")]
@@ -145,7 +161,7 @@ class TestBootReport:
 
 
 class TestSubidaReal:
-    def test_the_mongo_uri_with_a_password_never_reaches_the_boot_lines(self, fabrica, captura, monkeypatch):  # noqa: F811
+    def test_the_mongo_uri_with_a_password_never_reaches_the_boot_lines(self, fabrica, captura, monkeypatch):
         senha = "senha-do-mongo-da-subida-Z9"
         uri = f"mongodb+srv://usuario:{senha}@cluster0.exemplo.net/banco"
         monkeypatch.setattr(client, "MongoDatabase", MagicMock())
@@ -165,7 +181,7 @@ class TestSubidaReal:
             )
         assert any("mongo" in r.getMessage().lower() for r in boot)
 
-    def test_a_node_with_a_password_never_shows_it_during_the_setup(self, fabrica, captura):  # noqa: F811
+    def test_a_node_with_a_password_never_shows_it_during_the_setup(self, fabrica, captura):
         senha = "senha-do-no-da-subida-Y8"
         pool = fabrica(LAVALINK_NODE_1=no_json(senha, "NO_DA_SUBIDA"))
 
@@ -209,7 +225,7 @@ class TestSubidaReal:
         assert any("NO_VERIFICADO" in t for t in textos)
         assert not any(senha in t or "10.1.2.3" in t for t in textos)
 
-    def test_the_boot_lines_of_a_normal_setup_are_at_info_or_below_and_never_print(self, fabrica, captura, capsys):  # noqa: F811
+    def test_the_boot_lines_of_a_normal_setup_are_at_info_or_below_and_never_print(self, fabrica, captura, capsys):
         pool = fabrica()
 
         pool.setup()
@@ -351,7 +367,7 @@ class TestVersaoNova:
         assert registros and all(r.levelno == logging.DEBUG for r in registros)
 
     @pytest.mark.asyncio
-    async def test_the_check_does_not_use_the_real_network(self, captura, sem_rede):  # noqa: F811
+    async def test_the_check_does_not_use_the_real_network(self, captura, sem_rede):
         registros = await checar(captura, lista=lista_de("2.2.0"), atual=Version(2, 1, 0))
 
         assert any(r.levelno == logging.INFO for r in registros)
@@ -701,3 +717,182 @@ class TestLinhasDistintasDoJava:
     def test_six_identical_lines_give_the_first_plus_a_summary_of_five(self, lavalink_com_stderr, tmp_path):
         for texto in self.textos(lavalink_com_stderr, tmp_path, ["Address already in use"] * 6):
             assert texto.count("repetida 5×") == 1 and texto.count("Address already in use") == 2
+
+
+# ============================================================================ CodeRabbit #126 — initial_setup, tarefa da versão nova, linhas longas
+
+
+class ConfigPermissiva(dict):
+    """``bot.config`` que o ``setup`` lê chave por chave: o que não foi dado vale ``False``."""
+
+    def __missing__(self, chave):
+        return False
+
+
+def montar_pool_com_bot(fabrica, monkeypatch, *, carregador=None, cooldowns_falham=False):
+    """``BotPool.setup`` REAL com um bot falso cujo ``initial_setup`` fica guardado (as corrotinas) para o teste rodar à mão."""
+    corrotinas = []
+    bot = MagicMock(identifier="bot1")
+    bot.loop.create_task.side_effect = corrotinas.append
+    bot.wait_until_ready = AsyncMock()
+    bot.update_appinfo = AsyncMock()
+    bot.session = object()
+    bot.config = ConfigPermissiva({"AUTO_SYNC_COMMANDS": False})
+    if carregador is not None:
+        bot.load_modules = lambda **kwargs: LOAD_MODULES_REAL(carregador, **kwargs)
+    else:
+        bot.load_modules = MagicMock(return_value={})
+    if cooldowns_falham:
+        bot.sync_command_cooldowns = MagicMock(side_effect=ValueError("cooldowns quebraram"))
+    monkeypatch.setattr(client, "MongoDatabase", MagicMock())
+    pool = fabrica()
+    monkeypatch.setattr(client, "BotCore", lambda **kwargs: bot)
+    pool.check_pool_ready = AsyncMock()
+    return pool, bot, corrotinas
+
+
+def carregador_que_falha():
+    from disnake.ext import commands
+
+    class Carregador:
+        def __init__(self) -> None:
+            self.user, self.identifier, self.bot_ready = "bot", "id", False
+            self.config = {"ENABLE_DISCORD_URLS_PLAYBACK": True}
+            self.slash_commands = []
+            self.remove_slash_command = MagicMock()
+
+        def unload_extension(self, nome):
+            raise commands.ExtensionNotLoaded(nome)
+
+        def load_extension(self, nome):
+            raise RuntimeError(f"explodiu ao carregar {nome} com detalhe-interno")
+
+    return Carregador()
+
+
+def rodar_initial_setup(corrotinas) -> None:
+    for corrotina in corrotinas:
+        asyncio.run(corrotina)
+
+
+class TestInitialSetup:
+    def test_a_cog_failure_gives_no_error_record_and_no_traceback_above_debug(self, fabrica, captura, monkeypatch):
+        pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, carregador=carregador_que_falha())
+        pool.setup()
+        captura.limpar()
+
+        rodar_initial_setup(corrotinas)
+
+        proprios = [f for f in captura.fotos if f.name.startswith("empiremuse")]
+        assert not [f for f in proprios if f.levelno >= logging.ERROR], "falha de cog não pode virar ERROR"
+        assert not [f for f in proprios if f.exc_tipo and f.levelno > logging.DEBUG], "traceback só em DEBUG"
+
+    def test_a_cog_failure_reports_the_module_and_type_and_that_the_initial_setup_stopped_as_warnings(
+        self,
+        fabrica,
+        captura,
+        monkeypatch,
+    ):
+        pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, carregador=carregador_que_falha())
+        pool.setup()
+        captura.limpar()
+
+        rodar_initial_setup(corrotinas)
+
+        avisos = [f.mensagem for f in captura.fotos if f.levelno == logging.WARNING]
+        assert any("RuntimeError" in texto and ".py" in texto for texto in avisos)
+        assert any("configuração inicial" in texto.lower() for texto in avisos)
+        assert not any("detalhe-interno" in texto for texto in avisos), "a mensagem da exceção só vale no DEBUG"
+
+    def test_the_cog_failure_does_not_print_the_traceback_to_the_real_streams(
+        self, fabrica, captura, monkeypatch, capfd
+    ):
+        pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, carregador=carregador_que_falha())
+        pool.setup()
+        capfd.readouterr()
+
+        rodar_initial_setup(corrotinas)
+
+        saida = capfd.readouterr()
+        assert "Traceback" not in saida.out + saida.err
+
+    def test_the_initial_setup_still_finishes_after_a_cog_failure(self, fabrica, monkeypatch):
+        pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, carregador=carregador_que_falha())
+        pool.setup()
+
+        rodar_initial_setup(corrotinas)
+
+        assert bot.bot_ready is True and bot.update_appinfo.await_count == 1
+
+    def test_a_failure_that_is_not_from_a_cog_keeps_the_error_with_its_traceback(self, fabrica, captura, monkeypatch):
+        pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, cooldowns_falham=True)
+        pool.setup()
+        captura.limpar()
+
+        rodar_initial_setup(corrotinas)
+
+        erros = [f for f in captura.fotos if f.levelno >= logging.ERROR and f.name.startswith("empiremuse")]
+        assert erros and any(f.exc_tipo is ValueError for f in erros)
+
+
+class TestTarefaDaVersaoNova:
+    def test_the_attribute_exists_on_the_class_and_starts_empty(self):
+        assert BotPool_version_check_task_default() is None
+
+    def test_after_setup_it_is_a_task_and_after_shutdown_it_is_cancelled_and_still_there(self, fabrica):
+        pool = fabrica()
+        pool.setup()
+
+        tarefa = pool.version_check_task
+        assert isinstance(tarefa, asyncio.Task)
+
+        asyncio.run(pool.shutdown(0))
+        pool.loop.run_until_complete(asyncio.sleep(0))
+
+        assert tarefa.cancelled() or tarefa.done()
+        assert pool.version_check_task is tarefa
+
+    def test_shutdown_without_the_task_does_not_fail(self):
+        pool = client.BotPool.__new__(client.BotPool)
+        pool.bots, pool.guild_bots, pool.heartbeat_task, pool.nodes_expected = [], {}, None, False
+        pool.update_watch_task, pool.helper_watch_tasks, pool.lavalink_instance = None, set(), None
+
+        asyncio.run(pool.shutdown(0))
+
+
+def BotPool_version_check_task_default():
+    return client.BotPool.version_check_task
+
+
+class TestLinhasLongasDoJava:
+    BASE = "x" * 300
+
+    def textos(self, lavalink_com_stderr, tmp_path, linhas):
+        console = lavalink_com_stderr(linhas, arquivo=True)
+        return console, (tmp_path / ".logs" / "disnake.log").read_text(encoding="utf-8")
+
+    def test_two_long_lines_that_differ_only_after_the_256th_character_are_two_records(
+        self, lavalink_com_stderr, tmp_path
+    ):
+        linhas = [self.BASE + "-final-A", self.BASE + "-final-B"]
+
+        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
+            assert "-final-A" in texto and "-final-B" in texto
+            assert "repetida" not in texto and "↻" not in texto
+            assert len([linha for linha in texto.splitlines() if linha]) == 2
+
+    def test_the_same_long_line_a_hundred_times_still_aggregates(self, lavalink_com_stderr, tmp_path):
+        for texto in self.textos(lavalink_com_stderr, tmp_path, [self.BASE + "-final-A"] * 100):
+            assert texto.count("-final-A") == 2 and texto.count("repetida 99×") == 1
+
+    def test_long_lines_that_differ_in_the_first_256_characters_stay_distinct(self, lavalink_com_stderr, tmp_path):
+        linhas = ["a" * 300, "b" * 300]
+
+        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
+            assert "repetida" not in texto and len([linha for linha in texto.splitlines() if linha]) == 2
+
+    def test_three_long_lines_with_the_same_prefix_give_three_records(self, lavalink_com_stderr, tmp_path):
+        linhas = [self.BASE + f"-{n}" for n in range(3)]
+
+        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
+            assert len([linha for linha in texto.splitlines() if linha]) == 3 and "repetida" not in texto
