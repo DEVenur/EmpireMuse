@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Segurança
+- **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
+
 ## [2.1.0] - 2026-10-27
 
 Atualização da stack (Python 3.14, Java 25, PyMongo Async), atualização automática do bot no Docker pelo comando `update` e correções de segurança.
