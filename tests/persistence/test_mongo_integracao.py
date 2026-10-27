@@ -8,23 +8,24 @@ Tudo roda num banco com nome único, apagado no fim.
 import asyncio
 import os
 import uuid
-from urllib.parse import urlparse
 
 import pytest
 
 from empiremuse.utils import db
 from empiremuse.utils.db import DBModel, MongoDatabase
+from tests.support.mongo_local import uri_so_local
 
 pytestmark = pytest.mark.integration
 
 URI = os.environ.get("MONGO_TEST_URI", "")
-HOSTS_LOCAIS = {"localhost", "127.0.0.1", "::1"}
 
 if not URI:
     pytest.skip("MONGO_TEST_URI ausente: sem mongod descartável", allow_module_level=True)
 
-if urlparse(URI).hostname not in HOSTS_LOCAIS:
-    pytest.fail("MONGO_TEST_URI precisa apontar para localhost", pytrace=False)
+if not uri_so_local(URI):
+    pytest.fail(
+        "MONGO_TEST_URI precisa ser mongodb:// e todos os hosts locais (localhost, 127.0.0.1, ::1)", pytrace=False
+    )
 
 
 async def _ciclo():
