@@ -15,19 +15,18 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `LOG_DEBUG_GUILDS` (IDs de servidores, separados por vírgula, que registram em `DEBUG` mesmo com o nível global mais alto).
   - `METRICS_INTERVAL` (segundos entre os resumos periódicos de métricas; padrão 300, mínimo 60; 0 desliga o resumo).
 - **Agregação de erros repetidos**: avisos e erros iguais (mesmo logger, nível, modelo da mensagem e tipo de exceção) saem uma vez e viram um resumo por janela de 60 s, em vez de inundar o console e o arquivo.
+- **Relatório de subida por etapas (item 7, fase P2)**: a subida do bot mostra, em etapas, a pasta de execução, o Python, a versão do bot, os cogs carregados e os que falharam, o MongoDB, o Java, os nós do Lavalink e se há uma versão estável nova disponível.
 - **Eventos do player no log (item 7, fase P3)**: início e fim de faixa, pausa, troca de nó e erros saem no log com servidor, canal, duração e origem. O título da faixa só aparece em `DEBUG`. Em escala o `INFO` fica silencioso: início e fim de faixa vão para `DEBUG` e só os problemas sobem para `WARNING`.
 - **Resumo periódico de métricas**: a cada `METRICS_INTERVAL` o log traz faixas tocadas, erros por tipo, players ativos, CPU e RAM do Python e do Java local, nós do Lavalink e latência do gateway e da voz.
 - **Estado dos nós de áudio no log**: as transições de cada nó (conectado, caído) e o caso de todos indisponíveis são registradas.
-- **Relatório de subida por etapas (item 7, fase P2)**: a subida do bot mostra, em etapas, a pasta de execução, o Python, a versão do bot, os cogs carregados e os que falharam, o MongoDB, o Java, os nós do Lavalink e se há uma versão estável nova disponível.
 
 ### Alterado
-- **Cerca de 100 `print` migrados para o log (item 7, fase P3)**: as mensagens passam a ter nível, cor, contexto e redação de segredos.
-- **Sem `print` no caminho de subida (item 7, fase P2)**: a subida do bot deixa de usar `print`; tudo sai pelo log, com nível, cor e contexto.
+- **`print` migrado para o log (item 7, fases P2 e P3)**: cerca de 100 `print`, incluindo todo o caminho de subida do bot, passam a sair pelo log, com nível, cor, contexto e redação de segredos.
 
 ### Segurança
+- **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
 - **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
-- **Redator único de segredos em todos os destinos do log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 
 ### Removido
 - **Aviso de bot público e licença GPL-2 no console**: o aviso herdado de bot público e o texto da licença GPL-2 deixam de aparecer no console; o aviso de servidores sem o dono ou a equipe continua.
