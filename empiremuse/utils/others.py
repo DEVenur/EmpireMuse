@@ -14,6 +14,7 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import GenericError, ArgumentParsingError
 
 if TYPE_CHECKING:
@@ -403,8 +404,8 @@ async def send_idle_embed(
         + ("no post" if is_forum else "no canal ou na conversa abaixo")
         + f" (ou clique no botão abaixo ou use o comando {cmd} aqui ou em algum outro canal)**\n\n"
         "**Você pode usar um nome ou um link de site compatível:**\n"
-        "[`Youtube`](<https://www.youtube.com/>), [`Soundcloud`](<https://soundcloud.com/>), "
-        "[`Spotify`](<https://open.spotify.com/>), [`Twitch`](<https://www.twitch.tv/>)",
+        f"{md_link('Youtube', 'https://www.youtube.com/')}, {md_link('Soundcloud', 'https://soundcloud.com/')}, "
+        f"{md_link('Spotify', 'https://open.spotify.com/')}, {md_link('Twitch', 'https://www.twitch.tv/')}",
         color=bot.get_color(target.guild.me),
     )
 
@@ -509,7 +510,7 @@ async def send_idle_embed(
         isinstance(message.channel, (disnake.Thread, disnake.TextChannel))
         and not message.pinned
         and not is_forum
-        and target.guild.me.guild_permissions.manage_messages
+        and message.channel.permissions_for(target.guild.me).pin_messages
     ):
         await message.pin(reason="Player controller")
 
