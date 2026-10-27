@@ -87,6 +87,44 @@ def achados(codigo: str) -> list[tuple[int, str]]:
     return resultado
 
 
+FUNCOES_SEGURAS_EM_CRASE = {"md_code", "fix_characters", "time_format", "int", "len", "round", "float", "abs"}
+
+
+def _seguro_em_crase(expressao: ast.expr) -> bool:
+    """Número, ou chamada de ``md_code``/``fix_characters``/``time_format`` (e conversões numéricas), ou conta só entre elas."""
+    if isinstance(expressao, ast.Constant):
+        return isinstance(expressao.value, (int, float))
+    if isinstance(expressao, ast.Call):
+        funcao = expressao.func
+        nome = funcao.id if isinstance(funcao, ast.Name) else funcao.attr if isinstance(funcao, ast.Attribute) else ""
+        return nome in FUNCOES_SEGURAS_EM_CRASE
+    return isinstance(expressao, ast.BinOp) and _seguro_em_crase(expressao.left) and _seguro_em_crase(expressao.right)
+
+
+def achados_em_crase(codigo: str) -> list[tuple[int, str]]:
+    """S4b: ``(linha, expressão)`` de cada valor de f-string entre crases (``` `{x}` ```) que não é número nem passou por ``md_code``/``fix_characters``."""
+    resultado: list[tuple[int, str]] = []
+    for no in ast.walk(ast.parse(codigo)):
+        if not isinstance(no, ast.JoinedStr):
+            continue
+        partes = no.values
+        for i in range(1, len(partes) - 1):
+            valor, antes, depois = partes[i], partes[i - 1], partes[i + 1]
+            if not (
+                isinstance(valor, ast.FormattedValue)
+                and isinstance(antes, ast.Constant)
+                and isinstance(depois, ast.Constant)
+            ):
+                continue
+            if (
+                str(antes.value).endswith("`")
+                and str(depois.value).startswith("`")
+                and not _seguro_em_crase(valor.value)
+            ):
+                resultado.append((valor.lineno, ast.unparse(valor.value)))
+    return resultado
+
+
 def arquivos_do_pacote():
     for caminho in sorted(PACOTE.rglob("*.py")):
         relativo = caminho.relative_to(RAIZ).as_posix()
@@ -145,6 +183,40 @@ class TestScanner:
 
     def test_the_line_number_is_the_line_of_the_construct(self):
         assert achados('a = 1\nb = 2\nx = f"[`{n}`]({u})"\n') == [(3, "fstring")]
+
+
+class TestScannerEmCrase:
+    @pytest.mark.parametrize(
+        "codigo",
+        [
+            "x = f\"`{track.info['sourceName']}`\"",
+            'x = f"Região: `{node.region.title()}`"',
+            'x = f"```{guild.name}```"',
+            'x = f"a `{nome}` b"',
+        ],
+    )
+    def test_it_finds_a_raw_value_inside_backticks(self, codigo):
+        assert len(achados_em_crase(codigo)) == 1
+
+    @pytest.mark.parametrize(
+        "codigo",
+        [
+            'x = f"`{md_code(nome)}`"',
+            'x = f"`{fix_characters(nome, 40)}`"',
+            'x = f"`{time_format(ms)}`"',
+            'x = f"`{len(lista)}`"',
+            'x = f"`{int(total)}`"',
+            'x = f"`{3}`"',
+            'x = f"{nome} sem crase"',
+            'x = f"`aberta {nome}"',
+            'x = f"{nome}`"',
+        ],
+    )
+    def test_it_ignores_safe_values_and_values_outside_backticks(self, codigo):
+        assert achados_em_crase(codigo) == []
+
+    def test_the_line_number_and_the_expression_are_reported(self):
+        assert achados_em_crase('a = 1\nx = f"`{obj.nome}`"') == [(2, "obj.nome")]
 
 
 # ============================================================================ a guarda sobre o código do bot

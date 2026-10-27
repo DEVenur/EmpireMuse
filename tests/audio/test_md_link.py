@@ -14,6 +14,7 @@ from tests.support.marcas_md import (
     NOME_COM_MARCAS,
     URL_COM_CONTROLE,
     URL_COM_CRASE,
+    URL_COM_BARRA,
     URL_COM_ESPACO,
     URL_COM_MAIOR,
     URL_COM_MAIOR_CODIFICADA,
@@ -67,8 +68,19 @@ class TestMdLink:
             (URL_COM_ESPACO, "https://ok.exemplo/a%20b"),
             (URL_COM_CONTROLE, "https://ok.exemplo/a%09b%0Ac"),
             ("https://a.exemplo/\x00\x1f\x7f", "https://a.exemplo/%00%1F%7F"),
+            ("https://a.exemplo/x\\y", "https://a.exemplo/x%5Cy"),
         ],
-        ids=["abre-paren", "fecha-paren", "menor", "maior", "crase", "espaco", "controles", "nulo-e-del"],
+        ids=[
+            "abre-paren",
+            "fecha-paren",
+            "menor",
+            "maior",
+            "crase",
+            "espaco",
+            "controles",
+            "nulo-e-del",
+            "barra-invertida",
+        ],
     )
     def test_each_dangerous_character_in_the_url_is_percent_encoded(self, url, esperada):
         assert md_url(url) == esperada
@@ -148,10 +160,10 @@ class TestMdUrl:
             assert md_url(md_url(url)) == md_url(url)
 
     def test_the_encoded_url_never_has_a_paren_angle_backtick_space_or_control(self):
-        for url in (URL_COM_PARENTESE, URL_COM_MAIOR, URL_COM_CRASE, URL_COM_ESPACO, URL_COM_CONTROLE):
+        for url in (URL_COM_PARENTESE, URL_COM_MAIOR, URL_COM_CRASE, URL_COM_ESPACO, URL_COM_CONTROLE, URL_COM_BARRA):
             saida = md_url(url)
             assert saida is not None
-            assert not re.search(r"[()<>`\x00-\x20\x7f]", saida), saida
+            assert not re.search(r"[()<>`\\\x00-\x20\x7f]", saida), saida
 
 
 class TestMdCode:

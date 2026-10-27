@@ -23,6 +23,7 @@ NOME_COM_CRASES = f"{CRASE}{CRASE}cod{CRASE} e *negrito* e _it_"
 URL_COM_PARENTESE = f"https://ok.exemplo/x)[z](https://{ALHEIO}"
 URL_COM_MAIOR = f"https://ok.exemplo/x>[z](https://{ALHEIO}"
 URL_COM_CRASE = f"https://ok.exemplo/x{CRASE}y"
+URL_COM_BARRA = "https://ok.exemplo/x\\y"
 URL_COM_ESPACO = "https://ok.exemplo/a b"
 URL_COM_CONTROLE = "https://ok.exemplo/a\tb\nc"
 
