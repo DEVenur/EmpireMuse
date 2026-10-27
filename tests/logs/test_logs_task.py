@@ -7,6 +7,7 @@ aparece pelo efeito (a linha ``↻ … repetida N×`` sai quando a janela fecha)
 import asyncio
 import io
 import logging
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -56,6 +57,11 @@ class Cenario:
         return self.console.getvalue()
 
 
+def resumos(saida: str) -> list[str]:
+    """Linhas de resumo do console: o 📊 vem do formatter (categoria ``empiremuse.metrics``), então se conta pelo logger + 'servidores'."""
+    return [linha for linha in saida.splitlines() if re.search(r"empiremuse\.metrics: (📊 )?servidores", linha)]
+
+
 def repetir_aviso(vezes: int = 3) -> None:
     for n in range(vezes):
         logging.getLogger("empiremuse.wavelink").warning("nó %s caiu", n)
@@ -103,8 +109,8 @@ class TestTarefaComResumo:
 
     def test_the_first_summary_is_after_five_windows_and_the_second_after_ten(self):
         # 6 e 11 ``sleep``s: o primeiro/segundo resumo (t = 300 s / 600 s) já saiu tanto com o ``sleep`` no começo quanto no fim da volta
-        assert Cenario(300).rodar(6).count("📊 servidores") == 1
-        assert Cenario(300).rodar(11).count("📊 servidores") == 2
+        assert len(resumos(Cenario(300).rodar(6))) == 1
+        assert len(resumos(Cenario(300).rodar(11))) == 2
 
     def test_with_no_bots_each_interval_is_a_single_line(self):
         saida = Cenario(300).rodar(11)
@@ -132,7 +138,7 @@ class TestTarefaComResumo:
 
         saida = cenario.rodar(3)
 
-        assert saida.count("📊 servidores") == 2  # 30 s vira 60 s (parse_log_settings): um resumo por volta
+        assert len(resumos(saida)) == 2  # 30 s vira 60 s (parse_log_settings): um resumo por volta
 
 
 class TestRobustez:
