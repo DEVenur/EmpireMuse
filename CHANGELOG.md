@@ -13,7 +13,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `LOG_COLOR` (`on` ou `off`; padrão `on`, só no console).
   - `LOG_FILE` (`auto`, `on` ou `off`; padrão `auto`: grava arquivo fora da imagem Docker e não grava dentro dela). `ENABLE_LOGGER` continua valendo como sinônimo de `LOG_FILE=on` e nunca desliga nada.
   - `LOG_DEBUG_GUILDS` (IDs de servidores, separados por vírgula, que registram em `DEBUG` mesmo com o nível global mais alto).
-  - `METRICS_INTERVAL` (segundos entre os resumos de métricas; padrão 300, mínimo 60; 0 desliga).
+  - `METRICS_INTERVAL` (reservada para o resumo periódico de métricas da fase 3; ainda sem efeito; padrão 300, mínimo 60; 0 desliga).
 - **Agregação de erros repetidos**: avisos e erros iguais (mesmo logger, nível, modelo da mensagem e tipo de exceção) saem uma vez e viram um resumo por janela de 60 s, em vez de inundar o console e o arquivo.
 
 ### Segurança
