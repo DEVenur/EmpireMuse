@@ -17,6 +17,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Agregação de erros repetidos**: avisos e erros iguais (mesmo logger, nível, modelo da mensagem e tipo de exceção) saem uma vez e viram um resumo por janela de 60 s, em vez de inundar o console e o arquivo.
 
 ### Segurança
+- **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
 - **Redator único de segredos em todos os destinos do log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 
 ## [2.1.0] - 2026-10-27
