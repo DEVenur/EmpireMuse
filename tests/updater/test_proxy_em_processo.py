@@ -252,6 +252,27 @@ def test_load_config_names_only_the_invalid_variables(variavel, valor):
     assert variavel in str(erro.value) and valor not in str(erro.value)
 
 
+@pytest.mark.parametrize(
+    ("variavel", "valor"),
+    [
+        ("UPDATER_PROJECT_DIR", "//"),
+        ("UPDATER_PROJECT_DIR", "//docker"),
+        ("UPDATER_LISTEN_SOCKET", "//x"),
+        ("UPDATER_DOCKER_SOCKET", "//x"),
+    ],
+)
+def test_a_path_with_a_double_leading_slash_is_refused(variavel, valor):
+    """``//x`` é equivalente a ``/x`` no Linux, mas no POSIX o início ``//`` é especial: o caminho tem de vir normalizado (I1)."""
+    with pytest.raises(ConfigError) as erro:
+        load_config({"UPDATER_PROJECT_DIR": "/srv/app", variavel: valor})
+
+    assert variavel in str(erro.value)
+
+
+def test_a_normalized_absolute_path_is_still_valid():
+    assert load_config({"UPDATER_PROJECT_DIR": "/opt/x"}).project_dir == "/opt/x"
+
+
 # ============================================================================ cliente do daemon e Updater
 
 

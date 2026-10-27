@@ -510,3 +510,22 @@ def test_with_a_third_party_module_already_imported_the_proxy_refuses_to_start(t
 
     assert processo.returncode not in (0, None)
     assert not (tmp_path / "updater.sock").exists()
+
+
+# ============================================================================ log: nada do bot vira sequência de controle (B1)
+
+
+@pytest.mark.parametrize("metodo", ["\x1b[2J\x1b[31mFORJADO", "\x1b]0;x\x07FORJADO"], ids=["CSI", "OSC"])
+def test_a_forged_request_line_never_puts_control_sequences_in_the_proxy_log(tmp_path, metodo):
+    """Cabeçalhos demais viram 431 no parser da stdlib; a linha de log traz o método do bot e não pode repassar o ESC."""
+    env = ambiente(tmp_path)
+    processo = subir(env)
+    esperar_socket(processo, env["UPDATER_LISTEN_SOCKET"])
+
+    status, _ = requisicao_crua(env["UPDATER_LISTEN_SOCKET"], metodo, "/x", [(f"X-{n}", "v") for n in range(120)])
+    processo.terminate()
+    _, erro = processo.communicate(timeout=30)
+
+    assert status == 431
+    assert "\x1b" not in erro and "\x07" not in erro and "FORJADO" not in erro
+    assert "? - parser 431" in erro
