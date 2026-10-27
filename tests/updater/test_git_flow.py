@@ -601,9 +601,10 @@ def test_a_cancellation_during_the_smoke_restores_the_checkout_and_reraises(mund
     assert not (tmp_path / "runtime" / "update-pending.json").exists()
 
 
-def test_an_oserror_writing_the_pending_file_restores_the_checkout_and_reraises(
-    mundo, python_falso, tmp_path, monkeypatch
+def test_a_failing_write_of_the_applying_mark_runs_no_git_and_reraises(
+    mundo, python_falso, gravador, tmp_path, monkeypatch
 ):
+    """D9: sem a marca no disco nenhum git roda; o erro do disco sobe e o clone nem chega a mudar."""
     remoto, local = mundo
     plano = planejar(remoto, local)
 
@@ -611,11 +612,12 @@ def test_an_oserror_writing_the_pending_file_restores_the_checkout_and_reraises(
         raise OSError(28, "sem espaço")
 
     monkeypatch.setattr(git_flow, "write_pending", falha)
+    chamadas_antes = len(gravador.chamadas)
 
     with pytest.raises(OSError):
-        aplicar(plano, local, python_falso, tmp_path)
+        aplicar(plano, local, python_falso, tmp_path, gravador)
 
-    assert head(local) == plano.prev_sha
+    assert head(local) == plano.prev_sha and len(gravador.chamadas) == chamadas_antes
     assert not (tmp_path / "runtime" / "update-pending.json").exists()
 
 
@@ -627,4 +629,117 @@ def test_when_the_restore_also_fails_the_original_exception_is_the_one_that_rise
     with pytest.raises(asyncio.CancelledError):
         aplicar(plano, local, python_falso, tmp_path, runner)
 
-    assert runner.restore_tentado and not (tmp_path / "runtime" / "update-pending.json").exists()
+    assert runner.restore_tentado
+    # D9: o restore falhou, então a marca ``applying`` FICA para o boot_guard reverter no próximo início
+    assert pendente_em_disco(tmp_path)["status"] == "applying"
+
+
+# ============================================================================ D9: pendente ``applying`` antes de qualquer efeito colateral
+
+
+def roteiro(plano, *, smoke=None, restore=None, instalacao=None):
+    """Delega ao ``run_exec`` real; ``smoke``/``restore``/``instalacao`` (exceção ou ``ExecResult``) substituem a 1ª instalação (a do alvo),
+    o teste de fumaça e o checkout do ``prev_sha``. Anota o que o disco tinha no 1º ``checkout``."""
+    estado = {"instalacoes": 0, "restore_tentado": False, "pendente_no_1o_checkout": None, "checkouts": 0}
+
+    async def runner(*args, **kwargs):
+        texto = [str(a) for a in args]
+        if "checkout" in texto:
+            estado["checkouts"] += 1
+            arquivo = Path(kwargs["cwd"]).parent / "runtime" / "update-pending.json"
+            if estado["pendente_no_1o_checkout"] is None:
+                estado["pendente_no_1o_checkout"] = json.loads(arquivo.read_text()) if arquivo.exists() else False
+            if plano.prev_sha in texto:
+                estado["restore_tentado"] = True
+                resposta = restore
+            else:
+                resposta = None
+        elif "pip" in texto and "install" in texto:
+            estado["instalacoes"] += 1
+            resposta = instalacao if estado["instalacoes"] == 1 else None
+        elif "import empiremuse.utils.client" in texto:
+            resposta = smoke
+        else:
+            resposta = None
+        if isinstance(resposta, BaseException):
+            raise resposta
+        if resposta is not None:
+            return resposta
+        return await run_exec(*args, **kwargs)
+
+    runner.estado = estado
+    return runner
+
+
+def test_the_applying_mark_is_on_disk_before_the_first_checkout(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano)
+
+    aplicar(plano, local, python_falso, tmp_path, runner)
+
+    marca = runner.estado["pendente_no_1o_checkout"]
+    assert marca and marca["status"] == "applying" and marca["boots"] == 0 and marca["prev_sha"] == plano.prev_sha
+    assert marca["flow"] == "git"
+
+
+def test_on_success_the_same_pending_update_becomes_pending_with_zero_boots(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    devolvido = aplicar(plano, local, python_falso, tmp_path)
+
+    assert (devolvido.status, devolvido.boots) == ("pending", 0)
+    assert pendente_em_disco(tmp_path)["status"] == "pending" and pendente_em_disco(tmp_path)["boots"] == 0
+
+
+def test_a_failing_smoke_with_a_good_restore_removes_the_applying_mark(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, smoke=git_flow.ExecResult(1, "falhou"))
+
+    with pytest.raises(UpdateError) as erro:
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert type(erro.value) is UpdateError and "revertido" in str(erro.value)
+    assert head(local) == plano.prev_sha and not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_a_failing_restore_keeps_the_applying_mark_and_raises_rollback_failed(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, smoke=git_flow.ExecResult(1, "falhou"), restore=git_flow.ExecResult(1, "falhou"))
+
+    with pytest.raises(git_flow.UpdateRollbackFailed) as erro:
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert isinstance(erro.value, UpdateError) and "próximo início" in str(erro.value)
+    assert isinstance(erro.value.__cause__, UpdateError)
+    assert head(local) == plano.target_commit  # o clone ficou no código novo...
+    assert pendente_em_disco(tmp_path)["status"] == "applying"  # ...e a marca fica para o boot_guard reverter
+
+
+def test_a_cancellation_with_a_failing_restore_keeps_the_mark_and_reraises_the_cancellation(
+    mundo, python_falso, tmp_path
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, smoke=asyncio.CancelledError(), restore=git_flow.ExecResult(1, "falhou"))
+
+    with pytest.raises(asyncio.CancelledError):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert runner.estado["restore_tentado"] and pendente_em_disco(tmp_path)["status"] == "applying"
+
+
+def test_a_double_cancellation_never_leaves_new_code_without_a_pending_mark(mundo, python_falso, tmp_path):
+    """Cancelamento no install e de novo no restore: ou o restore terminou, ou a marca ``applying`` ficou no disco."""
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, instalacao=asyncio.CancelledError(), restore=asyncio.CancelledError())
+
+    with pytest.raises(asyncio.CancelledError):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    arquivo = tmp_path / "runtime" / "update-pending.json"
+    assert head(local) == plano.prev_sha or (arquivo.exists() and pendente_em_disco(tmp_path)["status"] == "applying")

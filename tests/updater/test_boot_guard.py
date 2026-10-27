@@ -217,3 +217,35 @@ def test_a_pending_update_already_ready_or_rolled_back_is_left_untouched(mundo, 
 
     assert pending_path(runtime).read_bytes() == antes and gravador.chamadas == []
     assert git(repo, "rev-parse", "HEAD") == head
+
+
+# ============================================================================ D9: ``applying`` reverte já no primeiro boot
+
+
+@pytest.mark.parametrize("idade", [60, 3 * 24 * 3600], ids=["recente", "mais-de-um-dia"])
+def test_an_applying_mark_is_rolled_back_on_the_first_boot_without_counting(mundo, idade):
+    repo, runtime, anterior, python = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying", criado=AGORA - idade))
+    gravador = Gravador()
+
+    with pytest.raises(SystemExit) as saida:
+        guardar(mundo, gravador)
+
+    assert saida.value.code == EXIT_RESTART
+    assert git(repo, "rev-parse", "HEAD") == anterior
+    argvs = [[str(a) for a in args] for args in gravador.chamadas]
+    assert any("checkout" in a and "--detach" in a and anterior in a for a in argvs)
+    assert any(a[0] == python and "pip" in a and "install" in a for a in argvs)  # reinstala o lock anterior
+    gravado = em_disco(runtime)
+    assert gravado["status"] == "rolled_back" and gravado["boots"] == 0 and gravado["prev_sha"] == anterior
+
+
+def test_an_applying_mark_with_the_docker_flow_is_invalid_and_discarded(mundo):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, flow="docker", boots=0, status="applying"))
+    head = git(repo, "rev-parse", "HEAD")
+    gravador = Gravador()
+
+    guardar(mundo, gravador)
+
+    assert not pending_path(runtime).exists() and gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head

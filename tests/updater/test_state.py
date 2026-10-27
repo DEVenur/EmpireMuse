@@ -3,6 +3,7 @@
 O ``boot_guard`` lê o pendente antes de qualquer proteção, então a leitura não pode travar nem seguir um link.
 """
 
+import dataclasses
 import json
 import os
 import threading
@@ -161,3 +162,42 @@ def test_parse_pending_accepts_a_created_at_in_range(created_at):
     dados = pendente(created_at).to_json()
 
     assert parse_pending(dados) is not None
+
+
+# ============================================================================ D9: o status ``applying``
+
+
+def com_status(status: str, **campos) -> PendingUpdate:
+    return dataclasses.replace(pendente(AGORA - 60), status=status, **campos)
+
+
+def test_applying_is_valid_for_the_git_flow_with_zero_boots():
+    lido = parse_pending(com_status("applying", boots=0).to_json())
+
+    assert lido is not None and lido.status == "applying" and lido.boots == 0
+
+
+def test_applying_with_boots_is_invalid():
+    assert parse_pending(com_status("applying", boots=1).to_json()) is None
+
+
+def test_applying_is_invalid_for_the_docker_flow():
+    docker = dataclasses.replace(com_status("applying"), flow="docker", prev_sha=None, digest="sha256:" + "ab" * 32)
+
+    assert parse_pending(docker.to_json()) is None
+
+
+def test_an_applying_pending_update_never_expires_by_age(tmp_path):
+    """Uma árvore meio aplicada continua perigosa depois de dias desligado."""
+    write_pending(tmp_path, dataclasses.replace(pendente(AGORA - 3 * 24 * 3600), status="applying"))
+
+    lido = read_pending(tmp_path, AGORA)
+
+    assert lido is not None and lido.status == "applying" and pending_path(tmp_path).exists()
+
+
+@pytest.mark.parametrize("status", ["pending", "ready", "rolled_back"])
+def test_the_other_statuses_still_expire_after_a_day(tmp_path, status):
+    write_pending(tmp_path, dataclasses.replace(pendente(AGORA - 3 * 24 * 3600), status=status))
+
+    assert read_pending(tmp_path, AGORA) is None and not pending_path(tmp_path).exists()
