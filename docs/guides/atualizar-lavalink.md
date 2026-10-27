@@ -41,11 +41,11 @@ Caso Java 17+ não esteja disponível no sistema operacional do host, o bot gere
 - **Atomicidade e integridade**: A descompactação ocorre em diretório temporário isolado e só é promovida para a pasta definitiva através de substituição atômica (`os.replace`) após conclusão bem-sucedida. Instalações quebradas ou interrompidas são substituídas por completo e uma instalação existente só é considerada utilizável se `bin/java` existir e for executável.
 
 ### Opções da JVM do Lavalink local (GC e flags de acesso)
-O bot monta a linha de comando do Java em `_java_command` (`utils/music/local_lavalink.py`), lendo o major da JVM de `java -version` (`java_major_version`). Todas as opções vêm antes de `-jar Lavalink.jar`, nesta ordem: processadores, `-Xmx`, `-Xms`, GC, flags de acesso, diretório temporário, log e override.
+O bot monta a linha de comando do Java em `_java_command` (`utils/music/local_lavalink.py`), lendo o major da JVM de `java -version` (`java_major_version`). Todas as opções vêm antes de `-jar Lavalink.jar`, nesta ordem: processadores, `-Xmx`, `-Xms`, GC, flags de acesso, diretório temporário, log, flag que desliga o log do corpo das requisições (`-Dlogging.request.includePayload=false`) e override.
 - **Coletor de lixo**: `-XX:+UseSerialGC` quando o host tem **1 núcleo**; `-XX:+UseG1GC` com 2 ou mais. Sempre exatamente um GC. Não são usados `UseZGC`, `MaxRAMPercentage` nem AOT cache.
 - **Flags de acesso**: `--enable-native-access=ALL-UNNAMED` e `--sun-misc-unsafe-memory-access=allow` só entram em **Java 24 e 25**, faixa em que as duas existem e foram testadas. Com Java 17 a 23, 26 ou superior, ou major ilegível, nenhuma das duas é passada: é melhor uma JVM que sobe com avisos do que uma que recusa a opção. A faixa só sobe junto com o JRE da imagem, depois de um novo teste de subida.
 - **Tamanho do heap**: segue `LAVALINK_INITIAL_RAM` e `LAVALINK_RAM_LIMIT`, sem mudança.
-- **Trust store da JRE**: na imagem Docker, as raízes emSign C1 e ECC C3 (CA eMudhra, removidas do `certifi` 2026.10.23) são removidas do `cacerts` do Temurin com `keytool -delete`. Fora do Docker, o JDK de reserva da Liberica ainda as confia; é um risco residual aceito.
+- **Trust store da JRE**: na imagem Docker, as raízes emSign C1, ECC C3 e ECC G3 (CA eMudhra, removidas do `certifi` 2026.10.23) são removidas do `cacerts` do Temurin com `keytool -delete`. Fora do Docker, o JDK de reserva da Liberica ainda as confia; é um risco residual aceito.
 
 ### Isolamento do Ambiente do Subprocesso (Allowlist)
 Ao iniciar o Lavalink local, o processo Java não herda as variáveis de ambiente arbitrárias do bot:
