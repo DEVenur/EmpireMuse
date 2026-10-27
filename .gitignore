@@ -77,6 +77,8 @@ source.zip
 *.log
 .logs/
 logs/
+!empiremuse/logs/
+!tests/logs/
 
 # --- Lavalink Local, Java e Configuração de Nós ---
 *.jar

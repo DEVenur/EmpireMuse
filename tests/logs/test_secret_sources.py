@@ -174,7 +174,8 @@ class TestRefreshTokensDoMongo:
         refresh = "refresh-token-do-mongo-G7"
 
         class Resposta:
-            status = 204
+            def __init__(self, status):
+                self.status = status
 
             async def __aenter__(self):
                 return self
@@ -196,10 +197,10 @@ class TestRefreshTokensDoMongo:
                 return False
 
             def get(self, *args, **kwargs):
-                return Resposta()
+                return Resposta(200)
 
             async def post(self, *args, **kwargs):
-                return Resposta()
+                return Resposta(204)
 
         monkeypatch.setattr(client.asyncio, "sleep", AsyncMock())
         monkeypatch.setattr(client.aiohttp, "ClientSession", Sessao)
