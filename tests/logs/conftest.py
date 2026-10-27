@@ -1,6 +1,6 @@
 """Isolamento do item 7: o ``configure_logging`` mexe no root, em loggers de bibliotecas e nos ganchos globais de exceção.
 
-Cada teste começa e termina com o root, os loggers de biblioteca, ``sys.excepthook`` e ``threading.excepthook`` como estavam, e com o
+Cada teste termina com o root, os loggers de biblioteca, ``sys.excepthook`` e ``threading.excepthook`` como estavam, e com o
 redator sem o conjunto base de segredos (o que veio de ``register_secret`` fica: use valores próprios por teste).
 """
 
@@ -27,7 +27,7 @@ def isolar_logging():
         pass
     yield
     for handler in list(raiz.handlers):
-        if handler not in handlers:
+        if handler not in handlers and not type(handler).__module__.startswith("_pytest"):
             raiz.removeHandler(handler)
             handler.close()
     raiz.setLevel(nivel)
