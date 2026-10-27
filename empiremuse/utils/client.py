@@ -1589,8 +1589,8 @@ class BotCore(commands.AutoShardedBot):
 
             if guilds:
                 warn_msg = (
-                    f"Atenção: O bot [{self.user}] (ID: {self.user.id}) se encontra em servidores no qual o dono do "
-                    "bot (ou membro da equipe) não estão ou que não possuem permissão de gerenciar servidor pra "
+                    f"Atenção: O bot [{self.user}] (ID: {self.user.id}) se encontra em servidores nos quais o dono do "
+                    "bot (ou membro da equipe) não está ou que não possuem permissão de gerenciar servidor para "
                     f"adicionar o próprio bot [{self.user}] nos servidores abaixo:\n\n"
                     + "\n".join(f"{g.name} [ID: {g.id}]" for g in list(guilds)[:10])
                 )
