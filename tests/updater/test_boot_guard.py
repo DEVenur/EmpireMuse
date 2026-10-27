@@ -6,7 +6,9 @@ e um JSON inválido (ou velho demais) é apagado sem mexer em nada. Repositório
 """
 
 import asyncio
+import dataclasses
 import json
+import logging
 import shutil
 import subprocess
 
@@ -132,7 +134,8 @@ def test_the_third_boot_rolls_back_marks_the_pending_and_exits_with_75(mundo):
     assert all(codigo == 0 for _, codigo in gravador.resultados)
 
 
-def test_a_failing_reinstall_during_the_rollback_still_exits_with_75_and_keeps_the_mark(mundo):
+def test_a_failing_reinstall_during_the_rollback_still_exits_with_75_and_keeps_the_state(mundo):
+    """D11: restore falho NÃO marca ``rolled_back``; o pendente fica (com o contador) para a próxima subida tentar de novo."""
     repo, runtime, anterior, _ = mundo
     write_pending(runtime, pendente(anterior, boots=2))
     gravador = Gravador(instalacao_falha)
@@ -142,7 +145,8 @@ def test_a_failing_reinstall_during_the_rollback_still_exits_with_75_and_keeps_t
 
     assert saida.value.code == EXIT_RESTART
     assert [codigo for args, codigo in gravador.resultados if e_instalacao(args)] == [1]
-    assert git(repo, "rev-parse", "HEAD") == anterior and em_disco(runtime)["status"] == "rolled_back"
+    gravado = em_disco(runtime)
+    assert gravado["status"] == "pending" and gravado["boots"] == 3 and gravado["restore_attempts"] == 1
 
 
 def test_restore_checkout_treats_a_non_zero_reinstall_as_an_update_error(mundo):
@@ -249,3 +253,104 @@ def test_an_applying_mark_with_the_docker_flow_is_invalid_and_discarded(mundo):
     guardar(mundo, gravador)
 
     assert not pending_path(runtime).exists() and gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head
+
+
+# ============================================================================ D11: restore falho não vira ``rolled_back``; tentativas limitadas
+
+
+class Morte(BaseException):
+    """Simula o processo morrendo no meio do restore (``KeyboardInterrupt``/``SystemExit`` de fora)."""
+
+
+def subir(mundo, gravador) -> int:
+    with pytest.raises(SystemExit) as saida:
+        guardar(mundo, gravador)
+    return saida.value.code
+
+
+def instalacao_boa(args):
+    return None
+
+
+def test_a_failed_restore_of_an_applying_mark_keeps_it_and_counts_one_attempt(mundo):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+
+    assert subir(mundo, Gravador(instalacao_falha)) == EXIT_RESTART
+
+    gravado = em_disco(runtime)
+    assert gravado["status"] == "applying" and gravado["restore_attempts"] == 1 and gravado["boots"] == 0
+
+
+def test_the_attempts_grow_on_each_boot_until_three(mundo):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+
+    for esperado in (1, 2, 3):
+        assert subir(mundo, Gravador(instalacao_falha)) == EXIT_RESTART
+        assert em_disco(runtime)["restore_attempts"] == esperado and em_disco(runtime)["status"] == "applying"
+
+
+def test_the_fourth_boot_gives_up_marks_rolled_back_and_never_calls_the_restore(mundo, caplog):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, dataclasses.replace(pendente(anterior, boots=0, status="applying"), restore_attempts=3))
+    gravador = Gravador()
+
+    with caplog.at_level(logging.ERROR):
+        assert subir(mundo, gravador) == EXIT_RESTART
+
+    assert gravador.chamadas == [] and em_disco(runtime)["status"] == "rolled_back"
+    assert "confira o servidor" in caplog.text
+
+
+def test_a_successful_restore_on_a_later_attempt_marks_rolled_back(mundo):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+    subir(mundo, Gravador(instalacao_falha))
+
+    assert subir(mundo, Gravador()) == EXIT_RESTART
+
+    assert git(repo, "rev-parse", "HEAD") == anterior and em_disco(runtime)["status"] == "rolled_back"
+
+
+def test_the_counter_is_on_disk_before_the_restore_so_a_death_in_the_middle_still_counts(mundo):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+
+    def morrer(args):
+        raise Morte
+
+    with pytest.raises(Morte):
+        guardar(mundo, Gravador(morrer))
+
+    assert em_disco(runtime)["restore_attempts"] == 1 and em_disco(runtime)["status"] == "applying"
+
+
+def test_a_failed_restore_at_the_third_boot_keeps_the_pending_state(mundo):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=2))
+
+    assert subir(mundo, Gravador(instalacao_falha)) == EXIT_RESTART
+
+    gravado = em_disco(runtime)
+    assert gravado["status"] == "pending" and gravado["boots"] == 3 and gravado["restore_attempts"] == 1
+
+
+def test_a_failing_write_of_the_counter_does_not_stop_the_restore(mundo, monkeypatch):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+    real = boot_guard.write_pending
+    chamadas = []
+
+    def instavel(*args, **kwargs):
+        chamadas.append(args)
+        if len(chamadas) == 1:
+            raise OSError(28, "sem espaço")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(boot_guard, "write_pending", instavel)
+    gravador = Gravador()
+
+    assert subir(mundo, gravador) == EXIT_RESTART
+
+    assert gravador.chamadas and git(repo, "rev-parse", "HEAD") == anterior
