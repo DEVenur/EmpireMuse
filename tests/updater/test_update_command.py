@@ -1096,3 +1096,34 @@ async def test_a_held_pool_lock_still_refuses_before_any_proxy_access_with_a_doc
         await Owner.update.callback(cog, ctx_prefixo())
 
     assert cog.bot.pool.update_lock.locked()
+
+
+@pytest.mark.parametrize("situacao", ["created", "dead", "removing"])
+async def test_a_helper_that_never_ran_or_is_in_another_non_running_state_is_an_unknown_result(cog, d12, situacao):
+    """Um auxiliar CRIADO e nunca iniciado também tem ``Running=False`` e ``ExitCode=0``: só ``exited`` conta como terminado."""
+    from empiremuse.updater import docker_flow
+    from empiremuse.updater.proxy_client import HelperState
+
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.estado = HelperState(situacao, False, 0, "", "")
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(None) in texto_do_primeiro_envio(ctx)
+    assert docker_flow.describe_exit(0) not in texto_do_primeiro_envio(ctx)
+    d12.enviar_log.assert_not_awaited()
+    assert d12.auxiliar.eventos == ["state", "remove"] and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"] and ctx.send.await_count == 2
+
+
+async def test_an_exited_helper_with_exit_code_zero_is_still_a_completed_update(cog, d12):
+    from empiremuse.updater import docker_flow
+
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(0)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(0) in texto_do_primeiro_envio(ctx)
