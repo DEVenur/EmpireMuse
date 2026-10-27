@@ -427,3 +427,55 @@ async def test_a_client_error_inside_the_loop_reports_the_message_and_keeps_the_
 
     assert resultado is None and relatorio.canal == ["proxy de atualização inacessível"]
     assert read_pending(tmp_path, AGORA) == pendente
+
+
+# ============================================================================ DM do log: cabe no limite do Discord, mascara antes de truncar
+
+
+LIMITE_DM = 1900
+
+
+def lixo_unico(n: int) -> str:
+    return "".join(chr(65 + (i * 7 + i // 5) % 26) for i in range(n))
+
+
+async def mandar_log(docker_flow, tmp_path, pendente, linhas: list[str], secrets=frozenset()):
+    cliente = ClienteQueObserva(tmp_path, [estado(rodando=False, codigo=70)])
+    cliente.linhas = linhas
+    _, relatorio, _ = await vigiar(docker_flow, cliente, pendente, tmp_path, secrets=secrets)
+    return relatorio.dms
+
+
+async def test_a_long_log_goes_in_one_dm_within_the_discord_limit_keeping_the_end(docker_flow, tmp_path, pendente):
+    linhas = [f"linha {n:02d} " + "y" * 290 for n in range(20)]  # > 4000 caracteres
+
+    dms = await mandar_log(docker_flow, tmp_path, pendente, linhas)
+
+    (dm,) = dms
+    assert len(dm) <= LIMITE_DM
+    assert linhas[-1][-100:] in dm and linhas[0] not in dm
+    corpo = dm.split("\n", 1)[1]
+    assert corpo.startswith("…")
+
+
+async def test_a_secret_that_would_straddle_the_cut_never_shows_not_even_partially(docker_flow, tmp_path, pendente):
+    segredo = lixo_unico(600)
+    linhas = (
+        [f"antes {n:02d} " + "a" * 190 for n in range(10)]
+        + ["x" * 50 + segredo + "y" * 50]
+        + [f"depois {n:02d} " + "b" * 290 for n in range(5)]
+    )
+
+    (dm,) = await mandar_log(docker_flow, tmp_path, pendente, linhas, secrets=frozenset({segredo}))
+
+    assert len(dm) <= LIMITE_DM and "depois 04" in dm
+    assert segredo not in dm
+    assert all(segredo[inicio : inicio + 12] not in dm for inicio in range(0, 600 - 12, 12))  # nem um pedaço
+
+
+async def test_a_short_log_is_sent_intact(docker_flow, tmp_path, pendente):
+    linhas = ["empiremuse-updater: pull 0", "empiremuse-updater: up 70"]
+
+    (dm,) = await mandar_log(docker_flow, tmp_path, pendente, linhas)
+
+    assert dm.endswith("\n".join(linhas)) and "…" not in dm

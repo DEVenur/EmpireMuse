@@ -349,3 +349,25 @@ async def test_a_failing_log_read_does_not_stop_the_notice_or_the_removal(runtim
     bot.canal.send.assert_awaited_once()
     bot.usuario.send.assert_not_awaited()
     assert cliente.eventos == ["logs", "remove"] and not pending_path(runtime).exists()
+
+
+async def test_the_post_boot_dm_also_fits_the_limit_keeps_the_end_and_masks_before_cutting(runtime):
+    segredo = "".join(chr(65 + (i * 7 + i // 5) % 26) for i in range(600))
+    linhas = (
+        [f"antes {n:02d} " + "a" * 190 for n in range(10)]
+        + ["x" * 50 + segredo + "y" * 50]
+        + [f"depois {n:02d} " + "b" * 290 for n in range(5)]
+    )
+    bot = bot_falso()
+    cliente = ClienteFalso([estado(rodando=False, codigo=71)])
+    cliente.linhas = linhas
+    write_pending(runtime, pendente_docker())
+
+    await entregar_docker(pool_com_config(bot, TOKEN=segredo), cliente, runtime, DE)
+
+    chamada = bot.usuario.send.await_args
+    dm = (chamada.args[0] if chamada.args else chamada.kwargs.get("content") or "") + (
+        chamada.kwargs["embed"].description if chamada.kwargs.get("embed") else ""
+    )
+    assert len(dm) <= 1900 and "depois 04" in dm and linhas[0] not in dm
+    assert segredo not in dm and all(segredo[i : i + 12] not in dm for i in range(0, 588, 12))

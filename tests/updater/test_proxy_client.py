@@ -284,3 +284,64 @@ async def test_a_proxy_that_never_answers_times_out_as_the_same_error(proxy_clie
         nunca.set()  # solta o handler: senão o encerramento do servidor espera o tempo de graça inteiro
 
     assert str(erro.value) == INACESSIVEL and servidor.caminho not in str(erro.value)
+
+
+# ============================================================================ corpo da resposta: lido até o EOF, com teto
+
+
+PEDACOS_JSON = {"lines": [f"empiremuse-updater: passo {n:03d} " + "x" * 60 for n in range(120)]}
+TETO = 256 * 1024
+
+
+def em_pedacos(corpo: bytes, partes: int = 4):
+    """Resposta em ``Transfer-Encoding: chunked`` escrita em ``partes`` pedaços, com uma pausa real e curta entre eles (segmentos separados no socket)."""
+    tamanho = -(-len(corpo) // partes)
+
+    async def handler(request: web.Request) -> web.StreamResponse:
+        resposta = web.StreamResponse(headers={"Content-Type": "application/json"})
+        await resposta.prepare(request)
+        for inicio in range(0, len(corpo), tamanho):
+            await resposta.write(corpo[inicio : inicio + tamanho])
+            await resposta.drain()
+            await asyncio.sleep(0.02)
+        await resposta.write_eof()
+        return resposta
+
+    return handler
+
+
+async def test_a_logs_response_delivered_in_several_pieces_comes_back_whole(cliente, servidor):
+    servidor.rotas[("GET", f"{HELPER}/logs")] = em_pedacos(json.dumps(PEDACOS_JSON).encode(), partes=5)
+
+    linhas = await cliente.helper_logs(200)
+
+    assert linhas[-1] == PEDACOS_JSON["lines"][-1] and len(linhas) >= 1
+    assert linhas == PEDACOS_JSON["lines"][-len(linhas) :]  # sem JSON truncado: nenhuma linha cortada ao meio
+
+
+async def test_a_state_response_delivered_in_several_pieces_comes_back_whole(cliente, servidor, proxy_client):
+    servidor.rotas[("GET", f"{HELPER}/json")] = em_pedacos(json.dumps(ESTADO).encode(), partes=6)
+
+    estado = await cliente.helper_state()
+
+    assert estado == proxy_client.HelperState(
+        status="exited",
+        running=False,
+        exit_code=70,
+        started_at="2026-10-27T10:00:00Z",
+        finished_at="2026-10-27T10:01:00Z",
+    )
+
+
+@pytest.mark.parametrize("chamada", ["state", "logs"])
+async def test_a_body_over_the_cap_is_the_unexpected_error_never_a_truncated_json(cliente, servidor, chamada):
+    gigante = json.dumps({"lines": ["x" * 1000] * 400, "State": ESTADO["State"]}).encode()
+    assert len(gigante) > TETO
+    servidor.rotas[("GET", f"{HELPER}/json")] = servidor.rotas[("GET", f"{HELPER}/logs")] = web.Response(
+        body=gigante, content_type="application/json"
+    )
+
+    with pytest.raises(UpdateError) as erro:
+        await CHAMADAS[chamada](cliente)
+
+    assert str(erro.value) == INESPERADA
