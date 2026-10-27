@@ -528,7 +528,10 @@ class ErrorHandler(commands.Cog):
             if ctx.filled_options:
                 # Resumo por tipo (V-L4): str(Attachment) é a URL assinada da CDN, str(Member) é o nome e o texto livre pode ter segredo.
                 params = command_context(ctx, level=logging.ERROR)["params"]
-                embed.description += "**Options**```\n" + "\n".join(f"{k} -> {v}" for k, v in params.items()) + "```"
+                options = "\n".join(f"{k} -> {v}" for k, v in params.items()).replace(
+                    "`", "'"
+                )  # não fecha o bloco de código
+                embed.description += "**Options**```\n" + options + "```"
 
         except AttributeError:
             if self.bot.intents.message_content and not ctx.author.bot:
