@@ -89,11 +89,15 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Desconfiar das raízes emSign C1 e ECC C3, removidas do certifi 2026.10.23 (a "emSign Root CA - G1" segue confiável,
-# como no certifi); remover quando o ca-certificates do Debian desconfiar delas.
+# como no certifi); remover quando o ca-certificates do Debian desconfiar delas. Os grep derrubam o build se um
+# ca-certificates futuro renomear ou tirar as linhas (o repositório apt não é fixado): sem eles, o sed não trocaria nada e as
+# raízes voltariam a ser confiáveis em silêncio. Se quebrar por isso, confira se o Debian já as desconfia e tire o bloco.
 RUN sed -i \
       -e 's|^mozilla/emSign_Root_CA_-_C1.crt$|!&|' \
       -e 's|^mozilla/emSign_ECC_Root_CA_-_C3.crt$|!&|' \
       /etc/ca-certificates.conf && \
+    grep -qxF "!mozilla/emSign_Root_CA_-_C1.crt" /etc/ca-certificates.conf && \
+    grep -qxF "!mozilla/emSign_ECC_Root_CA_-_C3.crt" /etc/ca-certificates.conf && \
     update-ca-certificates --fresh
 
 # Copiar JRE 21 oficial do Eclipse Temurin (apenas /opt/java/openjdk)
