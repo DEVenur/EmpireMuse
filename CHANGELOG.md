@@ -23,6 +23,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Alterado
 - **`print` migrado para o log (item 7, fases P2 e P3)**: cerca de 100 `print`, incluindo todo o caminho de subida do bot, passam a sair pelo log, com nível, cor, contexto e redação de segredos.
 
+### Corrigido
+- **Autoplay a partir de uma faixa do Spotify**: deixa de falhar com `TypeError` e de esperar 15 s toda vez que a fila acaba.
+- **Recomendações do Spotify por artista**: voltam a funcionar (a busca pede até 10 resultados, o máximo da API). Só erros de rede são repetidos, e "sem resultados" de um provedor deixa de imprimir um traceback.
+
 ### Segurança
 - **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
