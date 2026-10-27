@@ -138,6 +138,20 @@ def test_an_invalid_pending_file_is_deleted_without_any_action(mundo, conteudo):
     assert not pending_path(runtime).exists() and gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head
 
 
+@pytest.mark.parametrize("created_at", [10**400, 2**63, 1e300], ids=["gigante", "2-a-63", "float-gigante"])
+def test_a_pending_file_with_an_absurd_created_at_is_discarded_and_the_boot_goes_on(mundo, created_at):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior))
+    dados = em_disco(runtime)
+    dados["created_at"] = created_at
+    pending_path(runtime).write_text(json.dumps(dados), encoding="utf-8")
+    gravador = Gravador()
+
+    guardar(mundo, gravador)
+
+    assert not pending_path(runtime).exists() and gravador.chamadas == []
+
+
 def test_a_pending_update_older_than_a_day_is_discarded_without_rolling_back(mundo):
     repo, runtime, anterior, _ = mundo
     write_pending(runtime, pendente(anterior, boots=2, criado=AGORA - 25 * 3600))

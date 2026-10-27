@@ -182,17 +182,23 @@ def test_a_seen_tag_that_changed_its_object_sha_aborts(mundo, tmp_path):
     assert head(local) == antes
 
 
-def test_an_invalid_seen_tags_file_aborts_without_resetting_the_history(mundo, tmp_path):
-    """Sem o histórico não dá para saber se a tag mudou: abortar, e não recomeçar do zero sobrescrevendo o arquivo."""
+@pytest.mark.parametrize(
+    "conteudo",
+    ["{isto não é json", "[]", json.dumps({"v2.1.0": "curto"}), json.dumps({"nao-e-tag": "a" * 40})],
+    ids=["lixo", "nao-e-dict", "sha-invalido", "tag-invalida"],
+)
+def test_an_invalid_seen_tags_file_aborts_without_resetting_the_history(mundo, tmp_path, conteudo):
+    """Sem o histórico não dá para saber se a tag mudou: abortar citando o arquivo, sem reescrevê-lo."""
     remoto, local = mundo
     arquivo = tmp_path / "runtime" / "update-state.json"
-    arquivo.write_text("{isto não é json", encoding="utf-8")
+    arquivo.write_text(conteudo, encoding="utf-8")
     antes = head(local)
 
-    with pytest.raises(UpdateError):
+    with pytest.raises(UpdateError) as erro:
         planejar(remoto, local)
 
-    assert head(local) == antes and arquivo.read_text(encoding="utf-8") == "{isto não é json"
+    assert "update-state.json" in str(erro.value)
+    assert head(local) == antes and arquivo.read_bytes() == conteudo.encode("utf-8")
 
 
 def test_a_seen_tags_path_that_cannot_be_read_aborts(mundo, tmp_path):
@@ -200,10 +206,21 @@ def test_a_seen_tags_path_that_cannot_be_read_aborts(mundo, tmp_path):
     (tmp_path / "runtime" / "update-state.json").mkdir()
     antes = head(local)
 
-    with pytest.raises(UpdateError):
+    with pytest.raises(UpdateError) as erro:
         planejar(remoto, local)
 
-    assert head(local) == antes
+    assert "update-state.json" in str(erro.value) and head(local) == antes
+
+
+def test_a_missing_seen_tags_file_is_an_empty_history_and_records_the_new_tag(mundo, tmp_path):
+    remoto, local = mundo
+    arquivo = tmp_path / "runtime" / "update-state.json"
+    assert not arquivo.exists()
+
+    plano = planejar(remoto, local)
+
+    assert plano.target == Version(2, 1, 0)
+    assert json.loads(arquivo.read_text(encoding="utf-8")) == {"v2.1.0": plano.tag_object_sha}
 
 
 def test_origin_pointing_elsewhere_is_never_used(mundo):

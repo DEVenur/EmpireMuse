@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from empiremuse.rules.release import Version
-from empiremuse.updater.state import PendingUpdate, pending_path, read_pending, write_pending
+from empiremuse.updater.state import PendingUpdate, parse_pending, pending_path, read_pending, write_pending
 
 pytestmark = pytest.mark.critical
 
@@ -144,3 +144,20 @@ def test_a_created_at_too_big_for_a_float_is_invalid_and_does_not_crash(tmp_path
     assert read_pending(tmp_path, AGORA) is None
 
     assert not pending_path(tmp_path).exists()
+
+
+@pytest.mark.parametrize(
+    "created_at", [10**400, 2**63, 1e300, -1], ids=["gigante", "2-a-63", "float-gigante", "negativo"]
+)
+def test_parse_pending_rejects_a_created_at_out_of_range_without_raising(created_at):
+    dados = pendente(AGORA - 60).to_json()
+    dados["created_at"] = created_at
+
+    assert parse_pending(dados) is None
+
+
+@pytest.mark.parametrize("created_at", [AGORA - 60, 0], ids=["normal", "zero"])
+def test_parse_pending_accepts_a_created_at_in_range(created_at):
+    dados = pendente(created_at).to_json()
+
+    assert parse_pending(dados) is not None
