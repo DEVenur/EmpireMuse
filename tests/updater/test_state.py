@@ -3,6 +3,7 @@
 O ``boot_guard`` lê o pendente antes de qualquer proteção, então a leitura não pode travar nem seguir um link.
 """
 
+import json
 import os
 import threading
 from pathlib import Path
@@ -30,18 +31,30 @@ def pendente(created_at: float) -> PendingUpdate:
     )
 
 
+ESPERA_MAXIMA = 30  # só impede a suíte de pendurar se a leitura travar; o que se verifica é ter terminado sozinha
+
+
+def ligar(link: Path, alvo: Path) -> None:
+    """Cria o link simbólico ou pula o teste onde o sistema não deixa (Windows sem privilégio)."""
+    try:
+        link.symlink_to(alvo)
+    except (OSError, NotImplementedError) as erro:
+        pytest.skip(f"link simbólico indisponível: {erro}")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO só existe em Unix")
 def test_a_fifo_in_place_of_the_file_does_not_block_and_is_removed(tmp_path):
     os.mkfifo(pending_path(tmp_path))
     resultado = []
     leitura = threading.Thread(target=lambda: resultado.append(read_pending(tmp_path, AGORA)), daemon=True)
 
     leitura.start()
-    leitura.join(timeout=1)
+    leitura.join(timeout=ESPERA_MAXIMA)
     travou = leitura.is_alive()
     if travou:  # solta a leitura presa no open() para a thread não sobrar
         with open(pending_path(tmp_path), "wb"):
             pass
-        leitura.join(timeout=1)
+        leitura.join(timeout=ESPERA_MAXIMA)
 
     assert not travou
     assert resultado == [None] and not os.path.lexists(pending_path(tmp_path))
@@ -51,7 +64,7 @@ def test_a_symlink_in_place_of_the_file_is_discarded_without_touching_its_target
     alvo = tmp_path / "alvo.json"
     write_pending(tmp_path, pendente(AGORA - 60))
     pending_path(tmp_path).rename(alvo)
-    pending_path(tmp_path).symlink_to(alvo)
+    ligar(pending_path(tmp_path), alvo)
 
     assert read_pending(tmp_path, AGORA) is None
 
@@ -98,7 +111,7 @@ def test_a_symlink_is_refused_where_the_posix_open_flags_do_not_exist(tmp_path, 
     alvo = tmp_path / "alvo.json"
     write_pending(tmp_path, pendente(AGORA - 60))
     pending_path(tmp_path).rename(alvo)
-    pending_path(tmp_path).symlink_to(alvo)
+    ligar(pending_path(tmp_path), alvo)
 
     assert read_pending(tmp_path, AGORA) is None
 
@@ -119,3 +132,15 @@ def test_a_reparse_point_is_refused_where_the_posix_open_flags_do_not_exist(tmp_
     monkeypatch.setattr(os, "lstat", lstat_com_reparse)
 
     assert read_pending(tmp_path, AGORA) is None
+
+
+@pytest.mark.parametrize("created_at", [10**400, -(10**400)], ids=["inteiro-gigante", "negativo-gigante"])
+def test_a_created_at_too_big_for_a_float_is_invalid_and_does_not_crash(tmp_path, created_at):
+    write_pending(tmp_path, pendente(AGORA - 60))
+    dados = json.loads(pending_path(tmp_path).read_text(encoding="utf-8"))
+    dados["created_at"] = created_at
+    pending_path(tmp_path).write_text(json.dumps(dados), encoding="utf-8")
+
+    assert read_pending(tmp_path, AGORA) is None
+
+    assert not pending_path(tmp_path).exists()

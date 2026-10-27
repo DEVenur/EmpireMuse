@@ -182,6 +182,30 @@ def test_a_seen_tag_that_changed_its_object_sha_aborts(mundo, tmp_path):
     assert head(local) == antes
 
 
+def test_an_invalid_seen_tags_file_aborts_without_resetting_the_history(mundo, tmp_path):
+    """Sem o histórico não dá para saber se a tag mudou: abortar, e não recomeçar do zero sobrescrevendo o arquivo."""
+    remoto, local = mundo
+    arquivo = tmp_path / "runtime" / "update-state.json"
+    arquivo.write_text("{isto não é json", encoding="utf-8")
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes and arquivo.read_text(encoding="utf-8") == "{isto não é json"
+
+
+def test_a_seen_tags_path_that_cannot_be_read_aborts(mundo, tmp_path):
+    remoto, local = mundo
+    (tmp_path / "runtime" / "update-state.json").mkdir()
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
 def test_origin_pointing_elsewhere_is_never_used(mundo):
     remoto, local = mundo
     git(local, "remote", "set-url", "origin", "file:///nao/existe/de/jeito/nenhum")
