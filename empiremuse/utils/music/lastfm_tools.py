@@ -231,15 +231,14 @@ class LastFM:
         return (await self.request_lastfm(params))["similarartists"]["artist"]
 
     async def user_info(self, session_key: str):
-        return (
-            await self.request_lastfm(
-                params={
-                    "method": "user.getInfo",
-                    "api_key": self.api_key,
-                    "sk": session_key,
-                }
-            )
-        )["user"]
+        # Sem o parâmetro ``user`` é uma chamada autenticada: o Last.FM identifica o usuário pelo sk e exige a assinatura.
+        params = {
+            "method": "user.getInfo",
+            "api_key": self.api_key,
+            "sk": session_key,
+        }
+        params["api_sig"] = self.generate_api_sig(params)
+        return (await self.request_lastfm(params=params))["user"]
 
     async def user_recent_tracks(self, user: str, limit: int = 50):
         return (

@@ -15,7 +15,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse.rules.title_match import title_matches
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, scrobble_model
-from empiremuse.utils.safe_error import safe_error
+from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.lastfm_tools import LastFmException
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack, exclude_tags
@@ -706,7 +706,7 @@ class LastFmCog(commands.Cog):
                         except KeyError:
                             pass
                         continue
-                if isinstance(e, ClientError):
+                if isinstance(e, ClientError | HTTPStatusError):
                     # O str do erro do aiohttp traz a URL com api_key, sk e api_sig: só o status vai para o log.
                     logger.warning("last.fm request failed! user: %s - %s", fminfo["user_id"], safe_error(e))
                 else:
