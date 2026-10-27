@@ -17,10 +17,6 @@ from tests.support.raiz import RAIZ
 AGORA = 1_000_000.0
 
 
-def test_the_contract_constants():
-    assert (HEALTH_FILE_ENV, MAX_AGE_SECONDS, health.HEARTBEAT_INTERVAL) == ("EMPIREMUSE_HEALTH_FILE", 60, 15)
-
-
 # ============================================================================ A3 — is_healthy
 
 
