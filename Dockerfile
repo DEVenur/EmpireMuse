@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-ARG PYTHON_IMAGE=python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
+ARG PYTHON_IMAGE=python:3.14-slim-trixie@sha256:c2aca8207dfb68e7d20fecb7fad7e145c5d79d2ff36712d416c144130606d71d
 ARG JRE_IMAGE=eclipse-temurin:21-jre@sha256:227118764cccd3c3294617061aaa93a08309c63a395eefa83e6b35032992ea99
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff
 
 # -----------------------------------------------------------------------------
 # Estágio JRE: Fornece o runtime Java 21 oficial do Eclipse Temurin
@@ -87,6 +87,14 @@ LABEL org.opencontainers.image.source="https://github.com/EmpireCommunity/Empire
 RUN apt-get update && \
     apt-get install -y --no-install-recommends tini ca-certificates && \
     rm -rf /var/lib/apt/lists/*
+
+# Desconfiar das raízes emSign C1 e ECC C3, removidas do certifi 2026.10.23 (a "emSign Root CA - G1" segue confiável,
+# como no certifi); remover quando o ca-certificates do Debian desconfiar delas.
+RUN sed -i \
+      -e 's|^mozilla/emSign_Root_CA_-_C1.crt$|!&|' \
+      -e 's|^mozilla/emSign_ECC_Root_CA_-_C3.crt$|!&|' \
+      /etc/ca-certificates.conf && \
+    update-ca-certificates --fresh
 
 # Copiar JRE 21 oficial do Eclipse Temurin (apenas /opt/java/openjdk)
 COPY --from=jre-stage /opt/java/openjdk /opt/java/openjdk
