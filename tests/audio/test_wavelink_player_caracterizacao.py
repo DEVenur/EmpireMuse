@@ -5,6 +5,7 @@ posição, a máquina de estados de voz e a troca de nó. Sem rede: o nó é um 
 """
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -188,12 +189,14 @@ class TestConnect:
         channel.connect.assert_awaited_once_with(cls=WavelinkVoiceClient, reconnect=True)
         assert player.channel_id == 5
 
-    def test_reconnect_failure_is_swallowed(self, capsys):
+    def test_reconnect_failure_is_swallowed(self, capsys, caplog):
+        caplog.set_level(logging.INFO)
         stale = MagicMock()
         bot, _, channel = self.bot(voice_client=stale, me_voice=False)
         channel.connect.side_effect = RuntimeError("falhou")
         run(make_player(bot=bot).connect(5))
-        assert "falhou" in capsys.readouterr().err
+        saida = capsys.readouterr()
+        assert "falhou" in saida.out + saida.err + caplog.text  # a falha passou do print para o log
 
     def test_other_channel_moves_the_voice_client(self):
         client = MagicMock()
@@ -478,13 +481,15 @@ class TestWavelinkMixin:
         assert Cog.__wavelink_listeners__ == {"on_track_end": ["terminou"]}
         assert instancia is not None
 
-    def test_default_error_hook_prints_the_traceback(self, capsys):
+    def test_default_error_hook_prints_the_traceback(self, capsys, caplog):
+        caplog.set_level(logging.INFO)
         try:
             raise ValueError("ruim")
         except ValueError as exc:
             run(WavelinkMixin().on_wavelink_error("on_x", exc))
-        err = capsys.readouterr().err
-        assert "on_x" in err and "ruim" in err
+        saida = capsys.readouterr()
+        texto = saida.out + saida.err + caplog.text  # o hook padrão passou do print para o log (com o traceback)
+        assert "on_x" in texto and "ruim" in texto and "Traceback" in texto
 
     def test_default_event_hooks_are_noops(self):
         mixin = WavelinkMixin()
