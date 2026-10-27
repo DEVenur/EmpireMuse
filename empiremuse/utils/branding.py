@@ -49,23 +49,26 @@ LAVALINK_APPLICATION_YML_KNOWN_SHA256 = frozenset(
     }
 )
 # JDK baixado quando não há Java 17+ no sistema: plataforma -> (URL oficial da BellSoft, SHA-256 fixo do arquivo).
-# Para atualizar: baixe o arquivo novo, confira o SHA-1 que a BellSoft publica e só então calcule o SHA-256.
+# x64: Liberica 25 LTS (JDK zip no Windows, JDK lite tar.gz no Linux). O JDK 25 não tem build x86 de 32 bits (JEP 503), então
+# as chaves i586 ficam no último Liberica 21.0.x que as publica.
+# Para atualizar: baixe o arquivo novo de download.bell-sw.com e confira por três canais: o SHA-256 baixado igual ao `digest` do
+# asset em bell-sw/Liberica (GitHub Releases), e o SHA-1 baixado igual ao da api.bell-sw.com. Só então grave o SHA-256.
 JDK_DOWNLOADS = {
     "windows-amd64": (
-        "https://download.bell-sw.com/java/17.0.13+12/bellsoft-jdk17.0.13+12-windows-amd64.zip",
-        "91b442a2952dc0e83b40406345a138b44c60ef41eed66afd80ae43d97ca155de",
+        "https://download.bell-sw.com/java/25.0.4.1+1/bellsoft-jdk25.0.4.1+1-windows-amd64.zip",
+        "fba1429ebbb62af18701f8f32e7aa1a2d07b87c93521b74d6f4afbf480a52010",
     ),
     "windows-i586": (
-        "https://download.bell-sw.com/java/17.0.13+12/bellsoft-jdk17.0.13+12-windows-i586.zip",
-        "2cfe28ed102436dc7a03e71495ddd7ae2348de686e42d05b6bdf7b62b15684ed",
+        "https://download.bell-sw.com/java/21.0.13.0.3+5/bellsoft-jdk21.0.13.0.3+5-windows-i586.zip",
+        "fc643ea5aa3fde487ee020c412cb5919acae98af16e8ec3b0965ff5149c1a9ae",
     ),
     "linux-amd64": (
-        "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-amd64-lite.tar.gz",
-        "525aa7ffea39e09f33ffd6eafb56322d614b315c51664170985dd1384579e2d1",
+        "https://download.bell-sw.com/java/25.0.4.1+1/bellsoft-jdk25.0.4.1+1-linux-amd64-lite.tar.gz",
+        "7cd6e87f3c356d8a971f281033c1a8850c85cf1b20724e6ef398a958e9d6be3d",
     ),
     "linux-i586": (
-        "https://download.bell-sw.com/java/21.0.3+12/bellsoft-jdk21.0.3+12-linux-i586-lite.tar.gz",
-        "d9de6f59b82db53894b03aa33675f20489844f9893bd6b75553145f43a05b0cd",
+        "https://download.bell-sw.com/java/21.0.13.0.3+5/bellsoft-jdk21.0.13.0.3+5-linux-i586-lite.tar.gz",
+        "c9e555bd50f68c4626b4902100c4e5af668461e94940785502990e7eba21dd75",
     ),
 }
 # Plugins do Lavalink (nome canônico em plugins/ -> SHA-256); a URL é LAVALINK_BINARIES_URL + "/" + nome.
