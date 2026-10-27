@@ -16,7 +16,7 @@ from empiremuse.utils.db import LocalDatabase, MongoDatabase
 
 
 class CursorFalso:
-    """O cursor assíncrono do motor: ``limit()`` encadeável e contagem do que foi realmente puxado."""
+    """O cursor assíncrono do PyMongo Async (``AsyncCursor``): ``limit()`` encadeável e contagem do que foi realmente puxado."""
 
     def __init__(self, documentos):
         self.documentos, self.teto, self.puxados = list(documentos), None, 0
