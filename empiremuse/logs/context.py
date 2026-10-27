@@ -30,6 +30,21 @@ def log_context(*, bot: str | None = None, guild: int | None = None) -> Iterator
             var.reset(token)
 
 
+def guild_extra(value: object) -> dict[str, int]:
+    """``extra`` com o servidor para o log: ``{"guild": id}`` se ``value`` é um ID (int ou texto só de dígitos ASCII), senão vazio.
+
+    O ``LevelGate`` só deixa o DEBUG de um servidor de ``LOG_DEBUG_GUILDS`` passar com ``record.guild`` int, e o ``ContextFilter`` só
+    aceita int: um ``_id`` de sessão vem como texto, então a conversão fica aqui e um valor inválido nunca levanta.
+    """
+    if isinstance(value, bool):
+        return {}
+    if isinstance(value, int):
+        return {"guild": value}
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return {"guild": int(value)}
+    return {}
+
+
 class ContextFilter(logging.Filter):
     """Copia o contexto para ``record.bot`` e ``record.guild``; um ``extra`` do próprio registro vence.
 

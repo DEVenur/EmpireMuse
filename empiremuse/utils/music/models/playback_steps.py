@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import traceback
 from time import time
 from typing import Union, TYPE_CHECKING
 
@@ -192,7 +191,7 @@ async def _pn_native(self, req):
             else:
                 tracks = []
 
-                exceptions = ""
+                exceptions: list[Exception] = []
 
                 if not partial_data:
                     for provider in self.node.search_providers:
@@ -211,8 +210,8 @@ async def _pn_native(self, req):
                                 tracks = await self.node.get_tracks(
                                     query, track_cls=LavalinkTrack, playlist_cls=LavalinkPlaylist
                                 )
-                            except Exception:
-                                exceptions += f"{traceback.format_exc()}\n"
+                            except Exception as e:
+                                exceptions.append(e)
                                 await asyncio.sleep(1)
                                 continue
 

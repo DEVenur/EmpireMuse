@@ -218,7 +218,7 @@ async def _aq_lastfm_tracks(self, req):
                 ]
                 self.lastfm_artists.insert(0, track_data.author)
             except LastFmException as e:
-                logger.warning("Last.FM recommendations error: %s", type(e).__name__)
+                logger.warning("Last.FM recommendations error: %s (código %s)", type(e).__name__, e.code)
             except Exception as e:
                 if isinstance(e, ClientError):
                     # O str do erro do aiohttp traz a URL com api_key e sk: só o status vai para o log.

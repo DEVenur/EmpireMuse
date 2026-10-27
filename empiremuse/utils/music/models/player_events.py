@@ -5,6 +5,7 @@ import logging
 import asyncio
 
 import empiremuse.wavelink as wavelink
+from empiremuse.logs.context import guild_extra
 from empiremuse.utils.music.models.event_steps import _he_dispatch
 
 logger = logging.getLogger("empiremuse.player")
@@ -51,6 +52,7 @@ class PlayerEventsMixin:
                     self.node.identifier,
                     event.code,
                     event.reason,
+                    extra={"aggregate_key": str(event.code), **guild_extra(self.guild_id)},
                 )
 
             if self.is_closing:

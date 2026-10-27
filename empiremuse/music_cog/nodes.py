@@ -138,14 +138,23 @@ class NodesMixin:
         if ((dt_now := datetime.datetime.now(datetime.timezone.utc)) - node._retry_dt).total_seconds() < 7:
             node._retry_count += 1
         if node._retry_count >= 4:
-            logger.error("[%s / v%s] Reconexão cancelada.", node.identifier, node.version)
+            logger.error(
+                "[%s / v%s] Reconexão cancelada.",
+                node.identifier,
+                node.version,
+                extra={"aggregate_key": node.identifier},
+            )
             node._retry_count = 0
             return
         else:
             node._retry_dt = dt_now
 
         logger.warning(
-            "[%s / v%s] Conexão perdida - reconectando em %s segundos.", node.identifier, node.version, int(backoff)
+            "[%s / v%s] Conexão perdida - reconectando em %s segundos.",
+            node.identifier,
+            node.version,
+            int(backoff),
+            extra={"aggregate_key": node.identifier},
         )
 
         while True:
@@ -164,7 +173,11 @@ class NodesMixin:
                 self.bot.config["LAVALINK_RECONNECT_RETRIES"]
                 and retries == self.bot.config["LAVALINK_RECONNECT_RETRIES"]
             ):
-                logger.error("[%s] Todas as tentativas de reconectar falharam...", node.identifier)
+                logger.error(
+                    "[%s] Todas as tentativas de reconectar falharam...",
+                    node.identifier,
+                    extra={"aggregate_key": node.identifier},
+                )
                 return
 
             await self.bot.wait_until_ready()
@@ -192,6 +205,7 @@ class NodesMixin:
                     node.identifier,
                     int(backoff),
                     error,
+                    extra={"aggregate_key": node.identifier},
                 )
             await asyncio.sleep(backoff)
             retries += 1

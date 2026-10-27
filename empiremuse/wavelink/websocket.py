@@ -114,9 +114,18 @@ class WebSocket:
             self._node.available = False
 
             if isinstance(error, aiohttp.WSServerHandshakeError) and error.status == 401:
-                __log__.error("WEBSOCKET %s | Authorization Failed for Node", self._node.identifier)
+                __log__.error(
+                    "WEBSOCKET %s | Authorization Failed for Node",
+                    self._node.identifier,
+                    extra={"aggregate_key": self._node.identifier},
+                )
             else:
-                __log__.error("WEBSOCKET %s | Connection Failure:: %s", self._node.identifier, safe_error(error))
+                __log__.error(
+                    "WEBSOCKET %s | Connection Failure:: %s",
+                    self._node.identifier,
+                    safe_error(error),
+                    extra={"aggregate_key": self._node.identifier},
+                )
             return
 
         if not self._task:
