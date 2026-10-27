@@ -18,7 +18,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Relatório de subida por etapas (item 7, fase P2)**: a subida do bot mostra, em etapas, a pasta de execução, o Python, a versão do bot, os cogs carregados e os que falharam, o MongoDB, o Java, os nós do Lavalink e se há uma versão estável nova disponível.
 
 ### Alterado
+- **Permissões do convite do bot**: o convite passa a pedir Ler o Histórico de Mensagens, Definir o Status do Canal de Voz (necessária ao `/setvoicestatus`) e Fixar Mensagens, e deixa de pedir Usar Comandos de Aplicativo e Pedir para Falar (sem uso). O padrão de `INVITE_PERMISSIONS` passa a `2533601240804560` no `.example.env`, no modelo da Hostinger e no egg do Pterodactyl. Quem já definiu `INVITE_PERMISSIONS` mantém o valor antigo até alterá-lo.
 - **Sem `print` no caminho de subida (item 7, fase P2)**: a subida do bot deixa de usar `print`; tudo sai pelo log, com nível, cor e contexto.
+
+### Corrigido
+- **Fixar a mensagem do player**: a checagem passa a exigir Fixar Mensagens, em vez de Gerenciar Mensagens.
 
 ### Segurança
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
