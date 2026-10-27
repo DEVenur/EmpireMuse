@@ -16,7 +16,8 @@ A imagem Docker do EmpireMuse foi projetada para oferecer uma implantação simp
   - Código-fonte da aplicação em `/app` de propriedade de `root` e estritamente somente leitura para o usuário da aplicação.
   - Binários e configurações pré-instaladas do Lavalink em `/opt/lavalink` em modo somente leitura.
 - **Gerenciamento com `tini`**: O contêiner utiliza o inicializador `tini` como PID 1, garantindo o correto repasse de sinais do sistema operacional (`SIGTERM`, `SIGINT`) e a eliminação de processos zumbis.
-- **Healthcheck nativo**: Monitoramento da integridade do serviço HTTP/status na porta configurada.
+- **Healthcheck por heartbeat**: o bot grava um carimbo de tempo em `EMPIREMUSE_HEALTH_FILE` (`/tmp/empiremuse.health`) a cada 15 s, apagado na subida, só enquanto todos os bots estão prontos e, havendo nós de áudio configurados, ao menos um está disponível. O `HEALTHCHECK` (`python -m empiremuse.health`) falha se o carimbo tiver mais de 60 s, está ausente ou a variável não existe; sem tokens válidos o container nunca fica `healthy`. Não depende do `RUN_RPC_SERVER` nem de porta HTTP, e tem 180 s de carência (`start-period`) na subida.
+- **Versão na imagem**: `EMPIREMUSE_VERSION` traz a versão da tag (`dev` em builds locais).
 
 ---
 
