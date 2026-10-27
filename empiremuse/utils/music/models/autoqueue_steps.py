@@ -38,6 +38,15 @@ from empiremuse.utils.music.models.helpers import (
 )
 
 
+def _spotify_url(obj: object) -> str:
+    """Extrai com segurança a URL do Spotify de um objeto da API."""
+    if isinstance(obj, dict):
+        urls = obj.get("external_urls")
+        if isinstance(urls, dict):
+            return urls.get("spotify") or ""
+    return ""
+
+
 async def _aq_source_tracks(self, req):
     """Busca recomendações na fonte da faixa (Spotify, Deezer ou SoundCloud)."""
     exception = req.exception
@@ -91,23 +100,19 @@ async def _aq_source_tracks(self, req):
                 if not isinstance(t, dict):
                     continue
 
-                uri = (
-                    ((t.get("external_urls") or {}).get("spotify") or "")
-                    if isinstance(t.get("external_urls"), dict)
-                    else ""
-                )
+                uri = _spotify_url(t)
                 identifier = t.get("id") or ""
                 if not uri or not identifier:
                     continue
 
-                album = (t.get("album") or {}) if isinstance(t, dict) else {}
+                album = t.get("album") or {}
                 try:
-                    images = (album.get("images") or []) if isinstance(album, dict) else []
+                    images = album.get("images") if isinstance(album, dict) else []
                     thumb = images[0]["url"] if images and isinstance(images[0], dict) else ""
                 except IndexError, KeyError, TypeError, AttributeError:
                     thumb = ""
 
-                artists = (t.get("artists") or []) if isinstance(t, dict) else []
+                artists = t.get("artists") or []
                 first_artist = (
                     artists[0].get("name") if artists and isinstance(artists[0], dict) else None
                 ) or "Unknown Artist"
@@ -132,17 +137,17 @@ async def _aq_source_tracks(self, req):
                     and f"feat. {i['name'].lower()}" not in (t.get("name") or "").lower()
                 ]
 
-                partial_track.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{fix_characters(a['name']).replace('`', '')}`]({((a.get('external_urls') or {}).get('spotify', '')) if isinstance(a.get('external_urls'), dict) else ''})"
+                authors_md = [
+                    f"[`{fix_characters(a['name'])}`]({_spotify_url(a)})"
                     for a in artists
                     if isinstance(a, dict) and a.get("name")
-                )
+                ]
+                partial_track.info["extra"]["authors_md"] = ", ".join(authors_md)
 
                 if isinstance(album, dict) and album.get("name") and album.get("name") != t.get("name"):
-                    album_urls = (album.get("external_urls") or {}) if isinstance(album, dict) else {}
                     partial_track.info["extra"]["album"] = {
                         "name": album["name"],
-                        "url": album_urls.get("spotify"),
+                        "url": _spotify_url(album),
                     }
 
                 tracks.append(partial_track)
@@ -181,11 +186,12 @@ async def _aq_source_tracks(self, req):
                     partial_track.info["extra"]["authors"] = [
                         fix_characters(a["name"]) for a in artists if isinstance(a, dict) and a.get("name")
                     ]
-                    partial_track.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{fix_characters(a['name']).replace('`', '')}`](https://www.deezer.com/artist/{a['id']})"
+                    authors_md = [
+                        f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})"
                         for a in artists
                         if isinstance(a, dict) and a.get("name") and a.get("id")
-                    )
+                    ]
+                    partial_track.info["extra"]["authors_md"] = ", ".join(authors_md)
                     partial_track.info["extra"]["artist_id"] = t["artist"]["id"]
 
                     if t["title"] != t["album"]["title"]:
