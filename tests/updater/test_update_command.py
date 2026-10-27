@@ -5,6 +5,7 @@ comando. Sem relógio real: a expiração da janela é ``view.on_timeout()`` e a
 """
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -151,6 +152,31 @@ async def test_an_existing_pending_update_refuses_a_second_one(cog, ambiente, mo
     assert "andamento" in erro.value.text
     planejar.assert_not_awaited()
     assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_an_applying_mark_refuses_a_second_update_even_after_a_day(cog, ambiente, monkeypatch):
+    """D9: o ``applying`` (árvore meio aplicada) conta como atualização em andamento e não expira por idade."""
+    planejar = modo_git(ambiente, monkeypatch)
+    write_pending(
+        ambiente.runtime,
+        PendingUpdate(
+            flow="git",
+            from_version=DE,
+            to_version=PARA,
+            bot_id=1,
+            channel_id=2,
+            requested_by=3,
+            created_at=time.time() - 3 * 24 * 3600,
+            prev_sha=SHA,
+            status="applying",
+        ),
+    )
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text
+    planejar.assert_not_awaited()
 
 
 async def test_a_held_lock_refuses_a_second_update_and_is_not_released_by_the_refusal(cog, ambiente, monkeypatch):
@@ -506,3 +532,38 @@ async def test_a_prefix_command_is_never_deferred(cog, ambiente, monkeypatch, mo
     ctx.response.defer.assert_not_awaited()
     ctx.defer.assert_not_awaited()
     assert ctx.defers_na_rede == [0]
+
+
+async def test_a_failed_rollback_tells_the_channel_and_still_restarts_so_the_boot_guard_reverts(
+    cog, ambiente, monkeypatch
+):
+    """D9: o restore falhou, a marca ``applying`` ficou no disco; o processo precisa reiniciar para o boot_guard reverter limpo."""
+    from empiremuse.updater.git_flow import UpdateRollbackFailed
+
+    modo_git(ambiente, monkeypatch)
+    erro = UpdateRollbackFailed("A reversão falhou; o bot volta para a versão anterior no próximo início.")
+    monkeypatch.setattr(legacy_cmds, "apply_git_update", AsyncMock(side_effect=erro))
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+
+    descricao = interacao.edit_original_message.await_args.kwargs["embed"].description
+    assert descricao.startswith("❌") and "próximo início" in descricao
+    cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_failed_rollback_is_recorded_as_an_error_in_the_log(cog, ambiente, monkeypatch, caplog):
+    from empiremuse.updater.git_flow import UpdateRollbackFailed
+
+    modo_git(ambiente, monkeypatch)
+    erro = UpdateRollbackFailed("A reversão falhou; o bot volta para a versão anterior no próximo início.")
+    monkeypatch.setattr(legacy_cmds, "apply_git_update", AsyncMock(side_effect=erro))
+    view = await oferecer(cog, ctx_prefixo())
+
+    with caplog.at_level(logging.ERROR):
+        await view.confirm.callback(clique())
+
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR and r.name == legacy_cmds.logger.name]
+    cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)  # o reinício continua

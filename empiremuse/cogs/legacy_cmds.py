@@ -31,6 +31,7 @@ from empiremuse.rules.settings import validate_prefix
 from empiremuse.updater.git_flow import (
     EXIT_RESTART,
     UpdateError,
+    UpdateRollbackFailed,
     apply_git_update,
     fetch_remote_changelog,
     git_env,
@@ -522,6 +523,11 @@ class Owner(commands.Cog):
             await interaction.response.edit_message(embed=progress, view=None)
             try:
                 await apply_git_update(plan, request, paths.PROJECT_DIR, paths.get_runtime_dir())
+            except UpdateRollbackFailed as error:
+                # O ``applying`` ficou no disco: reinicia já, para o boot_guard reverter num processo limpo.
+                logger.error("update: a reversão automática falhou e o applying ficou no disco: %s", error)
+                text = f"❌ {error}"
+                restart = True
             except UpdateError as error:
                 text = f"❌ {error}"
             except Exception as error:

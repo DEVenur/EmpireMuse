@@ -2,8 +2,9 @@
 
 Roda em ``__main__.main()`` ANTES de importar o ``BotPool`` (um erro de import no código novo derrubaria o bot antes de
 qualquer outra proteção). Só stdlib no import. Só age quando existe um pendente do fluxo git: cada subida soma um ``boots``;
-quando o pool fica saudável o pendente vira ``ready`` (e o aviso pós-boot o apaga), então só quem nunca fica pronto chega ao limite. O fluxo
-Docker não é tocado (quem desfaz é o auxiliar, com ``--wait``).
+quando o pool fica saudável o pendente vira ``ready`` (e o aviso pós-boot o apaga), então só quem nunca fica pronto chega ao limite. Um
+pendente ``applying`` (o processo morreu ou a reversão falhou no meio do apply) é revertido já no primeiro boot, sem contar.
+O fluxo Docker não é tocado (quem desfaz é o auxiliar, com ``--wait``).
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import sys
 from pathlib import Path
 
 from empiremuse.updater.git_flow import EXIT_RESTART, Runner, UpdateError, restore_checkout, run_exec
-from empiremuse.updater.state import read_pending, write_pending
+from empiremuse.updater.state import MAX_RESTORE_ATTEMPTS, PendingUpdate, read_pending, write_pending
 
 logger = logging.getLogger(__name__)
 
@@ -25,21 +26,52 @@ MAX_BOOTS_WITHOUT_READY = 2
 def run(
     runtime_dir: Path, repo_dir: Path, now: float, *, python: str = sys.executable, runner: Runner = run_exec
 ) -> None:
-    """Conta a subida e, no terceiro boot sem o bot ficar pronto, reverte o código e sai com ``EXIT_RESTART`` (75)."""
+    """Conta a subida e, no terceiro boot sem o bot ficar pronto, reverte o código e sai com ``EXIT_RESTART`` (75).
+
+    ``rolled_back`` só é gravado DEPOIS de um restore bem-sucedido. Restore falho deixa o pendente como está (com o
+    contador ``restore_attempts`` já incrementado, gravado antes do restore para contar também um restore que derruba o
+    processo) e sai com 75: o próximo boot tenta de novo, até ``MAX_RESTORE_ATTEMPTS``; depois disso desiste.
+    """
     pending = read_pending(runtime_dir, now)
-    if pending is None or pending.flow != "git" or pending.status != "pending":
+    if pending is None or pending.flow != "git" or pending.status not in ("applying", "pending"):
         return
-    boots = pending.boots + 1
-    if boots <= MAX_BOOTS_WITHOUT_READY:
+    # ``applying``: o processo morreu (ou a reversão falhou) no meio do apply, com a árvore possivelmente meio aplicada.
+    # Reverte já, sem contar subidas: não há o que esperar de um código que nem terminou de ser instalado.
+    boots = pending.boots + 1 if pending.status == "pending" else 0
+    if pending.status == "pending" and boots <= MAX_BOOTS_WITHOUT_READY:
         write_pending(runtime_dir, dataclasses.replace(pending, boots=boots))
         return
-    # Marca antes de reverter: se a reversão falhar, as próximas subidas não repetem a tentativa em laço.
-    write_pending(runtime_dir, dataclasses.replace(pending, boots=boots, status="rolled_back"))
-    logger.error("O código novo não ficou pronto em %d subidas; voltando ao commit anterior.", MAX_BOOTS_WITHOUT_READY)
+    pending = dataclasses.replace(pending, boots=boots)
+    if pending.restore_attempts >= MAX_RESTORE_ATTEMPTS:
+        logger.error(
+            "A reversão automática falhou %d vezes; desisti, confira o servidor: o clone pode estar meio restaurado.",
+            MAX_RESTORE_ATTEMPTS,
+        )
+        _save(runtime_dir, dataclasses.replace(pending, status="rolled_back"))
+        raise SystemExit(EXIT_RESTART)
+    attempt = dataclasses.replace(pending, restore_attempts=pending.restore_attempts + 1)
+    _save(runtime_dir, attempt)  # antes do restore: um restore que derruba o processo também conta
+    if pending.status == "applying":
+        logger.error("A atualização anterior não terminou de ser aplicada; voltando ao commit anterior.")
+    else:
+        logger.error(
+            "O código novo não ficou pronto em %d subidas; voltando ao commit anterior.", MAX_BOOTS_WITHOUT_READY
+        )
     try:
         if pending.prev_sha is None:
             raise UpdateError("sem commit anterior")
         asyncio.run(restore_checkout(Path(repo_dir), pending.prev_sha, python=python, runner=runner))
-    except UpdateError:
+    except Exception:
+        # O pendente fica como está (applying/pending): o próximo boot tenta de novo, sem carregar um rolled_back falso.
         logger.error("A reversão automática para o commit anterior falhou; confira o servidor.")
+        raise SystemExit(EXIT_RESTART) from None
+    _save(runtime_dir, dataclasses.replace(attempt, status="rolled_back"))
     raise SystemExit(EXIT_RESTART)
+
+
+def _save(runtime_dir: Path, pending: PendingUpdate) -> None:
+    """Grava o pendente; se o disco falhar, só registra (o boot_guard não pode derrubar a subida por isso)."""
+    try:
+        write_pending(runtime_dir, pending)
+    except OSError:
+        logger.error("Não consegui gravar o estado da atualização em %s.", pending.status)
