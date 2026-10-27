@@ -5,6 +5,7 @@ trocadas por um espião para o teste não demorar.
 """
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -503,7 +504,8 @@ class TestConnect:
         assert node.version == 3 and node.info["sourceManagers"] == ["youtube", "soundcloud", "http"]
         node._websocket._connect.assert_not_awaited()
 
-    def test_retries_then_succeeds(self, capsys, no_sleep):
+    def test_retries_then_succeeds(self, capsys, caplog, no_sleep):
+        caplog.set_level(logging.INFO)
         session = self.bot_session()
         original = session.get
         estado = {"n": 0}
@@ -519,13 +521,16 @@ class TestConnect:
         node.max_retries = 3
         run(node.connect())
         assert node.version == 4 and no_sleep.await_count == 1
-        assert "nova tentativa" in capsys.readouterr().out
+        saida = capsys.readouterr()
+        assert "nova tentativa" in saida.out + saida.err + caplog.text  # o aviso passou do print para o log
 
-    def test_unexpected_status_is_retried_as_an_error(self, capsys):
+    def test_unexpected_status_is_retried_as_an_error(self, capsys, caplog):
+        caplog.set_level(logging.INFO)
         node = self.prepared(self.bot_session(status=500, text="erro interno"))
         node.max_retries = 1
         run(node.connect())
-        assert node.version == 0 and "Falha ao conectar" in capsys.readouterr().out
+        saida = capsys.readouterr()
+        assert node.version == 0 and "Falha ao conectar" in saida.out + saida.err + caplog.text
 
     def test_websocket_is_created_when_missing(self, monkeypatch):
         criado = {}

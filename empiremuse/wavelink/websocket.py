@@ -23,8 +23,6 @@ SOFTWARE.
 
 import asyncio
 import logging
-import sys
-import traceback
 from typing import Any, Dict
 
 import aiohttp
@@ -32,6 +30,7 @@ import aiohttp
 from .backoff import ExponentialBackoff
 from .events import *
 from .stats import Stats
+from empiremuse.utils.safe_error import safe_error
 
 __log__ = logging.getLogger(__name__)
 
@@ -115,15 +114,9 @@ class WebSocket:
             self._node.available = False
 
             if isinstance(error, aiohttp.WSServerHandshakeError) and error.status == 401:
-                print(
-                    f"❌ - {self._node._client.bot.user} - Authorization Failed for Node:: {self._node}",
-                    file=sys.stderr,
-                )
+                __log__.error("WEBSOCKET %s | Authorization Failed for Node", self._node.identifier)
             else:
-                __log__.error(
-                    f"❌ - {self._node._client.bot.user} - WEBSOCKET {self._node.identifier}| Connection Failure:: {error}"
-                )
-                # traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+                __log__.error("WEBSOCKET %s | Connection Failure:: %s", self._node.identifier, safe_error(error))
             return
 
         if not self._task:
@@ -157,23 +150,22 @@ class WebSocket:
                     self.bot.dispatch("wavelink_node_connection_closed", self._node)
                     continue
 
-                __log__.debug(f"WEBSOCKET | Close data: {msg.extra}")
+                __log__.debug("WEBSOCKET | Close data: %s", msg.extra)
 
                 retry = backoff.delay()
 
-                __log__.warning(f"\nWEBSOCKET | Connection closed:: Retrying connection in <{retry}> seconds\n")
+                __log__.warning("WEBSOCKET | Connection closed:: Retrying connection in <%s> seconds", retry)
 
                 await asyncio.sleep(retry)
                 if not self.is_connected:
                     self.bot.loop.create_task(self._connect())
             else:
-                __log__.debug(f"WEBSOCKET | Received Payload:: <{msg.data}>")
+                __log__.debug("WEBSOCKET | Received Payload:: <%s>", msg.data)
 
                 try:
                     json_data = msg.json()
                 except Exception:
-                    traceback.print_exc()
-                    print(repr(msg))
+                    __log__.warning("WEBSOCKET | Mensagem inválida recebida do servidor (JSON)", exc_info=True)
                 else:
                     self.bot.loop.create_task(self.process_data(json_data))
 
@@ -199,23 +191,25 @@ class WebSocket:
 
             listener, payload = self._get_event_payload(data["type"], data)
 
-            __log__.debug(f"WEBSOCKET | op: event:: {data}")
+            __log__.debug("WEBSOCKET | op: event:: %s", data)
 
             # Dispatch node event/player hooks
             try:
                 await self._node.on_event(payload)
                 # self.bot.dispatch(listener, self._node, payload)
-            except Exception as e:
-                traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
+            except Exception:
+                __log__.exception("WEBSOCKET | Falha ao tratar o evento %s", data.get("type"))
 
         elif op == "playerUpdate":
-            __log__.debug(f"WEBSOCKET | op: playerUpdate:: {data}")
+            __log__.debug("WEBSOCKET | op: playerUpdate:: %s", data)
             try:
                 await self._node.players[int(data["guildId"])].update_state(data)
             except KeyError:
                 pass
         else:
-            __log__.warn(f"Unknown op: {op} | {data}")
+            # Só o op em WARNING; o payload (dado de terceiros) apenas em DEBUG (V-L10).
+            __log__.warning("Unknown op: %s", op)
+            __log__.debug("Unknown op payload: %s", data)
 
     def _get_event_payload(self, name: str, data):
         data["node"] = self._node
@@ -233,7 +227,7 @@ class WebSocket:
 
     async def _send(self, **data):
         if self.is_connected:
-            __log__.debug(f"WEBSOCKET | Sending Payload:: {data}")
+            __log__.debug("WEBSOCKET | Sending Payload:: %s", data)
             data_str = self._dumps(data)
             if isinstance(data_str, bytes):
                 # Some JSON libraries serialize to bytes

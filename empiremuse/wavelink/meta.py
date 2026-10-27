@@ -1,9 +1,10 @@
 import inspect
-import sys
-import traceback
+import logging
 
 from .events import *
 from .node import Node
+
+__log__ = logging.getLogger(__name__)
 
 
 class WavelinkMixin:
@@ -58,8 +59,7 @@ class WavelinkMixin:
         error: Exception
             The excpetion raised when dispatching a mixin listener.
         """
-        print(f"Ignoring exception in listener {listener}:", file=sys.stderr)
-        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        __log__.error("Ignoring exception in listener %s", listener, exc_info=(type(error), error, error.__traceback__))
 
     async def on_node_ready(self, node: Node):
         """Listener dispatched when a :class:`wavelink.node.Node` is connected and ready.

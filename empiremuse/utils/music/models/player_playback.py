@@ -122,7 +122,7 @@ class PlayerPlaybackMixin:
                 try:
                     await self.text_channel.send(embed=embed, delete_after=15)
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _process_next")
 
             cog = self.bot.get_cog("ErrorHandler")
             if cog:
@@ -135,7 +135,7 @@ class PlayerPlaybackMixin:
                         ),
                     )
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _process_next")
             await asyncio.sleep(10)
             self.locked = False
             await self.process_next()
@@ -304,7 +304,7 @@ class PlayerPlaybackMixin:
                 try:
                     await self.message.edit(**kwargs)
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em process_idle_message")
                     if self.text_channel and not self.static:
                         self.message = await self.text_channel.send(**kwargs)
                 send_message = False
@@ -329,12 +329,12 @@ class PlayerPlaybackMixin:
         try:
             await self.process_rpc(vc)
         except Exception:
-            print(traceback.format_exc())
+            logger.exception("Falha em idling_mode")
 
         try:
             await self.process_idle_message()
         except Exception:
-            print(traceback.format_exc())
+            logger.exception("Falha em idling_mode")
 
         try:
             await self.update_stage_topic()
@@ -358,7 +358,7 @@ class PlayerPlaybackMixin:
                         self.text_channel.send(embed=embed, delete_after=120, allowed_mentions=self.allowed_mentions)
                     )
         except Exception:
-            print(traceback.format_exc())
+            logger.exception("Falha em idling_mode")
 
         await self.destroy()
 
@@ -407,5 +407,5 @@ class PlayerPlaybackMixin:
             return
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em auto_skip_track")
             return

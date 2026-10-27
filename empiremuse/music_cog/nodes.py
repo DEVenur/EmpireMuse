@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime
+import logging
 from copy import deepcopy
 
 import disnake
@@ -29,6 +30,8 @@ from empiremuse.utils.others import (
 from empiremuse.music_cog.shared import (
     DESC_PREFIX as desc_prefix,
 )
+
+logger = logging.getLogger("empiremuse.wavelink")
 
 
 class NodesMixin:
@@ -110,6 +113,17 @@ class NodesMixin:
 
     @commands.Cog.listener("on_wavelink_node_connection_closed")
     async def node_connection_closed(self, node: wavelink.Node):
+        metrics = getattr(getattr(self.bot, "pool", None), "metrics", None)
+        if metrics:
+            metrics.error("node_unavailable")
+
+        # Uma linha ERROR por transição: quando o último nó cai; o node_ready rearma para a próxima queda total.
+        if not any(n.is_available for n in self.bot.music.nodes.values()) and not getattr(
+            self.bot, "all_nodes_unavailable", False
+        ):
+            self.bot.all_nodes_unavailable = True
+            logger.error("Todos os servidores de música estão indisponíveis.")
+
         try:
             self.bot.wavelink_node_reconnect_tasks[node.identifier].cancel()
         except Exception:
@@ -124,14 +138,14 @@ class NodesMixin:
         if ((dt_now := datetime.datetime.now(datetime.timezone.utc)) - node._retry_dt).total_seconds() < 7:
             node._retry_count += 1
         if node._retry_count >= 4:
-            print(f"❌ - {self.bot.user} - [{node.identifier} / v{node.version}] Reconexão cancelada.")
+            logger.error("[%s / v%s] Reconexão cancelada.", node.identifier, node.version)
             node._retry_count = 0
             return
         else:
             node._retry_dt = dt_now
 
-        print(
-            f"⚠️ - {self.bot.user} - [{node.identifier} / v{node.version}] Conexão perdida - reconectando em {int(backoff)} segundos."
+        logger.warning(
+            "[%s / v%s] Conexão perdida - reconectando em %s segundos.", node.identifier, node.version, int(backoff)
         )
 
         while True:
@@ -150,7 +164,7 @@ class NodesMixin:
                 self.bot.config["LAVALINK_RECONNECT_RETRIES"]
                 and retries == self.bot.config["LAVALINK_RECONNECT_RETRIES"]
             ):
-                print(f"❌ - {self.bot.user} - [{node.identifier}] Todas as tentativas de reconectar falharam...")
+                logger.error("[%s] Todas as tentativas de reconectar falharam...", node.identifier)
                 return
 
             await self.bot.wait_until_ready()
@@ -173,9 +187,11 @@ class NodesMixin:
 
             backoff *= 1.5
             if node.identifier != "LOCAL":
-                print(
-                    f"⚠️ - {self.bot.user} - Falha ao reconectar no servidor [{node.identifier}] nova tentativa em {int(backoff)}"
-                    f" segundos. Erro: {error}"[:300]
+                logger.warning(
+                    "Falha ao reconectar no servidor [%s] nova tentativa em %s segundos. Erro: %s",
+                    node.identifier,
+                    int(backoff),
+                    error,
                 )
             await asyncio.sleep(backoff)
             retries += 1
@@ -195,7 +211,8 @@ class NodesMixin:
 
     @commands.Cog.listener("on_wavelink_node_ready")
     async def node_ready(self, node: wavelink.Node):
-        print(f"🌋 - {self.bot.user} - Servidor de música: [{node.identifier} / v{node.version}] está pronto para uso!")
+        self.bot.all_nodes_unavailable = False
+        logger.info("Servidor de música: [%s / v%s] está pronto para uso!", node.identifier, node.version)
         retries = 25
         while retries > 0:
             if not node._websocket.is_connected:
