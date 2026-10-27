@@ -5,6 +5,7 @@ comando. Sem relógio real: a expiração da janela é ``view.on_timeout()`` e a
 """
 
 import asyncio
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
@@ -16,8 +17,9 @@ from empiremuse.cogs import legacy_cmds
 from empiremuse.cogs.legacy_cmds import Owner
 from empiremuse.rules.release import Version
 from empiremuse.updater.git_flow import EXIT_RESTART, GitPlan, UpdateError
-from empiremuse.updater.state import PendingUpdate, UpdateRequest, write_pending
+from empiremuse.updater.state import PendingUpdate, UpdateRequest, read_pending, write_pending
 from empiremuse.updater.views import ConfirmView
+from empiremuse.utils import client
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import CustomContext
 
@@ -51,7 +53,13 @@ def ambiente(tmp_path, monkeypatch):
 
 @pytest.fixture
 def cog():
-    pool = SimpleNamespace(update_lock=asyncio.Lock(), shutdown=AsyncMock(), config={"RUN_RPC_SERVER": False})
+    pool = SimpleNamespace(
+        update_lock=asyncio.Lock(),
+        shutdown=AsyncMock(),
+        config={"RUN_RPC_SERVER": False},
+        update_ready_checked=False,
+        update_watch_task=None,
+    )
     bot = SimpleNamespace(
         pool=pool,
         config={},
@@ -113,7 +121,7 @@ def pendente_em_disco(runtime):
             bot_id=1,
             channel_id=2,
             requested_by=3,
-            created_at=1e18,
+            created_at=time.time(),
             prev_sha=SHA,
         ),
     )
@@ -295,6 +303,45 @@ async def test_confirm_applies_the_update_and_restarts_with_75(cog, ambiente, mo
     cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)
     assert "Reiniciando" in interacao.edit_original_message.await_args.kwargs["embed"].description
     assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_the_old_process_stops_its_ready_check_before_the_update_is_applied(cog, ambiente, monkeypatch):
+    """I1: o pendente que o apply grava é do processo novo; no instante do apply o velho já não pode marcá-lo como pronto."""
+    modo_git(ambiente, monkeypatch)
+    pool = cog.bot.pool
+    pool.update_watch_task = Mock()
+    vistos = {}
+
+    async def aplicar(*args):
+        vistos["checado"] = pool.update_ready_checked
+        vistos["cancelamentos"] = pool.update_watch_task.cancel.call_count
+
+    monkeypatch.setattr(legacy_cmds, "apply_git_update", aplicar)
+    view = await oferecer(cog, ctx_prefixo())
+
+    await view.confirm.callback(clique())
+
+    assert vistos == {"checado": True, "cancelamentos": 1}
+
+
+async def test_the_old_process_does_not_mark_the_new_pending_update_as_ready(cog, ambiente, monkeypatch):
+    """I1 (corrida): pendente novo gravado pelo apply + pool saudável depois dele: quem o promove é o processo novo."""
+    modo_git(ambiente, monkeypatch)
+    pool = client.BotPool.__new__(client.BotPool)
+    pool.update_lock, pool.shutdown = asyncio.Lock(), AsyncMock()
+    pool.config, pool.bots, pool.pool_is_healthy = {"RUN_RPC_SERVER": False}, [], lambda: True
+    cog.bot.pool = pool
+
+    async def aplicar(*args):
+        pendente_em_disco(ambiente.runtime)
+
+    monkeypatch.setattr(legacy_cmds, "apply_git_update", aplicar)
+    view = await oferecer(cog, ctx_prefixo())
+    await view.confirm.callback(clique())
+
+    await pool.check_pool_ready()
+
+    assert read_pending(ambiente.runtime, time.time()).status == "pending"
 
 
 async def test_a_second_confirm_click_does_not_apply_twice(cog, ambiente, monkeypatch):

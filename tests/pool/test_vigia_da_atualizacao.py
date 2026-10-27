@@ -114,6 +114,16 @@ async def test_a_failing_on_pool_ready_does_not_break_the_watch_and_is_not_retri
     assert pool.update_watch_task.exception() is None
 
 
+async def test_a_pool_that_is_shutting_down_never_calls_on_pool_ready(ao_ficar_pronto):
+    """I1: depois do ``shutdown`` (killing_state) um pool saudável não promove nem avisa nada."""
+    pool = pool_que_fica_saudavel_na_checagem(1, [])
+    pool.killing_state = True
+
+    await pool.check_pool_ready()
+
+    ao_ficar_pronto.assert_not_awaited()
+
+
 async def test_shutdown_cancels_the_watch(pendente, ao_ficar_pronto):
     pool = pool_que_fica_saudavel_na_checagem(10**6, [])
     pool.heartbeat_task = None

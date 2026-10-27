@@ -186,6 +186,18 @@ async def test_without_any_bot_nothing_is_delivered_or_consumed(runtime):
     assert pending_path(runtime).exists()
 
 
+async def test_a_guild_bot_that_is_not_in_pool_bots_delivers_when_it_is_the_requester(runtime):
+    """I2: quem pediu pode ser um bot de guild (fora de ``pool.bots``): ele entrega, não o primeiro bot pronto do pool."""
+    principal, de_guild = bot_falso(identificador=999), bot_falso()
+    write_pending(runtime, pendente())
+    pool = SimpleNamespace(bots=[principal], get_all_bots=lambda: [principal, de_guild], pool_is_healthy=lambda: True)
+
+    await entregar(pool, runtime, PARA)
+
+    de_guild.canal.send.assert_awaited_once()
+    principal.canal.send.assert_not_awaited()
+
+
 async def test_when_the_requesting_bot_is_gone_another_ready_bot_delivers(runtime):
     """F3: o bot que pediu pode ter falhado na subida (token inválido); outro bot pronto do pool entrega no mesmo canal."""
     outro = bot_falso(identificador=999)
