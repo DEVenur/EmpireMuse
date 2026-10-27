@@ -57,7 +57,7 @@ def is_export_refused(name: str) -> bool:
     try:
         path = Path(name).resolve()
         dev_runtime = (paths.PROJECT_DIR / paths.DEV_RUNTIME_NAME).resolve()
-    except (OSError, ValueError, RuntimeError):
+    except OSError, ValueError, RuntimeError:
         return True  # caminho que nem resolve não vai para o zip
     if path.name.lower() in EXPORT_REFUSED_NAMES:
         return True
@@ -718,7 +718,7 @@ class Owner(commands.Cog):
                             env_written = True
                     elif not is_export_refused(f):
                         zipf.write(f)
-                except (FileNotFoundError, ValueError, RuntimeError):
+                except FileNotFoundError, ValueError, RuntimeError:
                     continue
 
     @commands.is_owner()
@@ -1003,7 +1003,7 @@ class Owner(commands.Cog):
             async with ClientSession(timeout=ClientTimeout(total=30)) as session:
                 async with session.get(self.bot.config["LAVALINK_SERVER_LIST"], allow_redirects=False) as r:
                     ini_file = validated_server_list(r.status, await r.read())
-        except (ClientError, asyncio.TimeoutError):
+        except ClientError, asyncio.TimeoutError:
             traceback.print_exc()
             print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
             ini_file = validated_server_list(None, None)

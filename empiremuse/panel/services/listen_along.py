@@ -73,7 +73,7 @@ class ListenAlongForm(SettingsForm):
         if member is None:
             try:
                 member = await ctx.guild.fetch_member(user_id)
-            except (disnake.HTTPException, OSError):
+            except disnake.HTTPException, OSError:
                 return False
         return can_manage_channels(ctx.guild, member, user_id)
 

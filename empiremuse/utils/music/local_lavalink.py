@@ -562,7 +562,7 @@ def _has_override_content(path: str) -> bool:
     try:
         with open(path, encoding="utf-8") as f:
             return f.read() == PLUGINS_OVERRIDE_CONTENT
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return False
 
 

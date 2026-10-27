@@ -365,7 +365,7 @@ class PlayerSession(commands.Cog):
 
             if channel is None and fetch:
                 channel = await self.bot.fetch_channel(channel_id)
-        except (disnake.HTTPException, TypeError, ValueError):
+        except disnake.HTTPException, TypeError, ValueError:
             return None
 
         if channel is not None and getattr(getattr(channel, "guild", None), "id", None) != guild.id:
@@ -378,7 +378,7 @@ class PlayerSession(commands.Cog):
     def _to_id(value):
         try:
             return int(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     async def resume_player(self, data: dict, hints: list = None):
@@ -466,7 +466,7 @@ class PlayerSession(commands.Cog):
                             if data["message_id"]:
                                 try:
                                     message = await text_channel.fetch_message(data["message_id"])
-                                except (disnake.NotFound, disnake.Forbidden):
+                                except disnake.NotFound, disnake.Forbidden:
                                     pass
 
                 message_without_thread = None

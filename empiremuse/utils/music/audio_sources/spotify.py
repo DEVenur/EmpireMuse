@@ -422,7 +422,7 @@ class SpotifyClient:
                                 "name": result["album"]["name"],
                                 "url": result["album"]["external_urls"]["spotify"],
                             }
-                    except (AttributeError, KeyError):
+                    except AttributeError, KeyError:
                         pass
 
                     tracks.append(t)
@@ -477,7 +477,7 @@ class SpotifyClient:
                         "name": result["album"]["name"],
                         "url": result["album"]["external_urls"]["spotify"],
                     }
-            except (AttributeError, KeyError):
+            except AttributeError, KeyError:
                 pass
 
             return [t]
@@ -500,7 +500,7 @@ class SpotifyClient:
 
             try:
                 thumb = result["tracks"][0]["album"]["images"][0]["url"]
-            except (KeyError, IndexError, TypeError):
+            except KeyError, IndexError, TypeError:
                 thumb = ""
 
             if result["tracks"] is None:
@@ -541,7 +541,7 @@ class SpotifyClient:
                 try:
                     if result["name"] != track["name"] or result["total_tracks"] > 1:
                         t.info["extra"]["album"] = {"name": result["name"], "url": result["external_urls"]["spotify"]}
-                except (AttributeError, KeyError):
+                except AttributeError, KeyError:
                     pass
 
                 return [t]
@@ -603,7 +603,7 @@ class SpotifyClient:
 
             try:
                 thumb = t["album"]["images"][0]["url"]
-            except (IndexError, KeyError):
+            except IndexError, KeyError:
                 thumb = ""
 
             trackinfo = {
@@ -635,7 +635,7 @@ class SpotifyClient:
                         "name": t["album"]["name"],
                         "url": t["album"]["external_urls"]["spotify"],
                     }
-            except (AttributeError, KeyError):
+            except AttributeError, KeyError:
                 pass
 
             if t["artists"][0]["name"]:

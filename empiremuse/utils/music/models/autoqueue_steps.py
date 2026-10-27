@@ -73,7 +73,7 @@ async def _aq_source_tracks(self, req):
             for t in result["tracks"]:
                 try:
                     thumb = t["album"]["images"][0]["url"]
-                except (IndexError, KeyError):
+                except IndexError, KeyError:
                     thumb = ""
 
                 partial_track = PartialTrack(
@@ -104,7 +104,7 @@ async def _aq_source_tracks(self, req):
                             "name": t["album"]["name"],
                             "url": t["album"]["external_urls"]["spotify"],
                         }
-                except (AttributeError, KeyError):
+                except AttributeError, KeyError:
                     pass
 
                 tracks.append(partial_track)

@@ -20,7 +20,7 @@ def _is_valid_server_list(content: bytes) -> bool:
         parser = ConfigParser()
         parser.read_string(content.decode("utf-8"))
         sections = {section: dict(parser.items(section)) for section in parser.sections()}
-    except (UnicodeDecodeError, ConfigParserError):
+    except UnicodeDecodeError, ConfigParserError:
         return False
 
     return bool(sections) and all(all(key in values for key in _REQUIRED_KEYS) for values in sections.values())

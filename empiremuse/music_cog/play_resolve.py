@@ -183,7 +183,7 @@ class PlayResolveMixin:
 
             try:
                 profile_avatar = [a["url"] for a in info["thumbnails"] if a["id"] == "avatar_uncropped"][0]
-            except (KeyError, IndexError):
+            except KeyError, IndexError:
                 pass
 
             try:

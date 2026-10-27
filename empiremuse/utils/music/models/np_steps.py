@@ -351,7 +351,7 @@ async def _np_message_edit(self, req):
                 self.text_channel = self.bot.get_channel(self.text_channel.id) or await self.bot.fetch_channel(
                     self.text_channel.id
                 )
-            except (AttributeError, disnake.Forbidden, disnake.HTTPException):
+            except AttributeError, disnake.Forbidden, disnake.HTTPException:
                 self.text_channel = None
 
             if not self.text_channel:

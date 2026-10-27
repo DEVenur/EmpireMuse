@@ -24,13 +24,13 @@ Use `pytest.mark` for test categorization:
 ```python
 import pytest
 
+
 @pytest.mark.unit
-def test_calculate_total():
-    ...
+def test_calculate_total(): ...
+
 
 @pytest.mark.integration
-def test_database_connection():
-    ...
+def test_database_connection(): ...
 ```
 
 ## Reference

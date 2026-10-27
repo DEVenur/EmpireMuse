@@ -42,7 +42,7 @@ def load_json_object(raw: str) -> Optional[dict]:
     """JSON de importação: o objeto, ou ``None`` se não for JSON válido ou não for um objeto."""
     try:
         data = json.loads(raw)
-    except (ValueError, RecursionError):
+    except ValueError, RecursionError:
         return None
     return data if isinstance(data, dict) else None
 

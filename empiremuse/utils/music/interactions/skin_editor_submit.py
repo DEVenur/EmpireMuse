@@ -111,7 +111,7 @@ def _apply_author_footer(view, inter: disnake.ModalInteraction):
 def _apply_queue_setup(view, inter: disnake.ModalInteraction):
     try:
         queue_max_entries = int(inter.text_values["queue_max_entries"])
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise GenericError(QUEUE_MAX_ENTRIES_INVALID)
 
     view.message_data["queue_format"] = inter.text_values["queue_format"]
@@ -141,7 +141,7 @@ async def _apply_import_skin(view, inter: disnake.ModalInteraction) -> bool:
     """Importa o JSON enviado; devolve ``False`` se o conteúdo for inválido (nada muda na skin)."""
     try:
         info = json.loads(inter.text_values["skin"])
-    except (ValueError, RecursionError):
+    except ValueError, RecursionError:
         logger.exception("Editor de skin: JSON inválido na importação")
         await inter.send(
             "**Ocorreu um erro ao processar sua skin: confira se o conteúdo é um JSON válido.**",
@@ -155,7 +155,7 @@ async def _apply_import_skin(view, inter: disnake.ModalInteraction) -> bool:
     try:
         if len(str(info["queue_max_entries"])) > IMPORT_QUEUE_MAX_ENTRIES_DIGITS:
             info["queue_max_entries"] = DEFAULT_QUEUE_MAX_ENTRIES
-    except (KeyError, TypeError):
+    except KeyError, TypeError:
         pass
 
     try:

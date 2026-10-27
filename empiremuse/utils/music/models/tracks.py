@@ -249,7 +249,7 @@ class LavalinkPlaylist:
                     self.url = f"https://www.youtube.com/playlist?list={parse.parse_qs(parse.urlparse(self.url).query)['list'][0]}"
                 except KeyError:
                     pass
-        except (IndexError, KeyError):
+        except IndexError, KeyError:
             pass
 
         pluginInfo = kwargs.pop("pluginInfo", {})
@@ -316,7 +316,7 @@ class LavalinkTrack(wavelink.Track):
                 del self.info["pluginInfo"]["albumUrl"]
             else:
                 self.info["pluginInfo"]["albumName"] = albumname
-        except (AttributeError, KeyError):
+        except AttributeError, KeyError:
             pass
 
         try:

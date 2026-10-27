@@ -430,7 +430,7 @@ async def _fetch_configured_message(channel, guild_data: dict):
     """Mensagem do canal de pedidos registrada no banco; ``None`` se não existe mais ou o registro é inválido."""
     try:
         return await channel.fetch_message(int(guild_data["player_controller"]["message_id"]))
-    except (disnake.HTTPException, KeyError, TypeError, ValueError):
+    except disnake.HTTPException, KeyError, TypeError, ValueError:
         return None
 
 

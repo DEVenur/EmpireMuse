@@ -25,7 +25,7 @@ def hide_path(monkeypatch, hidden: Path) -> None:
     def is_hidden(candidate) -> bool:
         try:
             return os.path.abspath(candidate) == target
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return False
 
     def wrap_path_method(name: str) -> None:

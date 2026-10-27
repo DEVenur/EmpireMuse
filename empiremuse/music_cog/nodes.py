@@ -314,7 +314,7 @@ class NodesMixin:
 
         try:
             max_retries = int(data.pop("retries"))
-        except (TypeError, KeyError):
+        except TypeError, KeyError:
             max_retries = 1
 
         node = await self.bot.music.initiate_node(

@@ -68,12 +68,12 @@ class SongRequestsMixin:
 
                 try:
                     selected_fav = inter.values["fav_links"][0]
-                except (KeyError, IndexError):
+                except KeyError, IndexError:
                     selected_fav = None
 
                 try:
                     selected_integration = inter.values["integration_links"][0]
-                except (KeyError, IndexError):
+                except KeyError, IndexError:
                     selected_integration = None
 
                 multichoice_opts = []

@@ -107,7 +107,7 @@ class LinksForm(SettingsForm):
             return False
         try:
             return ctx.bot.get_channel(int(raw)) is not None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return False
 
     def display(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:

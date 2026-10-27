@@ -19,12 +19,15 @@ Prefer immutable data structures:
 ```python
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class User:
     name: str
     email: str
 
+
 from typing import NamedTuple
+
 
 class Point(NamedTuple):
     x: float

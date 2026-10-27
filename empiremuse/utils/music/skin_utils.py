@@ -294,7 +294,7 @@ def skin_converter(
                     ),
                     16,
                 )
-            except (KeyError, AttributeError):
+            except KeyError, AttributeError:
                 pass
 
         info["embeds"] = [disnake.Embed.from_dict(e) for e in embeds]

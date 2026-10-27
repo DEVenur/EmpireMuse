@@ -12,6 +12,7 @@ paths:
 ```python
 from typing import Protocol
 
+
 class Repository(Protocol):
     def find_by_id(self, id: str) -> dict | None: ...
     def save(self, entity: dict) -> dict: ...
@@ -21,6 +22,7 @@ class Repository(Protocol):
 
 ```python
 from dataclasses import dataclass
+
 
 @dataclass
 class CreateUserRequest:
