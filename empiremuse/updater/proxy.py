@@ -488,6 +488,7 @@ def _valid_path(value: object) -> bool:
     return (
         isinstance(value, str)
         and _ABSOLUTE_PATH.fullmatch(value) is not None
+        and not value.startswith("//")  # o normpath POSIX preserva o "//" inicial: "//" montaria a raiz do host
         and posixpath.normpath(value) == value
         and len(value.encode()) <= _SOCKET_PATH_LIMIT
     )
@@ -688,6 +689,11 @@ class Updater:
 # --------------------------------------------------------------------------- servidor
 
 
+def _loggable_method(method: str | None) -> str:
+    """Método HTTP como o bot mandou só se for letra maiúscula curta; senão ``?`` (o bot não injeta escapes no log)."""
+    return method if method is not None and re.fullmatch(r"[A-Z]{1,16}", method) else "?"
+
+
 def _loggable_path(target: str) -> str:
     path = target.partition("?")[0]
     return path if _PATH.fullmatch(path) else "-"
@@ -713,15 +719,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return False
 
     def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
-        LOG.info("%s - parser %d", self.command or "?", code)
+        LOG.info("%s - parser %d", _loggable_method(self.command), code)
         super().send_error(code, "negado" if code == 403 else None)
 
     def log_message(self, format: str, *args: Any) -> None:
         """O log da stdlib ecoa a linha de requisição do bot; só as linhas próprias de ``_log`` saem."""
 
     def _log(self, method: str, target: str, decision: str, status: int) -> None:
-        safe_method = method if re.fullmatch(r"[A-Z]{1,16}", method or "") else "?"
-        LOG.info("%s %s %s %d", safe_method, _loggable_path(target), decision, status)
+        LOG.info("%s %s %s %d", _loggable_method(method), _loggable_path(target), decision, status)
 
     def _reply(self, status: int, payload: dict[str, Any] | None) -> None:
         data = b"" if payload is None else json.dumps(payload, separators=(",", ":")).encode()
