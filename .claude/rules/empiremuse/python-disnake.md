@@ -64,7 +64,7 @@ projeto**. Contexto: `docs/architecture.md`; bugs conhecidos: `docs/known-issues
 ## Banco de dados
 
 - Acesse dados só por `bot.get_data/update_data` (por bot) e `bot.get_global_data/update_global_data`
-  (`empiremuse/utils/client.py` — `BotCore.get_data`/`BotCore.update_data`), que usam `empiremuse/utils/db.py`. Proibido instanciar `AsyncIOMotorClient`/TinyMongo
+  (`empiremuse/utils/client.py` — `BotCore.get_data`/`BotCore.update_data`), que usam `empiremuse/utils/db.py`. Proibido instanciar `AsyncMongoClient` (PyMongo Async)/TinyMongo
   fora de `empiremuse/utils/db.py` ou abrir arquivos de `local_database/` direto.
 - Mudou o formato de um documento? Atualize o modelo em `empiremuse/utils/db.py` **e** incremente `ver`; a migração
   (`update_values`) hoje descarta listas (KI-09) — cubra com teste.
