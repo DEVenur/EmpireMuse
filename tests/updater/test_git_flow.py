@@ -467,6 +467,7 @@ def test_the_pending_file_is_written_with_the_contract_fields_and_mode_0600(mund
         "prev_sha": plano.prev_sha,
         "boots": 0,
         "status": "pending",
+        "restore_attempts": 0,
     }
 
 
