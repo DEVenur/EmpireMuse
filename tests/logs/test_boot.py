@@ -9,6 +9,7 @@ import asyncio
 import io
 import json
 import logging
+import re
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -420,6 +421,10 @@ def test_no_print_or_print_exc_in_the_phase_two_functions_of_client():
 # ============================================================================ B11b — stderr do Java do Lavalink local (V-L9)
 
 
+class SemQuebra(str):
+    """Última linha do Java sem ``\\n`` no fim (o processo morreu no meio dela)."""
+
+
 class StderrFalso:
     """Fluxo que serve linhas de ``str`` e de ``bytes`` (o código pode ler de qualquer forma) e sinaliza o fim da leitura."""
 
@@ -443,7 +448,7 @@ class StderrFalso:
             return ""
 
     def __init__(self, linhas, terminou: threading.Event) -> None:
-        self._linhas = [self.Linha(linha + "\n") for linha in linhas]
+        self._linhas = [self.Linha(linha if isinstance(linha, SemQuebra) else linha + "\n") for linha in linhas]
         self._fim = terminou
 
     def readline(self, *args):
@@ -501,7 +506,7 @@ def lavalink_com_stderr(tmp_path, monkeypatch):
     monkeypatch.setattr(local_lavalink, "_java_command", lambda *a, **k: ["java", "-jar", "Lavalink.jar"])
     monkeypatch.setattr(local_lavalink, "java_major_version", lambda cmd, *a, **k: 21)
 
-    def executar(linhas):
+    def executar(linhas, arquivo=False):
         terminou = threading.Event()
         monkeypatch.setattr(
             local_lavalink.subprocess,
@@ -509,7 +514,9 @@ def lavalink_com_stderr(tmp_path, monkeypatch):
             lambda args, **kwargs: ProcessoFalso(linhas, terminou, args=args, **kwargs),
         )
         console = io.StringIO()
-        configure_logging(LogSettings(logging.INFO, False, False, frozenset(), 300), [], stream=console)
+        configure_logging(
+            LogSettings(logging.INFO, False, arquivo, frozenset(), 300), [], stream=console, logs_dir=tmp_path / ".logs"
+        )
         local_lavalink.run_lavalink(
             lavalink_java_path="java", lavalink_home=str(tmp_path / "lavalink"), lavalink_offline=True
         )
@@ -621,3 +628,66 @@ class TestIntegracaoDaSubida:
 
         for texto in self.textos(destinos):
             assert "segredo-da-etapa-integrada-5" not in texto and "***" in texto
+
+
+# ============================================================================ V-P2-1 — linhas distintas do Java não se agregam entre si
+
+SONDA_DO_VIGIL = [
+    "Exception in thread main java.lang.IllegalStateException: falhou ao subir",
+    "\tat com.exemplo.Servidor.iniciar(Servidor.java:42)",
+    "\tat com.exemplo.Principal.main(Principal.java:7)",
+    "Caused by: java.net.BindException: Address already in use",
+    "linha com \x1b[2J e \u202e dentro",
+    SemQuebra("última linha sem quebra"),
+]
+
+
+class TestLinhasDistintasDoJava:
+    def textos(self, lavalink_com_stderr, tmp_path, linhas):
+        console = lavalink_com_stderr(linhas, arquivo=True)
+        return console, (tmp_path / ".logs" / "disnake.log").read_text(encoding="utf-8")
+
+    def test_six_distinct_lines_give_six_lines_in_each_destination_and_no_repeat_summary(
+        self, lavalink_com_stderr, tmp_path
+    ):
+        for texto in self.textos(lavalink_com_stderr, tmp_path, SONDA_DO_VIGIL):
+            linhas = [linha for linha in texto.splitlines() if linha]
+            assert len(linhas) == 6, linhas
+            assert all("empiremuse.wavelink.local" in linha for linha in linhas)
+            assert "↻" not in texto and "repetida" not in texto
+
+    def test_the_root_cause_line_is_in_the_log(self, lavalink_com_stderr, tmp_path):
+        for texto in self.textos(lavalink_com_stderr, tmp_path, SONDA_DO_VIGIL):
+            assert "Caused by: java.net.BindException: Address already in use" in texto
+            assert "última linha sem quebra" in texto
+
+    def test_every_output_line_starts_with_a_header_so_nothing_sits_at_column_zero(self, lavalink_com_stderr, tmp_path):
+        console, arquivo = self.textos(lavalink_com_stderr, tmp_path, SONDA_DO_VIGIL)
+
+        for linha in console.splitlines():
+            assert re.match(r"\d{2}:\d{2}:\d{2} ", linha), linha
+        for linha in arquivo.splitlines():
+            assert re.match(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} ", linha), linha
+
+    def test_controls_and_the_registered_password_are_still_neutralised_in_the_distinct_lines(
+        self, lavalink_com_stderr, tmp_path
+    ):
+        senha = "senha-do-java-nas-distintas-V2"
+        register_secret(senha)
+        linhas = [f"tentando com {senha}", *SONDA_DO_VIGIL]
+
+        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
+            assert senha not in texto and "***" in texto
+            assert not any(c in texto for c in ("\x1b", "\u202e", "\r"))
+            assert len([linha for linha in texto.splitlines() if linha]) == 7
+
+    def test_the_same_line_a_hundred_times_in_a_burst_still_aggregates(self, lavalink_com_stderr, tmp_path):
+        for texto in self.textos(lavalink_com_stderr, tmp_path, ["conexão recusada pelo Java"] * 100):
+            assert texto.count("conexão recusada pelo Java") == 2  # a 1ª ocorrência e a linha do resumo
+            assert texto.count("repetida 99×") == 1 and texto.count("↻") == 1
+
+    def test_distinct_lines_do_not_hide_inside_a_summary_of_a_repeated_one(self, lavalink_com_stderr, tmp_path):
+        linhas = ["repetida A"] * 5 + ["única B"] + ["repetida A"] * 5
+
+        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
+            assert "única B" in texto and texto.count("repetida 9×") == 1
