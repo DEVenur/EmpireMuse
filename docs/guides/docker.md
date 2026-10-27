@@ -182,7 +182,7 @@ Em gerenciadores de Docker integrados a painéis de VPS (como o **Docker Manager
 
 Para esse cenário de implantação em arquivo único atrás do Traefik, o repositório traz o compose usado na produção do EmpireMuse (VPS na Hostinger, atrás do Traefik + Cloudflare):
 
-- [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml): copie para o diretório do projeto no gerenciador (ex.: `/docker/empiremuse`) como `docker-compose.yml`. A cada release, atualize a tag da imagem, ou use o `update` com o auto-update ([`auto-update.md`](auto-update.md)).
+- [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml): copie para o diretório do projeto no gerenciador (ex.: `/docker/empiremuse`) como `docker-compose.yml`. A cada release, atualize a tag **e o digest** das duas linhas `image:` (bot e `updater-proxy`), com o digest do `image-digest.txt` da release (passo 2 do [`release.md`](release.md), seção 3, Passo 5): trocar só a tag mantém a imagem antiga. Ou use o `update` com o auto-update ([`auto-update.md`](auto-update.md)).
 - [`deploy/env.example.hostinger`](../../deploy/env.example.hostinger): renomeie para `.env` e preencha só os segredos.
 
 Ele segue a receita genérica mantida no repositório [**docker-compose-cookbook (`composes/empiremuse`)**](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/empiremuse):
