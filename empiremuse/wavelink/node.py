@@ -34,7 +34,7 @@ from urllib.parse import quote
 from rapidfuzz import fuzz
 
 from empiremuse.rules.title_match import title_matches
-from empiremuse.utils.safe_error import safe_error
+from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from .backoff import ExponentialBackoff
 from .errors import *
 from .player import Player, Track, TrackPlaylist
@@ -219,7 +219,7 @@ class Node:
                             self.info = await r.json()
                             self.version = 4
                         elif r.status != 404:
-                            raise Exception(f"❌ - {self._client.bot.user} - [{r.status}]: {await r.text()}"[:300])
+                            raise HTTPStatusError(r.status)
                         else:
                             self.version = 3
                             self.info["sourceManagers"] = ["youtube", "soundcloud", "http"]
