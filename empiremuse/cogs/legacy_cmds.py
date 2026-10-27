@@ -89,12 +89,16 @@ EXPORT_REFUSED_NAMES = frozenset(
 
 
 def is_export_refused(name: str) -> bool:
-    """Se `name` (resolvido contra o cwd, com `..` e links) é um segredo conhecido ou fica dentro da `.runtime/` do projeto."""
+    """Se `name` (resolvido contra o cwd, com `..` e links) é um segredo conhecido, fica dentro da `.runtime/` do projeto
+    ou resolve para fora da raiz do projeto (link rastreado apontando para fora)."""
     try:
         path = Path(name).resolve()
+        project_dir = paths.PROJECT_DIR.resolve()
         dev_runtime = (paths.PROJECT_DIR / paths.DEV_RUNTIME_NAME).resolve()
     except OSError, ValueError, RuntimeError:
         return True  # caminho que nem resolve não vai para o zip
+    if project_dir not in path.parents:
+        return True
     if path.name.lower() in EXPORT_REFUSED_NAMES:
         return True
     return path == dev_runtime or dev_runtime in path.parents
