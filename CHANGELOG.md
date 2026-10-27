@@ -26,7 +26,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
 
 ### Segurança
-- **`pip` removido da imagem de runtime** (release `0.0.5` dos binários e Dockerfile): menos superfície no contêiner final.
+- **`pip` removido da imagem de runtime** (release `0.0.5` dos binários e Dockerfile): menos superfície no contêiner final. Quem instala pacotes em runtime (como `jsk pip` com `ENABLE_JISHAKU=true`) deixa de poder fazê-lo; a produção roda com o jishaku desligado.
 - **`.gitleaksignore`**: registra as impressões digitais de achados já auditados e sem segredo (cliente OAuth público do YouTube TV, senha publicada de um nó Lavalink público, fixture falso de teste e um modelo `.env-example` antigo), para `gitleaks git` e `gitleaks dir` ficarem limpos.
 - **`MONGO_SSL_FIX` com valor booleano estrito (CWE-295)**: antes qualquer valor não vazio desligava a validação do certificado TLS do MongoDB; agora só `true`, `1`, `yes` e `on` (sem diferenciar maiúsculas) a desligam, e vazio, ausente, `false` ou `0` validam. Com a validação desligada, o startup registra um WARNING (sem a URI). Mudança de comportamento para quem usava valores como `false` esperando o efeito oposto.
 - **Raízes emSign C1, ECC C3 e ECC G3 removidas do `cacerts` da JRE da imagem** (Temurin 25), como já são no ca-certificates do Debian. No JDK de reserva da Liberica elas continuam confiadas (risco residual aceito, só fora do Docker).
