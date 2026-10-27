@@ -74,7 +74,8 @@ async def _aq_source_tracks(self, req):
                         controller=True,
                     )
                     self.update = True
-                    await asyncio.sleep(5)
+                    if i < 2:
+                        await asyncio.sleep(5)
                 else:
                     break
 
@@ -90,17 +91,23 @@ async def _aq_source_tracks(self, req):
                 if not isinstance(t, dict):
                     continue
 
-                uri = (t.get("external_urls") or {}).get("spotify") or ""
+                uri = (
+                    ((t.get("external_urls") or {}).get("spotify") or "")
+                    if isinstance(t.get("external_urls"), dict)
+                    else ""
+                )
                 identifier = t.get("id") or ""
                 if not uri or not identifier:
                     continue
 
+                album = (t.get("album") or {}) if isinstance(t, dict) else {}
                 try:
-                    thumb = t.get("album", {}).get("images", [])[0]["url"]
-                except IndexError, KeyError, TypeError:
+                    images = (album.get("images") or []) if isinstance(album, dict) else []
+                    thumb = images[0]["url"] if images and isinstance(images[0], dict) else ""
+                except IndexError, KeyError, TypeError, AttributeError:
                     thumb = ""
 
-                artists = t.get("artists") or []
+                artists = (t.get("artists") or []) if isinstance(t, dict) else []
                 first_artist = (
                     artists[0].get("name") if artists and isinstance(artists[0], dict) else None
                 ) or "Unknown Artist"
@@ -126,14 +133,13 @@ async def _aq_source_tracks(self, req):
                 ]
 
                 partial_track.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({(a.get('external_urls') or {}).get('spotify', '')})"
+                    f"[`{fix_characters(a['name']).replace('`', '')}`]({((a.get('external_urls') or {}).get('spotify', '')) if isinstance(a.get('external_urls'), dict) else ''})"
                     for a in artists
                     if isinstance(a, dict) and a.get("name")
                 )
 
-                album = t.get("album")
                 if isinstance(album, dict) and album.get("name") and album.get("name") != t.get("name"):
-                    album_urls = album.get("external_urls") or {}
+                    album_urls = (album.get("external_urls") or {}) if isinstance(album, dict) else {}
                     partial_track.info["extra"]["album"] = {
                         "name": album["name"],
                         "url": album_urls.get("spotify"),
@@ -172,9 +178,13 @@ async def _aq_source_tracks(self, req):
                     partial_track.info["isrc"] = t.get("isrc")
                     artists = t.get("contributors") or [t["artist"]]
 
-                    partial_track.info["extra"]["authors"] = [a["name"] for a in artists]
+                    partial_track.info["extra"]["authors"] = [
+                        fix_characters(a["name"]) for a in artists if isinstance(a, dict) and a.get("name")
+                    ]
                     partial_track.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})" for a in artists
+                        f"[`{fix_characters(a['name']).replace('`', '')}`](https://www.deezer.com/artist/{a['id']})"
+                        for a in artists
+                        if isinstance(a, dict) and a.get("name") and a.get("id")
                     )
                     partial_track.info["extra"]["artist_id"] = t["artist"]["id"]
 
