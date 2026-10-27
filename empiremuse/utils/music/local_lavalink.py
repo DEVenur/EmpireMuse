@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import threading
 import time
 import zipfile
 from contextlib import suppress
@@ -18,6 +19,7 @@ import requests
 
 from empiremuse import paths
 from empiremuse.logs import register_secret
+from empiremuse.logs.boot import BootReport
 from empiremuse.utils import branding
 
 # Senha fixa do nó LOCAL (a do application.yml do repositório); registrada no redator para nunca sair em log.
@@ -25,6 +27,8 @@ LOCAL_LAVALINK_PASSWORD = "youshallnotpass"
 register_secret(LOCAL_LAVALINK_PASSWORD)
 
 logger = logging.getLogger(__name__)
+# O stderr do Java (Spring, JVM) passa por este logger linha a linha: redator e saneamento do pacote ``logs`` valem para ele.
+JAVA_STDERR_LOGGER = "empiremuse.wavelink.local"
 
 DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um servidor parado trava o boot
 HASH_CHUNK_SIZE = 1024 * 1024
@@ -124,17 +128,52 @@ def download_file(url, filename):
                         speed_txt = "MB/s"
                     else:
                         speed_txt = "KB/s"
-                    print(
-                        f"Download do arquivo {filename} {current_progress}% concluído ({download_speed:.2f} {speed_txt} / {total_txt})"
+                    logger.log(
+                        _download_level(current_progress),
+                        "Download do arquivo %s %s%% concluído (%.2f %s / %s)",
+                        filename,
+                        current_progress,
+                        download_speed,
+                        speed_txt,
+                        total_txt,
                     )
                 except Exception:
-                    print(f"Download do arquivo {filename} {current_progress}% concluído")
+                    logger.log(
+                        _download_level(current_progress),
+                        "Download do arquivo %s %s%% concluído",
+                        filename,
+                        current_progress,
+                    )
 
     r.close()
 
     os.rename(f"{filename}.tmp", filename)
 
     return True
+
+
+def _download_level(progress: int) -> int:
+    """INFO a cada 25% e DEBUG nos demais: o download inteiro não pode virar uma linha por porcento no console."""
+    return logging.INFO if progress % 25 == 0 else logging.DEBUG
+
+
+def _debug_step(name: str, status: str, detail: str = "") -> None:
+    logger.debug("%s [%s]: %s", name, status, detail)
+
+
+def _forward_java_stderr(stream) -> None:
+    """Lê o stderr do Java linha a linha e entrega ao logger; texto ou bytes, o fim do fluxo encerra a leitura."""
+    java_logger = logging.getLogger(JAVA_STDERR_LOGGER)
+    try:
+        while raw := stream.readline():
+            line = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            if line := line.rstrip("\r\n"):
+                java_logger.warning("%s", line)
+    except Exception as error:
+        logger.debug("Leitura do stderr do Java interrompida (%s).", type(error).__name__)
+    finally:
+        with suppress(Exception):
+            stream.close()
 
 
 def java_major_version(cmd: str, debug: bool = False) -> Optional[int]:
@@ -149,7 +188,7 @@ def java_major_version(cmd: str, debug: bool = False) -> Optional[int]:
         )
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         if debug:
-            print(f"\nFalha ao obter versão do java...\nPath: {cmd} | Erro: {repr(e)}\n")
+            logger.warning("Falha ao obter a versão do java (%s): %s", cmd, type(e).__name__)
         return None
 
     for line in java_info.splitlines():
@@ -157,7 +196,7 @@ def java_major_version(cmd: str, debug: bool = False) -> Optional[int]:
             return int(found.group(1))
 
     if debug:
-        print(f"\nFalha ao obter versão do java...\nPath: {cmd} | Erro: saída sem a linha version\n")
+        logger.warning("Falha ao obter a versão do java (%s): saída sem a linha version", cmd)
     return None
 
 
@@ -696,7 +735,9 @@ def run_lavalink(
     lavalink_java_path: str = "",
     lavalink_home: str = "",
     lavalink_offline: bool = False,
+    report: Optional[BootReport] = None,
 ):
+    """Sobe o Lavalink local; com um ``report`` as etapas Java e Lavalink saem como linhas de subida, sem ele ficam em DEBUG."""
     arch, osname = platform.architecture()
     jdk_platform = f"{platform.system()}-{arch}-{osname}"
 
@@ -718,29 +759,41 @@ def run_lavalink(
         lavalink_offline=lavalink_offline,
     )
 
+    java_major = java_major_version(java_cmd)
+    step = report.step if report is not None else _debug_step
+    step("Java", "ok" if java_major is not None else "warn", f"versão {java_major or 'desconhecida'}")
+
     java_args = _java_command(
         java_cmd,
         home=home,
         cpu_cores=lavalink_cpu_cores,
         ram_limit=lavalink_ram_limit,
         initial_ram=lavalink_initial_ram,
-        java_major=java_major_version(java_cmd),
+        java_major=java_major,
     )
 
-    print(
-        "🌋 - Iniciando o servidor Lavalink (dependendo da hospedagem o lavalink pode demorar iniciar, "
-        "o que pode ocorrer falhas em algumas tentativas de conexão até ele iniciar totalmente)."
+    step(
+        "Lavalink local",
+        "ok",
+        "iniciando (dependendo da hospedagem pode demorar, e algumas tentativas de conexão podem falhar até ele subir)",
     )
 
     lavalink_process = subprocess.Popen(
         java_args,
         stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         env=lavalink_child_env(youtube_oauth_refresh_token),
         cwd=home,
     )
 
+    if (java_stderr := getattr(lavalink_process, "stderr", None)) is not None:
+        threading.Thread(target=_forward_java_stderr, args=(java_stderr,), name="lavalink-stderr", daemon=True).start()
+
     if lavalink_additional_sleep:
-        print(f"🕙 - Aguarde {lavalink_additional_sleep} segundos...")
+        logger.info("Aguardando %s segundos...", lavalink_additional_sleep)
         time.sleep(lavalink_additional_sleep)
 
     return lavalink_process
