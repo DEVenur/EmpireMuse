@@ -282,9 +282,16 @@ def fechou_com(codigo, razao, jogador):
 @pytest.mark.asyncio
 class TestRazaoDoNo:
     async def linhas(self, destinos, razao):
+        """As linhas do aviso, UMA lista por destino (console e arquivo); exige que cada destino tenha recebido o aviso antes de qualquer checagem de conteúdo."""
         jogador = jogador_de_voz(10)
         await PlayerEventsMixin.hook(jogador, fechou_com(4006, razao, jogador))
-        return [linha for texto in destinos.textos() for linha in texto.splitlines() if "Erro no canal de voz" in linha]
+        por_destino = [
+            [linha for linha in texto.splitlines() if "Erro no canal de voz" in linha] for texto in destinos.textos()
+        ]
+        assert len(por_destino) == 2, "esperados dois destinos (console e arquivo)"
+        for linhas_do_destino in por_destino:
+            assert len(linhas_do_destino) == 1, f"o aviso devia chegar uma vez em cada destino: {linhas_do_destino}"
+        return [linha for linhas_do_destino in por_destino for linha in linhas_do_destino]
 
     async def test_a_one_megabyte_reason_is_cut_at_a_thousand_characters(self, destinos):
         for linha in await self.linhas(destinos, "R" * 1_000_000):
