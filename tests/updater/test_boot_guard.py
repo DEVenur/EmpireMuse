@@ -398,3 +398,30 @@ def test_the_restore_gets_the_target_commit_so_it_can_remove_what_the_target_add
 
     argvs = [[str(a) for a in args] for args in gravador.chamadas]
     assert any("diff" in a and "--diff-filter=A" in a and anterior in a and ALVO_DO_CENARIO["sha"] in a for a in argvs)
+
+
+@pytest.mark.parametrize("status_e_boots", [("applying", 0), ("pending", 2)], ids=["applying", "pending-no-3o-boot"])
+def test_a_giving_up_that_cannot_be_recorded_does_not_exit_75_in_a_loop(mundo, monkeypatch, caplog, status_e_boots):
+    """D11: com o ``RUNTIME_DIR`` sem escrita cada boot releria ``restore_attempts=3``, falharia ao gravar a desistência e sairia com 75 de novo."""
+    status, boots = status_e_boots
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, dataclasses.replace(pendente(anterior, boots=boots, status=status), restore_attempts=3))
+    sempre_sem_espaco(monkeypatch)
+    gravador = Gravador()
+    head = git(repo, "rev-parse", "HEAD")
+
+    with caplog.at_level(logging.ERROR):
+        for _ in range(8):
+            guardar(mundo, gravador)  # nenhuma subida sai com 75
+
+    assert gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head
+    assert "confira o servidor" in caplog.text
+
+
+def test_with_a_working_disk_giving_up_still_records_rolled_back_with_four_attempts_and_exits_75(mundo):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, dataclasses.replace(pendente(anterior, boots=0, status="applying"), restore_attempts=3))
+
+    assert subir(mundo, Gravador()) == EXIT_RESTART
+
+    assert em_disco(runtime)["status"] == "rolled_back" and em_disco(runtime)["restore_attempts"] == 4
