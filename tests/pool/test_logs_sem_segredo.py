@@ -5,6 +5,7 @@ bot e provedores são fakes; o ``sleep`` dos backoffs é trocado: nada dorme nem
 """
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -72,13 +73,15 @@ def node_falso(**campos) -> Node:
     return node
 
 
-async def test_node_connect_failure_message_has_no_header(capsys):
+async def test_node_connect_failure_message_has_no_header(capsys, caplog):
     """(C) ``Node.connect``: a última falha é impressa como causa."""
+    caplog.set_level(logging.INFO)
     await node_falso().connect()
 
     saida = capsys.readouterr()
-    sem_segredo(saida.out + saida.err)
-    assert "Falha ao conectar no servidor [NODE-X]" in saida.out and "HTTP 200" in saida.out
+    visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
+    sem_segredo(visivel)
+    assert "Falha ao conectar no servidor [NODE-X]" in visivel and "HTTP 200" in visivel
 
 
 async def test_get_tracks_json_parse_error_has_no_header():
@@ -90,8 +93,9 @@ async def test_get_tracks_json_parse_error_has_no_header():
     assert "NODE-X" in str(erro.value) and "HTTP 200" in str(erro.value)
 
 
-async def test_node_reconnect_message_has_no_header(capsys):
+async def test_node_reconnect_message_has_no_header(capsys, caplog):
     """(E) a reconexão imprime o erro de cada tentativa (node que não é o LOCAL)."""
+    caplog.set_level(logging.INFO)
     node = node_falso(
         players={},
         session_id=None,
@@ -108,8 +112,9 @@ async def test_node_reconnect_message_has_no_header(capsys):
     await cog.node_reconnect(node)
 
     saida = capsys.readouterr()
-    sem_segredo(saida.out + saida.err)
-    assert "Falha ao reconectar no servidor [NODE-X]" in saida.out and "HTTP 200" in saida.out
+    visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
+    sem_segredo(visivel)
+    assert "Falha ao reconectar no servidor [NODE-X]" in visivel and "HTTP 200" in visivel
 
 
 def ctx_e_bot(**config):
@@ -177,19 +182,22 @@ async def test_check_node_http_status_failure_logs_only_the_status(monkeypatch, 
 
 
 @pytest.mark.parametrize("status", [401, 500])
-async def test_node_connect_http_status_failure_logs_only_the_status(capsys, status):
+async def test_node_connect_http_status_failure_logs_only_the_status(capsys, caplog, status):
+    caplog.set_level(logging.INFO)
     node = node_falso()
     node.session = node._client.bot.session = SessaoComStatus(status)
 
     await node.connect()
 
     saida = capsys.readouterr()
-    sem_segredo(saida.out + saida.err)
-    assert "Falha ao conectar no servidor [NODE-X]" in saida.out and f"HTTP {status}" in saida.out
+    visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
+    sem_segredo(visivel)
+    assert "Falha ao conectar no servidor [NODE-X]" in visivel and f"HTTP {status}" in visivel
 
 
 @pytest.mark.parametrize("status", [401, 500])
-async def test_node_reconnect_http_status_failure_logs_only_the_status(capsys, status):
+async def test_node_reconnect_http_status_failure_logs_only_the_status(capsys, caplog, status):
+    caplog.set_level(logging.INFO)
     node = node_falso(
         players={},
         session_id=None,
@@ -207,5 +215,6 @@ async def test_node_reconnect_http_status_failure_logs_only_the_status(capsys, s
     await cog.node_reconnect(node)
 
     saida = capsys.readouterr()
-    sem_segredo(saida.out + saida.err)
-    assert "Falha ao reconectar no servidor [NODE-X]" in saida.out and f"HTTP {status}" in saida.out
+    visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
+    sem_segredo(visivel)
+    assert "Falha ao reconectar no servidor [NODE-X]" in visivel and f"HTTP {status}" in visivel
