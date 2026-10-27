@@ -60,18 +60,18 @@ jobs:
           echo "code=$CODE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Resultado da detecção de código: code=$CODE_CHANGED"
 
-      - name: Configurar Python 3.13
+      - name: Configurar Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Instalar uv
-        run: python -m pip install "uv==0.13.1"
+        run: python -m pip install --require-hashes -r .github/ci-uv-requirements.txt
 
       - name: Verificar integridade e sincronia dos lockfiles
         run: |
           uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --exclude-newer-package setuptools=2026-10-19T20:20:00Z requirements.txt -o requirements-lock.txt
-          uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
+          uv pip compile --generate-hashes --universal --exclude-newer 2026-10-20T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
           git diff --exit-code requirements-lock.txt requirements-dev-lock.txt
 
       - name: Instalar dependências com hashes
@@ -91,6 +91,84 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         continue-on-error: true
         run: mypy
+
+      - name: Execução dos testes smoke (pytest)
+        if: steps.detect-changes.outputs.code == 'true'
+        run: pytest -q -m smoke -p no:cacheprovider
+
+      - name: Execução dos testes automatizados (pytest)
+        if: steps.detect-changes.outputs.code == 'true'
+        run: pytest -q --durations=30 --cov --cov-report=term-missing:skip-covered
+
+      - name: Cobertura das áreas críticas (≥ 90%)
+        if: steps.detect-changes.outputs.code == 'true'
+        run: coverage report --fail-under=90 --skip-covered --include="empiremuse/panel/*,empiremuse/web_app.py,empiremuse/rpc_protocol.py,empiremuse/rules/*,empiremuse/config_loader.py,empiremuse/utils/db.py,empiremuse/serialization/*,empiremuse/utils/music/legacy_notice.py,empiremuse/utils/music/session_store.py"
+
+  ci-py315:
+    name: CI Python 3.15 (não bloqueante)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detectar alterações em código
+        id: detect-changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "Evento '$EVENT_NAME': execução completa ativada."
+            exit 0
+          fi
+
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          DIFF_FILES=$(git diff --name-only "origin/$BASE_REF...HEAD" 2>/dev/null || git diff --name-only "origin/$BASE_REF" HEAD)
+          echo "Arquivos alterados no PR:"
+          echo "$DIFF_FILES"
+
+          CODE_CHANGED="false"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              *.py|empiremuse/*|tests/*|data/*|.example.env|requirements*|*/requirements*|pyproject.toml|*/pyproject.toml|Dockerfile|*/Dockerfile|.github/workflows/*)
+                echo "Arquivo de código/configuração detectado: $file"
+                CODE_CHANGED="true"
+                break
+                ;;
+            esac
+          done <<< "$DIFF_FILES"
+
+          echo "code=$CODE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Resultado da detecção de código: code=$CODE_CHANGED"
+
+      - name: Configurar Python 3.15
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.15"
+          allow-prereleases: true
+
+      - name: Instalar uv
+        run: python -m pip install --require-hashes -r .github/ci-uv-requirements.txt
+
+      - name: Instalar dependências com hashes
+        run: |
+          uv pip install --system --require-hashes -r requirements-lock.txt -r requirements-dev-lock.txt
+
+      - name: Verificação de lint (ruff check)
+        run: ruff check .
+
+      - name: Verificação de formatação (ruff format)
+        run: ruff format --check .
+
+      - name: Verificação de compilação de bytecode
+        run: python -m compileall -q main.py empiremuse
 
       - name: Execução dos testes smoke (pytest)
         if: steps.detect-changes.outputs.code == 'true'

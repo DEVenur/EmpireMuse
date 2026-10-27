@@ -118,7 +118,7 @@ class PlayerLifecycleMixin:
 
         try:
             invite = global_data["listen_along_invites"][str(vc.id)]
-        except (AttributeError, KeyError):
+        except AttributeError, KeyError:
             invite = ""
 
         if invite:

@@ -289,7 +289,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
                 try:
                     if inter.author.id not in bot.music.players[guild.id].last_channel.voice_states:
                         raise DiffVoiceChannel()
-                except (KeyError, AttributeError):
+                except KeyError, AttributeError:
                     pass
 
             else:

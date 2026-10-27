@@ -117,7 +117,7 @@ class DiscordOAuthClient:
                     return await response.json(content_type=None)
         except DiscordOAuthError:
             raise
-        except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError):
+        except aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError:
             raise DiscordOAuthError("Falha de comunicação com o Discord.") from None
 
 
@@ -187,7 +187,7 @@ def parse_managed_guilds(raw: list[dict]) -> tuple[ManagedGuild, ...]:
                 permissions=permissions,
                 owner=bool(item.get("owner", False)),
             )
-        except (AttributeError, KeyError, TypeError, ValueError):
+        except AttributeError, KeyError, TypeError, ValueError:
             continue
         if guild.owner or permissions & MANAGEMENT_PERMISSIONS:
             guilds.append(guild)

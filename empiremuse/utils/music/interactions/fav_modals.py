@@ -123,7 +123,7 @@ class FavModalImport(disnake.ui.Modal):
     async def callback(self, inter: disnake.ModalInteraction, /) -> None:
         try:
             json_data = json.loads(inter.text_values["json_data"])
-        except (ValueError, RecursionError):
+        except ValueError, RecursionError:
             logger.exception("Importação de favoritos/links/integrações: JSON inválido")
             await inter.send(
                 "**Ocorreu um erro ao analisar os dados ou foi enviado dados inválidos/não-formatado "
@@ -510,7 +510,7 @@ class FavModalAdd(disnake.ui.Modal):
         """Adiciona/edita uma integração a partir do link de um perfil; ``False`` se nada foi gravado."""
         try:
             await inter.response.defer(ephemeral=True, with_message=True)
-        except (disnake.HTTPException, disnake.InteractionResponded):
+        except disnake.HTTPException, disnake.InteractionResponded:
             pass
 
         work = deepcopy(await self.view.bot.get_global_data(inter.author.id, db_name=DBModel.users))
@@ -665,7 +665,7 @@ class FavModalAdd(disnake.ui.Modal):
         else:
             base_url, label = f"https://soundcloud.com/{soundcloud_regex.search(url).group(1)}/sets", "[SC]:"
 
-        loop = self.view.bot.loop or asyncio.get_event_loop()
+        loop = self.view.bot.loop or asyncio.get_running_loop()
 
         try:
             info = await loop.run_in_executor(

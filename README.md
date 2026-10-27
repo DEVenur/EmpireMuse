@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://discord.gg/KgtyNg9U6H"><img src="https://img.shields.io/badge/Discord-EmpireHUB-8B5CF6?logo=discord&logoColor=white" alt="Discord EmpireHUB"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Licen%C3%A7a-GPL--2.0-blue.svg" alt="Licença GPL-2.0"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white" alt="Python 3.14"></a>
   <a href="https://github.com/EmpireCommunity/EmpireMuse/actions/workflows/ci.yml"><img src="https://github.com/EmpireCommunity/EmpireMuse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -19,7 +19,7 @@
 
 ## Sobre o Projeto
 
-O **EmpireMuse** é o bot de música oficial da comunidade [EmpireHUB](https://discord.gg/KgtyNg9U6H). Desenvolvido em **Python 3.13** com o framework [disnake](https://github.com/DisnakeDev/disnake), o bot conta com processamento de áudio externo de alta fidelidade baseado no ecossistema [Lavalink v4](https://github.com/lavalink-devs/Lavalink) e NodeLink, arquitetura multi-instância em pool e interface visual rica para usuários e administradores no Discord.
+O **EmpireMuse** é o bot de música oficial da comunidade [EmpireHUB](https://discord.gg/KgtyNg9U6H). Desenvolvido em **Python 3.14** com o framework [disnake](https://github.com/DisnakeDev/disnake), o bot conta com processamento de áudio externo de alta fidelidade baseado no ecossistema [Lavalink v4](https://github.com/lavalink-devs/Lavalink) e NodeLink, arquitetura multi-instância em pool e interface visual rica para usuários e administradores no Discord.
 
 > O **EmpireMuse** é uma obra derivada e evolução contínua do [MuseHeart-MusicBot](https://github.com/zRitsu/MuseHeart-MusicBot), criado por **zRitsu** e distribuído sob a licença **GPL-2.0** (consulte [LICENSE](LICENSE) e [CREDITS.md](CREDITS.md)).
 

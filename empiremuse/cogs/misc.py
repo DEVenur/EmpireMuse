@@ -565,7 +565,7 @@ class Misc(commands.Cog):
                         if any(m for m in p.last_channel if not m.bot):
                             paused_players_other_bots += 1
                             continue
-                    except (AttributeError, TypeError):
+                    except AttributeError, TypeError:
                         pass
                     inactive_players_other_bots += 1
 
@@ -705,7 +705,7 @@ class Misc(commands.Cog):
 
         try:
             await inter.edit_original_message(embed=embed, components=components)
-        except (AttributeError, disnake.InteractionNotEditable):
+        except AttributeError, disnake.InteractionNotEditable:
             try:
                 await inter.response.edit_message(embed=embed, components=components)
             except Exception:

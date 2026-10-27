@@ -152,7 +152,7 @@ def pack(raw: bytes) -> str:
 def _decode_base64(text: str) -> bytes:
     try:
         return b64decode(text, validate=True)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         raise _fail(ENVELOPE) from None
 
 

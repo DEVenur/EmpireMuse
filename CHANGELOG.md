@@ -14,9 +14,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Compose de produção da VPS (`deploy/docker-compose.hostinger.yml` e `deploy/env.example.hostinger`)**: o compose de arquivo único usado na VPS da Hostinger (atrás do Traefik + Cloudflare) e o modelo do `.env` só com os segredos (valores vazios); ao usar, são renomeados para `docker-compose.yml` e `.env`.
 
 ### Alterado
+- **Python 3.14 passa a ser o mínimo (mudança incompatível)**: o `ruff format` com alvo `py314` reescreveu `except (A, B):` como `except A, B:` (PEP 758) em 32 arquivos, então o código não importa mais no Python 3.13. Quem roda fora do Docker precisa do Python 3.14.
+- **Python 3.14 (item 6, fase S2)**: runtime e piso passam do 3.13 para o 3.14 na documentação (README, AGENTS.md, guias, templates do GitHub, descrição do egg) e no job `ci`; o `audioop-lts` segue condicionado ao 3.13+. Notas datadas nos ADR-0001 e ADR-0003.
+- **CI**: o uv passa a ser instalado com `--require-hashes` a partir de `.github/ci-uv-requirements.txt` (0.13.5, a mesma versão do Dockerfile), o novo job `ci-py315` roda a suíte no Python 3.15 sem bloquear o merge (`continue-on-error`).
 - **Composes em `deploy/`**: o `docker-compose.yml` base sai da raiz para `deploy/docker-compose.yml` (lê o `.env` e o `.env.mongo` da raiz; uso: `docker compose -f deploy/docker-compose.yml --env-file .env up -d`), ao lado do override do Traefik.
 - **Documentação**: `release.md` descreve o fluxo de patch atual (sem release candidate, `verify-ci` no lugar de `test` e o passo de implantação na VPS) e quando publicar (uma release junta vários merges; merge não gera imagem); `docker.md` e `pterodactyl.md` sem o aviso de tags "a partir da 2.0.0"; LL-binaries 0.0.4 em `youtube-oauth.md`, `development.md` e `atualizar-lavalink.md`; título do ADR-0003 no índice dos ADRs.
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
+
+### Segurança
+- **Imagem Docker em Python 3.14.10 e uv 0.13.5**: a base `python:3.14-slim-trixie` fixada por digest e o uv 0.13.5 (corrige GHSA-hq85-5cpj-mr62), escolhido por estar fora da quarentena de 7 dias.
+- **Raízes emSign C1 e ECC C3 desconfiadas na imagem**: desativadas em `/etc/ca-certificates.conf` (a CA eMudhra foi removida do `certifi` 2026.10.23, mas o Debian ainda a confiava).
 
 ### Removido
 - **Submódulos git** (`.gitmodules` e os links em `repos/`): `EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app` e `EmpireMuse-jishaku` passam a ser clones irmãos na raiz do workspace; ignores, workspace do VS Code, cobertura, `.coderabbit.yaml`, `AGENTS.md`, `docs/development.md`, ADR-0003 e o teste do RPC atualizados.

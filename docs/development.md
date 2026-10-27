@@ -7,7 +7,7 @@ Como preparar o ambiente para desenvolver e testar o EmpireMuse. Para entender o
 
 | Item | Versão | Observação |
 |---|---|---|
-| Python | **3.13** | O ambiente validado usa 3.13 (`audioop-lts` só é exigido a partir dele, `requirements.txt:30`). |
+| Python | **3.14** | Runtime e **mínimo** do projeto (item 6): o código usa `except A, B:` (PEP 758) e não importa no 3.13. A CI também roda o 3.15 sem bloquear. `audioop-lts` (`requirements.txt`) cobre o módulo que saiu da biblioteca padrão. |
 | [uv](https://docs.astral.sh/uv/) | recente | Gerenciador de venv/pacotes recomendado. |
 | Git | qualquer | Só para clonar o repositório e os submódulos; nenhuma dependência Python é instalada via Git. |
 | Java | **17+** | **Só** se for rodar o Lavalink local. Sem Java 17+, o bot tenta baixar um JDK sozinho (`validate_java` e `run_lavalink` em `empiremuse/utils/music/local_lavalink.py`). |
@@ -19,7 +19,7 @@ Como preparar o ambiente para desenvolver e testar o EmpireMuse. Para entender o
 git clone https://github.com/EmpireCommunity/EmpireMuse.git
 cd EmpireMuse
 
-uv venv --python 3.13
+uv venv --python 3.14
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
 uv pip install --require-hashes -r requirements-lock.txt
@@ -177,10 +177,10 @@ uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-as
 
 | Ferramenta | Status | Uso |
 |---|---|---|
-| `ruff` | **Ativo** | Linter e formatador configurado em `pyproject.toml` (target Python 3.13, line-length 120, regras `E4`, `E7`, `E9`, `F`). |
+| `ruff` | **Ativo** | Linter e formatador configurado em `pyproject.toml` (target Python 3.14, line-length 120, regras `E4`, `E7`, `E9`, `F`). |
 | `pytest` + `pytest-asyncio` + `pytest-cov` | **Ativo** | Testes por risco (ver `.claude/rules/empiremuse/testing.md`); piso de cobertura no `pyproject.toml` (`fail_under`, nunca cai) e meta de 70%. |
 | `compileall` | **Ativo** | Validação sintática e compilação de bytecode (`python -m compileall -q main.py empiremuse`). |
-| `mypy` | **Ativo** | Checagem estática de tipos configurada em `pyproject.toml` (target Python 3.13, baseline gradual com checagem ativa em `empiremuse.rules.*`). |
+| `mypy` | **Ativo** | Checagem estática de tipos configurada em `pyproject.toml` (target Python 3.14, baseline gradual com checagem ativa em `empiremuse.rules.*`). |
 | `uv` | **Ativo** | Gerenciamento de dependências e arquivos de lock universais com integridade estrita via hash (`requirements-lock.txt` e `requirements-dev-lock.txt`). |
 
 ### Regeneração e sincronia dos lockfiles
@@ -192,7 +192,7 @@ Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.tx
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --exclude-newer-package setuptools=2026-10-19T20:20:00Z requirements.txt -o requirements-lock.txt
 
 # Lock universal de desenvolvimento
-uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-20T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
 ```
 
 #### Justificativa das isenções pontuais de corte temporal

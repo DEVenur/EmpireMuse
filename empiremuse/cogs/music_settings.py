@@ -742,7 +742,7 @@ class MusicSettings(commands.Cog):
                 await inter.send(embed=embed)
         try:
             await inter.edit_original_message(embed=embed, components=None)
-        except (AttributeError, disnake.InteractionNotEditable):
+        except AttributeError, disnake.InteractionNotEditable:
             try:
                 await inter.response.edit_message(embed=embed, components=None)
             except Exception:

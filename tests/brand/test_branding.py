@@ -130,7 +130,7 @@ def _list_repo_files() -> list[str]:
         try:
             tracked = _git_lines("ls-files", "-z")
             untracked = _git_lines("ls-files", "-z", "--others", "--exclude-standard")
-        except (OSError, subprocess.CalledProcessError):
+        except OSError, subprocess.CalledProcessError:
             tracked, untracked = [], _walk_files(ROOT)
     else:
         tracked, untracked = [], _walk_files(ROOT)

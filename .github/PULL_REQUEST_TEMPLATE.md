@@ -30,7 +30,7 @@ Descreva detalhadamente os procedimentos executados para validar as alterações
 2. **Testes manuais**:
    <!-- Cenários simulados (ex.: reprodução de faixa Spotify/YouTube via Lavalink, comando /play, desconexão de canal) -->
 3. **Ambiente utilizado**:
-   <!-- SO, versão do Python (3.13), versão do Lavalink/NodeLink -->
+   <!-- SO, versão do Python (3.14), versão do Lavalink/NodeLink -->
 
 ---
 

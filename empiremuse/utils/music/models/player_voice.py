@@ -162,8 +162,8 @@ class PlayerVoiceMixin:
                 return True
 
         if isinstance(self.text_channel, disnake.Thread):
-            check = (
-                lambda m: m.id != self.last_message_id
+            check = lambda m: (
+                m.id != self.last_message_id
                 and not not m.pinned
                 and check_current_message(m)
                 and (not m.is_system() or m.type != disnake.MessageType.channel_name_change)

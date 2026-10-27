@@ -36,7 +36,7 @@ class ControllerDispatchMixin:
             if message.id != player.message.id:
                 return
 
-        except (AttributeError, KeyError):
+        except AttributeError, KeyError:
             return
 
         thread = self.bot.get_channel(message.id)
@@ -151,7 +151,7 @@ class ControllerDispatchMixin:
             channel_db = bot.get_channel(int(static_player["channel"])) or await bot.fetch_channel(
                 int(static_player["channel"])
             )
-        except (TypeError, disnake.NotFound):
+        except TypeError, disnake.NotFound:
             channel_db = None
         except disnake.Forbidden:
             channel_db = bot.get_channel(inter.channel_id)
@@ -294,7 +294,7 @@ class ControllerDispatchMixin:
             player.interaction_cooldown = True
             await asyncio.sleep(1)
             player.interaction_cooldown = False
-        except (KeyError, AttributeError):
+        except KeyError, AttributeError:
             pass
 
     @commands.Cog.listener("on_dropdown")

@@ -60,11 +60,6 @@ from empiremuse.utils.others import CustomContext, token_regex, sort_dict_recurs
 from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
 
-if os.name != "nt":
-    import uvloop
-
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
 logger = logging.getLogger(__name__)
 
 
@@ -309,7 +304,7 @@ class BotPool:
         self.stop_lavalink()
 
         if not self.loop:
-            self.loop = asyncio.get_event_loop()
+            self.loop = asyncio.get_running_loop()
 
         try:
             process = await self.loop.run_in_executor(
@@ -459,7 +454,7 @@ class BotPool:
 
         try:
             max_retries = int(data.get("retries")) or 1
-        except (TypeError, KeyError):
+        except TypeError, KeyError:
             max_retries = 1
 
         headers = {"Authorization": data["password"]}
@@ -824,13 +819,13 @@ class BotPool:
         try:
             self.commit = check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode("ascii").strip()
             print(f"📥 - Commit ver: {self.commit}")
-        except (OSError, subprocess.CalledProcessError, UnicodeDecodeError):
+        except OSError, subprocess.CalledProcessError, UnicodeDecodeError:
             self.commit = None
 
         try:
             remotes = check_output(["git", "remote", "-v"], stderr=subprocess.DEVNULL).decode("utf-8", "replace")
             self.remote_git_url = parse_remote_web_url(remotes)
-        except (OSError, subprocess.CalledProcessError):
+        except OSError, subprocess.CalledProcessError:
             pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
         if not self.remote_git_url:
@@ -879,7 +874,7 @@ class BotPool:
         def load_bot(bot_name: str, token: str, guild_id: str = None, load_modules_log: bool = False):
             try:
                 token = token.split().pop()
-            except (AttributeError, IndexError):
+            except AttributeError, IndexError:
                 pass
 
             if not token:
@@ -1066,7 +1061,12 @@ class BotPool:
 
         load_modules_log = True
 
-        self.loop = asyncio.new_event_loop()
+        if os.name != "nt":
+            import uvloop
+
+            self.loop = uvloop.new_event_loop()
+        else:
+            self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
 
         for k, v in all_tokens.items():
@@ -1325,7 +1325,7 @@ class BotCore(commands.AutoShardedBot):
             player: LavalinkPlayer = self.music.players[message.guild.id]
             if player.text_channel == message.channel and not message.flags.ephemeral:
                 player.last_message_id = message.id
-        except (KeyError, AttributeError):
+        except KeyError, AttributeError:
             pass
 
         if isinstance(message.channel, disnake.StageChannel):
@@ -1574,7 +1574,7 @@ class BotCore(commands.AutoShardedBot):
                         if not self.bot_ready and load_modules_log:
                             print(f"🟦 - {bot_name} - {filename}.py Recarregado.")
                         load_status["reloaded"].append(f"{filename}.py")
-                    except (commands.ExtensionAlreadyLoaded, commands.ExtensionNotLoaded):
+                    except commands.ExtensionAlreadyLoaded, commands.ExtensionNotLoaded:
                         try:
                             self.load_extension(module_filename)
                             if not self.bot_ready and load_modules_log:

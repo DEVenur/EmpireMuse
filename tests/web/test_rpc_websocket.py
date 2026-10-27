@@ -978,7 +978,7 @@ async def _tentar_enviar(ws, payload: dict) -> None:
     """Envia, aceitando que o servidor já possa ter fechado a conexão (o que é o esperado para quem não é bot)."""
     try:
         await ws.send_json(payload)
-    except (ConnectionError, aiohttp.ClientError, RuntimeError):
+    except ConnectionError, aiohttp.ClientError, RuntimeError:
         pass
 
 

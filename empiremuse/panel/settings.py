@@ -65,7 +65,7 @@ def _bounded_int(config: Mapping[str, Any], key: str, default: int, bounds: tupl
     raw = config.get(key, default)
     try:
         number = int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise PanelConfigError(f"{key} deve ser um número inteiro.") from None
     if isinstance(raw, bool) or not bounds[0] <= number <= bounds[1]:
         raise PanelConfigError(f"{key} deve estar entre {bounds[0]} e {bounds[1]}.")
