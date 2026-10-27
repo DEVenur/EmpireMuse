@@ -9,6 +9,7 @@ só grava as chamadas e delega ao ``run_exec`` real; o resto (``update-state.jso
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -770,3 +771,29 @@ def test_an_unexpected_error_with_a_good_restore_reraises_the_original_and_clear
         aplicar(plano, local, python_falso, tmp_path, roteiro(plano, smoke=RuntimeError("boom")))
 
     assert head(local) == plano.prev_sha and not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_a_failed_restore_logs_the_original_failure_too_when_it_is_a_safe_update_error(
+    mundo, python_falso, tmp_path, caplog
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, smoke=git_flow.ExecResult(1, "falhou"), restore=git_flow.ExecResult(1, "falhou"))
+
+    with caplog.at_level(logging.ERROR), pytest.raises(git_flow.UpdateRollbackFailed):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    erros = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert any(plano.prev_sha in m and "o teste de fumaça do código novo falhou" in m for m in erros), erros
+
+
+def test_a_failed_restore_logs_only_the_type_of_an_unexpected_original_failure(mundo, python_falso, tmp_path, caplog):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, smoke=RuntimeError("boom-secreto"), restore=git_flow.ExecResult(1, "falhou"))
+
+    with caplog.at_level(logging.ERROR), pytest.raises(git_flow.UpdateRollbackFailed):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert any("RuntimeError" in r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR)
+    assert "boom-secreto" not in caplog.text  # nem na mensagem, nem no traceback encadeado

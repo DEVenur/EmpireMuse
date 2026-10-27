@@ -5,6 +5,7 @@ comando. Sem relógio real: a expiração da janela é ``view.on_timeout()`` e a
 """
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -551,3 +552,18 @@ async def test_a_failed_rollback_tells_the_channel_and_still_restarts_so_the_boo
     assert descricao.startswith("❌") and "próximo início" in descricao
     cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)
     assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_failed_rollback_is_recorded_as_an_error_in_the_log(cog, ambiente, monkeypatch, caplog):
+    from empiremuse.updater.git_flow import UpdateRollbackFailed
+
+    modo_git(ambiente, monkeypatch)
+    erro = UpdateRollbackFailed("A reversão falhou; o bot volta para a versão anterior no próximo início.")
+    monkeypatch.setattr(legacy_cmds, "apply_git_update", AsyncMock(side_effect=erro))
+    view = await oferecer(cog, ctx_prefixo())
+
+    with caplog.at_level(logging.ERROR):
+        await view.confirm.callback(clique())
+
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR and r.name == legacy_cmds.logger.name]
+    cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)  # o reinício continua
