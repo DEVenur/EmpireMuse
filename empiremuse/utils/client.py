@@ -266,7 +266,7 @@ class BotPool:
             logger.warning("Falha ao entregar o aviso de atualização", exc_info=True)
 
     async def _watch_pool_ready(self) -> None:
-        """Reavalia o pool até ele ficar saudável: os nós conectam depois do ``initial_setup`` e nenhum evento avisa."""
+        """Reavalia o pool até ele ficar saudável: os nós conectam depois do ``initial_setup``; o evento é por bot e a disponibilidade pode oscilar, então o polling é mais simples."""
         while not self.update_ready_checked:
             await asyncio.sleep(UPDATE_WATCH_INTERVAL)
             await self.check_pool_ready()

@@ -450,26 +450,22 @@ class Owner(commands.Cog):
         latest = await latest_official_version()
         installed = image_version() if mode == MODE_PANEL else None
         self.log_owner_command(ctx, "update", f"{mode} {installed or '?'}->{latest or '?'}")
-        if latest is None and mode == MODE_PANEL:
+        if mode == MODE_PANEL:
+            action = "Atualize pelo painel da hospedagem: este bot roda numa imagem gerenciada por ela."
+        else:
+            target = f"da versão {latest}" if latest else "da versão mais recente"
+            action = f"Reimplante o código {target}: este bot não tem um clone git para se atualizar sozinho."
+        if latest is None:
             text = (
                 "**Não consegui consultar a versão disponível agora.**\n\n"
-                "Atualize pelo painel da hospedagem: este bot roda numa imagem gerenciada por ela.\n"
-                f"[Versões publicadas]({branding.REPO_URL}/releases)"
+                f"{action}\n[Versões publicadas]({branding.REPO_URL}/releases)"
             )
             return await self._reply_update(ctx, text)
-        if latest is None:
-            return await self._reply_update(
-                ctx, "**Não consegui consultar a versão oficial agora.** Tente de novo mais tarde."
-            )
         if installed is not None and latest <= installed:
             return await self._reply_update(ctx, f"✅ **Você já está na versão mais recente ({installed}).**")
         raw = await asyncio.get_running_loop().run_in_executor(None, fetch_remote_changelog, f"v{latest}")
         notes = changelog_sections(raw, installed or Version(0, 0, 0), latest, MANUAL_CHANGELOG_CHARS)
         link = f"{branding.REPO_URL}/blob/v{latest}/CHANGELOG.md"
-        if mode == MODE_PANEL:
-            action = "Atualize pelo painel da hospedagem: este bot roda numa imagem gerenciada por ela."
-        else:
-            action = f"Reimplante o código da versão {latest}: este bot não tem um clone git para se atualizar sozinho."
         title = f"🆕 **Versão disponível: {latest}**" + (f" (instalada: {installed})" if installed else "")
         parts = [title, notes, f"{action}\n[CHANGELOG completo]({link})"]
         return await self._reply_update(ctx, "\n\n".join(part for part in parts if part))
