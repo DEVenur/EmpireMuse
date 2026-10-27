@@ -136,3 +136,48 @@ class TestQuePermanece:
         assert entradas[".env"] == ENV_MASCARADO
         assert ".env-temp" not in entradas
         assert ".runtime/.env-temp" not in entradas
+
+
+class TestLacoEQuebrado:
+    """V-S29-1 — ``Path.resolve()`` não estrito não levanta em laço (a→b→a): o nome passa e o ``ZipFile.write`` dá ELOOP."""
+
+    def test_laco_de_links_e_link_quebrado_sao_pulados_sem_levantar(self, projeto):
+        (projeto / "a.txt").symlink_to(projeto / "b.txt")
+        (projeto / "b.txt").symlink_to(projeto / "a.txt")
+        (projeto / "quebrado.txt").symlink_to(projeto / "nao_existe.txt")
+
+        entradas = zipar(["a.txt", "quebrado.txt", "b.txt", "ok.py"])
+
+        assert entradas == {"ok.py": "print('ok')\n"}
+
+    def test_link_para_si_mesmo_e_pulado(self, projeto):
+        (projeto / "eu.txt").symlink_to(projeto / "eu.txt")
+
+        entradas = zipar(["eu.txt", "ok.py"])
+
+        assert entradas == {"ok.py": "print('ok')\n"}
+
+    def test_laco_de_diretorios_e_pulado(self, projeto):
+        (projeto / "d1").symlink_to(projeto / "d2", target_is_directory=True)
+        (projeto / "d2").symlink_to(projeto / "d1", target_is_directory=True)
+
+        entradas = zipar(["d1/x.txt", "d2/x.txt", "ok.py"])
+
+        assert entradas == {"ok.py": "print('ok')\n"}
+
+    def test_o_que_vem_depois_do_laco_continua_entrando_e_o_env_mascarado_tambem(self, projeto):
+        (projeto / "a.txt").symlink_to(projeto / "b.txt")
+        (projeto / "b.txt").symlink_to(projeto / "a.txt")
+
+        entradas = zipar(["a.txt", ".runtime/.env-temp", "dentro/real.txt", "ok.py"])
+
+        assert entradas == {".env": ENV_MASCARADO, "dentro/real.txt": "dentro\n", "ok.py": "print('ok')\n"}
+
+    def test_o_env_temp_que_e_um_laco_nao_entra_nem_derruba_o_zip(self, projeto):
+        env_temp = projeto / ".runtime" / ".env-temp"
+        env_temp.unlink()
+        env_temp.symlink_to(env_temp)
+
+        entradas = zipar([".runtime/.env-temp", "ok.py"])
+
+        assert entradas == {"ok.py": "print('ok')\n"}
