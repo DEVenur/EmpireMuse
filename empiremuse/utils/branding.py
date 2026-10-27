@@ -10,7 +10,9 @@ from pathlib import Path
 from empiremuse.paths import PROJECT_DIR
 
 BOT_NAME = "EmpireMuse"
-REPO_URL = "https://github.com/EmpireCommunity/EmpireMuse"
+GITHUB_REPO = "EmpireCommunity/EmpireMuse"
+DOCKER_IMAGE_REPO = "or4cu1o/empiremuse"
+REPO_URL = f"https://github.com/{GITHUB_REPO}"
 SOURCE_REPO_GIT = REPO_URL + ".git"
 RAW_BASE_URL = "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main"
 ASSETS_BASE_URL = RAW_BASE_URL + "/assets"

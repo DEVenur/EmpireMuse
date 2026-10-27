@@ -243,3 +243,9 @@ def raiz_falsa(monkeypatch, tmp_path):
     yield tmp_path
     _repo_files_cached.cache_clear()
     _read.cache_clear()
+
+
+def test_the_github_and_docker_repos_are_consistent_with_the_public_urls(branding):
+    """O fluxo Docker monta as URLs da API/raw e a imagem a partir destas constantes: elas têm de bater com o resto da marca."""
+    assert branding.REPO_URL == f"https://github.com/{branding.GITHUB_REPO}"
+    assert re.fullmatch(r"[a-z0-9_.-]+/[a-z0-9_.-]+", branding.DOCKER_IMAGE_REPO)

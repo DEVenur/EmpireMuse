@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import os
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -20,9 +21,19 @@ import disnake
 
 from empiremuse import paths
 from empiremuse.rules.release import Version, changelog_sections
-from empiremuse.updater.git_flow import installed_version
+from empiremuse.rules.owner_shell import collect_secret_values
+from empiremuse.updater.docker_flow import (
+    UNKNOWN_EXIT,
+    WATCH_INTERVAL,
+    WATCH_TIMEOUT,
+    describe_exit,
+    send_helper_log,
+)
+from empiremuse.updater.git_flow import UpdateError, installed_version
+from empiremuse.updater.proxy_client import HelperState, ProxyClient
 from empiremuse.updater.state import PendingUpdate, clear_pending, read_pending, write_pending
 from empiremuse.utils import branding
+from empiremuse.version import image_version
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +41,7 @@ CHANGELOG_MAX_CHARS = 3500
 COLOR_OK = 0x2ECC71
 COLOR_FAIL = 0xE74C3C
 COLOR_UNKNOWN = 0xF1C40F
+COLOR_INFO = 0x95A5A6
 
 VersionDetector = Callable[[PendingUpdate], Awaitable[Version | None]]
 
@@ -130,6 +142,111 @@ async def deliver_update_notice(
     await _send(bot, pending, build_notice(pending, running, changelog))
 
 
+async def _wait_for_helper(
+    client: ProxyClient, sleep: Callable[[float], Awaitable[Any]], timeout: float, interval: float
+) -> HelperState | None:
+    """Estado final do auxiliar; ``None`` se ele não existe, o proxy não responde ou ele ainda roda no ``timeout``."""
+    waited = 0.0
+    while True:
+        try:
+            state = await client.helper_state()
+        except UpdateError:
+            return None
+        if state is None or not state.running:
+            return state
+        if waited >= timeout:
+            return None
+        await sleep(interval)
+        waited += interval
+
+
+def build_docker_notice(
+    pending: PendingUpdate, state: HelperState | None, running: Version | None, changelog: str
+) -> disnake.Embed:
+    """Embed do resultado do fluxo Docker, decidido pelo auxiliar (código de saída) E pela versão que de fato subiu.
+
+    Saiu com 0 e a imagem é a nova → sucesso; saiu com ≠ 0 e a imagem é a antiga → falhou/voltou, com o significado do
+    código; qualquer outra combinação (auxiliar ausente, ainda rodando, versão ilegível ou inesperada) → desconhecido.
+    """
+    link = f"{branding.REPO_URL}/blob/v{pending.to_version}/CHANGELOG.md"
+    if state is not None and state.exit_code == 0 and running == pending.to_version:
+        text = f"✅ **Atualizado de {pending.from_version} para {pending.to_version}.**"
+        if changelog:
+            text += f"\n\n{changelog}"
+        return disnake.Embed(description=f"{text}\n\n[Histórico completo]({link})", colour=COLOR_OK)
+    if state is not None and state.exit_code != 0 and running == pending.from_version:
+        text = (
+            f"⚠️ **A atualização para {pending.to_version} falhou e o bot continua na versão {pending.from_version}.**"
+            f"\nMotivo: {describe_exit(state.exit_code)}."
+        )
+        return disnake.Embed(description=text, colour=COLOR_FAIL)
+    text = f"❔ **Atualização de {pending.from_version} para {pending.to_version}: {UNKNOWN_EXIT}.**"
+    return disnake.Embed(description=text, colour=COLOR_UNKNOWN)
+
+
+async def deliver_docker_notice(
+    pool: Any,
+    client: ProxyClient | None,
+    *,
+    runtime_dir: Path | None = None,
+    now: Callable[[], float] = time.time,
+    image_version_fn: Callable[[], Version | None] = image_version,
+    sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+    timeout: float = WATCH_TIMEOUT,
+    interval: float = WATCH_INTERVAL,
+) -> None:
+    """Aviso pós-boot do fluxo Docker: lê o estado do auxiliar (espera se ainda roda), confere a versão e avisa uma vez.
+
+    Com saída ≠ 0 o log do auxiliar (mascarado) vai por DM a quem pediu ANTES de o auxiliar ser removido: nos casos 70 e
+    71 o processo que acompanhava morreu na troca do container, e este aviso é a única chance de o dono ver o detalhe.
+    Sem ``client`` (proxy não configurado) o estado do auxiliar é desconhecido. O auxiliar é removido no fim (erro
+    ignorado) e o pendente é apagado ANTES do envio. Sem bot pronto não faz nada.
+    """
+    runtime_dir = runtime_dir or paths.get_runtime_dir()
+    pending = read_pending(runtime_dir, now())
+    if pending is None or pending.flow != "docker" or pending.status not in ("pending", "ready"):
+        return
+    bot = _sender(pool, pending)
+    if bot is None:
+        return
+    state = await _wait_for_helper(client, sleep, timeout, interval) if client is not None else None
+    if client is not None:
+        if state is not None and state.exit_code != 0:
+            secrets = collect_secret_values(getattr(pool, "config", {}), os.environ)
+            await send_helper_log(client, DiscordReport(bot, pending), pending, secrets)
+        try:
+            await client.remove_helper()
+        except UpdateError:
+            logger.warning("update: não consegui remover o auxiliar depois do aviso pós-boot.")
+    clear_pending(runtime_dir)  # uma única entrega, mesmo que o envio falhe
+    running = image_version_fn()
+    changelog = ""
+    if state is not None and state.exit_code == 0 and running == pending.to_version:
+        text = await asyncio.get_running_loop().run_in_executor(None, _read_text, paths.PROJECT_DIR / "CHANGELOG.md")
+        changelog = changelog_sections(text, pending.from_version, pending.to_version, CHANGELOG_MAX_CHARS)
+    await _send(bot, pending, build_docker_notice(pending, state, running, changelog))
+
+
+class DiscordReport:
+    """Mensagens do acompanhamento do auxiliar: o canal de origem (com DM de reserva) e a DM de quem pediu."""
+
+    def __init__(self, bot: Any, pending: PendingUpdate) -> None:
+        self._bot = bot
+        self._pending = pending
+
+    async def channel(self, text: str) -> None:
+        await _send(self._bot, self._pending, disnake.Embed(description=text, colour=COLOR_INFO))
+
+    async def dm(self, text: str) -> None:
+        try:
+            user = self._bot.get_user(self._pending.requested_by) or await self._bot.fetch_user(
+                self._pending.requested_by
+            )
+            await user.send(text, allowed_mentions=disnake.AllowedMentions.none())
+        except disnake.HTTPException, AttributeError:
+            logger.warning("update: não consegui mandar o log do auxiliar por DM")
+
+
 async def on_pool_ready(
     pool: Any,
     *,
@@ -151,4 +268,11 @@ async def on_pool_ready(
         return
     if pending.status == "pending":
         write_pending(runtime_dir, dataclasses.replace(pending, status="ready", boots=0))
+    if pending.flow == "docker":
+        socket = pool.config.get("UPDATE_PROXY_SOCKET")
+        if not socket:
+            logger.warning("update: pendente do fluxo Docker sem UPDATE_PROXY_SOCKET; o aviso sai como desconhecido.")
+        client = ProxyClient(socket) if socket else None
+        await deliver_docker_notice(pool, client, runtime_dir=runtime_dir, now=now)
+        return
     await deliver_update_notice(pool, runtime_dir=runtime_dir, now=now, detect_version=detect_version)

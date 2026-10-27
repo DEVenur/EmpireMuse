@@ -131,6 +131,7 @@ class BotPool:
     # Defaults de classe (como o killing_state): fakes de BotPool criados com __new__ não passam pelo __init__.
     update_ready_checked = False  # on_pool_ready roda uma vez, na primeira vez em que o pool fica saudável
     update_watch_task: Optional[asyncio.Task] = None
+    helper_watch_tasks: tuple[asyncio.Task, ...] | set[asyncio.Task] = ()
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
         sync_commands=True,
@@ -192,6 +193,7 @@ class BotPool:
         self.default_idling_skin = self.config.get("DEFAULT_IDLING_SKIN", "default")
         self.cache_updater_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
+        self.helper_watch_tasks: set[asyncio.Task] = set()  # referências fortes das tarefas do watch_helper
         # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
         self.update_lock = asyncio.Lock()
         self.nodes_expected = False  # vira True quando o pool configura ao menos um nó (local ou da lista)
@@ -497,6 +499,8 @@ class BotPool:
             self.heartbeat_task.cancel()
         if self.update_watch_task:
             self.update_watch_task.cancel()
+        for task in list(self.helper_watch_tasks):
+            task.cancel()
         for bot in self.get_all_bots():
             try:
                 if not bot.is_closed():
