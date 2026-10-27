@@ -31,6 +31,8 @@ dono → bot → proxy (socket Unix) → docker.sock → auxiliar → compose up
 4. O auxiliar não tem rede e só fala com o daemon pelo `docker.sock` (equivale a root no host, por desenho; é o daemon que baixa a imagem). Ele confere que a imagem baixada declara a versão alvo, recusa downgrade, guarda um backup do compose, troca **uma única linha** `image:` do bot e sobe o serviço com `compose up --wait`. Se falhar, restaura o compose anterior.
 5. O bot novo sobe, confere a versão que de fato subiu e o resultado do auxiliar e avisa uma vez.
 
+**Versão de teste.** Uma imagem de teste (`X.Y.Z-rc.N`, a `rc` da rehearsal da release) reconhece a própria versão e pode usar o `/update` para a próxima versão **estável** (`2.1.0-rc.2` → `2.1.0`). Só a versão **atual** pode ser de teste: o alvo é sempre estável, nunca um `rc`. Sem estável mais nova, o bot responde "✅ **Você está na versão de teste X.Y.Z-rc.N; ainda não há versão estável mais nova.**". Na imagem em modo `docker` e no modo `panel`, a linha `image:` do compose pode estar numa `X.Y.Z-rc.N@sha256:…`; o auxiliar troca essa linha pela estável e o código 67 continua valendo (alvo não é maior que a versão atual).
+
 O proxy é o arquivo único `empiremuse/updater/proxy.py`, só biblioteca padrão, rodado com `python -I -S`. A decisão e as alternativas estão no [ADR-0004](../adr/0004-auto-update-proxy.md).
 
 ### 2.1 Implantação passo a passo (compose da Hostinger)
