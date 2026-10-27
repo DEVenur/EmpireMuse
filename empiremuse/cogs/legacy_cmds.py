@@ -39,8 +39,18 @@ from empiremuse.updater.git_flow import (
     plan_git_update,
     run_exec,
 )
-from empiremuse.updater.mode import MODE_GIT, MODE_PANEL, update_mode
-from empiremuse.updater.state import UpdateRequest, read_pending
+from empiremuse.updater.docker_flow import (
+    describe_exit,
+    plan_docker_update,
+    send_helper_log,
+    start_docker_update,
+    watch_helper,
+)
+from empiremuse.updater.mode import MODE_DOCKER, MODE_GIT, MODE_PANEL, update_mode
+from empiremuse.updater.notice import DiscordReport
+from empiremuse.updater.proxy_client import ProxyClient
+from empiremuse.updater.releases import fetch_changelog, list_releases
+from empiremuse.updater.state import UpdateRequest, clear_pending, read_pending
 from empiremuse.updater.views import ConfirmView
 from empiremuse.utils import branding
 from empiremuse.utils.client import BotCore
@@ -100,6 +110,21 @@ def format_git_log(data_list: list):
         data.append({"commit": t[0], "abbreviated_commit": t[1], "subject": t[2], "timestamp": t[3]})
 
     return data
+
+
+def _pool_watch_tasks(pool) -> set[asyncio.Task]:
+    """Conjunto de tarefas de acompanhamento do auxiliar no ``pool`` (criado sob demanda em fakes sem ``__init__``)."""
+    tasks = getattr(pool, "helper_watch_tasks", None)
+    if not isinstance(tasks, set):
+        tasks = set(tasks) if tasks else set()
+        pool.helper_watch_tasks = tasks
+    return tasks
+
+
+def _finish_watch(tasks: set[asyncio.Task], task: asyncio.Task) -> None:
+    tasks.discard(task)
+    if not task.cancelled() and task.exception() is not None:
+        logger.warning("update: o acompanhamento do auxiliar terminou com erro", exc_info=task.exception())
 
 
 class CommandFailed(Exception):
@@ -429,8 +454,8 @@ class Owner(commands.Cog):
         if not await self.bot.is_owner(ctx.author):
             raise GenericError("**Apenas meu(s) desenvolvedor(es) pode(m) atualizar o bot.**")
         pool = self.bot.pool
-        if pool.update_lock.locked() or read_pending(paths.get_runtime_dir(), time.time()) is not None:
-            raise GenericError("**Já há uma atualização em andamento.** Aguarde o aviso de conclusão.")
+        if pool.update_lock.locked():
+            raise self._in_progress_error()
 
         await pool.update_lock.acquire()
         handed_over = False  # a trava passa para a janela de confirmação, que a solta ao cancelar, expirar ou terminar
@@ -439,15 +464,67 @@ class Owner(commands.Cog):
                 await (
                     ctx.response.defer()
                 )  # a consulta ao remoto passa de 3 s; o botão do painel expiraria antes da resposta
+            if (pending := read_pending(paths.get_runtime_dir(), time.time())) is not None:
+                await self._resolve_stale_pending(
+                    ctx, pending
+                )  # recusa (GenericError) ou libera um pendente Docker parado
             mode = update_mode(self.bot.config, os.environ, paths.PROJECT_DIR)
             if mode == MODE_GIT:
                 handed_over, text = await self._offer_git_update(ctx)
+            elif mode == MODE_DOCKER:
+                handed_over, text = await self._offer_docker_update(ctx)
             else:
                 text = await self._describe_manual_update(ctx, mode)
         finally:
             if not handed_over:
                 self._release_update_lock()
         return text
+
+    @staticmethod
+    def _in_progress_error() -> GenericError:
+        return GenericError("**Já há uma atualização em andamento.** Aguarde o aviso de conclusão.")
+
+    async def _resolve_stale_pending(self, ctx, pending) -> None:
+        """Pendente existente: recusa, a não ser que seja um pendente Docker cujo auxiliar já parou (ou sumiu).
+
+        Só tenta resolver com ``status == "pending"`` e sem nenhum acompanhamento deste processo vivo: com ``ready`` quem
+        resolve é o aviso pós-boot (resolver aqui entregaria o resultado duas vezes). Auxiliar rodando ou proxy
+        inacessível: recusa. Parado ou ausente: conta o resultado da atualização anterior no canal, manda o log mascarado
+        por DM quando ela falhou, remove o auxiliar e só com a remoção confirmada apaga o pendente (D12).
+        """
+        socket = self.bot.config.get("UPDATE_PROXY_SOCKET")
+        watching = any(not task.done() for task in _pool_watch_tasks(self.bot.pool))
+        if pending.flow != "docker" or pending.status != "pending" or watching or not socket:
+            raise self._in_progress_error()
+        client = ProxyClient(socket)
+        try:
+            state = await client.helper_state()
+        except UpdateError:
+            raise self._in_progress_error() from None
+        if state is not None and state.running:
+            raise self._in_progress_error()
+        # Só ``exited`` tem código de saída de verdade: um auxiliar criado e nunca iniciado (created), morto (dead) ou em
+        # remoção também não roda, mas o ExitCode dele é 0 e não quer dizer "concluída".
+        finished = state is not None and state.status == "exited"
+        code = state.exit_code if finished else None
+        await self._say(
+            ctx, f"ℹ️ **Resultado da atualização anterior (para {pending.to_version}):** {describe_exit(code)}."
+        )
+        if finished and code != 0:
+            await send_helper_log(client, DiscordReport(self.bot, pending), pending, self.secret_values())
+        try:
+            await client.remove_helper()
+        except UpdateError:
+            raise self._in_progress_error() from None
+        clear_pending(paths.get_runtime_dir())
+
+    async def _say(self, ctx, text: str) -> None:
+        """Mensagem solta no canal do comando (no painel, só para quem clicou)."""
+        embed = disnake.Embed(description=text, colour=self.bot.get_color())
+        if isinstance(ctx, CustomContext):
+            await ctx.send(embed=embed)
+        else:
+            await ctx.followup.send(embed=embed, ephemeral=True)
 
     async def _reply_update(self, ctx, text: str) -> Optional[str]:
         """No prefixo manda o embed e não devolve nada; no painel devolve o texto para o painel mostrar."""
@@ -459,10 +536,10 @@ class Owner(commands.Cog):
     async def _describe_manual_update(self, ctx, mode: str) -> Optional[str]:
         """Modos em que o bot não se atualiza sozinho (imagem gerenciada ou código solto): informa a versão e a ação do modo.
 
-        A consulta da versão depende do ``git`` do servidor, que a imagem Docker não tem: no modo ``panel`` a resposta traz
-        a ação do modo mesmo sem a versão (o fluxo Docker passa a consultar as releases do GitHub).
+        A imagem Docker não tem ``git``: no modo ``panel`` a versão vem das releases do GitHub (mesma fonte e elegibilidade
+        do fluxo Docker); no ``manual`` vem do ``ls-remote``. Sem a versão a resposta traz a ação do modo mesmo assim.
         """
-        latest = await latest_official_version()
+        latest = await (self._latest_release_version() if mode == MODE_PANEL else latest_official_version())
         installed = image_version() if mode == MODE_PANEL else None
         self.log_owner_command(ctx, "update", f"{mode} {installed or '?'}->{latest or '?'}")
         if mode == MODE_PANEL:
@@ -478,12 +555,95 @@ class Owner(commands.Cog):
             return await self._reply_update(ctx, text)
         if installed is not None and latest <= installed:
             return await self._reply_update(ctx, f"✅ **Você já está na versão mais recente ({installed}).**")
-        raw = await asyncio.get_running_loop().run_in_executor(None, fetch_remote_changelog, f"v{latest}")
+        if mode == MODE_PANEL:
+            raw = await self._release_changelog(f"v{latest}")
+        else:
+            raw = await asyncio.get_running_loop().run_in_executor(None, fetch_remote_changelog, f"v{latest}")
         notes = changelog_sections(raw, installed or Version(0, 0, 0), latest, MANUAL_CHANGELOG_CHARS)
         link = f"{branding.REPO_URL}/blob/v{latest}/CHANGELOG.md"
         title = f"🆕 **Versão disponível: {latest}**" + (f" (instalada: {installed})" if installed else "")
         parts = [title, notes, f"{action}\n[CHANGELOG completo]({link})"]
         return await self._reply_update(ctx, "\n\n".join(part for part in parts if part))
+
+    async def _latest_release_version(self) -> Optional[Version]:
+        """Maior versão publicada nas releases do GitHub (elegíveis); ``None`` se a consulta falhar ou não houver release."""
+        try:
+            async with ClientSession() as session:
+                available = await list_releases(session)
+        except UpdateError:
+            return None
+        return max((release.version for release in available), default=None)
+
+    async def _release_changelog(self, tag: str) -> str:
+        """CHANGELOG da tag nas releases do GitHub; vazio se não der (a resposta segue sem "o que mudou")."""
+        try:
+            async with ClientSession() as session:
+                return await fetch_changelog(session, tag)
+        except UpdateError:
+            return ""
+
+    async def _offer_docker_update(self, ctx) -> tuple[bool, Optional[str]]:
+        """Planeja pelas releases do GitHub e pede a confirmação (proxy configurado). Mesma devolução do fluxo git."""
+        current = image_version()
+        if current is None:
+            raise GenericError(
+                "**Não consegui identificar a versão desta imagem; atualize pelo painel da hospedagem.**"
+            )
+        try:
+            async with ClientSession() as session:
+                plan = await plan_docker_update(session, current)
+        except UpdateError as error:
+            raise GenericError(f"**{error}**") from error
+        if plan is None:
+            return False, await self._reply_update(ctx, "✅ **Você já está na versão mais recente.**")
+        self.log_owner_command(ctx, "update", f"{MODE_DOCKER} {plan.current}->{plan.target}")
+
+        channel_id = getattr(getattr(ctx, "channel", None), "id", None) or ctx.channel_id
+        request = UpdateRequest(bot_id=self.bot.user.id, channel_id=channel_id, requested_by=ctx.author.id)
+        view = ConfirmView(ctx.author.id, partial(self._apply_docker_update, plan, request), self._release_update_lock)
+        embed = disnake.Embed(colour=self.bot.get_color(), description=self._confirmation_text(plan, docker=True))
+        if isinstance(ctx, CustomContext):
+            view.message = await ctx.send(embed=embed, view=view)
+            return True, None
+        view.message = await ctx.followup.send(embed=embed, view=view, ephemeral=True, wait=True)
+        return True, "Confirmação enviada só para você."
+
+    async def _apply_docker_update(self, plan, request: UpdateRequest, interaction: disnake.MessageInteraction) -> None:
+        """Roda depois do clique em Confirmar: inicia o auxiliar e passa a acompanhá-lo. Quem troca o container é o auxiliar."""
+        self._stop_ready_check()  # o pendente é do processo NOVO; este não pode marcá-lo como pronto
+        try:
+            progress = disnake.Embed(
+                colour=self.bot.get_color(), description=f"⏳ Iniciando a atualização para {plan.target}..."
+            )
+            await interaction.response.edit_message(embed=progress, view=None)
+            client = ProxyClient(self.bot.config["UPDATE_PROXY_SOCKET"])
+            try:
+                pending = await start_docker_update(client, plan, request, paths.get_runtime_dir())
+            except UpdateError as error:
+                text = f"❌ {error}"
+            except Exception as error:
+                text = f"❌ **Falha inesperada na atualização.**{code_suffix(log_unexpected_error(logger, error, 'atualização'))}"
+            else:
+                text = (
+                    f"✅ **Atualização para {plan.target} iniciada.** O bot reinicia sozinho em instantes; "
+                    "o resultado chega neste canal."
+                )
+                self._watch_docker_update(client, pending)
+            await interaction.edit_original_message(embed=disnake.Embed(colour=self.bot.get_color(), description=text))
+        except disnake.HTTPException:
+            logger.warning("update: não consegui editar a mensagem de progresso", exc_info=True)
+        finally:
+            self._release_update_lock()
+
+    def _watch_docker_update(self, client, pending) -> None:
+        """Acompanha o auxiliar em segundo plano enquanto este processo viver (a tarefa não é cancelada por quem confirmou)."""
+        report = DiscordReport(self.bot, pending)
+        tasks = _pool_watch_tasks(self.bot.pool)
+        watcher = asyncio.create_task(
+            watch_helper(client, pending, paths.get_runtime_dir(), report, secrets=self.secret_values())
+        )
+        tasks.add(watcher)
+        watcher.add_done_callback(partial(_finish_watch, tasks))
 
     async def _offer_git_update(self, ctx) -> tuple[bool, Optional[str]]:
         """Planeja e pede a confirmação. Devolve ``(trava_entregue, texto)``; a trava só é entregue se a janela foi enviada."""
@@ -507,10 +667,10 @@ class Owner(commands.Cog):
         return True, "Confirmação enviada só para você."
 
     @staticmethod
-    def _confirmation_text(plan) -> str:
+    def _confirmation_text(plan, *, docker: bool = False) -> str:
         notes = plan.changelog or "_Esta versão não traz notas no CHANGELOG._"
         warning = "⚠️ O bot **fica indisponível** durante a atualização e reinicia ao fim."
-        if not os.environ.get("INVOCATION_ID"):
+        if not docker and not os.environ.get("INVOCATION_ID"):
             warning += "\n⚠️ Não detectei um supervisor (systemd): o bot **vai parar** e você precisará iniciá-lo à mão."
         return f"🛠️ **Atualizar de {plan.current} para {plan.target}?**\n\n{notes}\n\n{warning}"
 

@@ -9,14 +9,17 @@ import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+import pytest_asyncio
 
 from empiremuse import paths
 from empiremuse.cogs import legacy_cmds
 from empiremuse.cogs.legacy_cmds import Owner
 from empiremuse.rules.release import Version
+from empiremuse.updater import releases
 from empiremuse.updater.git_flow import EXIT_RESTART, GitPlan, UpdateError
 from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, UpdateRequest, read_pending, write_pending
@@ -412,14 +415,40 @@ async def test_a_failed_update_does_not_restart_and_frees_the_lock(cog, ambiente
 # ============================================================================ modos sem atualização automática
 
 
+def releases_do_github(monkeypatch, *, versao=PARA, falha=None, antes=None):
+    """O modo ``panel`` (imagem sem git) consulta as releases do GitHub; a lista e o CHANGELOG são trocados nos dois lugares possíveis."""
+
+    async def lista(session):
+        if antes:
+            antes()
+        if falha:
+            raise falha
+        return [releases.Release(versao, f"v{versao}", "https://exemplo.invalido/image-digest.txt")]
+
+    async def changelog(session, tag):
+        return "## [2.1.0]\n- novidade da 2.1.0\n"
+
+    for nome, fn in (("list_releases", lista), ("fetch_changelog", changelog)):
+        monkeypatch.setattr(releases, nome, fn)
+        if hasattr(legacy_cmds, nome):
+            monkeypatch.setattr(legacy_cmds, nome, fn)
+
+    def sem_ls_remote(*args, **kwargs):
+        raise AssertionError("a imagem não tem git: o modo painel não pode usar o ls-remote")
+
+    monkeypatch.setattr(legacy_cmds, "latest_official_version", sem_ls_remote)
+    monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", sem_ls_remote)
+
+
 @pytest.fixture
 def versoes(monkeypatch):
     monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=PARA))
     monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", lambda tag: "## [2.1.0]\n- novidade da 2.1.0\n")
 
 
-async def test_the_panel_mode_shows_the_version_and_points_to_the_host_panel(cog, ambiente, versoes, monkeypatch):
+async def test_the_panel_mode_shows_the_version_and_points_to_the_host_panel(cog, ambiente, monkeypatch):
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
+    releases_do_github(monkeypatch)
 
     texto = await Owner.update.callback(cog, ctx_painel())
 
@@ -427,8 +456,9 @@ async def test_the_panel_mode_shows_the_version_and_points_to_the_host_panel(cog
     assert not cog.bot.pool.update_lock.locked()
 
 
-async def test_the_panel_mode_on_the_latest_version_says_so(cog, ambiente, versoes, monkeypatch):
+async def test_the_panel_mode_on_the_latest_version_says_so(cog, ambiente, monkeypatch):
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.1.0")
+    releases_do_github(monkeypatch)
 
     texto = await Owner.update.callback(cog, ctx_painel())
 
@@ -451,7 +481,7 @@ async def test_the_prefix_command_sends_an_embed_instead_of_returning_text(cog, 
 async def test_the_panel_mode_still_points_to_the_host_panel_when_the_version_lookup_fails(cog, ambiente, monkeypatch):
     """A imagem não tem o binário do git: a consulta da versão oficial pode falhar, e o dono ainda precisa saber que atualiza pelo painel."""
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
-    monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=None))
+    releases_do_github(monkeypatch, falha=UpdateError("Não consegui consultar as versões publicadas agora."))
 
     texto = await Owner.update.callback(cog, ctx_painel())
 
@@ -496,6 +526,8 @@ def modo_com_consulta_registrada(modo: str, ambiente, monkeypatch, ctx) -> None:
         return
     if modo == "painel":
         monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
+        releases_do_github(monkeypatch, antes=lambda: vistos.append(ctx.response.defer.await_count))
+        return
     monkeypatch.setattr(legacy_cmds, "latest_official_version", consulta)
     monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", lambda tag: "## [2.1.0]\n- novidade\n")
 
@@ -537,6 +569,167 @@ async def test_a_prefix_command_is_never_deferred(cog, ambiente, monkeypatch, mo
     assert ctx.defers_na_rede == [0]
 
 
+# ============================================================================ P4: modo docker (proxy configurado em UPDATE_PROXY_SOCKET)
+
+SOCKET = "/run/empiremuse/updater.sock"
+PLANO_DOCKER = SimpleNamespace(current=DE, target=PARA, digest="sha256:" + "ab" * 32, changelog="- novidade da 2.1.0")
+
+
+class Cronologia:
+    """Anota a ordem entre a parada da checagem de ready, o início do auxiliar e o acompanhamento."""
+
+    def __init__(self, pool) -> None:
+        self.pool = pool
+        self.eventos: list[str] = []
+        self.ready_checked_no_inicio: bool | None = None
+        self.args_inicio: tuple[Any, ...] = ()
+        self.args_vigia: tuple[Any, ...] = ()
+        self.socket: str | None = None
+
+
+@pytest.fixture
+def docker(cog, ambiente, monkeypatch):
+    """Modo docker: socket configurado, imagem 2.0.0 e o fluxo (plano, início, vigia, cliente) trocado por mocks no módulo do comando."""
+    cog.bot.config = {"UPDATE_PROXY_SOCKET": SOCKET}
+    monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.0")
+    cron = Cronologia(cog.bot.pool)
+    pendente = SimpleNamespace(marca="pendente-docker", channel_id=CANAL, requested_by=DONO)
+
+    async def planejar(*args, **kwargs):
+        cron.eventos.append("plano")
+        cron.args_plano = (args, kwargs)
+        return PLANO_DOCKER
+
+    async def iniciar(*args, **kwargs):
+        cron.eventos.append("inicio")
+        cron.ready_checked_no_inicio = cog.bot.pool.update_ready_checked
+        cron.args_inicio = args
+        return pendente
+
+    async def vigiar(*args, **kwargs):
+        cron.eventos.append("vigia")
+        cron.args_vigia = args
+
+    def fabrica(caminho):
+        cron.socket = caminho
+        return SimpleNamespace(socket=caminho)
+
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", planejar)
+    monkeypatch.setattr(legacy_cmds, "start_docker_update", iniciar)
+    monkeypatch.setattr(legacy_cmds, "watch_helper", vigiar)
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", fabrica)
+    cron.pendente = pendente
+    cron.planejar, cron.iniciar = planejar, iniciar
+    return cron
+
+
+async def esperar_tarefas() -> None:
+    atual = asyncio.current_task()
+    await asyncio.gather(*(t for t in asyncio.all_tasks() if t is not atual), return_exceptions=True)
+
+
+async def test_the_docker_mode_offers_the_update_planned_from_the_image_version(cog, docker):
+    ctx = ctx_prefixo()
+
+    view = await oferecer(cog, ctx)
+
+    args, kwargs = docker.args_plano
+    assert (args[1] if len(args) > 1 else kwargs["current"]) == DE  # a versão da imagem (EMPIREMUSE_VERSION)
+    descricao = ctx.send.await_args.kwargs["embed"].description
+    assert (
+        "2.0.0" in descricao
+        and "2.1.0" in descricao
+        and "novidade da 2.1.0" in descricao
+        and "indisponível" in descricao
+    )
+    assert view is not None and cog.bot.pool.update_lock.locked()  # a trava passou para a janela
+
+
+async def test_through_the_panel_the_docker_mode_defers_first_and_sends_an_ephemeral_confirmation(cog, docker):
+    ctx = ctx_painel()
+
+    texto = await Owner.update.callback(cog, ctx)
+
+    ctx.response.defer.assert_awaited_once()
+    assert ctx.followup.send.await_args.kwargs["ephemeral"] is True and texto == "Confirmação enviada só para você."
+
+
+async def test_without_a_newer_release_the_docker_mode_says_so_and_frees_the_lock(cog, docker, monkeypatch):
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert "mais recente" in ctx.send.await_args.kwargs["embed"].description
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_planning_error_becomes_a_friendly_message_and_frees_the_lock(cog, docker, monkeypatch):
+    monkeypatch.setattr(
+        legacy_cmds,
+        "plan_docker_update",
+        AsyncMock(side_effect=UpdateError("Não consegui consultar as versões publicadas agora.")),
+    )
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "Não consegui consultar as versões publicadas agora." in erro.value.text
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_confirming_stops_the_ready_check_then_starts_the_helper_then_watches_it(cog, docker):
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    assert docker.eventos == ["plano", "inicio", "vigia"]
+    assert docker.ready_checked_no_inicio is True  # a checagem de ready do processo velho já estava encerrada
+    assert docker.socket == SOCKET
+    cliente, plano, pedido = docker.args_inicio[0], docker.args_inicio[1], docker.args_inicio[2]
+    assert cliente.socket == SOCKET and plano is PLANO_DOCKER
+    assert pedido == UpdateRequest(bot_id=BOT_ID, channel_id=CANAL, requested_by=DONO)
+    assert docker.args_vigia[1] is docker.pendente  # o acompanhamento recebe o pendente devolvido
+    interacao.edit_original_message.assert_awaited()
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_the_docker_flow_never_restarts_the_process_itself(cog, docker):
+    view = await oferecer(cog, ctx_prefixo())
+
+    await view.confirm.callback(clique())
+    await esperar_tarefas()
+
+    cog.bot.pool.shutdown.assert_not_awaited()  # quem troca o container é o auxiliar
+
+
+async def test_a_start_error_is_shown_in_the_channel_without_watching_and_frees_the_lock(cog, docker, monkeypatch):
+    monkeypatch.setattr(
+        legacy_cmds, "start_docker_update", AsyncMock(side_effect=UpdateError("proxy de atualização inacessível"))
+    )
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    descricao = interacao.edit_original_message.await_args.kwargs["embed"].description
+    assert descricao.startswith("❌") and "proxy de atualização inacessível" in descricao
+    assert "vigia" not in docker.eventos and not cog.bot.pool.update_lock.locked()
+    cog.bot.pool.shutdown.assert_not_awaited()
+
+
+async def test_the_docker_mode_refuses_a_second_update_while_one_is_pending(cog, docker, ambiente):
+    pendente_em_disco(ambiente.runtime)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and "plano" not in docker.eventos
+
+
 async def test_a_failed_rollback_tells_the_channel_and_still_restarts_so_the_boot_guard_reverts(
     cog, ambiente, monkeypatch
 ):
@@ -570,3 +763,444 @@ async def test_a_failed_rollback_is_recorded_as_an_error_in_the_log(cog, ambient
 
     assert [r for r in caplog.records if r.levelno >= logging.ERROR and r.name == legacy_cmds.logger.name]
     cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)  # o reinício continua
+
+
+# ---------------------------------------------------------------------------- P4: critérios do contrato (A16, A24, A26) que o modo docker também cumpre
+
+
+async def test_a_non_owner_is_refused_in_the_docker_mode_even_through_the_panel(cog, docker):
+    cog.bot.is_owner.return_value = False
+
+    with pytest.raises(GenericError):
+        await Owner.update.callback(cog, ctx_painel(autor=7))
+
+    assert docker.eventos == [] and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_held_pool_lock_refuses_a_second_docker_update_without_planning(cog, docker):
+    await cog.bot.pool.update_lock.acquire()
+
+    with pytest.raises(GenericError):
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert docker.eventos == [] and cog.bot.pool.update_lock.locked()  # a recusa não solta a trava de quem a tem
+
+
+async def test_the_docker_mode_is_logged_with_the_versions(cog, docker):
+    await oferecer(cog, ctx_prefixo())
+
+    argumentos = cog.log_owner_command.call_args.args
+    assert argumentos[1:] == ("update", "docker 2.0.0->2.1.0")
+
+
+async def test_only_the_author_can_confirm_the_docker_update(cog, docker):
+    """O framework chama ``interaction_check`` antes do botão: um clique de outro usuário não passa e nada é iniciado."""
+    view = await oferecer(cog, ctx_prefixo())
+
+    assert await view.interaction_check(clique(autor=999)) is False
+    assert await view.interaction_check(clique(autor=DONO)) is True
+    await esperar_tarefas()
+
+    assert docker.eventos == ["plano"] and cog.bot.pool.update_lock.locked()
+
+
+async def test_an_expired_docker_confirmation_frees_the_lock_and_starts_nothing(cog, docker):
+    ctx = ctx_prefixo()
+    view = await oferecer(cog, ctx)
+
+    await view.on_timeout()
+
+    assert docker.eventos == ["plano"] and not cog.bot.pool.update_lock.locked()
+    assert "expirou" in ctx.send.return_value.edit.await_args.kwargs["content"]
+
+
+async def test_confirming_cancels_the_old_ready_watch_task(cog, docker):
+    cog.bot.pool.update_watch_task = Mock()
+    tarefa = cog.bot.pool.update_watch_task
+    view = await oferecer(cog, ctx_prefixo())
+
+    await view.confirm.callback(clique())
+    await esperar_tarefas()
+
+    tarefa.cancel.assert_called_once()
+
+
+async def test_an_unreachable_proxy_at_the_start_is_friendly_and_leaves_no_pending_file(
+    cog, docker, ambiente, monkeypatch
+):
+    """A26: com o início REAL (não o mock), um proxy inacessível não deixa pendente nem vigia."""
+    from empiremuse.updater import docker_flow
+
+    class ProxyMorto:
+        def __init__(self, caminho) -> None:
+            pass
+
+        async def helper_state(self):
+            raise UpdateError("proxy de atualização inacessível")
+
+    monkeypatch.setattr(legacy_cmds, "start_docker_update", docker_flow.start_docker_update)
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", ProxyMorto)
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    descricao = interacao.edit_original_message.await_args.kwargs["embed"].description
+    assert "proxy de atualização inacessível" in descricao and SOCKET not in descricao
+    assert "vigia" not in docker.eventos and not (ambiente.runtime / "update-pending.json").exists()
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_the_report_given_to_the_watcher_writes_to_the_origin_channel_and_dms_the_requester(cog, docker):
+    canal, usuario = SimpleNamespace(send=AsyncMock()), SimpleNamespace(send=AsyncMock())
+    cog.bot.get_channel = Mock(return_value=canal)
+    cog.bot.get_user = Mock(return_value=usuario)
+    view = await oferecer(cog, ctx_prefixo())
+    await view.confirm.callback(clique())
+    await esperar_tarefas()
+    relatorio = docker.args_vigia[3]
+
+    await relatorio.channel("significado do código")
+    await relatorio.dm("linha 1\nlinha 2")
+
+    cog.bot.get_channel.assert_called_with(CANAL)
+    cog.bot.get_user.assert_called_with(DONO)
+
+    def texto(mock) -> str:
+        chamada = mock.send.await_args
+        embed = chamada.kwargs.get("embed")
+        return (chamada.args[0] if chamada.args else chamada.kwargs.get("content") or "") + (
+            embed.description if embed else ""
+        )
+
+    assert "significado do código" in texto(canal) and "linha 2" in texto(usuario)
+    for destino in (canal, usuario):
+        permitido = destino.send.await_args.kwargs["allowed_mentions"]
+        assert permitido.everyone is False and permitido.users is False and permitido.roles is False
+
+
+# ---------------------------------------------------------------------------- D12: pendente docker já existente que o comando consegue resolver
+
+
+def pendente_docker_em_disco(runtime, *, status: str = "pending") -> PendingUpdate:
+    pendente = PendingUpdate(
+        flow="docker",
+        from_version=DE,
+        to_version=PARA,
+        bot_id=1,
+        channel_id=CANAL,
+        requested_by=777,
+        created_at=time.time(),
+        digest="sha256:" + "ab" * 32,
+        status=status,
+    )
+    write_pending(runtime, pendente)
+    return pendente
+
+
+class AuxiliarFalso:
+    """Cliente do proxy para o D12: ``estado`` (ou ``None``), falhas por chamada e o registro da ordem."""
+
+    def __init__(self, ctx=None) -> None:
+        from empiremuse.updater.proxy_client import HelperState
+
+        self.HelperState = HelperState
+        self.estado: Any = None
+        self.falhas: dict[str, Exception] = {}
+        self.eventos: list[str] = []
+        self.defers_no_estado: int | None = None
+        self.ctx = ctx
+
+    def parado(self, codigo: int) -> "AuxiliarFalso":
+        self.estado = self.HelperState("exited", False, codigo, "ini", "fim")
+        return self
+
+    def rodando(self) -> "AuxiliarFalso":
+        self.estado = self.HelperState("running", True, 0, "ini", "")
+        return self
+
+    async def helper_state(self):
+        self.eventos.append("state")
+        if self.ctx is not None:
+            self.defers_no_estado = self.ctx.response.defer.await_count
+        if "state" in self.falhas:
+            raise self.falhas["state"]
+        return self.estado
+
+    async def remove_helper(self):
+        self.eventos.append("remove")
+        if "remove" in self.falhas:
+            raise self.falhas["remove"]
+
+
+@pytest.fixture
+def d12(cog, docker, ambiente, monkeypatch):
+    """Modo docker com o cliente do proxy, o envio do log e o relatório do Discord trocados no módulo do comando."""
+    auxiliar = AuxiliarFalso()
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", lambda caminho: auxiliar)
+    enviar_log = AsyncMock()
+    monkeypatch.setattr(legacy_cmds, "send_helper_log", enviar_log, raising=False)
+    relatorios: list[tuple[Any, Any]] = []
+
+    def relatorio(bot, pendente):
+        relatorios.append((bot, pendente))
+        return SimpleNamespace(bot=bot, pendente=pendente)
+
+    monkeypatch.setattr(legacy_cmds, "DiscordReport", relatorio, raising=False)
+    cog.secret_values = Mock(return_value=frozenset({"SEGREDO-1"}))
+    return SimpleNamespace(
+        auxiliar=auxiliar, enviar_log=enviar_log, relatorios=relatorios, cron=docker, runtime=ambiente.runtime
+    )
+
+
+def texto_do_primeiro_envio(ctx) -> str:
+    chamada = ctx.send.await_args_list[0]
+    embed = chamada.kwargs.get("embed")
+    return (chamada.args[0] if chamada.args else chamada.kwargs.get("content") or "") + (
+        embed.description if embed else ""
+    )
+
+
+@pytest.mark.parametrize("codigo", [66, 70, 71])
+async def test_a_stopped_helper_with_a_failure_is_reported_logged_by_dm_removed_and_the_new_update_goes_on(
+    cog, d12, codigo
+):
+    from empiremuse.updater import docker_flow
+
+    pendente = pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(codigo)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(codigo) in texto_do_primeiro_envio(
+        ctx
+    )  # o resultado da anterior, no canal do pedido
+    d12.enviar_log.assert_awaited_once()
+    cliente, relatorio, pend, segredos = d12.enviar_log.await_args.args
+    assert cliente is d12.auxiliar and relatorio.pendente.requested_by == 777 == pend.requested_by
+    assert segredos == frozenset({"SEGREDO-1"}) and pend.flow == "docker"
+    assert d12.auxiliar.eventos == ["state", "remove"] and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"] and ctx.send.await_count == 2  # o plano novo foi oferecido
+    assert cog.bot.pool.update_lock.locked()  # a trava passou para a janela de confirmação
+    assert pendente.status == "pending"
+
+
+@pytest.mark.parametrize(("estado", "codigo"), [("parado", 0), ("ausente", None)], ids=["saiu-com-0", "ausente"])
+async def test_a_helper_that_finished_well_or_is_gone_is_reported_without_dm_and_the_update_goes_on(
+    cog, d12, estado, codigo
+):
+    from empiremuse.updater import docker_flow
+
+    pendente_docker_em_disco(d12.runtime)
+    if estado == "parado":
+        d12.auxiliar.parado(0)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(codigo) in texto_do_primeiro_envio(ctx)
+    d12.enviar_log.assert_not_awaited()
+    assert "remove" in d12.auxiliar.eventos and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"]
+
+
+async def test_a_running_helper_refuses_without_removing_anything(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.rodando()
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == ["state"]
+    assert (d12.runtime / "update-pending.json").exists() and d12.cron.eventos == []
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_an_unreachable_proxy_refuses_and_keeps_the_pending_update(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.falhas["state"] = UpdateError("proxy de atualização inacessível")
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == [] and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_failing_removal_refuses_and_keeps_the_pending_update(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(66)
+    d12.auxiliar.falhas["remove"] = UpdateError("não removeu")
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == [] and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_ready_docker_pending_update_is_left_to_the_post_boot_notice_without_touching_the_proxy(
+    cog, d12, monkeypatch
+):
+    pendente_docker_em_disco(d12.runtime, status="ready")
+
+    def nunca(caminho):
+        raise AssertionError("o proxy não pode ser tocado com o pendente em 'ready'")
+
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", nunca)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+
+
+async def test_a_live_watcher_of_this_process_refuses_without_touching_the_proxy(cog, d12, monkeypatch):
+    pendente_docker_em_disco(d12.runtime)
+    viva = asyncio.get_running_loop().create_future()  # nunca concluída: faz o papel da tarefa do watch_helper
+    monkeypatch.setattr(cog.bot.pool, "helper_watch_tasks", {viva}, raising=False)  # o registro vive no pool
+
+    def nunca(caminho):
+        raise AssertionError("o proxy não pode ser tocado com o vigia vivo")
+
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", nunca)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    viva.cancel()
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+
+
+async def test_the_panel_defers_before_the_proxy_is_asked_about_the_old_helper(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    ctx = ctx_painel()
+    d12.auxiliar.ctx = ctx
+    d12.auxiliar.parado(66)
+
+    await Owner.update.callback(cog, ctx)
+
+    assert d12.auxiliar.defers_no_estado == 1
+
+
+async def test_a_held_pool_lock_still_refuses_before_any_proxy_access_with_a_docker_pending_update(
+    cog, d12, monkeypatch
+):
+    pendente_docker_em_disco(d12.runtime)
+    await cog.bot.pool.update_lock.acquire()
+
+    def nunca(caminho):
+        raise AssertionError("a trava ocupada recusa antes de qualquer acesso ao proxy")
+
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", nunca)
+
+    with pytest.raises(GenericError):
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert cog.bot.pool.update_lock.locked()
+
+
+@pytest.mark.parametrize("situacao", ["created", "dead", "removing"])
+async def test_a_helper_that_never_ran_or_is_in_another_non_running_state_is_an_unknown_result(cog, d12, situacao):
+    """Um auxiliar CRIADO e nunca iniciado também tem ``Running=False`` e ``ExitCode=0``: só ``exited`` conta como terminado."""
+    from empiremuse.updater import docker_flow
+    from empiremuse.updater.proxy_client import HelperState
+
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.estado = HelperState(situacao, False, 0, "", "")
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(None) in texto_do_primeiro_envio(ctx)
+    assert docker_flow.describe_exit(0) not in texto_do_primeiro_envio(ctx)
+    d12.enviar_log.assert_not_awaited()
+    assert d12.auxiliar.eventos == ["state", "remove"] and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"] and ctx.send.await_count == 2
+
+
+async def test_an_exited_helper_with_exit_code_zero_is_still_a_completed_update(cog, d12):
+    from empiremuse.updater import docker_flow
+
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(0)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(0) in texto_do_primeiro_envio(ctx)
+
+
+# ---------------------------------------------------------------------------- vigia do auxiliar: o registro vive no pool, não no módulo do cog
+
+
+def outro_cog(cog, *, bot_id: int | None = None) -> Owner:
+    """Um segundo ``Owner`` sobre o MESMO pool: o cog recarregado, ou o cog de outro bot do mesmo processo."""
+    bot = SimpleNamespace(**vars(cog.bot))
+    if bot_id is not None:
+        bot.user = SimpleNamespace(id=bot_id)
+    novo = Owner.__new__(Owner)
+    novo.bot = bot
+    novo.log_owner_command = Mock()
+    novo.secret_values = Mock(return_value=frozenset())
+    return novo
+
+
+@pytest_asyncio.fixture
+async def vigia_viva(cog, d12, monkeypatch):
+    """Confirma uma atualização docker cujo ``watch_helper`` NÃO termina: o vigia fica vivo até o fim do teste."""
+    solto = asyncio.Event()
+
+    async def vigia_bloqueado(*args, **kwargs):
+        await solto.wait()
+
+    monkeypatch.setattr(legacy_cmds, "watch_helper", vigia_bloqueado)
+    view = await oferecer(cog, ctx_prefixo())
+    await view.confirm.callback(clique())
+    for _ in range(5):  # deixa a tarefa do vigia começar
+        await asyncio.sleep(0)
+    pendente_docker_em_disco(d12.runtime)  # o que o início real teria gravado
+    d12.auxiliar.eventos.clear()
+    yield
+    solto.set()
+    await esperar_tarefas()
+
+
+async def test_a_reloaded_cog_still_sees_the_watcher_that_is_alive(cog, d12, vigia_viva, monkeypatch):
+    """Recarregar o cog zera o que é do módulo; o vigia vivo precisa continuar valendo para a recusa (o registro está no pool)."""
+    recarregado = outro_cog(cog)  # um Owner novo: nada do cog anterior sobrevive, só o registro do pool
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(recarregado, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []  # recusou sem tocar o proxy
+    assert (d12.runtime / "update-pending.json").exists()
+
+
+async def test_two_bots_of_the_same_pool_share_one_watcher_registry(cog, d12, vigia_viva):
+    do_outro_bot = outro_cog(cog, bot_id=BOT_ID + 1)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(do_outro_bot, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []
+    assert (d12.runtime / "update-pending.json").exists()
+
+
+async def test_two_pools_do_not_share_watchers(cog, d12, vigia_viva):
+    """O registro é por pool: um pool sem vigia vivo (outro processo simulado) não é bloqueado pelo vigia de outro."""
+    cog_de_outro_pool = outro_cog(cog)
+    cog_de_outro_pool.bot.pool = SimpleNamespace(
+        update_lock=asyncio.Lock(),
+        shutdown=AsyncMock(),
+        config={"RUN_RPC_SERVER": False},
+        update_ready_checked=False,
+        update_watch_task=None,
+    )
+    d12.auxiliar.parado(66)
+
+    await Owner.update.callback(cog_de_outro_pool, ctx_prefixo())
+
+    assert d12.auxiliar.eventos == ["state", "remove"]  # sem vigia vivo NESTE pool, o comando resolveu o pendente
