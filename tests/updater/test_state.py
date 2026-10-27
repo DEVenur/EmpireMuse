@@ -91,3 +91,31 @@ def test_a_non_regular_file_is_still_discarded_where_the_posix_open_flags_do_not
     pending_path(tmp_path).mkdir()
 
     assert read_pending(tmp_path, AGORA) is None
+
+
+def test_a_symlink_is_refused_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix):
+    """Sem ``O_NOFOLLOW`` (Windows) o ``S_ISREG`` valeria para o alvo: o link precisa ser recusado antes do ``open``."""
+    alvo = tmp_path / "alvo.json"
+    write_pending(tmp_path, pendente(AGORA - 60))
+    pending_path(tmp_path).rename(alvo)
+    pending_path(tmp_path).symlink_to(alvo)
+
+    assert read_pending(tmp_path, AGORA) is None
+
+    assert alvo.exists() and not os.path.lexists(pending_path(tmp_path))
+
+
+def test_a_reparse_point_is_refused_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix, monkeypatch):
+    """Junção/ponto de reanálise do Windows: ``lstat`` com ``FILE_ATTRIBUTE_REPARSE_POINT`` não vira leitura."""
+    write_pending(tmp_path, pendente(AGORA - 60))
+    real = os.lstat
+
+    def lstat_com_reparse(caminho, *args, **kwargs):
+        resultado = real(caminho, *args, **kwargs)
+        if Path(caminho) != pending_path(tmp_path):
+            return resultado
+        return type("Stat", (), {"st_mode": resultado.st_mode, "st_file_attributes": 0x400})()
+
+    monkeypatch.setattr(os, "lstat", lstat_com_reparse)
+
+    assert read_pending(tmp_path, AGORA) is None
