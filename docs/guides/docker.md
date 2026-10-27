@@ -182,7 +182,7 @@ Em gerenciadores de Docker integrados a painéis de VPS (como o **Docker Manager
 
 Para esse cenário de implantação em arquivo único atrás do Traefik, o repositório traz o compose usado na produção do EmpireMuse (VPS na Hostinger, atrás do Traefik + Cloudflare):
 
-- [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml): copie para o diretório do projeto no gerenciador (ex.: `/docker/empiremuse`) como `docker-compose.yml`. A cada release, atualize a tag da imagem.
+- [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml): copie para o diretório do projeto no gerenciador (ex.: `/docker/empiremuse`) como `docker-compose.yml`. A cada release, atualize a tag da imagem, ou use o `update` com o auto-update ([`auto-update.md`](auto-update.md)).
 - [`deploy/env.example.hostinger`](../../deploy/env.example.hostinger): renomeie para `.env` e preencha só os segredos.
 
 Ele segue a receita genérica mantida no repositório [**docker-compose-cookbook (`composes/empiremuse`)**](https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/empiremuse):
@@ -254,8 +254,8 @@ O EmpireMuse possui um mecanismo integrado de supervisão do processo de áudio:
 
 No modelo de contêineres, o ciclo de vida da aplicação é declarativo e imutável:
 
-1. O antigo comando de atualização em tempo de execução via Git (`@bot update`) foi **desativado** por segurança arquitetural.
-2. Para atualizar o bot:
+1. O comando `update` no Docker **não faz `git pull`**: com o proxy de atualização configurado (`UPDATE_PROXY_SOCKET`), o bot troca a imagem pelo auxiliar, por digest, e sem o proxy só mostra a versão nova. Como ligar, os códigos de saída e as limitações estão em [`auto-update.md`](auto-update.md).
+2. Para atualizar o bot à mão:
    - Baixe ou construa a nova imagem (`docker pull` ou `docker build`);
    - Pare e remova o contêiner em execução (`docker stop empiremuse && docker rm empiremuse` ou `docker compose down`);
    - Inicie o novo contêiner mantendo o mesmo volume persistente (`-v empiremuse-data:/data` ou via compose) e o mesmo arquivo `.env`.

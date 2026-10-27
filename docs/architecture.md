@@ -60,6 +60,20 @@ flowchart LR
 6. Ponto de extensão opcional: se existir o pacote `dev.pool_dev`, `PoolDev(self).run()` é executado
    (`BotPool.setup_pool_extras` em `empiremuse/utils/client.py`). Ele não existe no repositório.
 
+### Atualizador (`empiremuse/updater/`)
+
+Pacote do comando `update` (guia: [`guides/auto-update.md`](guides/auto-update.md); decisão: [ADR-0004](adr/0004-auto-update-proxy.md)):
+
+| Módulo | Papel |
+|---|---|
+| `mode.py` | Detecta o modo: `docker` (com `UPDATE_PROXY_SOCKET`), `panel`, `git` ou `manual` |
+| `git_flow.py`, `boot_guard.py` | Modo git: tag anotada oficial, reversão e guarda de boot (roda em `__main__` antes de importar o bot); saída 75 pede reinício ao supervisor |
+| `releases.py`, `docker_flow.py`, `proxy_client.py` | Modo Docker: releases imutáveis com digest, plano, pedido do auxiliar ao proxy e acompanhamento |
+| `proxy.py` | O proxy: arquivo único só com a biblioteca padrão (`python -I -S`), o único com acesso ao `docker.sock`; cria o auxiliar a partir de um modelo fixo |
+| `state.py`, `notice.py`, `views.py` | Estado da atualização em `RUNTIME_DIR` (`update-pending.json`), aviso pós-boot (entregue quando o pool inteiro fica saudável) e confirmação do dono |
+
+`empiremuse/health.py` e `empiremuse/version.py` completam o pacote: o bot grava um heartbeat só com todos os bots prontos (o `HEALTHCHECK` da imagem o lê) e lê a versão da imagem (`EMPIREMUSE_VERSION`).
+
 ### Estado compartilhado do pool
 
 `BotPool` guarda o que é comum a todos os bots: `bots` e `guild_bots` (`BotPool` em `empiremuse/utils/client.py`), a configuração,
