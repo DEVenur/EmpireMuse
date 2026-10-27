@@ -156,10 +156,20 @@ def _write_json_atomic(path: Path, data: object) -> None:
         raise
 
 
+def _refuse_link(path: Path) -> None:
+    """Levanta ``ValueError`` se o caminho é link simbólico ou ponto de reanálise (junção) do Windows; ``OSError`` se ausente."""
+    info = os.lstat(path)
+    reparse = getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    if stat.S_ISLNK(info.st_mode) or reparse:
+        raise ValueError("link simbólico ou ponto de reanálise")
+
+
 def _read_json(path: Path) -> object:
     """JSON do arquivo regular (até ``MAX_FILE_BYTES``); levanta ``OSError``/``ValueError`` se ausente, de outro tipo, grande demais ou inválido."""
     # O_NONBLOCK não deixa um FIFO travar a abertura (o boot_guard roda antes do bot); O_NOFOLLOW recusa link simbólico.
     # No Windows essas flags não existem (valem 0) e o ``S_ISREG`` abaixo segue barrando o que não é arquivo comum.
+    if not hasattr(os, "O_NOFOLLOW"):
+        _refuse_link(path)  # sem O_NOFOLLOW o ``open`` seguiria o link, e o ``S_ISREG`` abaixo olharia só o alvo
     flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     descriptor = os.open(path, flags)
     with os.fdopen(descriptor, "rb") as file:
