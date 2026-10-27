@@ -125,6 +125,58 @@ def achados_em_crase(codigo: str) -> list[tuple[int, str]]:
     return resultado
 
 
+# S4b — arquivo -> (motivo, nº de achados). Triagem do Vigil (s31-md-link.md §8) para os da lista dele; os marcados "(extra)" são o MESMO tipo de falso
+# positivo (valor numérico ou texto do próprio bot numa variável) que o Keystone não listou. NÃO entram: event_steps.py:260, autoqueue_steps.py:384 e
+# music_cog/nodes.py:69 (severity/node vindos do nó), que ficam vermelhos até o fix do Prism. Contagem exata, como no S4.
+NUMERO = "valor numérico (contagem, ID, intervalo) em variável (extra)"
+EXCECOES_S4B: dict[str, tuple[str, int]] = {
+    "empiremuse/cogs/lastfm.py": ("país vindo de lista fixa do Last.fm (Vigil)", 1),
+    "empiremuse/cogs/legacy_cmds.py": (
+        "prefixo de comando: até 5 caracteres, sem espaço, com escape_markdown quando aplicável (Vigil)",
+        3,
+    ),
+    "empiremuse/cogs/misc.py": (
+        "prefixos (Vigil, 662-671) e valores numéricos/versões do painel de informações (extra)",
+        22,
+    ),
+    "empiremuse/cogs/music_settings.py": (
+        "nome de skin já validado (Vigil, 1104/1110/1122/1129) e números/status do nodeinfo (extra)",
+        7,
+    ),
+    "empiremuse/music_cog/play_enqueue.py": (
+        "query já passa por fix_characters (Vigil, 422) e time_format condicional (extra)",
+        2,
+    ),
+    "empiremuse/utils/music/models/helpers.py": ("plain_snippet já saneia o texto (Vigil)", 1),
+    "empiremuse/cogs/help_cog.py": ("nomes de comando do próprio bot (Vigil)", 2),
+    "empiremuse/cogs/error_handler.py": ("código ERR- gerado pelo bot (Vigil)", 1),
+    "empiremuse/utils/music/errors.py": ("código ERR- gerado pelo bot (Vigil)", 2),
+    "empiremuse/updater/git_flow.py": ("_printable já saneia o nome (Vigil)", 1),
+    "empiremuse/utils/music/interactions/favorites_texts.py": ("_echo já corta e escapa o nome (Vigil)", 2),
+    "empiremuse/cogs/ll_yt_oauth.py": ("token com charset restrito (Vigil)", 1),
+    "empiremuse/cogs/server_manager.py": (NUMERO, 4),
+    "empiremuse/music_cog/now_playing.py": (NUMERO, 1),
+    "empiremuse/music_cog/queue_clear_steps.py": (NUMERO, 4),
+    "empiremuse/music_cog/queue_move_steps.py": (NUMERO, 4),
+    "empiremuse/music_cog/song_request_steps.py": ("time_format em expressão condicional (extra)", 1),
+    "empiremuse/utils/music/models/event_steps.py": (
+        "plain_snippet já saneia a mensagem (extra); a 260 (severity do nó) NÃO está aqui e deixa o arquivo vermelho",
+        1,
+    ),
+    "empiremuse/utils/music/skins/normal_player/embed_link.py": ("dica do próprio bot (current_hint) (extra)", 1),
+    "empiremuse/utils/music/skins/normal_player/lite.py": ("duração numérica em variável (extra)", 1),
+    "empiremuse/utils/music/skins/static_player/default.py": (
+        "contagem de repetições e emoji do próprio bot (extra)",
+        2,
+    ),
+    "empiremuse/utils/music/skins/static_player/default_progressbar.py": (
+        "contagem de repetições e emoji do próprio bot (extra)",
+        2,
+    ),
+    "empiremuse/utils/music/skins/static_player/embed_link.py": ("contagem de repetições (extra)", 1),
+}
+
+
 def arquivos_do_pacote():
     for caminho in sorted(PACOTE.rglob("*.py")):
         relativo = caminho.relative_to(RAIZ).as_posix()
@@ -262,3 +314,32 @@ class TestExcecoes:
     def test_the_helper_file_itself_is_the_only_file_excluded_without_a_reason(self):
         assert ARQUIVO_DO_HELPER == "empiremuse/utils/music/converters.py"
         assert (RAIZ / ARQUIVO_DO_HELPER).is_file()
+
+
+class TestCrasesNoCodigoDoBot:
+    """S4b sobre ``empiremuse/**``: nenhum valor cru de terceiros entre crases fora da lista de exceções com contagem exata."""
+
+    def test_no_file_outside_the_exceptions_has_a_raw_value_inside_backticks(self):
+        restantes: dict[str, list[tuple[int, str]]] = {}
+        for relativo, caminho in arquivos_do_pacote():
+            if relativo in EXCECOES_S4B:
+                continue
+            if lista := achados_em_crase(caminho.read_text(encoding="utf-8")):
+                restantes[relativo] = lista
+
+        assert restantes == {}, restantes
+
+    @pytest.mark.parametrize("arquivo", sorted(EXCECOES_S4B))
+    def test_the_number_of_findings_in_an_exception_is_exact(self, arquivo):
+        achados_do_arquivo = achados_em_crase((RAIZ / arquivo).read_text(encoding="utf-8"))
+
+        assert len(achados_do_arquivo) == EXCECOES_S4B[arquivo][1], (arquivo, achados_do_arquivo)
+
+    def test_every_exception_has_a_written_reason_and_an_existing_file(self):
+        assert all(
+            len(motivo) > 15 and n > 0 and (RAIZ / arquivo).is_file() for arquivo, (motivo, n) in EXCECOES_S4B.items()
+        )
+
+    def test_the_three_node_text_sites_are_not_exceptions(self):
+        for arquivo in ("empiremuse/utils/music/models/autoqueue_steps.py", "empiremuse/music_cog/nodes.py"):
+            assert arquivo not in EXCECOES_S4B
