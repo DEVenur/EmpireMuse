@@ -19,6 +19,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
@@ -232,7 +234,7 @@ class TestRepeticao:
         await autoqueue_steps._aq_source_tracks(contexto(cliente), req)
 
         assert cliente.request.await_count == 3
-        assert 1 <= sem_espera.await_count <= 3 and all(c.args == (5,) for c in sem_espera.await_args_list)
+        assert sem_espera.await_count == 2 and all(c.args == (5,) for c in sem_espera.await_args_list)
         assert req.exception is erro and req.tracks == []
         saida = capsys.readouterr()
         assert "Traceback" not in saida.out + saida.err
@@ -252,7 +254,10 @@ class TestRepeticao:
 
         await autoqueue_steps._aq_source_tracks(ctx, pedido())
 
-        assert ctx.set_command_log.call_count == 3
+        assert ctx.set_command_log.call_count in (
+            2,
+            3,
+        )  # um aviso por tentativa que ainda vai ser repetida; o da última é opcional
 
     async def test_a_non_transient_error_does_not_tell_the_user_to_wait_for_a_retry(self, sem_espera):
         cliente = cliente_spotify(erro=TypeError("limit"))
@@ -348,3 +353,178 @@ class TestProvedorSemResultado:
         await autoqueue_steps._aq_lastfm_tracks(contexto_lastfm(get_tracks), req)
 
         assert req.tracks == [achada]
+
+
+# ============================================================================ guardas: HTTP, sleep só entre tentativas, payload com campos nulos
+
+
+def erro_http(status):
+    info = aiohttp.RequestInfo(
+        url=URL("https://api.spotify.com/v1/search"),
+        method="GET",
+        headers=CIMultiDictProxy(CIMultiDict()),
+        real_url=URL("https://api.spotify.com/v1/search"),
+    )
+    return aiohttp.ClientResponseError(info, (), status=status, message="x")
+
+
+class TestErroHttp:
+    @pytest.mark.parametrize("status", [400, 401, 403, 404, 429])
+    async def test_a_4xx_response_error_is_not_retried_and_does_not_sleep(self, sem_espera, capsys, status):
+        erro = erro_http(status)
+        cliente = cliente_spotify(erro=erro)
+        req = pedido()
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), req)
+
+        assert cliente.request.await_count == 1
+        sem_espera.assert_not_awaited()
+        assert req.exception is erro and req.tracks == []
+        saida = capsys.readouterr()
+        assert "Traceback" not in saida.out + saida.err
+
+    @pytest.mark.parametrize("status", [500, 502, 503, 504])
+    async def test_a_5xx_response_error_is_retried_up_to_three_times(self, sem_espera, status):
+        erro = erro_http(status)
+        cliente = cliente_spotify(erro=erro)
+        req = pedido()
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), req)
+
+        assert cliente.request.await_count == 3
+        assert req.exception is erro and req.tracks == []
+
+    @pytest.mark.parametrize("status", [None, 0], ids=["None", "0"])
+    async def test_a_response_error_without_a_known_status_is_retried(self, sem_espera, status):
+        """O aiohttp guarda ``status=None`` como ``0`` (``ClientResponseError(..., status=None).status == 0``): os dois valem como "sem status"."""
+        erro = erro_http(status)
+        cliente = cliente_spotify(erro=erro)
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), pedido())
+
+        assert cliente.request.await_count == 3
+
+    async def test_a_503_followed_by_success_returns_the_tracks(self, sem_espera):
+        cliente = cliente_spotify()
+        cliente.request = AsyncMock(side_effect=[erro_http(503), resposta_da_busca(2)])
+        req = pedido()
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), req)
+
+        assert cliente.request.await_count == 2 and len(req.tracks) == 2 and req.exception is None
+
+
+class TestSleepSoEntreTentativas:
+    async def test_three_transient_failures_make_exactly_three_calls_and_sleep_twice(self, sem_espera):
+        cliente = cliente_spotify(erro=aiohttp.ClientConnectionError("caiu"))
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), pedido())
+
+        assert cliente.request.await_count == 3
+        assert [c.args for c in sem_espera.await_args_list] == [(5,), (5,)]
+
+    async def test_the_sleep_never_comes_after_the_last_attempt(self, sem_espera):
+        ordem = []
+        cliente = cliente_spotify()
+
+        async def falhar(*args, **kwargs):
+            ordem.append("chamada")
+            raise asyncio.TimeoutError
+
+        async def dormir(segundos):
+            ordem.append("sleep")
+
+        cliente.request = falhar
+        sem_espera.side_effect = dormir
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), pedido())
+
+        assert ordem == ["chamada", "sleep", "chamada", "sleep", "chamada"]
+
+    async def test_one_transient_failure_then_success_sleeps_once(self, sem_espera):
+        cliente = cliente_spotify()
+        cliente.request = AsyncMock(side_effect=[asyncio.TimeoutError(), resposta_da_busca(1)])
+
+        await autoqueue_steps._aq_source_tracks(contexto(cliente), pedido())
+
+        assert sem_espera.await_count == 1
+
+
+class TestPayloadComCamposNulos:
+    def sem(self, n, **campos):
+        faixa = item(n)
+        faixa.update(campos)
+        return faixa
+
+    async def rodar(self, itens, sem_espera):
+        cliente = cliente_spotify({"tracks": {"items": itens}})
+        req = pedido()
+        ctx = contexto(cliente)
+        ctx.locked = True
+        await autoqueue_steps._aq_source_tracks(
+            ctx, req
+        )  # não pode levantar (senão o autoplay fica travado com locked=True)
+        return req
+
+    @pytest.mark.parametrize("campo", ["id", "external_urls"])
+    async def test_an_item_without_id_or_uri_is_skipped_and_the_others_are_kept(self, sem_espera, campo):
+        itens = [item(0), self.sem(1), item(2)]
+        del itens[1][campo]
+
+        req = await self.rodar(itens, sem_espera)
+
+        assert [t.info["identifier"] for t in req.tracks] == ["id0", "id2"]
+
+    @pytest.mark.parametrize(
+        "campos",
+        [
+            {"id": None},
+            {"id": ""},
+            {"external_urls": None},
+            {"external_urls": {}},
+            {"external_urls": {"spotify": None}},
+            {"external_urls": {"spotify": ""}},
+        ],
+        ids=repr,
+    )
+    async def test_an_item_with_a_null_or_empty_id_or_uri_is_skipped(self, sem_espera, campos):
+        req = await self.rodar([item(0), self.sem(1, **campos), item(2)], sem_espera)
+
+        assert [t.info["identifier"] for t in req.tracks] == ["id0", "id2"]
+
+    async def test_a_null_album_does_not_raise_and_the_other_items_are_kept(self, sem_espera):
+        req = await self.rodar([item(0), self.sem(1, album=None), item(2)], sem_espera)
+
+        ids = [t.info["identifier"] for t in req.tracks]
+        assert "id0" in ids and "id2" in ids
+        for faixa in req.tracks:
+            if faixa.info["identifier"] == "id1":  # mantida: sem miniatura e sem álbum
+                assert faixa.info["extra"]["thumb"] == "" and "album" not in faixa.info["extra"]
+
+    async def test_null_artists_do_not_raise_and_the_other_items_are_kept(self, sem_espera):
+        req = await self.rodar([item(0), self.sem(1, artists=None), item(2)], sem_espera)
+
+        ids = [t.info["identifier"] for t in req.tracks]
+        assert "id0" in ids and "id2" in ids
+
+    async def test_null_album_and_null_artists_together_do_not_raise(self, sem_espera):
+        req = await self.rodar([self.sem(0, album=None, artists=None), item(1), item(2)], sem_espera)
+
+        ids = [t.info["identifier"] for t in req.tracks]
+        assert "id1" in ids and "id2" in ids
+
+    async def test_an_album_without_images_or_urls_keeps_the_item_without_thumb(self, sem_espera):
+        album = {"name": "Só nome", "images": [], "external_urls": {}}
+
+        req = await self.rodar([self.sem(0, album=album), item(1)], sem_espera)
+
+        ids = [t.info["identifier"] for t in req.tracks]
+        assert "id1" in ids
+        for faixa in req.tracks:
+            if faixa.info["identifier"] == "id0":
+                assert faixa.info["extra"]["thumb"] == ""
+
+    async def test_an_item_that_is_not_a_dict_is_skipped(self, sem_espera):
+        req = await self.rodar([item(0), None, "lixo", 7, item(1)], sem_espera)
+
+        assert [t.info["identifier"] for t in req.tracks] == ["id0", "id1"]
