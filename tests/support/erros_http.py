@@ -7,13 +7,15 @@ from yarl import URL
 SENHA = "SEGREDO-123"
 
 
-def info_da_requisicao() -> aiohttp.RequestInfo:
-    url = URL("http://127.0.0.1:8090/v4/info")
+def info_da_requisicao(url: str = "http://127.0.0.1:8090/v4/info") -> aiohttp.RequestInfo:
+    url = URL(url)
     return aiohttp.RequestInfo(url, "GET", CIMultiDictProxy(CIMultiDict({"Authorization": SENHA})), url)
 
 
-def erro_response(status: int = 401, classe=aiohttp.ClientResponseError) -> aiohttp.ClientResponseError:
-    return classe(info_da_requisicao(), (), status=status, message="x")
+def erro_response(
+    status: int = 401, classe=aiohttp.ClientResponseError, url: str = "http://127.0.0.1:8090/v4/info"
+) -> aiohttp.ClientResponseError:
+    return classe(info_da_requisicao(url), (), status=status, message="x")
 
 
 class Resposta:
