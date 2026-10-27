@@ -525,6 +525,7 @@ class Owner(commands.Cog):
                 await apply_git_update(plan, request, paths.PROJECT_DIR, paths.get_runtime_dir())
             except UpdateRollbackFailed as error:
                 # O ``applying`` ficou no disco: reinicia já, para o boot_guard reverter num processo limpo.
+                logger.error("update: a reversão automática falhou e o applying ficou no disco: %s", error)
                 text = f"❌ {error}"
                 restart = True
             except UpdateError as error:

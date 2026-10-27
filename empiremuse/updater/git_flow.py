@@ -463,6 +463,11 @@ async def apply_git_update(
     return pending
 
 
+def _safe_failure(failure: BaseException) -> str:
+    """Texto de log de uma falha: a mensagem só para ``UpdateError`` (escrita para o Discord, sem segredos); senão o tipo."""
+    return str(failure) if isinstance(failure, UpdateError) else type(failure).__name__
+
+
 async def _revert_or_keep(
     plan: GitPlan,
     repo_dir: Path,
@@ -485,7 +490,13 @@ async def _revert_or_keep(
     except asyncio.CancelledError:
         raise
     except Exception as restore_failure:
-        logger.error("update: a reversão para %s falhou", plan.prev_sha, exc_info=True)
+        # Sem exc_info: o traceback encadeado traria a mensagem da falha original, que pode citar a saída de um comando.
+        logger.error(
+            "update: a reversão para %s falhou (%s); falha original: %s",
+            plan.prev_sha,
+            _safe_failure(restore_failure),
+            _safe_failure(failure),
+        )
         if isinstance(failure, asyncio.CancelledError):
             raise failure from restore_failure
         detail = f" ({failure})" if isinstance(failure, UpdateError) else ""
