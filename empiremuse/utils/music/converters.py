@@ -76,7 +76,7 @@ _URL_SCHEMES = {"http", "https"}
 # Controles de direção e caracteres de largura zero que permitem falsificar o texto exibido; o ZWJ (U+200D) e o ZWNJ (U+200C) ficam,
 # porque compõem emojis e escritas legítimas.
 _SPOOFING_RE = re.compile("[\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
-_LINE_BREAK_RE = re.compile(r"\r\n|\r")
+_LINE_BREAK_RE = re.compile(r"\r\n|[\r\n\u2028\u2029]")
 
 
 def _clean_label(text: str) -> str:
@@ -90,7 +90,9 @@ def _percent_encode(char: str) -> str:
 def _has_web_host(url: str) -> bool:
     try:
         parts = urlsplit(url)
-        return parts.scheme in _URL_SCHEMES and bool(parts.hostname)
+        return (
+            parts.scheme in _URL_SCHEMES and bool(parts.hostname) and parts.username is None and parts.password is None
+        )
     except ValueError:
         return False
 

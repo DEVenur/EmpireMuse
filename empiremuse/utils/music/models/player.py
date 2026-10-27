@@ -263,7 +263,7 @@ class LavalinkPlayer(
             )
 
             try:
-                embed.description += f"\n**Canal:** `{disnake.utils.escape_markdown(self.guild.me.voice.channel.name)} [{self.guild.me.voice.channel.id}]`\n"
+                embed.description += f"\n**Canal:** {md_code(f'{self.guild.me.voice.channel.name} [{self.guild.me.voice.channel.id}]')}\n"
             except Exception:
                 pass
 
