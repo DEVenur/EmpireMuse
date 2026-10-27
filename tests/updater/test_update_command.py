@@ -1204,3 +1204,158 @@ async def test_two_pools_do_not_share_watchers(cog, d12, vigia_viva):
     await Owner.update.callback(cog_de_outro_pool, ctx_prefixo())
 
     assert d12.auxiliar.eventos == ["state", "remove"]  # sem vigia vivo NESTE pool, o comando resolveu o pendente
+
+
+# ============================================================================ D13: imagem em versão de teste ``X.Y.Z-rc.N`` (A29 g)
+
+RC2 = "2.1.0-rc.2"
+SEM_ALVO_RC = "Você está na versão de teste 2.1.0-rc.2; ainda não há versão estável mais nova."
+
+
+@pytest.fixture
+def docker_rc(docker, monkeypatch):
+    """Modo docker com a imagem na rc.2; o plano devolvido tem a versão atual vinda do ``plan_docker_update`` chamado."""
+    from tests.support.versao_rc import atual_rc
+
+    monkeypatch.setenv("EMPIREMUSE_VERSION", RC2)
+    rc = atual_rc(RC2)
+    plano = SimpleNamespace(current=rc, target=PARA, digest="sha256:" + "ab" * 32, changelog="- novidade da 2.1.0")
+    chamadas: list[Any] = []
+
+    async def planejar(*args, **kwargs):
+        chamadas.append((args, kwargs))
+        return plano
+
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", planejar)
+    return SimpleNamespace(rc=rc, plano=plano, chamadas=chamadas)
+
+
+async def test_the_docker_mode_plans_from_an_rc_image_version_instead_of_refusing(cog, docker_rc):
+    ctx = ctx_prefixo()
+
+    await oferecer(cog, ctx)
+
+    ((args, kwargs),) = docker_rc.chamadas
+    assert (args[1] if len(args) > 1 else kwargs["current"]) == docker_rc.rc
+    assert str(docker_rc.rc) == RC2
+
+
+async def test_the_docker_confirmation_offers_the_stable_from_the_rc(cog, docker_rc):
+    ctx = ctx_prefixo()
+
+    await oferecer(cog, ctx)
+
+    descricao = ctx.send.await_args.kwargs["embed"].description
+    assert "Atualizar de 2.1.0-rc.2 para 2.1.0?" in descricao and "novidade da 2.1.0" in descricao
+    assert "identificar a versão" not in descricao and cog.bot.pool.update_lock.locked()
+
+
+async def test_the_docker_mode_logs_the_rc_to_stable_move(cog, docker_rc):
+    await oferecer(cog, ctx_prefixo())
+
+    assert any("2.1.0-rc.2->2.1.0" in str(chamada) for chamada in cog.log_owner_command.call_args_list)
+
+
+async def test_the_docker_mode_never_offers_a_prerelease_target(cog, docker_rc, monkeypatch):
+    """Quando o plano chega com alvo estável, a mensagem nunca cita ``rc`` como destino."""
+    ctx = ctx_prefixo()
+
+    await oferecer(cog, ctx)
+
+    descricao = ctx.send.await_args.kwargs["embed"].description
+    destino = descricao.split(" para ", 1)[1].split("?", 1)[0]
+    assert "rc" not in destino and destino == "2.1.0"
+
+
+async def test_the_docker_mode_without_a_stable_target_says_the_test_version_phrase(cog, docker_rc, monkeypatch):
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    descricao = ctx.send.await_args.kwargs["embed"].description
+    assert descricao == f"✅ **{SEM_ALVO_RC}**"
+    assert "mais recente" not in descricao and not cog.bot.pool.update_lock.locked()
+
+
+async def test_through_the_panel_the_docker_mode_without_a_target_returns_the_test_version_phrase(
+    cog, docker_rc, monkeypatch
+):
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
+
+    texto = await Owner.update.callback(cog, ctx_painel())
+
+    assert texto == f"✅ **{SEM_ALVO_RC}**" and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_stable_image_without_a_target_keeps_saying_it_is_the_latest(cog, docker, monkeypatch):
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    descricao = ctx.send.await_args.kwargs["embed"].description
+    assert "mais recente" in descricao and "teste" not in descricao
+
+
+async def test_confirming_from_the_rc_starts_the_helper_for_the_stable_target(cog, docker_rc, monkeypatch):
+    iniciados: list[Any] = []
+
+    async def iniciar(client, plan, request, runtime_dir, **kwargs):
+        iniciados.append(plan)
+        return SimpleNamespace(marca="pendente-rc", channel_id=CANAL, requested_by=DONO)
+
+    monkeypatch.setattr(legacy_cmds, "start_docker_update", iniciar)
+    monkeypatch.setattr(legacy_cmds, "watch_helper", AsyncMock())
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", lambda caminho: SimpleNamespace(socket=caminho))
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    (plano,) = iniciados
+    assert str(plano.current) == RC2 and str(plano.target) == "2.1.0"
+    assert "2.1.0" in interacao.response.edit_message.await_args.kwargs["embed"].description
+
+
+@pytest.mark.parametrize("valor", ["2.1.0-rc.02", "2.1.0-beta.1", "2.1.0-RC.2", "dev"])
+async def test_an_invalid_pre_release_image_version_still_cannot_be_identified(cog, docker, monkeypatch, valor):
+    monkeypatch.setenv("EMPIREMUSE_VERSION", valor)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "Não consegui identificar a versão desta imagem" in erro.value.text
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_the_panel_mode_from_an_rc_offers_the_stable_and_shows_the_rc_as_installed(cog, ambiente, monkeypatch):
+    monkeypatch.setenv("EMPIREMUSE_VERSION", RC2)
+    releases_do_github(monkeypatch, versao=Version(2, 1, 0))
+
+    texto = await Owner.update.callback(cog, ctx_painel())
+
+    assert "Versão disponível: 2.1.0" in texto and "(instalada: 2.1.0-rc.2)" in texto
+    assert "novidade da 2.1.0" in texto and "blob/v2.1.0/CHANGELOG.md" in texto
+    assert "mais recente" not in texto
+
+
+async def test_the_panel_mode_from_an_rc_without_a_newer_stable_says_the_test_version_phrase(
+    cog, ambiente, monkeypatch
+):
+    monkeypatch.setenv("EMPIREMUSE_VERSION", RC2)
+    releases_do_github(monkeypatch, versao=Version(2, 0, 2))
+
+    texto = await Owner.update.callback(cog, ctx_painel())
+
+    assert texto == f"✅ **{SEM_ALVO_RC}**"
+
+
+async def test_the_panel_mode_on_the_stable_keeps_the_latest_phrase_with_the_version(cog, ambiente, monkeypatch):
+    monkeypatch.setenv("EMPIREMUSE_VERSION", "2.1.0")
+    releases_do_github(monkeypatch, versao=Version(2, 1, 0))
+
+    texto = await Owner.update.callback(cog, ctx_painel())
+
+    assert "mais recente (2.1.0)" in texto and "teste" not in texto
