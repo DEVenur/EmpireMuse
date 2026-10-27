@@ -23,7 +23,7 @@ A identidade visual do EmpireMuse adota o conceito cósmico **Nebulosa**, combin
 Todas as peças foram concebidas como arte original do EmpireMuse, sem dependência de ativos de terceiros ou logotipos do upstream.
 
 - **`assets/brand/logo.svg`**: Emblema vetorial autocontido utilizado no cabeçalho do `README.md`. Possui fundo transparente fora do emblema e não contém scripts, estilos externos ou elementos dinâmicos.
-- **`assets/brand/avatar.png`**: Ícone em formato PNG com resolução de **1024×1024** pixels (máximo 2 MB). A composição centraliza a silhueta da nebulosa e o elemento musical dentro do círculo focal, assegurando alta legibilidade mesmo em tamanhos reduzidos (32–40 px).
+- **`assets/brand/avatar.png`**: Ícone em formato PNG com resolução de **1024×1024** pixels (máximo 2 MB). A arte é uma garota chibi de fones de ouvido, com coroa e asas, sobre um campo de estrelas violeta, com o logotipo "EmpireMuse 1" na base. O emblema ocupa o centro do quadro, o que mantém a legibilidade em tamanhos reduzidos (32–40 px).
 - **`assets/brand/banner.png`**: Banner panorâmico em formato PNG com resolução de **1500×600** pixels (proporção 5:2, máximo 4 MB), desenvolvido para personalização de perfil no Discord.
 
 ---
