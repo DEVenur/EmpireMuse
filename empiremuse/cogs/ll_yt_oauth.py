@@ -12,6 +12,7 @@ import ruamel.yaml
 from disnake.ext import commands
 
 from empiremuse import paths
+from empiremuse.logs import register_secret
 from empiremuse.rules.text import plain_snippet
 from empiremuse.utils.music.errors import GenericError, code_suffix, log_unexpected_error
 from empiremuse.utils.music.interactions import AskView
@@ -176,6 +177,11 @@ class YtOauthLL(commands.Cog):
 
         if not (refresh_token := view.data.get("refresh_token")):
             raise GenericError("**Tempo para vincular conta do google esgotado!**")
+
+        # Segredos criados em tempo de execução: o redator não os conhece até aqui (V-L2).
+        for oauth_token in (refresh_token, view.data.get("access_token")):
+            if isinstance(oauth_token, str):
+                register_secret(oauth_token)
 
         async with self.bot.session.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",

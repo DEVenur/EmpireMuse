@@ -11,6 +11,8 @@ import logging
 import sys
 import time
 
+from empiremuse.logs.redact import sanitize_value
+
 FRAME = "  │ "
 BULLET = "•"
 ERROR_EMOJI = "❌"
@@ -103,7 +105,7 @@ class ConsoleFormatter(_FramedFormatter):
         level = self._paint(record.levelname.ljust(LEVEL_NAME_WIDTH), LEVEL_COLORS.get(record.levelno, "0"))
         context = _context(record)
         context = self._paint(f"[{context}]", CONTEXT_COLOR) + " " if context else ""
-        return f"{clock} {level} {_category_emoji(record)} {context}{record.name}: {first_line}"
+        return f"{clock} {level} {_category_emoji(record)} {context}{sanitize_value(record.name)}: {first_line}"
 
 
 class FileFormatter(_FramedFormatter):
@@ -113,4 +115,6 @@ class FileFormatter(_FramedFormatter):
         stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(record.created))
         context = _context(record)
         context = f"[{context}] " if context else ""
-        return f"{stamp},{int(record.msecs):03d} {record.levelname} {context}{record.name}: {first_line}"
+        return (
+            f"{stamp},{int(record.msecs):03d} {record.levelname} {context}{sanitize_value(record.name)}: {first_line}"
+        )

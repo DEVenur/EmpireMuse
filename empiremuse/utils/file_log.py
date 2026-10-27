@@ -61,6 +61,7 @@ def build_file_log_handler(logs_dir: Path) -> logging.Handler:
         maxBytes=LOG_FILE_MAX_BYTES,
         backupCount=LOG_FILE_BACKUPS,
         encoding="utf-8",
+        errors="backslashreplace",  # surrogate solto (vem de json.loads) vira \udXXX em vez de derrubar o registro do arquivo
     )
     handler.addFilter(SanitizeAndRedact())
     handler.setFormatter(FileFormatter())
