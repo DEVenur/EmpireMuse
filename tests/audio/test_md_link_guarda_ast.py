@@ -24,18 +24,28 @@ PACOTE = RAIZ / "empiremuse"
 MARCADORES = ("](", "[`")
 ARQUIVO_DO_HELPER = "empiremuse/utils/music/converters.py"
 
-# arquivo -> motivo. Só texto 100% do próprio bot ou código que LÊ markdown; nada que mostre nome, título, álbum, playlist ou URL de terceiros.
-EXCECOES: dict[str, str] = {
-    "empiremuse/updater/notice.py": "link do histórico/changelog do repositório oficial do próprio bot (versão e URL do próprio projeto)",
-    "empiremuse/logs/redact.py": "padrões de REDAÇÃO de segredo em texto de log (regex), não monta markdown",
-    "empiremuse/utils/music/errors.py": "mensagem fixa do próprio bot sobre o YouTube, com link de documentação do projeto",
-    "empiremuse/music_cog/song_requests.py": "texto fixo do próprio bot na conversa de pedidos de música",
-    "empiremuse/utils/music/interactions/skin_editor_data.py": "modelos PADRÃO de skin com placeholders (3b): a troca por nomes/URLs reais é do skin_utils, que escapa",
-    "empiremuse/utils/music/remote_lavalink_serverlist.py": "LÊ markdown da lista pública de nós (split por '](') em vez de montá-lo",
-    "empiremuse/utils/music/interactions/fav_menu_text.py": "links fixos do próprio bot para as plataformas suportadas (constantes)",
-    "empiremuse/cogs/lastfm.py": None,  # preenchido abaixo: só a constante da linha de convite; ver TestExcecoes
+# arquivo -> (motivo, nº de achados). Só texto 100% do próprio bot ou código que LÊ markdown; nada que mostre nome, título, álbum, playlist,
+# favorito ou URL de terceiros. O nº é exato: um achado a mais (código novo na exceção) ou a menos (migrou) falha o teste.
+EXCECOES: dict[str, tuple[str, int]] = {
+    "empiremuse/updater/notice.py": (
+        "link do histórico/changelog do repositório oficial do próprio bot (versão e URL do próprio projeto)",
+        2,
+    ),
+    "empiremuse/logs/redact.py": ("padrões de REDAÇÃO de segredo em texto de log (regex), não monta markdown", 1),
+    "empiremuse/utils/music/errors.py": (
+        "mensagem fixa do próprio bot sobre o YouTube, com link de documentação do projeto",
+        1,
+    ),
+    "empiremuse/music_cog/song_requests.py": ("texto fixo do próprio bot na conversa de pedidos de música", 1),
+    "empiremuse/utils/music/interactions/skin_editor_data.py": (
+        "modelos PADRÃO de skin com placeholders (3b): a troca por nomes/URLs reais é do skin_utils, que escapa",
+        2,
+    ),
+    "empiremuse/utils/music/remote_lavalink_serverlist.py": (
+        "LÊ markdown da lista pública de nós (split por '](') em vez de montá-lo",
+        1,
+    ),
 }
-EXCECOES = {arquivo: motivo for arquivo, motivo in EXCECOES.items() if motivo}
 
 
 def _tem_marcador(texto: object) -> bool:
@@ -155,17 +165,23 @@ class TestCodigoDoBot:
 
 class TestExcecoes:
     def test_every_exception_has_a_written_reason(self):
-        assert EXCECOES and all(isinstance(motivo, str) and len(motivo) > 20 for motivo in EXCECOES.values())
+        assert EXCECOES and all(
+            isinstance(motivo, str) and len(motivo) > 20 and n > 0 for motivo, n in EXCECOES.values()
+        )
 
     @pytest.mark.parametrize("arquivo", sorted(EXCECOES))
     def test_every_exception_points_to_an_existing_file(self, arquivo):
         assert (RAIZ / arquivo).is_file()
 
     @pytest.mark.parametrize("arquivo", sorted(EXCECOES))
-    def test_an_exception_that_no_longer_has_any_case_must_be_removed(self, arquivo):
-        assert achados((RAIZ / arquivo).read_text(encoding="utf-8")), (
-            f"{arquivo} não tem mais nenhum caso: tire da lista"
-        )
+    def test_the_number_of_findings_in_an_exception_is_exact(self, arquivo):
+        achados_do_arquivo = achados((RAIZ / arquivo).read_text(encoding="utf-8"))
+
+        assert len(achados_do_arquivo) == EXCECOES[arquivo][1], (arquivo, achados_do_arquivo)
+
+    def test_the_files_that_show_external_names_are_not_exceptions(self):
+        for arquivo in ("empiremuse/cogs/lastfm.py", "empiremuse/utils/music/interactions/fav_menu_text.py"):
+            assert arquivo not in EXCECOES
 
     def test_the_helper_file_itself_is_the_only_file_excluded_without_a_reason(self):
         assert ARQUIVO_DO_HELPER == "empiremuse/utils/music/converters.py"
