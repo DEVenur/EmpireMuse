@@ -5,8 +5,11 @@ de versão. Nenhuma mensagem de erro pode conter o caminho do socket.
 """
 
 import asyncio
+import fcntl
 import importlib
 import json
+import struct
+import termios
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -293,9 +296,19 @@ PEDACOS_JSON = {"lines": [f"empiremuse-updater: passo {n:03d} " + "x" * 60 for n
 TETO = 256 * 1024
 
 
+def bytes_nao_lidos(request: web.Request) -> int:
+    """Bytes que o servidor escreveu e o cliente ainda não leu do socket Unix (``TIOCOUTQ``): a sincronia é pelo estado real do socket, sem relógio."""
+    descritor = request.transport.get_extra_info("socket").fileno()
+    return struct.unpack("i", fcntl.ioctl(descritor, termios.TIOCOUTQ, struct.pack("i", 0)))[0]
+
+
 def em_pedacos(corpo: bytes, partes: int = 4):
-    """Resposta em ``Transfer-Encoding: chunked`` escrita em ``partes`` pedaços, com uma pausa real e curta entre eles (segmentos separados no socket)."""
+    """Resposta em ``Transfer-Encoding: chunked`` em ``partes`` pedaços: o próximo só sai depois de o cliente LER o anterior (segmentos separados de verdade)."""
     tamanho = -(-len(corpo) // partes)
+
+    async def cliente_leu(request: web.Request) -> None:
+        while bytes_nao_lidos(request) > 0:
+            await asyncio.sleep(0)  # só cede o laço ao cliente; não espera tempo nenhum
 
     async def handler(request: web.Request) -> web.StreamResponse:
         resposta = web.StreamResponse(headers={"Content-Type": "application/json"})
@@ -303,7 +316,9 @@ def em_pedacos(corpo: bytes, partes: int = 4):
         for inicio in range(0, len(corpo), tamanho):
             await resposta.write(corpo[inicio : inicio + tamanho])
             await resposta.drain()
-            await asyncio.sleep(0.02)
+            await asyncio.wait_for(
+                cliente_leu(request), 30
+            )  # teto só para a suíte não pendurar se o cliente parar de ler
         await resposta.write_eof()
         return resposta
 

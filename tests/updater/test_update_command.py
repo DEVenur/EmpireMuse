@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+import pytest_asyncio
 
 from empiremuse import paths
 from empiremuse.cogs import legacy_cmds
@@ -1127,3 +1128,79 @@ async def test_an_exited_helper_with_exit_code_zero_is_still_a_completed_update(
     await Owner.update.callback(cog, ctx)
 
     assert docker_flow.describe_exit(0) in texto_do_primeiro_envio(ctx)
+
+
+# ---------------------------------------------------------------------------- vigia do auxiliar: o registro vive no pool, não no módulo do cog
+
+
+def outro_cog(cog, *, bot_id: int | None = None) -> Owner:
+    """Um segundo ``Owner`` sobre o MESMO pool: o cog recarregado, ou o cog de outro bot do mesmo processo."""
+    bot = SimpleNamespace(**vars(cog.bot))
+    if bot_id is not None:
+        bot.user = SimpleNamespace(id=bot_id)
+    novo = Owner.__new__(Owner)
+    novo.bot = bot
+    novo.log_owner_command = Mock()
+    novo.secret_values = Mock(return_value=frozenset())
+    return novo
+
+
+@pytest_asyncio.fixture
+async def vigia_viva(cog, d12, monkeypatch):
+    """Confirma uma atualização docker cujo ``watch_helper`` NÃO termina: o vigia fica vivo até o fim do teste."""
+    solto = asyncio.Event()
+
+    async def vigia_bloqueado(*args, **kwargs):
+        await solto.wait()
+
+    monkeypatch.setattr(legacy_cmds, "watch_helper", vigia_bloqueado)
+    view = await oferecer(cog, ctx_prefixo())
+    await view.confirm.callback(clique())
+    for _ in range(5):  # deixa a tarefa do vigia começar
+        await asyncio.sleep(0)
+    pendente_docker_em_disco(d12.runtime)  # o que o início real teria gravado
+    d12.auxiliar.eventos.clear()
+    yield
+    solto.set()
+    await esperar_tarefas()
+
+
+async def test_a_reloaded_cog_still_sees_the_watcher_that_is_alive(cog, d12, vigia_viva, monkeypatch):
+    """Recarregar o cog zera o que é do módulo; o vigia vivo precisa continuar valendo para a recusa (o registro está no pool)."""
+    monkeypatch.setattr(
+        legacy_cmds, "_WATCH_TASKS", set(), raising=False
+    )  # o estado de módulo de um cog recém-recarregado
+    recarregado = outro_cog(cog)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(recarregado, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []  # recusou sem tocar o proxy
+    assert (d12.runtime / "update-pending.json").exists()
+
+
+async def test_two_bots_of_the_same_pool_share_one_watcher_registry(cog, d12, vigia_viva):
+    do_outro_bot = outro_cog(cog, bot_id=BOT_ID + 1)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(do_outro_bot, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []
+    assert (d12.runtime / "update-pending.json").exists()
+
+
+async def test_two_pools_do_not_share_watchers(cog, d12, vigia_viva):
+    """O registro é por pool: um pool sem vigia vivo (outro processo simulado) não é bloqueado pelo vigia de outro."""
+    cog_de_outro_pool = outro_cog(cog)
+    cog_de_outro_pool.bot.pool = SimpleNamespace(
+        update_lock=asyncio.Lock(),
+        shutdown=AsyncMock(),
+        config={"RUN_RPC_SERVER": False},
+        update_ready_checked=False,
+        update_watch_task=None,
+    )
+    d12.auxiliar.parado(66)
+
+    await Owner.update.callback(cog_de_outro_pool, ctx_prefixo())
+
+    assert d12.auxiliar.eventos == ["state", "remove"]  # sem vigia vivo NESTE pool, o comando resolveu o pendente
