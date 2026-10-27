@@ -66,11 +66,12 @@ RUN apt-get update && \
 
 COPY --from=uv-stage /uv /uvx /bin/
 
-RUN python -m venv /opt/venv
+# Sem pip no venv: quem instala é o uv, com o lock e os hashes, só neste estágio.
+RUN python -m venv --without-pip /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements-lock.txt /tmp/
-RUN uv pip install --no-cache --require-hashes -r /tmp/requirements-lock.txt
+RUN uv pip install --python /opt/venv/bin/python --no-cache --require-hashes -r /tmp/requirements-lock.txt
 
 # -----------------------------------------------------------------------------
 # Estágio 3: Imagem final de runtime (não-root, enxuta, código somente leitura)
@@ -120,6 +121,15 @@ COPY --from=lavalink-downloader /opt/lavalink /opt/lavalink
 
 # Copiar o ambiente virtual de dependências Python
 COPY --from=python-builder /opt/venv /opt/venv
+
+# Sem pip na imagem final: nada instala pacotes em runtime (as dependências vêm do lock, com hash, no estágio python-builder).
+# Tira o pip do Python da imagem base e o ensurepip, que traz uma wheel do pip. O teste no fim derruba o build se o pip
+# ainda puder ser importado, em qualquer dos dois interpretadores.
+RUN rm -rf /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14 \
+      /usr/local/lib/python3.14/site-packages/pip /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+      /usr/local/lib/python3.14/ensurepip && \
+    ! /usr/local/bin/python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)" && \
+    ! /opt/venv/bin/python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)"
 
 # Criar usuário não-root fixo com nologin e preparar diretórios de dados e código
 RUN groupadd -g 10001 empiremuse && \
