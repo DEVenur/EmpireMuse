@@ -72,15 +72,6 @@ class TestThreadPrincipal:
 
         assert len(saida.getvalue()) < MAX_TRACEBACK_CHARS + 200
 
-    def test_keyboard_interrupt_goes_to_the_default_hook_and_prints_nothing_here(self, saida, monkeypatch):
-        chamadas = []
-        monkeypatch.setattr(sys, "__excepthook__", lambda *args: chamadas.append(args[0]))
-        install_early_hooks({}, stream=saida)
-
-        sys.excepthook(*excecao("^C", KeyboardInterrupt))
-
-        assert chamadas == [KeyboardInterrupt] and saida.getvalue() == ""
-
     def test_without_a_stream_it_writes_to_the_stderr_of_the_moment(self, token, capsys):
         install_early_hooks({"DISCORD_TOKEN": token})
 
@@ -135,3 +126,59 @@ class TestRedatorUnico:
         install_early_hooks(stream=saida)
 
         assert redact("token-do-os-environ-99") == REDACTED
+
+
+FORJADA = "x\n2026-10-27 12:00:00 ERROR falso"
+
+
+class TestNenhumaLinhaNaColunaZero:
+    """Um gancho nunca escreve uma linha na coluna 0: nem o texto de uma exceção consegue passar por um registro novo do log."""
+
+    def linhas(self, saida):
+        return [linha for linha in saida.getvalue().splitlines() if linha]
+
+    def test_the_main_thread_hook_frames_every_line(self, instalado, saida):
+        sys.excepthook(*excecao(FORJADA))
+
+        linhas = self.linhas(saida)
+        assert linhas and all(linha[0] == " " for linha in linhas)
+        assert any("2026-10-27 12:00:00 ERROR falso" in linha for linha in linhas)
+
+    def test_the_thread_hook_frames_every_line(self, instalado, saida):
+        def alvo():
+            raise RuntimeError(FORJADA)
+
+        em_thread(alvo)
+
+        linhas = self.linhas(saida)
+        assert linhas and all(linha[0] == " " for linha in linhas)
+
+    def test_a_chained_exception_is_framed_too(self, instalado, saida):
+        try:
+            try:
+                raise KeyError(FORJADA)
+            except KeyError:
+                raise RuntimeError("segunda")
+        except RuntimeError:
+            sys.excepthook(*sys.exc_info())
+
+        assert all(linha[0] == " " for linha in self.linhas(saida))
+
+
+class TestInterrupcaoDoTeclado:
+    def test_keyboard_interrupt_is_formatted_here_without_the_raw_context(self, instalado, saida, token, monkeypatch):
+        padrao = []
+        monkeypatch.setattr(sys, "__excepthook__", lambda *args: padrao.append(args))
+        try:
+            try:
+                raise RuntimeError(f"contexto com {token}")
+            except RuntimeError:
+                raise KeyboardInterrupt
+        except KeyboardInterrupt:
+            info = sys.exc_info()
+
+        sys.excepthook(*info)
+
+        texto = saida.getvalue()
+        assert padrao == [] and "KeyboardInterrupt" in texto
+        assert token not in texto and "contexto com" not in texto and "During handling" not in texto
