@@ -5,6 +5,7 @@ import datetime
 import json
 import logging
 import re
+import unicodedata
 from typing import Union, TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -72,6 +73,18 @@ def fix_characters(text: str, limit: int = 0):
 
 _URL_ENCODE_RE = re.compile(r"[()<>`\\\x00-\x20\x7f]")
 _URL_SCHEMES = {"http", "https"}
+# Controles de direção e caracteres de largura zero que permitem falsificar o texto exibido; o ZWJ (U+200D) e o ZWNJ (U+200C) ficam,
+# porque compõem emojis e escritas legítimas.
+_SPOOFING_RE = re.compile("[\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
+_LINE_BREAK_RE = re.compile(r"\r\n|\r")
+
+
+def _clean_label(text: str) -> str:
+    return _LINE_BREAK_RE.sub(" ", _SPOOFING_RE.sub("", text))
+
+
+def _percent_encode(char: str) -> str:
+    return "".join(f"%{byte:02X}" for byte in char.encode("utf-8"))
 
 
 def _has_web_host(url: str) -> bool:
@@ -87,14 +100,17 @@ def md_url(url: object) -> str | None:
     if not isinstance(url, str) or not _has_web_host(url):
         return None
 
-    encoded = _URL_ENCODE_RE.sub(lambda m: f"%{ord(m.group()):02X}", url)
+    encoded = "".join(
+        _percent_encode(char) if _URL_ENCODE_RE.match(char) or unicodedata.category(char) == "Cf" else char
+        for char in url
+    )
 
     return encoded if _has_web_host(encoded) else None
 
 
 def md_code(text: object, *, limit: int = 0) -> str:
     """Code span com texto externo, sem como fechá-lo por dentro."""
-    return f"`{fix_characters(str(text), limit) or '?'}`"
+    return f"`{fix_characters(_clean_label(str(text)), limit) or '?'}`"
 
 
 def md_bracketed(inner: str, *, prefix: str = "") -> str:
@@ -107,7 +123,7 @@ def md_bracketed(inner: str, *, prefix: str = "") -> str:
 
 def md_link(text: object, url: object, *, code: bool = True, limit: int = 0) -> str:
     """Link mascarado ``[`texto`](<url>)`` com texto e URL externos neutralizados; sem URL válida sai só o rótulo."""
-    label = fix_characters(str(text), limit) or "?"
+    label = fix_characters(_clean_label(str(text)), limit) or "?"
 
     if not code:
         label = disnake.utils.escape_markdown(label)

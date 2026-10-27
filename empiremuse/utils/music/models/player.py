@@ -259,7 +259,7 @@ class LavalinkPlayer(
         if cog and cog.error_report_queue:
             embed.description += (
                 f"\n**Fonte:** {md_code(track.info['sourceName'])}"
-                f"\n**Servidor:** `{disnake.utils.escape_markdown(self.guild.name)} [{self.guild.id}]`"
+                f"\n**Servidor:** {md_code(f'{self.guild.name} [{self.guild.id}]')}"
             )
 
             try:
