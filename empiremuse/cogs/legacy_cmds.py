@@ -89,6 +89,23 @@ EXPORT_REFUSED_NAMES = frozenset(
 )
 
 
+# Já avisou que o diretório de execução é amplo demais para valer como raiz do source.zip (um aviso por processo).
+_warned_runtime_root = False
+
+
+def _runtime_root_is_too_broad(runtime_dir: Path, project_dir: Path) -> bool:
+    """Se o diretório de execução é a raiz do sistema ou ancestral do projeto: como raiz, liberaria a árvore inteira."""
+    global _warned_runtime_root
+    if runtime_dir != Path(runtime_dir.anchor) and runtime_dir not in project_dir.parents:
+        return False
+    if not _warned_runtime_root:
+        _warned_runtime_root = True
+        logger.warning(
+            "O diretório de execução é a raiz do sistema ou ancestral do projeto; o exportsource só inclui arquivos do projeto."
+        )
+    return True
+
+
 def is_export_refused(name: str) -> bool:
     """Se `name` (resolvido contra o cwd, com `..` e links) é um segredo conhecido, fica dentro da `.runtime/` do projeto
     ou resolve para fora do projeto e do diretório de execução (link rastreado apontando para fora)."""
@@ -99,7 +116,10 @@ def is_export_refused(name: str) -> bool:
         dev_runtime = (paths.PROJECT_DIR / paths.DEV_RUNTIME_NAME).resolve()
     except OSError, ValueError, RuntimeError:
         return True  # caminho que nem resolve não vai para o zip
-    if project_dir not in path.parents and runtime_dir not in path.parents:
+    roots = [project_dir]
+    if not _runtime_root_is_too_broad(runtime_dir, project_dir):
+        roots.append(runtime_dir)
+    if not any(root in path.parents for root in roots):
         return True
     if path.name.lower() in EXPORT_REFUSED_NAMES:
         return True
