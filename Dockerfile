@@ -24,15 +24,15 @@ RUN apt-get update && \
 
 WORKDIR /opt/lavalink
 
-ARG LL_BINARIES_URL="https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.4"
+ARG LL_BINARIES_URL="https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.5"
 ARG LAVALINK_JAR_SHA256="8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a"
 ARG LAVALINK_APPLICATION_YML_SHA256="39ca3e7813e0db338535b0e098dd084ea22c278bb74a8ddeac92f1fc65f8bb46"
 ARG YT_PLUGIN_NAME="youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar"
 ARG YT_PLUGIN_SHA256="b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0"
 ARG LAVASRC_PLUGIN_NAME="lavasrc-plugin-4.8.3.jar"
 ARG LAVASRC_PLUGIN_SHA256="4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3"
-ARG LAVALINK_FILTER_PLUGIN_NAME="lavalink-2.6.1.jar"
-ARG LAVALINK_FILTER_PLUGIN_SHA256="1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3"
+ARG LAVALINK_FILTER_PLUGIN_NAME="lavalink-2.7.1.jar"
+ARG LAVALINK_FILTER_PLUGIN_SHA256="4d63a711fa43f0f8ee88006e63b03d24c571ff54ea73d25cba83453b172cbf51"
 ARG SOUNDY_PLUGIN_NAME="soundy-plugin-1.1.0.jar"
 ARG SOUNDY_PLUGIN_SHA256="9568b5930969346b1afba89df8c0c6d373c2b553e087af09fb3c190f252a3cc9"
 
@@ -66,11 +66,12 @@ RUN apt-get update && \
 
 COPY --from=uv-stage /uv /uvx /bin/
 
-RUN python -m venv /opt/venv
+# Sem pip no venv: quem instala é o uv, com o lock e os hashes, só neste estágio.
+RUN python -m venv --without-pip /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements-lock.txt /tmp/
-RUN uv pip install --no-cache --require-hashes -r /tmp/requirements-lock.txt
+RUN uv pip install --python /opt/venv/bin/python --no-cache --require-hashes -r /tmp/requirements-lock.txt
 
 # -----------------------------------------------------------------------------
 # Estágio 3: Imagem final de runtime (não-root, enxuta, código somente leitura)
@@ -120,6 +121,15 @@ COPY --from=lavalink-downloader /opt/lavalink /opt/lavalink
 
 # Copiar o ambiente virtual de dependências Python
 COPY --from=python-builder /opt/venv /opt/venv
+
+# Sem pip na imagem final: nada instala pacotes em runtime (as dependências vêm do lock, com hash, no estágio python-builder).
+# Tira o pip do Python da imagem base e o ensurepip, que traz uma wheel do pip. O teste no fim derruba o build se o pip
+# ainda puder ser importado, em qualquer dos dois interpretadores.
+RUN rm -rf /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14 \
+      /usr/local/lib/python3.14/site-packages/pip /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+      /usr/local/lib/python3.14/ensurepip && \
+    ! /usr/local/bin/python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)" && \
+    ! /opt/venv/bin/python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)"
 
 # Criar usuário não-root fixo com nologin e preparar diretórios de dados e código
 RUN groupadd -g 10001 empiremuse && \

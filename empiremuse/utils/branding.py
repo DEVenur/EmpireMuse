@@ -18,10 +18,10 @@ LICENSE_URL = REPO_URL + "/blob/main/LICENSE"
 GUIDES_URL = REPO_URL + "/blob/main/docs/guides"
 RPC_APP_URL = "https://github.com/EmpireCommunity/EmpireMuse-RPC-app"
 RPC_APP_RELEASES_URL = RPC_APP_URL + "/releases"
-LAVALINK_BINARIES_URL = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.4"
+LAVALINK_BINARIES_URL = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.5"
 LAVALINK_JAR_URL = LAVALINK_BINARIES_URL + "/Lavalink.jar"
 LAVALINK_APPLICATION_YML_URL = LAVALINK_BINARIES_URL + "/application.yml"
-# SHA-256 fixos dos binários da release 0.0.4 (conferem com o SHA256SUMS publicado); lidos em tempo de chamada.
+# SHA-256 fixos dos binários da release 0.0.5 (conferem com o SHA256SUMS publicado); lidos em tempo de chamada.
 LAVALINK_JAR_SHA256 = "8cb801e591072c3689fafd71ccf571a95a4ead3cc35dfc045e157d763d89119a"
 LAVALINK_APPLICATION_YML_SHA256 = "39ca3e7813e0db338535b0e098dd084ea22c278bb74a8ddeac92f1fc65f8bb46"
 # URLs do Lavalink.jar de versões oficiais do espelho (inclusive sob o nome antigo do repositório). Quem as mantém no
@@ -37,6 +37,7 @@ LAVALINK_JAR_OFFICIAL_URLS = frozenset(
         "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.2/Lavalink.jar",
         "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.3/Lavalink.jar",
         "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.4/Lavalink.jar",
+        "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.5/Lavalink.jar",
     }
 )
 # Versões oficiais do application.yml que o bot pode substituir (a 0.0.1, a 0.0.2, a 0.0.3 e a atual); qualquer outra é do dono.
@@ -75,7 +76,7 @@ JDK_DOWNLOADS = {
 LAVALINK_PLUGIN_SHA256 = {
     "youtube-plugin-2be8e542d3f6f178e048dca565892684c2e40177.jar": "b062effdda6abeaa46913dfd1b5d5600120b65f239ce88f30948c7213a3ca1c0",
     "lavasrc-plugin-4.8.3.jar": "4ec389bdae64fd381ee62fcdb902e15d9402823b1ad0b982bd5633619a07c1b3",
-    "lavalink-2.6.1.jar": "1fc300ec80d4b1705eff0a3b2b4dae21177467c95a7f1e393ecf018c10f2aaf3",
+    "lavalink-2.7.1.jar": "4d63a711fa43f0f8ee88006e63b03d24c571ff54ea73d25cba83453b172cbf51",
     "soundy-plugin-1.1.0.jar": "9568b5930969346b1afba89df8c0c6d373c2b553e087af09fb3c190f252a3cc9",
 }
 LAVALINK_SERVER_LIST_URL = RAW_BASE_URL + "/data/lavalink_servers.ini"

@@ -205,7 +205,7 @@ def _prepare_yml(directory: str) -> None:
 
 
 def _remove_unlisted_plugins(plugins_dir: str) -> None:
-    """Todo .jar em plugins/ é carregado pelo Lavalink: ao renovar o jar, só os plugins oficiais permanecem."""
+    """Todo .jar em plugins/ é carregado pelo Lavalink: a cada preparo online, só os plugins oficiais permanecem."""
     if not os.path.isdir(plugins_dir):
         return
     for entry in os.listdir(plugins_dir):
@@ -284,7 +284,9 @@ def prepare_lavalink_files(
     jar_path = os.path.join(directory, "Lavalink.jar")
     if not _matches(jar_path, jar_sha256):
         download_verified(url, jar_path, jar_sha256)
-        _remove_unlisted_plugins(os.path.join(directory, PLUGINS_DIR))
+    # A cada preparo, e não só quando o Lavalink.jar é renovado: um plugin que saiu da lista (ex.: o lavalink-2.6.1.jar)
+    # continua em plugins/ se o jar do servidor não mudou entre duas versões.
+    _remove_unlisted_plugins(os.path.join(directory, PLUGINS_DIR))
     _prepare_yml(directory)
     _prepare_plugins(directory)
 

@@ -1,0 +1,18 @@
+# Falsos positivos já auditados (Vigil). Nenhum é segredo do projeto; cada linha é uma impressão digital do gitleaks.
+
+# Cliente OAuth público do YouTube TV (valor público, o mesmo de qualquer app de TV).
+empiremuse/cogs/ll_yt_oauth.py:generic-api-key:37
+# Mesmo cliente OAuth público, em commits antigos (caminho antigo modules/ll_yt_oauth.py).
+fc4b7f8f034071ccb08803c153511afbe5a2c9e9:modules/ll_yt_oauth.py:generic-api-key:31
+158636b02807db5af30162f9fbf65b8a01c8e22c:modules/ll_yt_oauth.py:generic-api-key:31
+
+# Senha publicada de um nó Lavalink público (lista de servidores públicos).
+data/lavalink_servers.ini:generic-api-key:53
+cbb1ea2e7cc798733cb0a123f9a47ecacc6d44ce:data/lavalink_servers.ini:generic-api-key:53
+
+# Fixture falso de teste (chave de sessão fictícia).
+tests/panel/helpers_account.py:generic-api-key:18
+6e35c80a268b683a3fec82aa0c13e9f462310ea4:tests/panel/helpers_account.py:generic-api-key:17
+
+# Primeiro commit: TOKEN vazio e DEFAULT_PREFIX de 4 caracteres no modelo .env-example (sem segredo).
+2fe8020682369a89281943d1ad79c072c673e5f7:.env-example:generic-api-key:1

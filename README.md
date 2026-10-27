@@ -92,6 +92,7 @@ O sistema é estruturado em camadas modulares para desacoplar regras de negócio
 - **Servidor Web e Relé (`empiremuse/web_app.py`)**: Servidor Tornado que expõe a página de status, relé WebSocket de RPC e o roteador da aplicação web `empiremuse/panel/`.
 - **Motor de Áudio (`empiremuse/wavelink/` e `empiremuse/utils/music/`)**: Modelos de reprodução (`LavalinkPlayer`, `LavalinkTrack`), cliente de nós Lavalink e gerenciamento de subprocesso Java local (`local_lavalink.py`).
 - **Persistência (`empiremuse/utils/db.py`)**: Suporte híbrido transparente para MongoDB (produção) e TinyMongo local (desenvolvimento).
+- **Repositórios satélites**: [`EmpireMuse-LL-binaries`](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) `0.0.5` (Lavalink 4.2.2 e plugins, incluindo Lyrics 2.7.1), [`EmpireMuse-jishaku`](https://github.com/EmpireCommunity/EmpireMuse-jishaku) `v2.6.6.post3` (opcional, `ENABLE_JISHAKU`) e [`EmpireMuse-RPC-app`](https://github.com/EmpireCommunity/EmpireMuse-RPC-app) (Rich Presence).
 - **Cogs e Comandos (`empiremuse/cogs/`)**: Módulos de comandos de música, configurações de servidor, tratamento de erros, ajuda e integração com Last.fm.
 
 Para uma documentação aprofundada com fluxogramas, ciclo de vida e mapeamento completo de arquivos, consulte [`docs/architecture.md`](docs/architecture.md).

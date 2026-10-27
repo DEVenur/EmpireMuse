@@ -43,3 +43,7 @@ O fork deixou de ser submódulo (`repos/EmpireMuse-jishaku`): passou a ser um cl
 ## Atualização (2026-10-27)
 
 Runtime atualizado para Python 3.14 no item 6; o pin do fork não muda nesta fase.
+
+## Atualização (2026-10-27, item 6, fase S4)
+
+O pin passa para o wheel da release `v2.6.6.post3` do fork, que exige `import_expression>=2,<3`; com isso o `jsk py` volta a aceitar `module!.attr`. A decisão (fork próprio, desligado por padrão, com hash SHA-256 no lock) não muda.

@@ -8,9 +8,9 @@ Quando configurado para execução local, o próprio bot gerencia o download de 
 
 ---
 
-## 1. Stack e Versões Homologadas (Release 0.0.4)
+## 1. Stack e Versões Homologadas (Release 0.0.5)
 
-O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins espelhados com hashes fixados. A release **0.0.4** mantém o Lavalink 4.2.2 e os plugins da 0.0.3 e acrescenta o plugin **Soundy** (SoundCloud), com um `application.yml` que desliga a fonte nativa do SoundCloud e fixa `logging.request.includePayload: false`. Desde a 0.0.3, o `application.yml` traz suporte ao cliente `TV` (essencial para contornar bloqueios anti-bot), OAuth desativado por padrão e nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN` (evitando vazamento de tokens nos logs):
+O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins espelhados com hashes fixados. A release **0.0.5** atualiza o plugin Lyrics para a 2.7.1; a **0.0.4** manteve o Lavalink 4.2.2 e os plugins da 0.0.3 e acrescentou o plugin **Soundy** (SoundCloud), com um `application.yml` que desliga a fonte nativa do SoundCloud e fixa `logging.request.includePayload: false`. Desde a 0.0.3, o `application.yml` traz suporte ao cliente `TV` (essencial para contornar bloqueios anti-bot), OAuth desativado por padrão e nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN` (evitando vazamento de tokens nos logs):
 
 | Componente | Versão / Tag | Origem e Observações |
 | :--- | :--- | :--- |
@@ -18,11 +18,11 @@ O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins es
 | **Java / JDK** | **25 recomendado, 17 mínimo** | Requisito do Lavalink 4.2.2 (**Java 25 recomendado**, 17 é o mínimo). Caso Java ≥ 17 não seja detectado no sistema, o bot baixa um JDK sob demanda. |
 | **youtube-plugin** | Snapshot `2be8e542` | Build fixado pós-1.18.2 com correções críticas para clientes mobile/web e suporte a cifra remota. |
 | **LavaSrc** | **4.8.3** | Provedor de metadados e suporte a plataformas externas (Spotify e Deezer). |
-| **Lyrics** | **2.6.1** | Plugin oficial de letras de músicas (`dev.schlaubi.lyrics`). |
+| **Lyrics** | **2.7.1** (commit `d0dfbb13`) | Plugin oficial de letras de músicas (`dev.schlaubi.lyrics`), compilado do commit do mantenedor porque a tag 2.7.1 não compilava. |
 | **Soundy** | **1.1.0** (`lowkwrs/soundy@e2c5da8`, MIT) | Fonte do SoundCloud (`scsearch:` e URLs `soundcloud.com`) com suporte a HLS fMP4, compilada do commit fixado; receita de recompilação no README do espelho. |
 
 Os artefatos homologados são distribuídos no espelho oficial da organização:
-- **Repositório de Binários**: [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/tag/0.0.4)
+- **Repositório de Binários**: [EmpireCommunity/EmpireMuse-LL-binaries](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/tag/0.0.5)
 
 ---
 
@@ -82,7 +82,7 @@ O parâmetro `LAVALINK_FILE_URL` define a origem do binário `Lavalink.jar`:
 
 ### 3.2. Bloqueio Anti-bot e Autenticação OAuth Opcional
 Desde agosto de 2026, o YouTube intensificou restrições automáticas contra clientes externos e scrapers ("Sign in to confirm you're not a bot", "This video requires login"):
-1. **Padrão Seguro**: O `application.yml` oficial da release 0.0.4 mantém `plugins.youtube.oauth.enabled: false` e o nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN`. Isso previne que tokens ou credenciais sejam impressos nos arquivos de log e evita ciclos contínuos de erro HTTP 400 quando não há conta vinculada.
+1. **Padrão Seguro**: O `application.yml` oficial da release 0.0.5 mantém `plugins.youtube.oauth.enabled: false` e o nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN`. Isso previne que tokens ou credenciais sejam impressos nos arquivos de log e evita ciclos contínuos de erro HTTP 400 quando não há conta vinculada.
 2. **OAuth com Conta Descartável**: Caso seu servidor sofra bloqueios de IP na reprodução do YouTube, é possível ativar a autenticação OAuth vinculando uma **conta Google descartável** através da variável `YOUTUBE_OAUTH_REFRESH_TOKEN` no `.env`.
    - Consulte o guia completo e passo a passo em: [Guia de Configuração do YouTube OAuth](youtube-oauth.md).
 
