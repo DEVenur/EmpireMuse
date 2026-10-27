@@ -5,6 +5,7 @@ console) e B7 (1000 WARNING iguais = 999 por destino, não 1998). Relógio do ag
 """
 
 import io
+from types import SimpleNamespace
 import logging
 import re
 
@@ -569,3 +570,112 @@ class TestPontosDeChamadaDiferentes:
 
         for texto in destinos.ambos():
             assert texto.count("Traceback (most recent call last)") == 1 and "repetida 1×" in texto
+
+
+# ============================================================================ V-126-1 — a chave do agregador nunca guarda o texto cru
+
+
+def agregador_instalado():
+    raiz = logging.getLogger()
+    for handler in raiz.handlers:
+        for filtro in handler.filters:
+            if type(filtro).__name__ == "RepeatAggregator":
+                return filtro
+    raise AssertionError("o configure_logging não instalou um RepeatAggregator")
+
+
+def textos_da_chave(agregador) -> list[str]:
+    """Todo texto que a chave de cada balde carrega (a chave é uma tupla; o que não for ``str`` é ignorado)."""
+    return [parte for chave in agregador._buckets for parte in chave if isinstance(parte, str)]
+
+
+class AposOsFiltros(logging.Handler):
+    """Handler instalado DEPOIS do ``configure_logging``: vê o registro já processado pelos filtros dos outros handlers."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.DEBUG)
+        self.atributos: list[dict] = []
+
+    def emit(self, record):
+        self.atributos.append({k: v for k, v in vars(record).items() if k.startswith("empiremuse_")})
+
+
+class TestChaveSemSegredo:
+    SEG = "senha-na-chave-do-balde-V126-q"
+
+    @pytest.fixture
+    def instalado(self, montar):
+        destinos = montar([self.SEG])
+        depois = AposOsFiltros()
+        logging.getLogger().addHandler(depois)
+        return SimpleNamespace(destinos=destinos, depois=depois, agregador=agregador_instalado())
+
+    def test_a_secret_and_control_characters_in_a_line_without_args_never_reach_the_bucket_key(self, instalado):
+        logging.getLogger("empiremuse.wavelink.local").warning(f"Failed to bind {self.SEG} \x1b[2J\rfim")
+
+        for texto in textos_da_chave(instalado.agregador):
+            assert self.SEG not in texto and "\x1b" not in texto and "\r" not in texto
+        assert textos_da_chave(instalado.agregador), "o teste não prova nada sem chave no balde"
+
+    def test_no_empiremuse_attribute_of_the_processed_record_carries_the_raw_secret(self, instalado):
+        logging.getLogger("empiremuse.wavelink.local").warning(f"Failed to bind {self.SEG} \x1b[2J\rfim")
+
+        (atributos,) = instalado.depois.atributos
+        for nome, valor in atributos.items():
+            if isinstance(valor, str):
+                assert self.SEG not in valor and "\x1b" not in valor and "\r" not in valor, nome
+
+    def test_the_destinations_still_get_the_masked_line(self, instalado):
+        logging.getLogger("empiremuse.wavelink.local").warning(f"Failed to bind {self.SEG} fim")
+
+        for texto in instalado.destinos.ambos():
+            assert self.SEG not in texto and "Failed to bind *** fim" in texto
+
+    def test_a_secret_straddling_the_256th_character_leaves_no_fragment_in_the_key(self, instalado):
+        linha = "a" * 250 + self.SEG + "b" * 100
+
+        logging.getLogger("empiremuse.wavelink.local").warning(linha)
+
+        for texto in textos_da_chave(instalado.agregador):
+            assert self.SEG[:6] not in texto and self.SEG[-6:] not in texto
+
+    def test_a_secret_in_the_args_of_a_percent_template_stays_out_of_the_key_and_the_template_is_unchanged(
+        self, instalado
+    ):
+        logging.getLogger("empiremuse.wavelink").warning("senha %s falhou", self.SEG)
+
+        (atributos,) = instalado.depois.atributos
+        assert atributos["empiremuse_template"] == "senha %s falhou"
+        assert all(self.SEG not in texto for texto in textos_da_chave(instalado.agregador))
+
+    def test_two_lines_that_differ_only_after_the_256th_character_are_still_two_records(self, instalado):
+        log = logging.getLogger("empiremuse.wavelink.local")
+
+        log.warning("x" * 300 + "-final-A")
+        log.warning("x" * 300 + "-final-B")
+
+        for texto in instalado.destinos.ambos():
+            assert "-final-A" in texto and "-final-B" in texto and "repetida" not in texto
+
+    def test_the_same_long_line_a_hundred_times_still_aggregates(self, instalado, relogio):
+        log = logging.getLogger("empiremuse.wavelink.local")
+
+        for _ in range(100):
+            log.warning("y" * 300 + f"-{self.SEG}-fim")
+        flush_logging()
+
+        for texto in instalado.destinos.ambos():
+            assert texto.count("repetida 99×") == 1 and self.SEG not in texto
+
+    def test_two_lines_that_differ_only_in_the_secret_aggregate_as_one(self, montar):
+        outro = "outra-senha-na-chave-V126-w"
+        destinos = montar([self.SEG, outro])
+        log = logging.getLogger("empiremuse.wavelink.local")
+
+        log.warning(f"Failed to bind {self.SEG} agora")
+        log.warning(f"Failed to bind {outro} agora")
+        flush_logging()
+
+        for texto in destinos.ambos():
+            assert texto.count("Failed to bind *** agora") == 2 and "repetida 1×" in texto
+            assert self.SEG not in texto and outro not in texto

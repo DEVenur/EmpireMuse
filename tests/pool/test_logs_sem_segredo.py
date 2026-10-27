@@ -28,11 +28,18 @@ def sem_espera(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", AsyncMock())
 
 
+def saida_visivel(capsys, caplog) -> str:
+    """Tudo o que o operador veria: stdout/stderr e os registros de log (a saída do ``check_node`` passou do ``print`` para o log)."""
+    saida = capsys.readouterr()
+    return saida.out + saida.err + "\n".join(r.getMessage() for r in caplog.records) + caplog.text
+
+
 def sem_segredo(texto: str) -> None:
     assert SENHA not in texto and CORPO_SECRETO not in texto and "RequestInfo" not in texto, texto
 
 
-async def test_check_node_final_failure_message_has_no_header(monkeypatch, capsys):
+async def test_check_node_final_failure_message_has_no_header(monkeypatch, capsys, caplog):
+    caplog.set_level(logging.INFO)
     """(B) a falha vem do ``r.json()`` (ContentTypeError) e a mensagem final traz a causa."""
     monkeypatch.setattr(client.aiohttp, "ClientSession", lambda: SessaoComoContexto())
     pool = BotPool.__new__(BotPool)
@@ -41,9 +48,9 @@ async def test_check_node_final_failure_message_has_no_header(monkeypatch, capsy
 
     await pool.check_node({"host": "127.0.0.1", "port": 8090, "password": SENHA, "identifier": "NODE-X", "retries": 1})
 
-    saida = capsys.readouterr()
-    sem_segredo(saida.out + saida.err)
-    assert "Todas as tentativas de verificar o servidor [NODE-X] falharam" in saida.out and "HTTP 200" in saida.out
+    visivel = saida_visivel(capsys, caplog)
+    sem_segredo(visivel)
+    assert "Todas as tentativas de verificar o servidor [NODE-X] falharam" in visivel and "HTTP 200" in visivel
 
 
 class SessaoComoContexto(SessaoQueNaoEntendeJson):
@@ -166,7 +173,8 @@ async def test_lavalink_tracks_exceptions_set_has_no_header():
 
 
 @pytest.mark.parametrize("status", [401, 500])
-async def test_check_node_http_status_failure_logs_only_the_status(monkeypatch, capsys, status):
+async def test_check_node_http_status_failure_logs_only_the_status(monkeypatch, capsys, caplog, status):
+    caplog.set_level(logging.INFO)
     monkeypatch.setattr(client.aiohttp, "ClientSession", lambda: SessaoComStatus(status))
     pool = BotPool.__new__(BotPool)
     pool.get_all_bots = lambda: []
@@ -174,11 +182,9 @@ async def test_check_node_http_status_failure_logs_only_the_status(monkeypatch, 
 
     await pool.check_node({"host": "127.0.0.1", "port": 8090, "password": SENHA, "identifier": "NODE-X", "retries": 1})
 
-    saida = capsys.readouterr()
-    sem_segredo(saida.out + saida.err)
-    assert (
-        "Todas as tentativas de verificar o servidor [NODE-X] falharam" in saida.out and f"HTTP {status}" in saida.out
-    )
+    visivel = saida_visivel(capsys, caplog)
+    sem_segredo(visivel)
+    assert "Todas as tentativas de verificar o servidor [NODE-X] falharam" in visivel and f"HTTP {status}" in visivel
 
 
 @pytest.mark.parametrize("status", [401, 500])

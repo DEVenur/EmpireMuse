@@ -4,6 +4,7 @@ O ``repr`` de um ``aiohttp.ClientResponseError`` carrega o ``RequestInfo`` com o
 O node, o Mongo e a rede são fakes; o ``sleep`` do backoff é trocado, então nada dorme nem sai da máquina.
 """
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -90,23 +91,29 @@ def rodar(monkeypatch):
     return executar
 
 
-async def test_an_http_error_logs_only_the_status_and_the_node_never_the_headers(rodar, capsys):
+def saida_visivel(capsys, caplog) -> str:
+    """Tudo o que o operador veria: stdout/stderr e os registros de log (a saída do ``check_node`` passou do ``print`` para o log)."""
+    saida = capsys.readouterr()
+    return saida.out + saida.err + "\n".join(r.getMessage() for r in caplog.records) + caplog.text
+
+
+async def test_an_http_error_logs_only_the_status_and_the_node_never_the_headers(rodar, capsys, caplog):
+    caplog.set_level(logging.INFO)
     resposta = Resposta(401, erro=erro_http())
 
     await rodar(resposta=resposta)
 
-    saida = capsys.readouterr()
-    visivel = saida.out + saida.err
+    visivel = saida_visivel(capsys, caplog)
     assert SENHA not in visivel and "RequestInfo" not in visivel
     assert "401" in visivel and "LOCAL" in visivel
     assert "Falha ao aplicar o Youtube refreshToken" in visivel
 
 
-async def test_a_non_http_error_logs_only_the_class_name(rodar, capsys):
+async def test_a_non_http_error_logs_only_the_class_name(rodar, capsys, caplog):
+    caplog.set_level(logging.INFO)
     await rodar(erro=OSError(f"conexão recusada com Authorization: {SENHA}"))
 
-    saida = capsys.readouterr()
-    visivel = saida.out + saida.err
+    visivel = saida_visivel(capsys, caplog)
     assert SENHA not in visivel
     assert "OSError" in visivel and "LOCAL" in visivel
     assert "Falha ao aplicar o Youtube refreshToken" in visivel

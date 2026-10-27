@@ -248,11 +248,20 @@ class SanitizeAndRedact(logging.Filter):
         try:
             if getattr(record, "empiremuse_redacted", False):
                 return True
-            record.empiremuse_template = (
-                record.msg[:MAX_TEMPLATE_KEY_CHARS]
-                if isinstance(record.msg, str)
-                else (_qualified_exc_type(type(record.msg)) or type(record.msg).__qualname__)
-            )
+            if isinstance(record.msg, str):
+                # Com args o template é constante do código; sem args a própria mensagem é o template (a linha do stderr do Java) e
+                # pode carregar segredo: a chave do agregador nasce do texto já saneado e redigido, nunca do cru.
+                template_text = record.msg if record.args else redact(sanitize_text(record.msg))
+                record.empiremuse_template = template_text[:MAX_TEMPLATE_KEY_CHARS]
+                # Mensagens longas que só diferem depois do corte do template não podem virar a mesma chave de agregação.
+                record.empiremuse_template_fp = (
+                    hashlib.sha256(template_text.encode("utf-8", errors="backslashreplace")).hexdigest()[:16]
+                    if len(template_text) > MAX_TEMPLATE_KEY_CHARS
+                    else None
+                )
+            else:
+                record.empiremuse_template = _qualified_exc_type(type(record.msg)) or type(record.msg).__qualname__
+                record.empiremuse_template_fp = None
             if record.args:
                 if isinstance(record.args, Mapping):
                     record.args = {key: _sanitize_arg(val) for key, val in record.args.items()}
