@@ -19,6 +19,7 @@ import pytest
 from empiremuse.logs.redact import REDACTED, redact
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
+from tests.support.laco_do_pool import encerrar_laco
 
 pytestmark = pytest.mark.critical
 
@@ -76,9 +77,7 @@ def fabrica(runtime, monkeypatch):
 
     yield criar
     for pool in criados:
-        if pool.loop is not None and not pool.loop.is_closed():
-            pool.loop.run_until_complete(asyncio.sleep(0))
-            pool.loop.close()
+        encerrar_laco(pool.loop)
     asyncio.set_event_loop(None)
 
 

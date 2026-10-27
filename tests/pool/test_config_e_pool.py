@@ -29,6 +29,7 @@ from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import DBModel, LocalDatabase
 from tests.support.api_publica import arvore_da_familia
+from tests.support.laco_do_pool import encerrar_laco
 from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.regression
@@ -234,9 +235,7 @@ def pool_com_bots_falsos(runtime, monkeypatch):
     pool.node_check = MagicMock()
     pool.start_lavalink = AsyncMock()  # nada de subir Java nem baixar jar/JDK
     yield pool
-    if pool.loop is not None and not pool.loop.is_closed():
-        pool.loop.run_until_complete(asyncio.sleep(0))  # deixa as tasks dubladas terminarem
-        pool.loop.close()
+    encerrar_laco(pool.loop)  # cancela o que o setup deixou (tarefas dubladas e a da versão nova) e fecha o laço
     asyncio.set_event_loop(None)
 
 
