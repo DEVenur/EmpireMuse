@@ -7,9 +7,7 @@ cada registro conte uma única vez (V-L6). Resumos saem fora da trava interna pa
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 import logging
-import re
 import threading
 import time
 from collections.abc import Callable
@@ -24,22 +22,11 @@ MAX_EXC_SUMMARY_CHARS = 300
 
 type _AggregateKey = tuple[str, int, str, str | None, str | None]
 
-_FRAME_LINE_RE = re.compile(r'^  File ".*", line \d+, in .*')
-
 
 def _normalize_template(raw: object) -> str:
     if isinstance(raw, str):
         return raw[:MAX_TEMPLATE_KEY_CHARS]
     return f"<{type(raw).__qualname__}>"
-
-
-def _traceback_fingerprint(exc_text: object) -> str | None:
-    if not isinstance(exc_text, str) or not exc_text:
-        return None
-    frames = [line for line in exc_text.splitlines() if _FRAME_LINE_RE.match(line)]
-    if not frames:
-        return None
-    return hashlib.sha256("\n".join(frames).encode("utf-8", errors="backslashreplace")).hexdigest()
 
 
 def _last_exc_line(exc_text: object) -> str:
@@ -74,7 +61,7 @@ class _Bucket:
 
 
 class RepeatAggregator(logging.Filter):
-    """Agrega registros ``WARNING+`` com mesma chave ``(name, levelno, empiremuse_template, empiremuse_exc_type, tb_fp)``."""
+    """Agrega registros ``WARNING+`` com mesma chave ``(name, levelno, empiremuse_template, empiremuse_exc_type, empiremuse_tb_fp)``."""
 
     def __init__(
         self,
@@ -114,6 +101,7 @@ class RepeatAggregator(logging.Filter):
         summary.guild = bucket.guild
         summary.empiremuse_template = msg[:MAX_TEMPLATE_KEY_CHARS]
         summary.empiremuse_exc_type = None
+        summary.empiremuse_tb_fp = None
         summary.empiremuse_redacted = True
         summary.empiremuse_emit = True
         return summary
@@ -130,14 +118,14 @@ class RepeatAggregator(logging.Filter):
             if hasattr(record, "empiremuse_template"):
                 record.empiremuse_template = template_key
             exc_text = getattr(record, "exc_text", None)
-            tb_fp = _traceback_fingerprint(exc_text)
+            tb_fp = getattr(record, "empiremuse_tb_fp", None)
             error_code = _valid_error_code(record)
             key: _AggregateKey = (
                 record.name,
                 record.levelno,
                 template_key,
                 getattr(record, "empiremuse_exc_type", None),
-                tb_fp,
+                tb_fp if isinstance(tb_fp, str) else None,
             )
             to_emit: list[logging.LogRecord] = []
             with self._lock:

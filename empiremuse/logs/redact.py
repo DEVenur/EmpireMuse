@@ -7,10 +7,12 @@ Funções puras sobre texto mais o redator único do processo (``configure_secre
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
 import threading
+import traceback
 from collections.abc import Iterable, Mapping
 from contextlib import suppress
 from urllib.parse import quote
@@ -22,6 +24,7 @@ OMITTED = "[registro omitido: falha ao redigir]"
 MAX_MESSAGE_CHARS = 8192
 MAX_TRACEBACK_CHARS = 32768
 MAX_TEMPLATE_KEY_CHARS = 256
+_MAX_CHAINED_EXCEPTIONS = 8
 
 _LINE_BREAKS = re.compile(r"[\r\n\u2028\u2029]")
 # C0 exceto \t (\x09) e \n (\x0a) — inclui \r (\x0d) e ESC (\x1b) — mais DEL (\x7f), C1 (\x80-\x9f),
@@ -155,6 +158,34 @@ def _qualified_exc_type(exc_type: object) -> str | None:
     return qualname
 
 
+def _structured_tb_fingerprint(exc_value: BaseException | None, exc_tb: object) -> str | None:
+    frames: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc_value
+    tb_only = exc_tb
+    depth = 0
+    while depth < _MAX_CHAINED_EXCEPTIONS:
+        depth += 1
+        tb = current.__traceback__ if current is not None and current.__traceback__ is not None else tb_only
+        tb_only = None
+        if tb is not None:
+            for frame, lineno in traceback.walk_tb(tb):  # type: ignore[arg-type]
+                code = frame.f_code
+                frames.append(f"{code.co_filename}:{lineno}:{code.co_name}")
+        if current is None or id(current) in seen:
+            break
+        seen.add(id(current))
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif current.__context__ is not None and not current.__suppress_context__:
+            current = current.__context__
+        else:
+            break
+    if not frames:
+        return None
+    return hashlib.sha256("\n".join(frames).encode("utf-8", errors="backslashreplace")).hexdigest()
+
+
 class SanitizeAndRedact(logging.Filter):
     """Filtro total de saneamento, redação e corte; executa só na 1ª passagem por ``LogRecord``."""
 
@@ -179,14 +210,17 @@ class SanitizeAndRedact(logging.Filter):
             record.args = None
             if record.exc_info and isinstance(record.exc_info, tuple) and record.exc_info[0] is not None:
                 record.empiremuse_exc_type = _qualified_exc_type(record.exc_info[0])
+                record.empiremuse_tb_fp = _structured_tb_fingerprint(record.exc_info[1], record.exc_info[2])
                 formatted = logging.Formatter().formatException(record.exc_info)
                 record.exc_text = scrub(formatted, MAX_TRACEBACK_CHARS)
                 record.exc_info = None
             elif record.exc_text:
                 record.exc_text = scrub(str(record.exc_text), MAX_TRACEBACK_CHARS)
                 record.empiremuse_exc_type = getattr(record, "empiremuse_exc_type", None)
+                record.empiremuse_tb_fp = getattr(record, "empiremuse_tb_fp", None)
             else:
                 record.empiremuse_exc_type = None
+                record.empiremuse_tb_fp = None
             if record.stack_info:
                 record.stack_info = scrub(str(record.stack_info), MAX_TRACEBACK_CHARS)
             record.empiremuse_redacted = True
@@ -199,5 +233,6 @@ class SanitizeAndRedact(logging.Filter):
                 record.stack_info = None
                 record.empiremuse_template = OMITTED
                 record.empiremuse_exc_type = None
+                record.empiremuse_tb_fp = None
                 record.empiremuse_redacted = True
         return True
