@@ -159,7 +159,9 @@ def _write_json_atomic(path: Path, data: object) -> None:
 def _read_json(path: Path) -> object:
     """JSON do arquivo regular (até ``MAX_FILE_BYTES``); levanta ``OSError``/``ValueError`` se ausente, de outro tipo, grande demais ou inválido."""
     # O_NONBLOCK não deixa um FIFO travar a abertura (o boot_guard roda antes do bot); O_NOFOLLOW recusa link simbólico.
-    descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    # No Windows essas flags não existem (valem 0) e o ``S_ISREG`` abaixo segue barrando o que não é arquivo comum.
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(path, flags)
     with os.fdopen(descriptor, "rb") as file:
         if not stat.S_ISREG(os.fstat(file.fileno()).st_mode):
             raise ValueError("não é um arquivo regular")
@@ -178,7 +180,11 @@ def write_pending(runtime_dir: Path, pending: PendingUpdate) -> None:
 
 
 def clear_pending(runtime_dir: Path) -> None:
-    pending_path(runtime_dir).unlink(missing_ok=True)
+    """Apaga o pendente; se não der (ex.: um diretório com esse nome), só avisa: o boot não pode cair por causa disso."""
+    try:
+        pending_path(runtime_dir).unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Não consegui apagar o arquivo de atualização pendente.")
 
 
 def read_pending(runtime_dir: Path, now: float) -> PendingUpdate | None:

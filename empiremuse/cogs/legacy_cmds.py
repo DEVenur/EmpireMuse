@@ -121,15 +121,25 @@ async def run_command(cmd: str):
     return str(r.stdout)
 
 
-async def run_git(*args: str, git_dir: str) -> str:
-    """Git de leitura sem shell: ``--git-dir`` explícito, ambiente mínimo (sem ``GIT_DIR`` herdado), saída mascarada.
+async def run_git(*args: str, git_dir: str, cwd: Path | None = None) -> str:
+    """Git de leitura sem shell: ``--git-dir`` absoluto, ambiente mínimo (sem ``GIT_DIR`` herdado), saída mascarada.
 
+    ``cwd`` é a árvore de trabalho (padrão: a pasta de execução). ``git_dir`` relativo vale contra o cwd do PROCESSO, como o
+    ``os.path.isdir`` de quem chama, e por isso é resolvido antes de o git mudar de pasta.
     Levanta ``CommandFailed`` com a saída se o git sair com status diferente de zero.
     """
-    command = ["git", f"--git-dir={git_dir}", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", *args]
+    command = [
+        "git",
+        f"--git-dir={os.path.abspath(git_dir)}",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        *args,
+    ]
     result = await run_exec(
         *command,
-        cwd=paths.RUNTIME_DIR,
+        cwd=cwd or paths.RUNTIME_DIR,
         env=git_env(os.environ),
         timeout=GIT_READ_TIMEOUT,
         max_output=MAX_GIT_READ_OUTPUT,
@@ -424,6 +434,10 @@ class Owner(commands.Cog):
         await pool.update_lock.acquire()
         handed_over = False  # a trava passa para a janela de confirmação, que a solta ao cancelar, expirar ou terminar
         try:
+            if not isinstance(ctx, CustomContext):
+                await (
+                    ctx.response.defer()
+                )  # a consulta ao remoto passa de 3 s; o botão do painel expiraria antes da resposta
             mode = update_mode(self.bot.config, os.environ, paths.PROJECT_DIR)
             if mode == MODE_GIT:
                 handed_over, text = await self._offer_git_update(ctx)
@@ -487,8 +501,7 @@ class Owner(commands.Cog):
         if isinstance(ctx, CustomContext):
             view.message = await ctx.send(embed=embed, view=view)
             return True, None
-        # Painel: a mensagem do painel segue como está e a confirmação vai só para quem clicou.
-        await ctx.response.defer()
+        # Painel (já deferido em ``update``): a mensagem do painel segue como está e a confirmação vai só para quem clicou.
         view.message = await ctx.followup.send(embed=embed, view=view, ephemeral=True, wait=True)
         return True, "Confirmação enviada só para você."
 
@@ -801,7 +814,10 @@ class Owner(commands.Cog):
         git_dir = os.environ.get("GIT_DIR", str(paths.RUNTIME_DIR / ".git"))
         if os.path.isdir(git_dir):
             try:
-                filelist = await run_git("ls-files", "--others", "--exclude-standard", "--cached", git_dir=git_dir)
+                # Os caminhos saem relativos à árvore de trabalho, e o ``zip_dir`` os lê a partir do cwd do processo.
+                filelist = await run_git(
+                    "ls-files", "--others", "--exclude-standard", "--cached", git_dir=git_dir, cwd=Path.cwd()
+                )
             except Exception:
                 filelist = ""
 
