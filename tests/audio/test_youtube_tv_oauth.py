@@ -121,6 +121,7 @@ def started(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ll.requests, "get", no_network)
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
+    monkeypatch.setattr(ll, "java_major_version", lambda cmd, debug=False: 25)
     monkeypatch.setattr(ll.platform, "architecture", lambda *a, **k: ("64bit", "ELF"))
     for var in OAUTH_ENV_VARS:
         monkeypatch.delenv(var, raising=False)

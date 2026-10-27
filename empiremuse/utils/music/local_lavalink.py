@@ -25,6 +25,13 @@ DOWNLOAD_TIMEOUT = (15, 60)  # (conexão, leitura) em segundos: sem isso um serv
 HASH_CHUNK_SIZE = 1024 * 1024
 PLUGINS_DIR = "plugins"
 VALIDATE_JAVA_TIMEOUT = 15  # segundos: um "java -version" que não responde não pode travar o boot
+MIN_JAVA_MAJOR = 17
+# 24 <= major <= 25: faixa em que as duas flags de acesso existem e foram testadas (smoke A12). Com major desconhecido ou
+# fora dela nenhuma das duas vai: a JVM tem de subir sempre, e um JDK futuro pode recusar a opção. A faixa só sobe junto
+# com o JRE da imagem, depois de um novo smoke.
+JVM_STRICT_ACCESS_MAJORS = range(24, 26)
+JVM_ACCESS_ARGS = ("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
+JAVA_VERSION_LINE = re.compile(r'\bversion "(\d+)[^"]*"')  # só a linha version "…": "Picked up …" pode vir antes dela
 JDK_STAGING_MAX_AGE = 3600  # segundos sem mudança para um staging do JDK ser tido como órfão (extração leva segundos)
 JDK_STAGING_NAME = re.compile(r"[\w-]+\.\w{8}\.tmp")  # <plataforma>.<8 caracteres do mkdtemp>.tmp, nunca a pasta final
 JDK_EXECUTABLES = ("java", "java.exe")  # bin/<nome> de um JDK instalado (Linux e Windows)
@@ -125,17 +132,35 @@ def download_file(url, filename):
     return True
 
 
-def validate_java(cmd: str, debug: bool = False):
-    """Devolve ``cmd`` se for um Java 17+ executável; senão ``None``. Sem shell: o caminho vira UM argumento."""
+def java_major_version(cmd: str, debug: bool = False) -> Optional[int]:
+    """Major de ``cmd -version`` ("25.0.4.1" -> 25, "25-ea" -> 25, "1.8.0_402" -> 1); ``None`` se falhar ou for ilegível.
+
+    Sem shell: o caminho vira UM argumento. Procura a linha com ``version "…"`` e não a primeira, porque
+    "Picked up JAVA_TOOL_OPTIONS: …" pode vir antes dela.
+    """
     try:
         java_info = subprocess.check_output(
             [cmd, "-version"], stderr=subprocess.STDOUT, text=True, timeout=VALIDATE_JAVA_TIMEOUT
         )
-        if int(java_info.splitlines()[0].split()[2].strip('"').split(".")[0]) >= 17:
-            return cmd
-    except (OSError, subprocess.SubprocessError, ValueError, IndexError) as e:
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
         if debug:
             print(f"\nFalha ao obter versão do java...\nPath: {cmd} | Erro: {repr(e)}\n")
+        return None
+
+    for line in java_info.splitlines():
+        if found := JAVA_VERSION_LINE.search(line):
+            return int(found.group(1))
+
+    if debug:
+        print(f"\nFalha ao obter versão do java...\nPath: {cmd} | Erro: saída sem a linha version\n")
+    return None
+
+
+def validate_java(cmd: str, debug: bool = False):
+    """Devolve ``cmd`` se for um Java 17+ executável; senão ``None``. Sem shell: o caminho vira UM argumento."""
+    major = java_major_version(cmd, debug)
+    if major is not None and major >= MIN_JAVA_MAJOR:
+        return cmd
 
 
 def _matches(path: str, sha256: str) -> bool:
@@ -605,8 +630,20 @@ def _logging_args(home: str) -> List[str]:
     return [f"-Dlogging.file.path={logs_dir}"]
 
 
-def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, initial_ram: int) -> List[str]:
-    """Linha de comando do Java como lista: o caminho do Java (mesmo com espaços) é sempre UM argumento."""
+def _java_command(
+    java_cmd: str,
+    *,
+    home: str,
+    cpu_cores: int,
+    ram_limit: int,
+    initial_ram: int,
+    java_major: Optional[int] = None,
+) -> List[str]:
+    """Linha de comando do Java como lista: o caminho do Java (mesmo com espaços) é sempre UM argumento.
+
+    Toda opção da JVM vem antes de ``-jar Lavalink.jar``, nesta ordem: processadores, -Xmx, -Xms, GC, flags de acesso, tmpdir,
+    logging, payload e override.
+    """
     args = [java_cmd]
 
     if cpu_cores >= 1:
@@ -617,6 +654,12 @@ def _java_command(java_cmd: str, *, home: str, cpu_cores: int, ram_limit: int, i
 
     if 0 < initial_ram < ram_limit:
         args.append(f"-Xms{initial_ram}m")
+
+    # Sempre exatamente um GC: o Serial com um core (sem threads de GC concorrentes disputando o único núcleo) e o G1 nos demais.
+    args.append("-XX:+UseSerialGC" if cpu_cores == 1 else "-XX:+UseG1GC")
+
+    if java_major in JVM_STRICT_ACCESS_MAJORS:
+        args.extend(JVM_ACCESS_ARGS)
 
     if os.name != "nt":
         # O tmpdir fica sempre em RUNTIME_DIR (volume gravável), mesmo quando LAVALINK_HOME é somente leitura.
@@ -674,6 +717,7 @@ def run_lavalink(
         cpu_cores=lavalink_cpu_cores,
         ram_limit=lavalink_ram_limit,
         initial_ram=lavalink_initial_ram,
+        java_major=java_major_version(java_cmd),
     )
 
     print(
