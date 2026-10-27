@@ -29,7 +29,8 @@ async def get_user(
     user_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-): ...
+):
+    ...
 ```
 
 Do not create `SessionLocal()` or long-lived clients inside route handlers.
