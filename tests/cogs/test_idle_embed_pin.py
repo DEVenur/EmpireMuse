@@ -17,18 +17,28 @@ pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
 CANAL = 123456789012345678
 
 
-def alvo(permissoes: disnake.Permissions, *, fixada: bool = False):
-    canal = MagicMock(spec=disnake.TextChannel)
+def alvo(permissoes: disnake.Permissions, *, fixada: bool = False, tipo=disnake.TextChannel, do_servidor=None):
+    """``permissoes`` é o que o bot tem NO CANAL (``channel.permissions_for``); ``do_servidor`` o que tem no servidor (``guild_permissions``)."""
+    canal = MagicMock(spec=tipo)
     canal.id = CANAL
+    canal.permissions_for.return_value = permissoes
+    if tipo is disnake.Thread:
+        canal.parent = MagicMock(spec=disnake.TextChannel)
     mensagem = MagicMock(spec=disnake.Message)
     mensagem.channel = canal
     mensagem.guild_id = 1
     mensagem.pinned = fixada
     mensagem.edit = AsyncMock()
-    mensagem.pin = AsyncMock()
+
+    async def fixar(**_):
+        # o Discord só aceita o pin se o bot pode fixar NO CANAL; sem isso responde 403
+        if not permissoes.pin_messages:
+            raise disnake.Forbidden(MagicMock(status=403, reason="Forbidden"), "Missing Permissions")
+
+    mensagem.pin = AsyncMock(side_effect=fixar)
     eu = MagicMock()
     eu.display_avatar.replace.return_value.url = "https://cdn.exemplo/avatar.png"
-    eu.guild_permissions = permissoes
+    eu.guild_permissions = do_servidor if do_servidor is not None else disnake.Permissions.all()
     mensagem.author = eu
     mensagem.guild = SimpleNamespace(me=eu, id=1)
     return mensagem
@@ -42,13 +52,40 @@ def bot_falso():
     )
 
 
-async def rodar(permissoes, **kwargs):
+async def rodar(permissoes, **kwargs):  # kwargs: fixada, tipo, do_servidor
     mensagem = alvo(permissoes, **kwargs)
     dados = {"player_controller": {"channel": str(CANAL), "fav_links": {}}}
 
     await send_idle_embed(mensagem, "", bot=bot_falso(), guild_data=dados)
 
     return mensagem
+
+
+TIPOS = [disnake.TextChannel, disnake.Thread]
+
+
+class TestPermissaoEfetivaNoCanal:
+    @pytest.mark.parametrize("tipo", TIPOS, ids=lambda t: t.__name__)
+    async def test_the_server_allows_but_the_channel_denies_so_it_does_not_pin_and_never_hits_forbidden(self, tipo):
+        mensagem = await rodar(
+            disnake.Permissions(pin_messages=False), tipo=tipo, do_servidor=disnake.Permissions(pin_messages=True)
+        )
+
+        mensagem.pin.assert_not_awaited()
+
+    @pytest.mark.parametrize("tipo", TIPOS, ids=lambda t: t.__name__)
+    async def test_the_channel_allows_but_the_server_does_not_so_it_pins(self, tipo):
+        mensagem = await rodar(
+            disnake.Permissions(pin_messages=True), tipo=tipo, do_servidor=disnake.Permissions(pin_messages=False)
+        )
+
+        mensagem.pin.assert_awaited_once()
+
+    @pytest.mark.parametrize("tipo", TIPOS, ids=lambda t: t.__name__)
+    async def test_the_permission_is_asked_of_the_channel_for_the_bots_own_member(self, tipo):
+        mensagem = await rodar(disnake.Permissions(pin_messages=True), tipo=tipo)
+
+        mensagem.channel.permissions_for.assert_any_call(mensagem.guild.me)
 
 
 class TestFixarMensagens:
