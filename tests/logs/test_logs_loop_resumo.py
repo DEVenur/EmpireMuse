@@ -167,11 +167,13 @@ class TestNos:
 
         linhas = cenario.rodar()
 
-        (linha,) = [x for x in linhas if "N-OK" in x]
-        assert "nó N-OK" in linha and "indisponível" not in linha
-        assert "players 12" in linha or "players 7" in linha
-        assert "CPU 3.5%" in linha or "CPU 20%" in linha
-        assert "memória 220" in linha or "memória 512" in linha
+        do_no = [x for x in linhas if "N-OK" in x]
+        assert len(do_no) == 2  # um por resumo (t = 300 e 600)
+        for linha in do_no:
+            assert "nó N-OK" in linha and "indisponível" not in linha
+            assert "players 12" in linha or "players 7" in linha
+            assert "CPU 3.5%" in linha or "CPU 20%" in linha
+            assert "memória 220" in linha or "memória 512" in linha
 
     def test_a_node_without_stats_is_unavailable(self):
         no = no_sem_stats("N-SEM")
@@ -179,8 +181,10 @@ class TestNos:
 
         linhas = cenario.rodar()
 
-        (linha,) = [x for x in linhas if "N-SEM" in x]
-        assert "indisponível" in linha and "players" not in linha
+        do_no = [x for x in linhas if "N-SEM" in x]
+        assert len(do_no) == 2  # um por resumo (t = 300 e 600)
+        for linha in do_no:
+            assert "indisponível" in linha and "players" not in linha
 
     def test_two_nodes_give_one_plus_two_lines_per_interval(self):
         nos = {n.identifier: n for n in (no_com_stats("A"), no_sem_stats("B"))}
