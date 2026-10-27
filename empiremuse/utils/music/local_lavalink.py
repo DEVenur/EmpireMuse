@@ -168,7 +168,9 @@ def _forward_java_stderr(stream) -> None:
         while raw := stream.readline():
             line = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
             if line := line.rstrip("\r\n"):
-                java_logger.warning("%s", line)
+                # Sem args: a linha é o template, então linhas distintas têm chaves distintas no agregador (a causa de uma falha
+                # não se perde atrás da 1ª linha) e um "%" do Java não é tratado como formato.
+                java_logger.warning(line)
     except Exception as error:
         logger.debug("Leitura do stderr do Java interrompida (%s).", type(error).__name__)
     finally:
