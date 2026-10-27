@@ -6,7 +6,7 @@ O relógio é sempre injetado (``now``); nada dorme. O ``main()`` só lê a vari
 
 import subprocess
 import sys
-import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -117,9 +117,15 @@ def test_a_failed_replace_keeps_the_previous_heartbeat_whole(tmp_path, monkeypat
 # ============================================================================ main()
 
 
+def relogio_do_main(monkeypatch):
+    """O ``main()`` lê ``time.time()``: troca só o ``time`` do módulo ``health`` por um relógio parado em ``AGORA``."""
+    monkeypatch.setattr(health, "time", SimpleNamespace(time=lambda: AGORA))
+
+
 def test_main_is_zero_for_a_fresh_heartbeat(tmp_path, monkeypatch):
     alvo = tmp_path / "saude"
-    write_heartbeat(alvo, time.time())
+    write_heartbeat(alvo, AGORA)
+    relogio_do_main(monkeypatch)
     monkeypatch.setenv(HEALTH_FILE_ENV, str(alvo))
 
     assert health.main() == 0
@@ -127,7 +133,8 @@ def test_main_is_zero_for_a_fresh_heartbeat(tmp_path, monkeypatch):
 
 def test_main_is_one_for_a_stale_heartbeat(tmp_path, monkeypatch):
     alvo = tmp_path / "saude"
-    write_heartbeat(alvo, time.time() - 10 * MAX_AGE_SECONDS)
+    write_heartbeat(alvo, AGORA - 10 * MAX_AGE_SECONDS)
+    relogio_do_main(monkeypatch)
     monkeypatch.setenv(HEALTH_FILE_ENV, str(alvo))
 
     assert health.main() == 1
