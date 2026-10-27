@@ -580,6 +580,10 @@ class Owner(commands.Cog):
             )
             return await self._reply_update(ctx, text)
         if installed is not None and latest <= installed:
+            if installed.is_prerelease:
+                return await self._reply_update(
+                    ctx, f"✅ **Você está na versão de teste {installed}; ainda não há versão estável mais nova.**"
+                )
             return await self._reply_update(ctx, f"✅ **Você já está na versão mais recente ({installed}).**")
         if mode == MODE_PANEL:
             raw = await self._release_changelog(f"v{latest}")
@@ -621,7 +625,11 @@ class Owner(commands.Cog):
         except UpdateError as error:
             raise GenericError(f"**{error}**") from error
         if plan is None:
-            return False, await self._reply_update(ctx, "✅ **Você já está na versão mais recente.**")
+            if current.is_prerelease:
+                text = f"✅ **Você está na versão de teste {current}; ainda não há versão estável mais nova.**"
+            else:
+                text = "✅ **Você já está na versão mais recente.**"
+            return False, await self._reply_update(ctx, text)
         self.log_owner_command(ctx, "update", f"{MODE_DOCKER} {plan.current}->{plan.target}")
 
         channel_id = getattr(getattr(ctx, "channel", None), "id", None) or ctx.channel_id

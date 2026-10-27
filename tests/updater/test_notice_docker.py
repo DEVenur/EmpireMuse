@@ -372,3 +372,74 @@ async def test_the_post_boot_dm_also_fits_the_limit_keeps_the_end_and_masks_befo
     )
     assert len(dm) <= 1900 and "depois 04" in dm and linhas[0] not in dm
     assert segredo not in dm and all(segredo[i : i + 12] not in dm for i in range(0, 588, 12))
+
+
+# ============================================================================ D13: ``from_version`` rc nos avisos (A29 h)
+
+CHANGELOG_COM_RC = "# Changelog\n\n## [2.1.0] - 2026-11-01\n- novidade da 2.1.0\n\n## [2.1.0-rc.2] - 2026-10-28\n- so da rc dois\n\n## [2.0.0]\n- base\n"
+
+
+def pendente_do_rc(**campos) -> PendingUpdate:
+    from tests.support.versao_rc import atual_rc
+
+    return pendente_docker(from_version=atual_rc("2.1.0-rc.2"), **campos)
+
+
+async def test_success_from_an_rc_image_says_updated_from_the_rc_to_the_stable_with_the_stable_changelog(runtime):
+    (paths.PROJECT_DIR / "CHANGELOG.md").write_text(CHANGELOG_COM_RC, encoding="utf-8")
+    bot = bot_falso()
+    cliente = ClienteFalso([estado(rodando=False, codigo=0)])
+    write_pending(runtime, pendente_do_rc())
+
+    await entregar_docker(pool_com(bot), cliente, runtime, PARA)
+
+    embed = bot.canal.send.await_args.kwargs["embed"]
+    assert "Atualizado de 2.1.0-rc.2 para 2.1.0." in embed.description
+    assert "novidade da 2.1.0" in embed.description and "so da rc dois" not in embed.description
+    assert "blob/v2.1.0/CHANGELOG.md" in embed.description and "10000" not in embed.description
+    assert embed.colour.value == notice.COLOR_OK
+    assert cliente.remocoes == 1 and not pending_path(runtime).exists()
+
+
+@pytest.mark.parametrize("codigo", [70, 71, 67, 66])
+async def test_a_failed_helper_with_the_rc_image_still_running_says_it_stays_on_the_rc(runtime, docker_flow, codigo):
+    from tests.support.versao_rc import atual_rc
+
+    bot = bot_falso()
+    cliente = ClienteFalso([estado(rodando=False, codigo=codigo)])
+    write_pending(runtime, pendente_do_rc())
+
+    await entregar_docker(pool_com(bot), cliente, runtime, atual_rc("2.1.0-rc.2"))
+
+    embed = bot.canal.send.await_args.kwargs["embed"]
+    assert embed.colour.value == notice.COLOR_FAIL
+    assert "continua na versão 2.1.0-rc.2" in embed.description
+    assert (
+        "A atualização para 2.1.0 falhou" in embed.description
+        and docker_flow.describe_exit(codigo) in embed.description
+    )
+
+
+@pytest.mark.parametrize("rodando", ["2.1.0-rc.3", "2.1.0-rc.1", "2.0.0"], ids=lambda v: f"imagem-{v}")
+async def test_an_unexpected_running_version_from_an_rc_pending_is_an_unknown_notice(runtime, rodando):
+    from tests.support.versao_rc import atual_rc
+
+    bot = bot_falso()
+    write_pending(runtime, pendente_do_rc())
+    versao = atual_rc(rodando) if "rc" in rodando else Version(2, 0, 0)
+
+    await entregar_docker(pool_com(bot), ClienteFalso([estado(rodando=False, codigo=0)]), runtime, versao)
+
+    embed = bot.canal.send.await_args.kwargs["embed"]
+    assert embed.colour.value == notice.COLOR_UNKNOWN
+    assert "Atualização de 2.1.0-rc.2 para 2.1.0" in embed.description and DESCONHECIDO in embed.description
+
+
+async def test_an_rc_pending_update_is_kept_by_the_read_so_the_notice_is_not_lost(runtime):
+    """Sem a D13 a leitura descartava o pendente com ``from_version`` rc e o dono ficava sem aviso."""
+    write_pending(runtime, pendente_do_rc())
+    bot = bot_falso()
+
+    await entregar_docker(pool_com(bot), ClienteFalso([estado(rodando=False, codigo=0)]), runtime, PARA)
+
+    bot.canal.send.assert_awaited_once()

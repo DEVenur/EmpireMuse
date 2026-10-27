@@ -527,3 +527,14 @@ def test_a_forged_request_line_never_puts_control_sequences_in_the_proxy_log(tmp
     assert status == 431
     assert "\x1b" not in erro and "\x07" not in erro and "FORJADO" not in erro
     assert "? - parser 431" in erro
+
+
+@pytest.mark.parametrize("alvo", ["2.1.0-rc.3", "2.1.0-rc.2", "v2.1.0-rc.3"])
+def test_a_prerelease_target_is_a_400_and_nothing_is_sent_to_the_daemon(daemon, pedir, alvo):
+    """D13: só a versão ATUAL pode ser rc; o alvo do auxiliar continua ``X.Y.Z@sha256`` estrito."""
+    corpo = json.dumps({"Cmd": [f"{alvo}@{DIGEST}"]}).encode()
+
+    status, _ = pedir("POST", f"/containers/create?name={CONTAINER_API}", [TIPO_JSON], corpo)
+
+    assert status == 400
+    assert daemon.requisicoes == []

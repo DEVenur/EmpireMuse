@@ -286,3 +286,86 @@ def test_a_docker_pending_file_with_a_target_commit_is_invalid():
 
     assert parse_pending(dados) is not None
     assert parse_pending({**dados, "target_commit": "c" * 40}) is None
+
+
+# ============================================================================ D13: ``from_version`` rc no fluxo docker (A29 f)
+
+DIGEST_RC = "sha256:" + "ab" * 32
+
+
+def docker_com_rc(**campos) -> PendingUpdate:
+    from tests.support.versao_rc import atual_rc
+
+    base = dataclasses.replace(
+        pendente(AGORA - 60),
+        flow="docker",
+        prev_sha=None,
+        target_commit=None,
+        digest=DIGEST_RC,
+        from_version=atual_rc("2.1.0-rc.2"),
+        to_version=Version(2, 1, 0),
+    )
+    return dataclasses.replace(base, **campos)
+
+
+def test_a_docker_pending_file_with_an_rc_from_version_is_written_as_text_and_read_back(tmp_path):
+    original = docker_com_rc()
+    write_pending(tmp_path, original)
+
+    gravado = json.loads(pending_path(tmp_path).read_text())
+    lido = read_pending(tmp_path, AGORA)
+
+    assert gravado["from_version"] == "2.1.0-rc.2" and gravado["to_version"] == "2.1.0"
+    assert "10000" not in pending_path(tmp_path).read_text()  # o sentinela nunca aparece em JSON
+    assert lido == original and str(lido.from_version) == "2.1.0-rc.2"
+
+
+@pytest.mark.parametrize("status", ["pending", "ready"])
+def test_a_docker_rc_pending_file_is_valid_in_both_statuses(status):
+    lido = parse_pending(docker_com_rc(status=status).to_json())
+
+    assert lido is not None and lido.from_version.is_prerelease and lido.status == status
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        "2.1.0-rc.02",
+        "2.1.0-RC.2",
+        "2.1.0-rc2",
+        "2.1.0-rc.",
+        "2.1.0-beta.1",
+        "2.1.0-rc.2+b",
+        "2.1.0-rc.10000",
+        "v2.1.0-rc.2",
+    ],
+)
+def test_a_docker_pending_file_with_a_malformed_from_version_is_invalid(valor):
+    dados = docker_com_rc().to_json()
+    dados["from_version"] = valor
+
+    assert parse_pending(dados) is None
+
+
+def test_a_git_pending_file_with_an_rc_from_version_is_invalid():
+    dados = pendente(AGORA - 60).to_json()
+    dados["from_version"] = "2.1.0-rc.2"
+
+    assert parse_pending(dados) is None
+
+
+@pytest.mark.parametrize("fluxo", ["git", "docker"])
+@pytest.mark.parametrize("alvo", ["2.1.0-rc.2", "2.1.0-rc.3"])
+def test_an_rc_to_version_is_invalid_in_both_flows(fluxo, alvo):
+    dados = (docker_com_rc() if fluxo == "docker" else pendente(AGORA - 60)).to_json()
+    dados["to_version"] = alvo
+
+    assert parse_pending(dados) is None
+
+
+def test_an_invalid_rc_from_version_on_disk_discards_the_file(tmp_path):
+    dados = docker_com_rc().to_json()
+    dados["from_version"] = "2.1.0-beta.1"
+    pending_path(tmp_path).write_text(json.dumps(dados))
+
+    assert read_pending(tmp_path, AGORA) is None and not pending_path(tmp_path).exists()

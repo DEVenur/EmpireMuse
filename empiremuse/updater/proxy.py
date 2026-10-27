@@ -188,9 +188,22 @@ current=$(image_lines) || die compose 65
 case $current in
   *@*) valid_digest "${current#*@}" || die compose 65 ;;
 esac
-split_version "${current%%@*}" || die compose 65
+c_ver=${current%%@*}
+c_rc=0
+case $c_ver in
+  *-rc.*)
+    valid_num "${c_ver#*-rc.}" || die compose 65
+    c_ver=${c_ver%%-rc.*}
+    c_rc=1
+    ;;
+esac
+split_version "$c_ver" || die compose 65
 c_key=$((v_major * 100000000 + v_minor * 10000 + v_patch))
-[ "$t_key" -gt "$c_key" ] || die downgrade 67
+if [ "$c_rc" -eq 1 ]; then
+  [ "$t_key" -ge "$c_key" ] || die downgrade 67
+else
+  [ "$t_key" -gt "$c_key" ] || die downgrade 67
+fi
 
 docker pull "$repo:$target" >/dev/null 2>&1 || die pull 66
 
