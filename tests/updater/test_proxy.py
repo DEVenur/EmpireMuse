@@ -270,7 +270,7 @@ def conferir_template(recebido: dict, alvo: str) -> None:
             "SecurityOpt": ["no-new-privileges:true"],
             "ReadonlyRootfs": True,
             "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=16m"},
-            "NetworkMode": "bridge",
+            "NetworkMode": "none",
             "AutoRemove": False,
             "RestartPolicy": {"Name": "no"},
             "Memory": 268435456,

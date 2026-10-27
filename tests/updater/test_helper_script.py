@@ -105,10 +105,10 @@ class Cenario:
     def marcar(self, nome: str, conteudo: str = "1\n"):
         (self.fake / nome).write_text(conteudo)
 
-    def rodar(self, alvo: str) -> subprocess.CompletedProcess:
+    def rodar(self, alvo: str, pasta: Path | None = None) -> subprocess.CompletedProcess:
         env = {"PATH": f"{self.bin}:/usr/bin:/bin", "FAKE": str(self.fake), "HOME": str(self.fake)}
         return subprocess.run(
-            ["sh", "-euc", HELPER_SCRIPT, "updater", alvo, "e2e", str(self.pasta), "bot", self.repo],
+            ["sh", "-euc", HELPER_SCRIPT, "updater", alvo, "e2e", str(pasta or self.pasta), "bot", self.repo],
             env=env,
             capture_output=True,
             text=True,
@@ -372,3 +372,105 @@ def test_the_script_never_writes_the_arguments_into_code(cenario):
 
     assert resultado.returncode == 65
     assert not marca.exists() and cenario.intacto()
+
+
+# ============================================================================ (m) quem grava o projeto decide o que sobe: dono, link e escrita de grupo/outros
+
+
+def recusado_antes_de_qualquer_docker(cenario, resultado) -> None:
+    assert resultado.returncode == 65
+    assert PREFIXO + "compose-perm" in resultado.stderr + resultado.stdout
+    assert cenario.chamadas == [] and cenario.ups == [] and cenario.backups == [] and cenario.intacto()
+    so_linhas_do_prefixo(resultado)
+
+
+def test_a_project_directory_writable_by_others_is_refused(cenario):
+    cenario.pasta.chmod(0o777)
+
+    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
+
+
+def test_a_project_directory_writable_by_the_group_is_refused(cenario):
+    cenario.pasta.chmod(0o775)
+
+    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
+
+
+def test_a_compose_file_writable_by_the_group_is_refused(cenario):
+    cenario.compose.chmod(0o664)
+
+    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
+
+
+def test_a_compose_file_that_is_a_symlink_is_refused(cenario, tmp_path):
+    real = tmp_path / "compose-real.yml"
+    cenario.compose.rename(real)
+    cenario.compose.symlink_to(real)
+
+    resultado = cenario.rodar(alvo())
+
+    assert resultado.returncode == 65 and cenario.chamadas == [] and real.read_text() == cenario.original
+
+
+def test_a_project_directory_that_is_a_symlink_is_refused(cenario, tmp_path):
+    ligacao = tmp_path / "ligacao"
+    ligacao.symlink_to(cenario.pasta)
+
+    resultado = cenario.rodar(alvo(), pasta=ligacao)
+
+    recusado_antes_de_qualquer_docker(cenario, resultado)
+
+
+def test_an_env_file_that_is_a_symlink_is_refused(cenario, tmp_path):
+    real = tmp_path / "env-real"
+    real.write_text("X=1\n")
+    real.chmod(0o600)
+    (cenario.pasta / ".env").symlink_to(real)
+
+    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
+
+
+def test_an_env_file_writable_by_others_is_refused(cenario):
+    env = cenario.pasta / ".env"
+    env.write_text("X=1\n")
+    env.chmod(0o666)
+
+    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
+
+
+def test_a_missing_env_file_does_not_stop_the_update(cenario):
+    assert not (cenario.pasta / ".env").exists()
+
+    assert cenario.rodar(alvo()).returncode == 0
+
+
+@pytest.mark.parametrize("modo_compose", [0o600, 0o644])
+def test_owned_and_not_group_or_other_writable_files_proceed(cenario, modo_compose):
+    cenario.pasta.chmod(0o755)
+    cenario.compose.chmod(modo_compose)
+    env = cenario.pasta / ".env"
+    env.write_text("X=1\n")
+    env.chmod(0o600)
+
+    resultado = cenario.rodar(alvo())
+
+    assert resultado.returncode == 0, resultado.stderr
+    assert cenario.ups
+
+
+def test_a_missing_or_unreadable_compose_is_still_reported_before_the_trust_check(cenario):
+    """Ordem: existência/legibilidade do compose (65 'compose') vem antes da confiança ('compose-perm')."""
+    cenario.compose.unlink()
+    cenario.pasta.chmod(0o777)
+
+    resultado = cenario.rodar(alvo())
+
+    assert resultado.returncode == 65 and "compose-perm" not in resultado.stderr + resultado.stdout
+
+
+@pytest.mark.skipif(os.geteuid() != 0, reason="trocar o dono exige root")
+@pytest.mark.parametrize("alvo_do_chown", ["pasta", "compose"])
+def test_a_file_owned_by_another_user_is_refused(cenario, alvo_do_chown):
+    os.chown(getattr(cenario, alvo_do_chown), 12345, 12345)
+
+    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
