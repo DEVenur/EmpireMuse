@@ -19,11 +19,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Eventos do player no log (item 7, fase P3)**: início e fim de faixa, pausa, troca de nó e erros saem no log com servidor, canal, duração e origem. O título da faixa só aparece em `DEBUG`. Em escala o `INFO` fica silencioso: início e fim de faixa vão para `DEBUG` e só os problemas sobem para `WARNING`.
 - **Resumo periódico de métricas**: a cada `METRICS_INTERVAL` o log traz faixas tocadas, erros por tipo, players ativos, CPU e RAM do Python e do Java local, nós do Lavalink e latência do gateway e da voz.
 - **Estado dos nós de áudio no log**: as transições de cada nó (conectado, caído) e o caso de todos indisponíveis são registradas.
+- **Erros com contexto (item 7, fase P4)**: um erro inesperado de comando sai como `ERROR` com traceback, o código `ERR-XXXXXX` e o contexto do comando (nome, usuário, servidor e canal por ID, parâmetros resumidos por tipo; texto livre só como tamanho fora do `DEBUG`). Erros esperados do usuário (cooldown, permissão, argumento inválido) ficam em `DEBUG`.
+- **Exceções não tratadas no log**: as exceções do loop de eventos, das threads e do `sys.excepthook` saem no log de erros, com redação, desde o início da subida.
+- **Guia de logs**: novo `docs/guides/logs.md` (chaves, nível por servidor, arquivo e rotação, o que nunca é gravado, como investigar um `ERR-XXXXXX`) e o [ADR-0005](docs/adr/0005-logs-stdlib.md).
 
 ### Alterado
-- **`print` migrado para o log (item 7, fases P2 e P3)**: cerca de 100 `print`, incluindo todo o caminho de subida do bot, passam a sair pelo log, com nível, cor, contexto e redação de segredos.
+- **`print` e `traceback.print_exc()` migrados para o log (item 7, fases P2 a P4)**: os `print` (incluindo todo o caminho de subida do bot) e os `traceback.print_exc()` do código do bot passam a sair pelo log, com nível, cor, contexto e redação de segredos.
+- **`COMMAND_LOG` só com IDs (item 7, fase P4)**: o registro de comandos deixa de gravar nome de usuário, apelido, nome do servidor, conteúdo da mensagem e URL de anexo; grava `user_id`, `guild_id`, o comando e as opções resumidas por tipo, no console e no arquivo. Continua opt-in.
 
 ### Segurança
+- **Webhook de erro com redação (item 7, fase P4)**: o traceback enviado ao webhook de erros passa pelo mesmo saneamento e redator do log, em vez de mascarar só o token do próprio bot.
+- **Menções do bot sem `@everyone` nem cargos**: o `allowed_mentions` padrão do bot deixa de permitir `@everyone` e menções a cargos; menções a usuários seguem funcionando.
 - **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
 - **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.

@@ -15,3 +15,4 @@ Para propor uma nova decisão técnica ou arquitetural, copie o modelo base [`00
 | [0002](0002-painel-web.md) | Painel Web Integrado com Login Discord, Templates Tornado e htmx | Aceito | 2026-10-15 |
 | [0003](0003-jishaku-fork.md) | Fork EmpireCommunity/EmpireMuse-jishaku para o Disnake | Aceito | 2026-10-24 |
 | [0004](0004-auto-update-proxy.md) | Auto-update Docker por proxy de cliente com modelo fixo | Aceito | 2026-10-27 |
+| [0005](0005-logs-stdlib.md) | Log centralizado com a biblioteca padrão, redator único e agregador de repetidos | Aceito | 2026-10-27 |

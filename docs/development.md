@@ -86,8 +86,9 @@ Valores de tipo incompatível em chaves inteiras geram erro explicativo na inici
 | `EMBED_COLOR` | Cor dos embeds (hex de 6 dígitos; padrão `8B5CF6`). Defina `EMBED_COLOR=none` para restaurar e utilizar a cor do cargo mais alto do bot no servidor. |
 | `*_INTENT`, `MESSAGE_CONTENT_INTENT` etc. | Intents; os padrões estão em `DEFAULT_CONFIG` (`empiremuse/config_loader.py`). |
 
-A lista completa, comentada, está em `.example.env`. Em desenvolvimento, `ENABLE_LOGGER=true` grava
-`./.logs/disnake.log` e `COMMAND_LOG=true` registra os comandos de usuários que não são donos. Em instâncias
+A lista completa, comentada, está em `.example.env`. O log (`LOG_LEVEL`, `LOG_COLOR`, `LOG_FILE`, `LOG_DEBUG_GUILDS`, `METRICS_INTERVAL`) é descrito no
+[guia de logs](guides/logs.md): fora do Docker o arquivo `./.logs/disnake.log` (rotativo, 5 MB × 3) vem ligado (`LOG_FILE=auto`).
+`COMMAND_LOG=true` registra os comandos de usuários que não são donos, só com IDs e opções resumidas. Em instâncias
 próprias (self-hosting), certifique-se de configurar `SUPPORT_SERVER` (com seu convite ou vazio) e `EMBED_COLOR`
 conforme a identidade desejada.
 

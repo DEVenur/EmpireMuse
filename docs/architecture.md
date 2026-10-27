@@ -74,6 +74,21 @@ Pacote do comando `update` (guia: [`guides/auto-update.md`](guides/auto-update.m
 
 `empiremuse/health.py` e `empiremuse/version.py` completam o pacote: o bot grava um heartbeat só com todos os bots prontos (o `HEALTHCHECK` da imagem o lê) e lê a versão da imagem (`EMPIREMUSE_VERSION`).
 
+### Logs (`empiremuse/logs/`)
+
+O log do processo é configurado num ponto só, por `configure_logging` (chamado em `BotPool.setup`), sobre o `logging` da biblioteca padrão. Console e arquivo recebem a mesma cadeia de filtros, nesta ordem: contexto (bot e servidor, por `contextvars`) → nível por servidor → saneamento e redação → agregação de repetidos. A decisão está no [ADR-0005](adr/0005-logs-stdlib.md) e o uso, em [`guides/logs.md`](guides/logs.md).
+
+| Módulo | Responsabilidade |
+|---|---|
+| `settings.py`, `setup.py` | Lê `LOG_LEVEL`, `LOG_COLOR`, `LOG_FILE`, `LOG_DEBUG_GUILDS` e `METRICS_INTERVAL`; monta os handlers (console e arquivo rotativo) e fixa as bibliotecas externas em `WARNING` |
+| `context.py`, `console.py` | Contexto de bot e servidor; formatadores (cor e emoji só no console) |
+| `redact.py` | Redator único: saneia caracteres de controle, mascara segredos, limita o tamanho e calcula a impressão digital do traceback |
+| `aggregate.py` | Agrega avisos e erros repetidos em janelas de 60 s, preservando o código `ERR-…` |
+| `boot.py`, `metrics.py` | Relatório de subida por etapas e resumo periódico de métricas (em memória, sem rede) |
+| `errors.py`, `hooks.py` | Contexto de comando (IDs e parâmetros resumidos por tipo) e tratadores de exceção não tratada (loop, threads, `sys.excepthook`) |
+
+O `BotCore` também define `allowed_mentions` padrão sem `@everyone` nem cargos, e o webhook de erro (`empiremuse/cogs/error_handler.py`) envia o traceback pelo mesmo redator.
+
 ### Estado compartilhado do pool
 
 `BotPool` guarda o que é comum a todos os bots: `bots` e `guild_bots` (`BotPool` em `empiremuse/utils/client.py`), a configuração,
@@ -397,6 +412,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/rpc_protocol.py` | Protocolo do relé RPC: validações, limites, sanitização e rate limit | 156 |
 | `empiremuse/web_app.py` | Status HTTP, relé WebSocket do RPC, roteador do painel web | 651 |
 | `empiremuse/panel/` | Sub-aplicação web Tornado: OAuth2, sessões, handlers, serviços puros, templates e estáticos | 4.306 |
+| `empiremuse/logs/` | Log centralizado: configuração, redator único de segredos, agregador de repetidos, relatório de subida, métricas e contexto de erros | ~1.500 |
 | `empiremuse/rules/` | Regras de negócio puras (limites, texto, URLs, cota, configurações, erros, favoritos, links, integrações, IP do visitante atrás da Cloudflare); só biblioteca padrão | 542 |
 | `empiremuse/serialization/` | Serialização segura em JSON (schema, codec, queue, cache, skins, session, tracks, files) | 1.442 (soma) |
 | `empiremuse/utils/music/request_channel.py` | Lógica unificada de setup e reset de canal de pedidos compartilhada entre cogs e painel | 497 |
