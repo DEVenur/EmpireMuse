@@ -14,6 +14,9 @@ from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
 logger = logging.getLogger(__name__)
 
 
+SECRET_PARAMS = frozenset({"sk", "token", "api_sig"})  # parâmetros que só trafegam no corpo de um POST
+
+
 class LastFmException(Exception):
     def __init__(self, data: dict):
         self.code = data["error"]
@@ -52,6 +55,10 @@ class LastFM:
         return hashlib.md5(sig.encode("utf-8")).hexdigest()
 
     async def request_lastfm(self, params: dict):
+        if SECRET_PARAMS & params.keys():
+            return await self.post_lastfm(
+                params
+            )  # sk, token e api_sig não podem ir na URL: o str do erro do aiohttp a traz
         params["format"] = "json"
         async with ClientSession() as session:
             async with session.get("https://ws.audioscrobbler.com/2.0/", params=params) as response:
