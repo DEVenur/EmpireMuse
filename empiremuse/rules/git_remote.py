@@ -91,3 +91,12 @@ def parse_remote_web_url(output: str) -> str:
             remotes.append(remote)
     candidates = [url for name, url in remotes if name == "origin"] or [url for _, url in remotes]
     return _web_url(candidates[0]) if candidates else ""
+
+
+def sanitized_repo_url(configured: str, fallback: str) -> str:
+    """URL web do repositório a partir de um valor de configuração (``SOURCE_REPO``), com o mesmo saneamento do ``git remote``.
+
+    Remove usuário e senha (``user:token@``), o sufixo ``.git`` e o que não for um endereço remoto reconhecível;
+    nesse caso devolve ``fallback``. O valor aparece em embeds do Discord e na página de status pública.
+    """
+    return parse_remote_web_url(f"origin {configured} (fetch)") or fallback

@@ -275,7 +275,12 @@ class TestStartBot:
     @staticmethod
     def pool():
         return SimpleNamespace(
-            config={"KILL_ON_429": False}, killing_state=False, failed_bots={}, bots=[], shutdown=AsyncMock()
+            config={"KILL_ON_429": False},
+            killing_state=False,
+            failed_bots={},
+            bots=[],
+            shutdown=AsyncMock(),
+            check_pool_ready=AsyncMock(),
         )
 
     @staticmethod

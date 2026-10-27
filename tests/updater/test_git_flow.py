@@ -1,0 +1,630 @@
+"""A12-A13 (item 18, P2) — o fluxo git do auto-update: escolha da tag, plano sem shell e rollback.
+
+Repositórios git reais e locais em ``tmp_path`` (``file://`` com ``allow_protocol="file"``). O ``HOME`` e a configuração do git do
+ambiente são isolados; o interpretador das dependências e do smoke é um ``python`` falso (script ``sh``) que registra o que recebeu.
+Assinaturas do contrato (3.5, 3.6): ``plan_git_update(repo_dir, repo_url, *, allow_protocol, runner=run_exec)`` e
+``apply_git_update(plan, request, repo_dir, runtime_dir, *, python, runner=run_exec, now=time.time) -> PendingUpdate``. O ``runner`` injetado
+só grava as chamadas e delega ao ``run_exec`` real; o resto (``update-state.json``) fica em ``RUNTIME_DIR``.
+"""
+
+import asyncio
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from empiremuse.rules.release import Version
+from empiremuse.updater import git_flow
+from empiremuse.updater.git_flow import UpdateError, apply_git_update, git_env, plan_git_update, run_exec
+from empiremuse.updater.state import UpdateRequest
+
+pytestmark = pytest.mark.critical
+
+AMBIENTE_GIT = {
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@example.org",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@example.org",
+    "GIT_TERMINAL_PROMPT": "0",
+}
+
+
+def git(cwd: Path, *args: str) -> str:
+    env = {"PATH": os.environ["PATH"], "HOME": str(cwd), **AMBIENTE_GIT}
+    return subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def commit(repo: Path, arquivos: dict[str, str], mensagem: str) -> str:
+    for nome, conteudo in arquivos.items():
+        (repo / nome).write_text(conteudo, encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", mensagem)
+    return git(repo, "rev-parse", "HEAD")
+
+
+PYPROJECT = '[project]\nname = "empiremuse"\nrequires-python = ">=3.10"\n'
+CHANGELOG_21 = "# Changelog\n\n## [2.1.0] - 2026-11-01\n- novidade da 2.1.0\n\n## [2.0.0] - 2026-09-01\n- base\n"
+
+
+@pytest.fixture
+def mundo(tmp_path, monkeypatch):
+    """``remoto`` (main com v2.0.0 e v2.1.0 anotadas e v2.5.0 leve) e ``local`` (clone destacado em v2.0.0)."""
+    monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path / "runtime"))
+    (tmp_path / "runtime").mkdir()
+    remoto = tmp_path / "remoto"
+    remoto.mkdir()
+    git(remoto, "init", "-q", "-b", "main")
+    commit(
+        remoto,
+        {"pyproject.toml": PYPROJECT, "CHANGELOG.md": "# Changelog\n\n## [2.0.0]\n- base\n", "app.txt": "v2.0.0\n"},
+        "v2.0.0",
+    )
+    git(remoto, "tag", "-a", "v2.0.0", "-m", "2.0.0")
+    commit(remoto, {"CHANGELOG.md": CHANGELOG_21, "app.txt": "v2.1.0\n"}, "v2.1.0")
+    git(remoto, "tag", "-a", "v2.1.0", "-m", "2.1.0")
+    git(remoto, "tag", "v2.5.0")  # leve: tem de ser ignorada
+    local = tmp_path / "local"
+    git(tmp_path, "clone", "-q", str(remoto), str(local))
+    git(local, "checkout", "-q", "--detach", "v2.0.0")
+    return remoto, local
+
+
+def url(remoto: Path) -> str:
+    return f"file://{remoto}"
+
+
+def planejar(remoto: Path, local: Path, runner=run_exec):
+    return asyncio.run(plan_git_update(local, url(remoto), allow_protocol="file", runner=runner))
+
+
+def head(repo: Path) -> str:
+    return git(repo, "rev-parse", "HEAD")
+
+
+# ============================================================================ git_env
+
+
+def test_git_env_keeps_only_the_minimal_keys_and_no_secret():
+    base = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/x",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C",
+        "TOKEN": "segredo",
+        "MONGO": "mongodb://u:s@h",
+        "GITHUB_TOKEN": "ghp_x",
+        "GIT_DIR": "/outro/.git",
+        "GIT_WORK_TREE": "/outro",
+        "GIT_ASKPASS": "/bin/evil",
+    }
+
+    env = git_env(base)
+
+    assert set(env) <= {"PATH", "HOME", "LANG", "GIT_TERMINAL_PROMPT", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_GLOBAL"}
+    assert env["PATH"] == "/usr/bin" and env["HOME"] == "/home/x" and env["LANG"] == "C.UTF-8"
+    assert (
+        env["GIT_TERMINAL_PROMPT"] == "0"
+        and env["GIT_CONFIG_NOSYSTEM"] == "1"
+        and env["GIT_CONFIG_GLOBAL"] == "/dev/null"
+    )
+
+
+# ============================================================================ A12 — escolha da tag e plano
+
+
+def test_the_plan_targets_the_newest_annotated_tag_that_is_an_ancestor_of_main(mundo):
+    remoto, local = mundo
+    antes = head(local)
+
+    plano = planejar(remoto, local)
+
+    assert plano.current == Version(2, 0, 0) and plano.target == Version(2, 1, 0)
+    assert plano.prev_sha == antes
+    assert plano.tag_object_sha == git(remoto, "rev-parse", "refs/tags/v2.1.0")
+    assert plano.target_commit == git(remoto, "rev-parse", "v2.1.0^{commit}")
+    assert plano.tag_object_sha != plano.target_commit  # é o objeto da tag anotada, não o commit
+    assert "novidade da 2.1.0" in plano.changelog
+    assert head(local) == antes  # planejar não mexe no HEAD
+
+
+def test_a_lightweight_tag_is_never_chosen(mundo):
+    remoto, local = mundo
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)  # a v2.5.0 leve foi ignorada
+
+
+def test_already_on_the_latest_annotated_tag_means_no_plan(mundo):
+    remoto, local = mundo
+    git(local, "fetch", "-q", url(remoto), "+refs/tags/v2.1.0:refs/tags/v2.1.0")
+    git(local, "checkout", "-q", "--detach", "v2.1.0")
+
+    assert planejar(remoto, local) is None
+
+
+def test_a_tag_that_is_not_on_main_is_refused_and_head_stays(mundo):
+    remoto, local = mundo
+    git(remoto, "checkout", "-q", "-b", "lateral")
+    commit(remoto, {"lateral.txt": "x\n"}, "fora da main")
+    git(remoto, "tag", "-a", "v2.3.0", "-m", "2.3.0")
+    git(remoto, "checkout", "-q", "main")
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
+def test_a_dirty_tree_is_refused_listing_the_files(mundo):
+    remoto, local = mundo
+    (local / "app.txt").write_text("alterado à mão\n", encoding="utf-8")
+    (local / "novo.txt").write_text("x\n", encoding="utf-8")
+    antes = head(local)
+
+    with pytest.raises(UpdateError) as erro:
+        planejar(remoto, local)
+
+    assert "app.txt" in str(erro.value) and head(local) == antes
+
+
+def test_a_seen_tag_that_changed_its_object_sha_aborts(mundo, tmp_path):
+    remoto, local = mundo
+    (tmp_path / "runtime" / "update-state.json").write_text(json.dumps({"v2.1.0": "0" * 40}), encoding="utf-8")
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
+@pytest.mark.parametrize(
+    "conteudo",
+    ["{isto não é json", "[]", json.dumps({"v2.1.0": "curto"}), json.dumps({"nao-e-tag": "a" * 40})],
+    ids=["lixo", "nao-e-dict", "sha-invalido", "tag-invalida"],
+)
+def test_an_invalid_seen_tags_file_aborts_without_resetting_the_history(mundo, tmp_path, conteudo):
+    """Sem o histórico não dá para saber se a tag mudou: abortar citando o arquivo, sem reescrevê-lo."""
+    remoto, local = mundo
+    arquivo = tmp_path / "runtime" / "update-state.json"
+    arquivo.write_text(conteudo, encoding="utf-8")
+    antes = head(local)
+
+    with pytest.raises(UpdateError) as erro:
+        planejar(remoto, local)
+
+    assert "update-state.json" in str(erro.value)
+    assert head(local) == antes and arquivo.read_bytes() == conteudo.encode("utf-8")
+
+
+def test_a_seen_tags_path_that_cannot_be_read_aborts(mundo, tmp_path):
+    remoto, local = mundo
+    (tmp_path / "runtime" / "update-state.json").mkdir()
+    antes = head(local)
+
+    with pytest.raises(UpdateError) as erro:
+        planejar(remoto, local)
+
+    assert "update-state.json" in str(erro.value) and head(local) == antes
+
+
+def test_a_missing_seen_tags_file_is_an_empty_history_and_records_the_new_tag(mundo, tmp_path):
+    remoto, local = mundo
+    arquivo = tmp_path / "runtime" / "update-state.json"
+    assert not arquivo.exists()
+
+    plano = planejar(remoto, local)
+
+    assert plano.target == Version(2, 1, 0)
+    assert json.loads(arquivo.read_text(encoding="utf-8")) == {"v2.1.0": plano.tag_object_sha}
+
+
+def test_origin_pointing_elsewhere_is_never_used(mundo):
+    remoto, local = mundo
+    git(local, "remote", "set-url", "origin", "file:///nao/existe/de/jeito/nenhum")
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)
+
+
+def test_a_requires_python_above_the_interpreter_is_refused_before_any_checkout(mundo):
+    remoto, local = mundo
+    git(remoto, "tag", "-d", "v2.1.0")
+    commit(
+        remoto,
+        {"pyproject.toml": '[project]\nname = "empiremuse"\nrequires-python = ">=99.0"\n'},
+        "exige python futuro",
+    )
+    git(remoto, "tag", "-a", "v2.1.0", "-m", "2.1.0")
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
+def retag(remoto: Path, arquivos: dict[str, str], mensagem: str = "2.1.0") -> None:
+    """Move a ``v2.1.0`` do remoto para um commit novo com ``arquivos`` e uma tag anotada com ``mensagem``."""
+    git(remoto, "tag", "-d", "v2.1.0")
+    commit(remoto, arquivos, "v2.1.0 refeita")
+    git(remoto, "tag", "-a", "v2.1.0", "-m", mensagem)
+
+
+def test_a_huge_changelog_with_the_target_section_on_top_still_yields_that_section(mundo):
+    remoto, local = mundo
+    antigas = "".join(f"## [1.{n}.0] - 2025-01-01\n" + "- item antigo\n" * 20 for n in range(500))
+    texto = (
+        "# Changelog\n\n## [2.1.0] - 2026-11-01\n- novidade da 2.1.0\n\n## [2.0.0] - 2026-09-01\n- base\n\n" + antigas
+    )
+    assert len(texto) > 100_000
+    retag(remoto, {"CHANGELOG.md": texto})
+
+    plano = planejar(remoto, local)
+
+    assert "novidade da 2.1.0" in plano.changelog and "item antigo" not in plano.changelog
+
+
+def test_a_requires_python_at_the_end_of_a_large_pyproject_is_still_checked(mundo):
+    remoto, local = mundo
+    enchimento = "".join(f"# linha de enchimento {n} {'x' * 60}\n" for n in range(100))
+    assert len(enchimento) > 4096
+    retag(remoto, {"pyproject.toml": '[project]\nname = "empiremuse"\n' + enchimento + 'requires-python = ">=99.0"\n'})
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
+def test_an_annotated_tag_with_a_five_kilobyte_message_is_accepted(mundo):
+    remoto, local = mundo
+    mensagem = "\n".join(f"nota {n:03d} " + "y" * 60 for n in range(90))
+    assert len(mensagem) > 5000
+    retag(remoto, {"app.txt": "v2.1.0 com tag grande\n"}, mensagem)
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)
+
+
+def test_a_tag_message_that_imitates_a_header_line_does_not_change_the_checked_header(mundo):
+    remoto, local = mundo
+    retag(remoto, {"app.txt": "v2.1.0 com isca\n"}, "introdução\ntag v9.9.9\nfim")
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)
+
+
+def test_a_tag_whose_header_names_another_tag_is_refused_even_if_the_message_says_its_name(mundo):
+    """``refs/tags/v2.1.0`` aponta para um objeto de tag cujo cabeçalho é ``tag outro-nome``; a mensagem repete ``tag v2.1.0`` de isca."""
+    remoto, local = mundo
+    git(remoto, "tag", "-d", "v2.1.0")
+    commit(remoto, {"app.txt": "v2.1.0 trocada\n"}, "v2.1.0 trocada")
+    git(remoto, "tag", "-a", "outro-nome", "-m", "isca\ntag v2.1.0\nfim")
+    objeto = git(remoto, "rev-parse", "refs/tags/outro-nome")
+    git(remoto, "update-ref", "refs/tags/v2.1.0", objeto)
+    git(remoto, "tag", "-d", "outro-nome")
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
+def test_a_hostile_global_gitconfig_has_no_effect(mundo, tmp_path, monkeypatch):
+    remoto, local = mundo
+    casa = tmp_path / "casa"
+    casa.mkdir()
+    marca = tmp_path / "fsmonitor-rodou"
+    gancho = tmp_path / "gancho.sh"
+    gancho.write_text(f"#!/bin/sh\ntouch {marca}\n", encoding="utf-8")
+    gancho.chmod(0o755)
+    (casa / ".gitconfig").write_text(
+        f'[url "file:///repo/malicioso"]\n\tinsteadOf = {url(remoto)}\n[core]\n\tfsmonitor = {gancho}\n\thooksPath = {casa}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(casa))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(casa))
+
+    plano = planejar(remoto, local)
+
+    assert plano.target == Version(2, 1, 0)
+    assert not marca.exists()
+
+
+# ============================================================================ A13 — sem shell, ambiente mínimo, -c de segurança
+
+OPCOES_DE_SEGURANCA = [
+    "protocol.allow=never",
+    "protocol.file.allow=always",
+    "core.hooksPath=/dev/null",
+    "http.sslVerify=true",
+    "credential.helper=",
+    "core.fsmonitor=false",
+    "transfer.fsckObjects=true",
+]
+CHAVES_PERMITIDAS = {"PATH", "HOME", "LANG", "GIT_TERMINAL_PROMPT", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_GLOBAL"}
+
+
+@pytest.fixture
+def gravador(monkeypatch):
+    """Runner injetado: grava ``(argv, env)`` de cada chamada e delega ao ``run_exec`` real; o shell fica proibido."""
+
+    class Gravador:
+        def __init__(self):
+            self.chamadas = []
+
+        async def __call__(self, *args, **kwargs):
+            self.chamadas.append((args, kwargs.get("env")))
+            return await run_exec(*args, **kwargs)
+
+    async def sem_shell(*args, **kwargs):
+        raise AssertionError("create_subprocess_shell não pode ser usado no fluxo de atualização")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_shell", sem_shell)
+    return Gravador()
+
+
+def test_every_git_runs_without_shell_with_the_security_options_and_the_minimal_env(mundo, gravador, monkeypatch):
+    remoto, local = mundo
+    for nome in ("TOKEN", "MONGO", "GITHUB_TOKEN", "GIT_DIR", "GIT_WORK_TREE", "GIT_ASKPASS"):
+        monkeypatch.setenv(nome, "valor-secreto")
+
+    planejar(remoto, local, runner=gravador)
+
+    gits = [(a, e) for a, e in gravador.chamadas if Path(str(a[0])).name == "git"]
+    assert gits and len(gits) == len(gravador.chamadas)
+    for argv, env in gits:
+        argv = [str(a) for a in argv]
+        for opcao in OPCOES_DE_SEGURANCA:
+            assert opcao in argv, (opcao, argv)
+        assert f"--git-dir={local}/.git" in argv and f"--work-tree={local}" in argv
+        assert set(env) <= CHAVES_PERMITIDAS and "valor-secreto" not in env.values()
+    assert any("--end-of-options" in [str(a) for a in argv] for argv, _ in gits)
+
+
+# ============================================================================ apply: dependências, smoke e rollback
+
+AGORA = 1_800_000_000.0
+PEDIDO = UpdateRequest(bot_id=111, channel_id=222, requested_by=333)
+
+PYTHON_FALSO = """#!/bin/sh
+d=$(dirname "$0")
+if [ "$2 $3" = "pip install" ] && [ -f "$d/pip_falha" ]; then rm -f "$d/pip_falha"; exit 1; fi
+case "$1" in
+  -c) [ -f "$d/smoke_falha" ] && exit 1 ;;
+esac
+exit 0
+"""
+
+
+@pytest.fixture
+def python_falso(tmp_path, monkeypatch):
+    """Interpretador falso e ``uv`` ausente (o caminho é ``python -m pip install``). As marcas de falha ficam AO LADO do script, porque o
+    ambiente mínimo do contrato (V6) não repassa variáveis do teste ao processo."""
+    script = tmp_path / "python-falso"
+    script.write_text(PYTHON_FALSO, encoding="utf-8")
+    script.chmod(0o755)
+    monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)
+    return script
+
+
+def aplicar(plano, local, script, tmp_path, runner=run_exec):
+    return asyncio.run(
+        apply_git_update(
+            plano, PEDIDO, local, tmp_path / "runtime", python=str(script), runner=runner, now=lambda: AGORA
+        )
+    )
+
+
+def pendente_em_disco(tmp_path) -> dict:
+    return json.loads((tmp_path / "runtime" / "update-pending.json").read_text())
+
+
+def test_apply_leaves_head_detached_on_the_tag_commit_and_returns_the_pending_update(
+    mundo, python_falso, gravador, tmp_path
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    pendente = aplicar(plano, local, python_falso, tmp_path, gravador)
+
+    assert head(local) == plano.target_commit
+    assert subprocess.run(["git", "-C", str(local), "symbolic-ref", "-q", "HEAD"], capture_output=True).returncode != 0
+    chamadas = [" ".join(str(a) for a in argv) for argv, _ in gravador.chamadas]
+    assert any("-m pip install" in c and "--require-hashes" in c and "requirements-lock.txt" in c for c in chamadas)
+    assert any("import empiremuse.utils.client" in c for c in chamadas)
+    assert any("-m compileall" in c and "empiremuse" in c for c in chamadas)
+    assert (pendente.v, pendente.flow, pendente.boots, pendente.status) == (1, "git", 0, "pending")
+    assert (str(pendente.from_version), str(pendente.to_version)) == ("2.0.0", "2.1.0")
+    assert (pendente.bot_id, pendente.channel_id, pendente.requested_by) == (111, 222, 333)
+    assert pendente.created_at == AGORA and pendente.prev_sha == plano.prev_sha
+
+
+def test_the_pending_file_is_written_with_the_contract_fields_and_mode_0600(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    aplicar(plano, local, python_falso, tmp_path)
+
+    arquivo = tmp_path / "runtime" / "update-pending.json"
+    assert arquivo.stat().st_mode & 0o777 == 0o600
+    assert pendente_em_disco(tmp_path) == {
+        "v": 1,
+        "flow": "git",
+        "from_version": "2.0.0",
+        "to_version": "2.1.0",
+        "bot_id": 111,
+        "channel_id": 222,
+        "requested_by": 333,
+        "created_at": AGORA,
+        "prev_sha": plano.prev_sha,
+        "boots": 0,
+        "status": "pending",
+    }
+
+
+def test_the_dependency_install_and_the_smoke_never_see_secrets(mundo, python_falso, gravador, tmp_path, monkeypatch):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    for nome in ("TOKEN", "MONGO", "GITHUB_TOKEN", "GIT_DIR"):
+        monkeypatch.setenv(nome, "valor-secreto")
+
+    aplicar(plano, local, python_falso, tmp_path, gravador)
+
+    do_python = [(argv, env) for argv, env in gravador.chamadas if Path(str(argv[0])).name == "python-falso"]
+    assert len(do_python) == 3  # instalação, import e compileall
+    for _, env in do_python:
+        assert "valor-secreto" not in env.values()
+        assert not {"TOKEN", "MONGO", "GITHUB_TOKEN"} & set(env) and not any(k.startswith("GIT_DIR") for k in env)
+
+
+def test_a_failing_smoke_rolls_back_to_prev_sha_reinstalls_the_lock_and_leaves_no_pending(
+    mundo, python_falso, gravador, tmp_path
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    (tmp_path / "smoke_falha").write_text("1", encoding="utf-8")
+
+    with pytest.raises(UpdateError):
+        aplicar(plano, local, python_falso, tmp_path, gravador)
+
+    assert head(local) == plano.prev_sha
+    instalacoes = [a for a, _ in gravador.chamadas if "pip" in [str(x) for x in a] and "install" in [str(x) for x in a]]
+    assert len(instalacoes) == 2  # a do alvo e a do lock anterior
+    assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_a_failing_dependency_install_also_rolls_back(mundo, python_falso, gravador, tmp_path):
+    """A 1ª instalação (a do alvo) falha; a reinstalação do lock anterior passa."""
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    (tmp_path / "pip_falha").write_text("1", encoding="utf-8")
+
+    with pytest.raises(UpdateError):
+        aplicar(plano, local, python_falso, tmp_path, gravador)
+
+    assert head(local) == plano.prev_sha
+    instalacoes = [a for a, _ in gravador.chamadas if "pip" in [str(x) for x in a] and "install" in [str(x) for x in a]]
+    assert len(instalacoes) == 2
+    assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+# ============================================================================ cancelamento: filho morto e reversão
+
+
+def test_cancelling_run_exec_kills_and_reaps_the_child_and_reraises():
+    """O shutdown cancela a tarefa: o git/pip não pode seguir vivo."""
+    capturado = []
+    criado = asyncio.Event()
+    original = asyncio.create_subprocess_exec
+
+    async def espiao(*args, **kwargs):
+        processo = await original(*args, **kwargs)
+        capturado.append(processo)
+        criado.set()
+        return processo
+
+    async def principal():
+        tarefa = asyncio.create_task(
+            run_exec(sys.executable, "-c", "import time; time.sleep(30)", cwd=None, env=os.environ, timeout=600)
+        )
+        await asyncio.wait_for(criado.wait(), 30)
+        tarefa.cancel()
+        propagou = vivo = False
+        try:
+            await tarefa
+        except asyncio.CancelledError:
+            propagou = True
+        finally:
+            vivo = capturado[0].returncode is None
+            if capturado[0].returncode is None:  # não deixa o filho de pé se a correção faltar
+                capturado[0].kill()
+                await capturado[0].wait()
+        return propagou, vivo
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(asyncio, "create_subprocess_exec", espiao)
+        propagou, vivo = asyncio.run(principal())
+
+    assert propagou and not vivo
+
+
+def test_a_timeout_still_returns_124_with_the_child_dead():
+    capturado = []
+    original = asyncio.create_subprocess_exec
+
+    async def espiao(*args, **kwargs):
+        processo = await original(*args, **kwargs)
+        capturado.append(processo)
+        return processo
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(asyncio, "create_subprocess_exec", espiao)
+        resultado = asyncio.run(
+            run_exec(sys.executable, "-c", "import time; time.sleep(30)", cwd=None, env=os.environ, timeout=0.2)
+        )
+
+    assert resultado.returncode == 124 and capturado[0].returncode is not None
+
+
+def runner_que_falha(plano, *, no_smoke=None, no_restore=None):
+    """Delega ao ``run_exec`` real, mas levanta ``no_smoke`` no teste de fumaça e ``no_restore`` no checkout do ``prev_sha``."""
+
+    async def runner(*args, **kwargs):
+        texto = [str(a) for a in args]
+        if no_smoke and "import empiremuse.utils.client" in texto:
+            raise no_smoke
+        if "checkout" in texto and plano.prev_sha in texto:
+            runner.restore_tentado = True
+            if no_restore:
+                raise no_restore
+        return await run_exec(*args, **kwargs)
+
+    runner.restore_tentado = False
+    return runner
+
+
+def test_a_cancellation_during_the_smoke_restores_the_checkout_and_reraises(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    with pytest.raises(asyncio.CancelledError):
+        aplicar(plano, local, python_falso, tmp_path, runner_que_falha(plano, no_smoke=asyncio.CancelledError()))
+
+    assert head(local) == plano.prev_sha
+    assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_an_oserror_writing_the_pending_file_restores_the_checkout_and_reraises(
+    mundo, python_falso, tmp_path, monkeypatch
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    def falha(*args, **kwargs):
+        raise OSError(28, "sem espaço")
+
+    monkeypatch.setattr(git_flow, "write_pending", falha)
+
+    with pytest.raises(OSError):
+        aplicar(plano, local, python_falso, tmp_path)
+
+    assert head(local) == plano.prev_sha
+    assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_when_the_restore_also_fails_the_original_exception_is_the_one_that_rises(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = runner_que_falha(plano, no_smoke=asyncio.CancelledError(), no_restore=RuntimeError("falha do restore"))
+
+    with pytest.raises(asyncio.CancelledError):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert runner.restore_tentado and not (tmp_path / "runtime" / "update-pending.json").exists()
