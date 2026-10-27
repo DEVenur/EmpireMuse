@@ -9,6 +9,7 @@ import re
 import socket
 import socketserver
 import struct
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import unquote, urlsplit
@@ -27,6 +28,12 @@ class Requisicao:
 
 class _Servidor(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        """O cliente (o proxy) pode fechar a conexão antes da resposta: isso não é erro do daemon falso, então não vai ao stderr."""
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
 
 
 class DaemonFalso:
