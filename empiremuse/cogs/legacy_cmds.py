@@ -112,11 +112,17 @@ def format_git_log(data_list: list):
     return data
 
 
-_WATCH_TASKS: set[asyncio.Task] = set()  # referências fortes: o loop só guarda referência fraca das tarefas
+def _pool_watch_tasks(pool) -> set[asyncio.Task]:
+    """Conjunto de tarefas de acompanhamento do auxiliar no ``pool`` (criado sob demanda em fakes sem ``__init__``)."""
+    tasks = getattr(pool, "helper_watch_tasks", None)
+    if not isinstance(tasks, set):
+        tasks = set(tasks) if tasks else set()
+        pool.helper_watch_tasks = tasks
+    return tasks
 
 
-def _finish_watch(task: asyncio.Task) -> None:
-    _WATCH_TASKS.discard(task)
+def _finish_watch(tasks: set[asyncio.Task], task: asyncio.Task) -> None:
+    tasks.discard(task)
     if not task.cancelled() and task.exception() is not None:
         logger.warning("update: o acompanhamento do auxiliar terminou com erro", exc_info=task.exception())
 
@@ -487,7 +493,7 @@ class Owner(commands.Cog):
         por DM quando ela falhou, remove o auxiliar e só com a remoção confirmada apaga o pendente (D12).
         """
         socket = self.bot.config.get("UPDATE_PROXY_SOCKET")
-        watching = any(not task.done() for task in _WATCH_TASKS)
+        watching = any(not task.done() for task in _pool_watch_tasks(self.bot.pool))
         if pending.flow != "docker" or pending.status != "pending" or watching or not socket:
             raise self._in_progress_error()
         client = ProxyClient(socket)
@@ -632,11 +638,12 @@ class Owner(commands.Cog):
     def _watch_docker_update(self, client, pending) -> None:
         """Acompanha o auxiliar em segundo plano enquanto este processo viver (a tarefa não é cancelada por quem confirmou)."""
         report = DiscordReport(self.bot, pending)
+        tasks = _pool_watch_tasks(self.bot.pool)
         watcher = asyncio.create_task(
             watch_helper(client, pending, paths.get_runtime_dir(), report, secrets=self.secret_values())
         )
-        _WATCH_TASKS.add(watcher)
-        watcher.add_done_callback(_finish_watch)
+        tasks.add(watcher)
+        watcher.add_done_callback(partial(_finish_watch, tasks))
 
     async def _offer_git_update(self, ctx) -> tuple[bool, Optional[str]]:
         """Planeja e pede a confirmação. Devolve ``(trava_entregue, texto)``; a trava só é entregue se a janela foi enviada."""
