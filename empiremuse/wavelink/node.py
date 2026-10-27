@@ -232,6 +232,7 @@ class Node:
                             "Falha ao conectar no servidor [%s].%s",
                             self.identifier,
                             f" Causa: {safe_error(exception)}" if exception else "",
+                            extra={"aggregate_key": self.identifier},
                         )
                         return
                     exception = e
@@ -242,6 +243,7 @@ class Node:
                             retries,
                             max_retries,
                             backoff,
+                            extra={"aggregate_key": self.identifier},
                         )
                     backoff += 2
                     retries += 1

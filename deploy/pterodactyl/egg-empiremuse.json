@@ -402,7 +402,7 @@
             "name": "Permissões do convite do bot",
             "description": "Máscara inteira de permissões do Discord solicitada no link gerado pelo comando convite.",
             "env_variable": "INVITE_PERMISSIONS",
-            "default_value": "332892794064",
+            "default_value": "2533601240804560",
             "user_viewable": true,
             "user_editable": true,
             "rules": "required|integer"

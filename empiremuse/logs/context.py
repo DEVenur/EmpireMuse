@@ -10,6 +10,8 @@ from contextvars import ContextVar
 from empiremuse.logs.redact import sanitize_value
 
 OWN_LOGGER = "empiremuse"
+# Um snowflake do Discord cabe em 19 dígitos; mais que isso nunca é um ID (e o int() recusa texto de mais de 4300 dígitos).
+MAX_GUILD_ID_DIGITS = 20
 
 log_bot: ContextVar[str | None] = ContextVar("log_bot", default=None)
 log_guild: ContextVar[int | None] = ContextVar("log_guild", default=None)
@@ -28,6 +30,21 @@ def log_context(*, bot: str | None = None, guild: int | None = None) -> Iterator
     finally:
         for var, token in reversed(tokens):
             var.reset(token)
+
+
+def guild_extra(value: object) -> dict[str, int]:
+    """``extra`` com o servidor para o log: ``{"guild": id}`` se ``value`` é um ID (int ou texto só de dígitos ASCII), senão vazio.
+
+    O ``LevelGate`` só deixa o DEBUG de um servidor de ``LOG_DEBUG_GUILDS`` passar com ``record.guild`` int, e o ``ContextFilter`` só
+    aceita int: um ``_id`` de sessão vem como texto, então a conversão fica aqui e um valor inválido nunca levanta.
+    """
+    if isinstance(value, bool):
+        return {}
+    if isinstance(value, int):
+        return {"guild": value}
+    if isinstance(value, str) and len(value) <= MAX_GUILD_ID_DIGITS and value.isascii() and value.isdigit():
+        return {"guild": int(value)}
+    return {}
 
 
 class ContextFilter(logging.Filter):
