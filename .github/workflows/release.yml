@@ -104,6 +104,21 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
 
+      - name: Recusar tag cuja imagem já foi publicada
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          # Reexecutar o job de uma tag publicada reconstruiria a imagem com outro digest e republicaria as tags,
+          # enquanto o image-digest.txt (imutável) guarda o digest antigo.
+          if out=$(docker buildx imagetools inspect "or4cu1o/empiremuse:${VERSION}" 2>&1); then
+            echo "::error::A imagem or4cu1o/empiremuse:${VERSION} já existe; uma versão publicada nunca é reconstruída."
+            exit 1
+          fi
+          if ! grep -qiE 'not found|manifest unknown|no such manifest' <<< "$out"; then
+            echo "::error::Não foi possível confirmar que a tag está livre: $out"
+            exit 1
+          fi
+
       - name: Build e push da imagem Docker
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -144,10 +159,11 @@ jobs:
       - name: Verificar a assinatura (identidade deste workflow)
         env:
           DIGEST: ${{ steps.digest.outputs.value }}
+          IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
         run: |
           cosign verify \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --certificate-identity-regexp '^https://github\.com/EmpireCommunity/EmpireMuse/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' \
+            --certificate-identity "$IDENTITY" \
             "or4cu1o/empiremuse@${DIGEST}" > /dev/null
 
   github-release:

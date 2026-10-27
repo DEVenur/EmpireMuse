@@ -129,7 +129,8 @@ flowchart TD
   - **SBOM** (`sbom: true`): Gera e anexa o inventário de software (Software Bill of Materials) diretamente ao registro;
   - **Provenance** (`provenance: mode=max`): Gera atestações criptográficas de procedência de compilação em conformidade com o nível SLSA;
 - **Versão dentro da imagem**: o `build-args` passa `EMPIREMUSE_VERSION` (a versão da tag, sem o `v`) para o Dockerfile, e o bot a lê para saber que versão está rodando (`empiremuse/version.py`). Builds locais ficam com `dev`;
-- **Assinatura (cosign keyless, cosign v3.1.3 fixado no instalador)**: só o job `docker` tem `id-token: write`. Depois do push, o job valida o digest (`^sha256:[0-9a-f]{64}$`), assina `or4cu1o/empiremuse@<digest>` pela identidade OIDC do GitHub (Sigstore, sem chave guardada) e roda `cosign verify` no mesmo digest, exigindo a identidade deste `release.yml` numa tag `vX.Y.Z[-rc.N]`. Se assinar ou verificar falhar, o job falha e a versão não é anunciada (fail-closed). O digest sai como saída do job;
+- **Imagem nunca reconstruída**: antes do build, o job falha se `or4cu1o/empiremuse:<versão>` já existe (reexecutar uma tag publicada trocaria o digest e republicaria as tags flutuantes, e o `image-digest.txt` imutável ficaria com o digest antigo);
+- **Assinatura (cosign keyless, cosign v3.1.3 fixado no instalador)**: só o job `docker` tem `id-token: write`. Depois do push, o job valida o digest (`^sha256:[0-9a-f]{64}$`), assina `or4cu1o/empiremuse@<digest>` pela identidade OIDC do GitHub (Sigstore, sem chave guardada) e roda `cosign verify` no mesmo digest, exigindo a identidade exata deste `release.yml` na ref da tag. Se assinar ou verificar falhar, o job falha e a versão não é anunciada (fail-closed). O digest sai como saída do job;
 - **Regras de Versionamento de Tags da Imagem**:
   - **Versão Final Estável** (`vX.Y.Z`, ex.: `v2.0.0`):
     - Publica a tag de versão exata `X.Y.Z` (`2.0.0`), que nunca é republicada, além das tags flutuantes `X.Y` (`2.0`), `X` (`2`, gerada para versões ≥ 1.0 via `enable=${{ !startsWith(github.ref_name, 'v0.') }}`) e `latest` (graças ao modificador `latest=auto`), que são atualizadas a cada nova release estável.
@@ -172,16 +173,17 @@ O comando exibirá a lista de manifestos contendo:
 - Camadas de atestação (`application/vnd.in-toto+json`) referentes ao SBOM e Provenance.
 
 ### 5.3 Verificação da Assinatura e do Digest
-Para conferir a assinatura como uma pessoa (o workflow já fez a mesma checagem), instale o [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) e rode, trocando `X.Y.Z` pela versão:
+O workflow já verificou a assinatura; para repetir como uma pessoa, instale o [cosign](https://docs.sigstore.dev/cosign/system_config/installation/), baixe o digest fixado da GitHub Release e verifique **o objeto pelo digest**, trocando `X.Y.Z` pela versão:
 
 ```bash
+DIGEST=$(gh release download vX.Y.Z --repo EmpireCommunity/EmpireMuse -p image-digest.txt -O -)
 cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity "https://github.com/EmpireCommunity/EmpireMuse/.github/workflows/release.yml@refs/tags/vX.Y.Z" \
-  or4cu1o/empiremuse:X.Y.Z
+  "or4cu1o/empiremuse@${DIGEST}"
 ```
 
-O digest fixado da versão está no asset `image-digest.txt` da GitHub Release (`gh release download vX.Y.Z -p image-digest.txt -O -`). Use-o para fixar a imagem como `or4cu1o/empiremuse:X.Y.Z@sha256:<digest>` em um compose.
+Use o mesmo digest para fixar a imagem como `or4cu1o/empiremuse:X.Y.Z@sha256:<digest>` em um compose.
 
 ---
 
