@@ -16,6 +16,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Compose de produção da VPS (`deploy/docker-compose.hostinger.yml` e `deploy/env.example.hostinger`)**: o compose de arquivo único usado na VPS da Hostinger (atrás do Traefik + Cloudflare) e o modelo do `.env` só com os segredos (valores vazios); ao usar, são renomeados para `docker-compose.yml` e `.env`.
 
 ### Alterado
+- **Novo avatar da marca**: `assets/brand/avatar.png` (1024×1024) passa a ser a arte "EmpireMuse 1" (garota chibi com fones, coroa e asas sobre um campo de estrelas violeta), no lugar da arte da nebulosa. O `discloud.config` e o guia da Discloud seguem apontando para o mesmo caminho.
 - **Cobertura crítica**: `empiremuse/updater/*`, `empiremuse/health.py` e `empiremuse/version.py` entram na lista de áreas com cobertura mínima de 90% no `ci.yml`.
 - **Satélites (item 6, fase S4)**: `jishaku` passa para o fork `v2.6.6.post3` (`import_expression` 2; o `jsk py` com `module!.attr` volta a funcionar) e o `EmpireMuse-LL-binaries` para a release `0.0.5`, com o plugin de letras 2.7.1 compilado do commit `d0dfbb13` do mantenedor (a tag 2.7.1 não compilava). Docs (`README.md`, `CREDITS.md`, `docs/`) com as novas versões.
 - **Driver do MongoDB: `motor` → PyMongo Async (item 6, fase S3)**: `MongoDatabase` passa a usar `pymongo.AsyncMongoClient` (API async GA do `pymongo>=4.13`); o contrato público (métodos, assinaturas e cache) não muda. `motor` sai do `requirements.txt` e dos locks. Documentação (`AGENTS.md`, `docs/architecture.md`) atualizada.
