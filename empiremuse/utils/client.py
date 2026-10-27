@@ -42,6 +42,7 @@ from empiremuse.health import (
     write_heartbeat,
 )
 from empiremuse.rules.git_remote import parse_remote_web_url
+from empiremuse.updater.notice import deliver_update_notice
 from empiremuse.utils import branding
 from empiremuse.utils.file_log import build_file_log_handler
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
@@ -184,6 +185,8 @@ class BotPool:
         self.default_idling_skin = self.config.get("DEFAULT_IDLING_SKIN", "default")
         self.cache_updater_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
+        # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
+        self.update_lock = asyncio.Lock()
         self.nodes_expected = False  # vira True quando o pool configura ao menos um nó (local ou da lista)
         self.lyric_data_cache = TTLCache(maxsize=30000, ttl=600 * 10)
         self.ytdl = CustomYTDL(
@@ -1093,6 +1096,12 @@ class BotPool:
                 await bot.update_appinfo()
 
                 bot.bot_ready = True
+
+                try:
+                    await deliver_update_notice(self)
+                except Exception:
+                    # logger aqui seria a variável local do setup(); o logger do módulo vem direto
+                    logging.getLogger(__name__).warning("Falha ao entregar o aviso de atualização", exc_info=True)
 
             bot.loop.create_task(initial_setup())
 

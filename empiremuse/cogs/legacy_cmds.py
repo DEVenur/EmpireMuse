@@ -6,7 +6,9 @@ import os
 import re
 import shutil
 import sys
+import time
 import traceback
+from functools import partial
 from pathlib import Path
 from typing import Union, Optional
 from zipfile import ZipFile
@@ -23,17 +25,33 @@ from empiremuse import paths
 from empiremuse.config_loader import DEFAULT_CONFIG, load_config
 from empiremuse.rules.errors import RuleError
 from empiremuse.rules.owner_shell import build_shell_env, collect_secret_values, mask_secrets
+from empiremuse.rules.release import Version, changelog_sections
 from empiremuse.rules.settings import validate_prefix
+from empiremuse.updater.git_flow import (
+    EXIT_RESTART,
+    UpdateError,
+    apply_git_update,
+    fetch_remote_changelog,
+    git_env,
+    latest_official_version,
+    plan_git_update,
+    run_exec,
+)
+from empiremuse.updater.mode import MODE_GIT, MODE_PANEL, update_mode
+from empiremuse.updater.state import UpdateRequest, read_pending
+from empiremuse.updater.views import ConfirmView
+from empiremuse.utils import branding
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import check_voice, check_requester_channel, can_connect
 from empiremuse.utils.music.converters import URL_REG
-from empiremuse.utils.music.errors import GenericError, NoVoice
+from empiremuse.utils.music.errors import GenericError, NoVoice, code_suffix, log_unexpected_error
 from empiremuse.utils.music.interactions import SelectBotVoice
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import CustomContext, string_to_file, token_regex, CommandArgparse, select_bot_pool
 from empiremuse.utils.owner_panel import panel_command, PanelView
+from empiremuse.version import image_version
 
 MSG_INVALID_PREFIX = "**O prefixo não pode conter espaços ou ter acima de 5 caracteres.**"
 
@@ -41,6 +59,12 @@ logger = logging.getLogger(__name__)
 
 # Trecho máximo do comando que vai para o log de execução de comandos de owner.
 MAX_LOGGED_COMMAND_LENGTH = 200
+
+# Saída máxima (em caracteres) lida de um git de leitura (git log, git ls-files); o padrão do run_exec cortaria a lista de arquivos.
+MAX_GIT_READ_OUTPUT = 4 * 1024 * 1024
+GIT_READ_TIMEOUT = 60
+# Janela do "o que mudou" mostrada quando o bot não se atualiza sozinho (cabe com folga num embed).
+MANUAL_CHANGELOG_CHARS = 1500
 
 # Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
 EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
@@ -96,6 +120,24 @@ async def run_command(cmd: str):
     return str(r.stdout)
 
 
+async def run_git(*args: str, git_dir: str) -> str:
+    """Git de leitura sem shell: ``--git-dir`` explícito, ambiente mínimo (sem ``GIT_DIR`` herdado), saída mascarada.
+
+    Levanta ``CommandFailed`` com a saída se o git sair com status diferente de zero.
+    """
+    command = ["git", f"--git-dir={git_dir}", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", *args]
+    result = await run_exec(
+        *command,
+        cwd=paths.RUNTIME_DIR,
+        env=git_env(os.environ),
+        timeout=GIT_READ_TIMEOUT,
+        max_output=MAX_GIT_READ_OUTPUT,
+    )
+    if result.returncode != 0:
+        raise CommandFailed(f"{result.output}\n\nStatus Code: {result.returncode}")
+    return result.output
+
+
 class ShellResult:
     def __init__(self, status: int, stdout: Optional[bytes], stderr: Optional[bytes]):
         self.status = status
@@ -104,8 +146,7 @@ class ShellResult:
 
 
 class Owner(commands.Cog):
-    os_quote = '"' if os.name == "nt" else "'"
-    git_format = f"--pretty=format:{os_quote}%H*****%h*****%s*****%ct{os_quote}"
+    git_format = "--pretty=format:%H*****%h*****%s*****%ct"
 
     additional_files = [
         "lavalink.ini",
@@ -358,20 +399,131 @@ class Owner(commands.Cog):
         else:
             return txt
 
+    def _release_update_lock(self) -> None:
+        lock = self.bot.pool.update_lock
+        if lock.locked():
+            lock.release()
+
     @commands.is_owner()
     @commands.max_concurrency(1, commands.BucketType.default)
     @panel_command(
         aliases=["up", "atualizar"],
-        description="Atualizar meu code usando o git.",
+        description="Atualizar o bot para a versão oficial mais nova.",
         emoji="🛠️",
         alt_name="Atualizar Bot",
     )
     async def update(self, ctx: Union[CustomContext, disnake.MessageInteraction], *, opts: str = ""):
-        self.log_owner_command(ctx, "update")
-        raise GenericError(
-            "**O comando de atualização via git foi desativado.**\n"
-            "Para atualizar o EmpireMuse, implante a nova release/imagem oficial."
-        )
+        # O decorador vale por bot; a conferência de dono e a trava valem aqui, no fluxo (e para o botão do painel).
+        if not await self.bot.is_owner(ctx.author):
+            raise GenericError("**Apenas meu(s) desenvolvedor(es) pode(m) atualizar o bot.**")
+        pool = self.bot.pool
+        if pool.update_lock.locked() or read_pending(paths.get_runtime_dir(), time.time()) is not None:
+            raise GenericError("**Já há uma atualização em andamento.** Aguarde o aviso de conclusão.")
+
+        await pool.update_lock.acquire()
+        handed_over = False  # a trava passa para a janela de confirmação, que a solta ao cancelar, expirar ou terminar
+        try:
+            mode = update_mode(self.bot.config, os.environ, paths.PROJECT_DIR)
+            if mode == MODE_GIT:
+                handed_over, text = await self._offer_git_update(ctx)
+            else:
+                text = await self._describe_manual_update(ctx, mode)
+        finally:
+            if not handed_over:
+                self._release_update_lock()
+        return text
+
+    async def _reply_update(self, ctx, text: str) -> Optional[str]:
+        """No prefixo manda o embed e não devolve nada; no painel devolve o texto para o painel mostrar."""
+        if isinstance(ctx, CustomContext):
+            await ctx.send(embed=disnake.Embed(description=text, colour=self.bot.get_color()))
+            return None
+        return text
+
+    async def _describe_manual_update(self, ctx, mode: str) -> Optional[str]:
+        """Modos em que o bot não se atualiza sozinho (imagem gerenciada ou código solto): só informa a versão disponível."""
+        latest = await latest_official_version()
+        installed = image_version() if mode == MODE_PANEL else None
+        self.log_owner_command(ctx, "update", f"{mode} {installed or '?'}->{latest or '?'}")
+        if latest is None:
+            return await self._reply_update(
+                ctx, "**Não consegui consultar a versão oficial agora.** Tente de novo mais tarde."
+            )
+        if installed is not None and latest <= installed:
+            return await self._reply_update(ctx, f"✅ **Você já está na versão mais recente ({installed}).**")
+        raw = await asyncio.get_running_loop().run_in_executor(None, fetch_remote_changelog, f"v{latest}")
+        notes = changelog_sections(raw, installed or Version(0, 0, 0), latest, MANUAL_CHANGELOG_CHARS)
+        link = f"{branding.REPO_URL}/blob/v{latest}/CHANGELOG.md"
+        if mode == MODE_PANEL:
+            action = "Atualize pelo painel da hospedagem: este bot roda numa imagem gerenciada por ela."
+        else:
+            action = f"Reimplante o código da versão {latest}: este bot não tem um clone git para se atualizar sozinho."
+        title = f"🆕 **Versão disponível: {latest}**" + (f" (instalada: {installed})" if installed else "")
+        parts = [title, notes, f"{action}\n[CHANGELOG completo]({link})"]
+        return await self._reply_update(ctx, "\n\n".join(part for part in parts if part))
+
+    async def _offer_git_update(self, ctx) -> tuple[bool, Optional[str]]:
+        """Planeja e pede a confirmação. Devolve ``(trava_entregue, texto)``; a trava só é entregue se a janela foi enviada."""
+        try:
+            plan = await plan_git_update(paths.PROJECT_DIR)
+        except UpdateError as error:
+            raise GenericError(f"**{error}**") from error
+        if plan is None:
+            return False, await self._reply_update(ctx, "✅ **Você já está na versão mais recente.**")
+        self.log_owner_command(ctx, "update", f"{MODE_GIT} {plan.current}->{plan.target}")
+
+        channel_id = getattr(getattr(ctx, "channel", None), "id", None) or ctx.channel_id
+        request = UpdateRequest(bot_id=self.bot.user.id, channel_id=channel_id, requested_by=ctx.author.id)
+        view = ConfirmView(ctx.author.id, partial(self._apply_git_update, plan, request), self._release_update_lock)
+        embed = disnake.Embed(colour=self.bot.get_color(), description=self._confirmation_text(plan))
+        if isinstance(ctx, CustomContext):
+            view.message = await ctx.send(embed=embed, view=view)
+            return True, None
+        # Painel: a mensagem do painel segue como está e a confirmação vai só para quem clicou.
+        await ctx.response.defer()
+        view.message = await ctx.followup.send(embed=embed, view=view, ephemeral=True, wait=True)
+        return True, "Confirmação enviada só para você."
+
+    @staticmethod
+    def _confirmation_text(plan) -> str:
+        notes = plan.changelog or "_Esta versão não traz notas no CHANGELOG._"
+        warning = "⚠️ O bot **fica indisponível** durante a atualização e reinicia ao fim."
+        if not os.environ.get("INVOCATION_ID"):
+            warning += "\n⚠️ Não detectei um supervisor (systemd): o bot **vai parar** e você precisará iniciá-lo à mão."
+        return f"🛠️ **Atualizar de {plan.current} para {plan.target}?**\n\n{notes}\n\n{warning}"
+
+    async def _apply_git_update(self, plan, request: UpdateRequest, interaction: disnake.MessageInteraction) -> None:
+        """Roda depois do clique em Confirmar: aplica, avisa o resultado e, se deu certo, encerra o processo com 75."""
+        restart = False
+        try:
+            progress = disnake.Embed(colour=self.bot.get_color(), description=f"⏳ Atualizando para {plan.target}...")
+            await interaction.response.edit_message(embed=progress, view=None)
+            try:
+                await apply_git_update(plan, request, paths.PROJECT_DIR, paths.get_runtime_dir())
+            except UpdateError as error:
+                text = f"❌ {error}"
+            except Exception as error:
+                text = f"❌ **Falha inesperada na atualização.**{code_suffix(log_unexpected_error(logger, error, 'atualização'))}"
+            else:
+                text = f"✅ **Código atualizado para {plan.target}.** Reiniciando; o resultado chega neste canal."
+                restart = True
+            await interaction.edit_original_message(embed=disnake.Embed(colour=self.bot.get_color(), description=text))
+        except disnake.HTTPException:
+            logger.warning("update: não consegui editar a mensagem de progresso", exc_info=True)
+        finally:
+            self._release_update_lock()
+        if restart:
+            await self._restart_process()
+
+    async def _restart_process(self) -> None:
+        """Encerra o pool com o código de reinício (75) e, com o servidor web no ar, também o laço dele (senão o processo não sai)."""
+        pool = self.bot.pool
+        await pool.shutdown(EXIT_RESTART)
+        if pool.config["RUN_RPC_SERVER"]:
+            import tornado.ioloop
+
+            loop = tornado.ioloop.IOLoop.current()
+            loop.add_callback(loop.stop)
 
     @commands.max_concurrency(1, commands.BucketType.guild)
     @commands.cooldown(1, 10, commands.BucketType.user)
@@ -397,7 +549,8 @@ class Owner(commands.Cog):
 
         git_log = []
 
-        data = (await run_command(f"git log -{amount or 10} {self.git_format}")).split("\n")
+        count = amount if amount and amount > 0 else 10
+        data = (await run_git("log", f"-{count}", self.git_format, git_dir=git_dir)).split("\n")
 
         git_log += format_git_log(data)
 
@@ -632,7 +785,7 @@ class Owner(commands.Cog):
         git_dir = os.environ.get("GIT_DIR", str(paths.RUNTIME_DIR / ".git"))
         if os.path.isdir(git_dir):
             try:
-                filelist = await run_command("git ls-files --others --exclude-standard --cached")
+                filelist = await run_git("ls-files", "--others", "--exclude-standard", "--cached", git_dir=git_dir)
             except Exception:
                 filelist = ""
 

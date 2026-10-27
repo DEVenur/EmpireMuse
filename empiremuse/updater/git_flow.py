@@ -19,6 +19,7 @@ import shutil
 import sys
 import time
 import tomllib
+import urllib.request
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 
@@ -41,6 +42,8 @@ MAIN_REF = "refs/remotes/official/main"
 LOCK_FILE = "requirements-lock.txt"
 CHANGELOG_FILE = "CHANGELOG.md"
 CHANGELOG_MAX_CHARS = 3500
+MAX_CHANGELOG_BYTES = 1024 * 1024
+RAW_BASE = "https://raw.githubusercontent.com/"
 GIT_TIMEOUT = 60
 GIT_NETWORK_TIMEOUT = 300
 INSTALL_TIMEOUT = 600
@@ -95,8 +98,8 @@ def minimal_env(base: Mapping[str, str]) -> dict[str, str]:
     return _base_env(base, {})
 
 
-def git_command(repo_dir: Path, allow_protocol: str, *args: str) -> list[str]:
-    """``git`` apontado para ``repo_dir`` com as opções de segurança; ``args`` começa pelo subcomando."""
+def git_command(repo_dir: Path | None, allow_protocol: str, *args: str) -> list[str]:
+    """``git`` apontado para ``repo_dir`` (ou sem repositório, para ``ls-remote``) com as opções de segurança; ``args`` começa pelo subcomando."""
     options = (
         "protocol.allow=never",
         f"protocol.{allow_protocol}.allow=always",
@@ -106,16 +109,25 @@ def git_command(repo_dir: Path, allow_protocol: str, *args: str) -> list[str]:
         "core.fsmonitor=false",
         "transfer.fsckObjects=true",
     )
-    command = ["git", f"--git-dir={repo_dir}/.git", f"--work-tree={repo_dir}"]
+    command = ["git"]
+    if repo_dir is not None:
+        command += [f"--git-dir={repo_dir}/.git", f"--work-tree={repo_dir}"]
     for option in options:
         command += ["-c", option]
     return command + list(args)
 
 
 async def run_exec(
-    *args: str, cwd: str | os.PathLike[str] | None, env: Mapping[str, str], timeout: float
+    *args: str,
+    cwd: str | os.PathLike[str] | None,
+    env: Mapping[str, str],
+    timeout: float,
+    max_output: int = MAX_OUTPUT_CHARS,
 ) -> ExecResult:
-    """Roda ``args`` sem shell. Saída (stdout e stderr juntos) mascarada e truncada; falha ao iniciar vira 127 e tempo esgotado, 124."""
+    """Roda ``args`` sem shell. Saída (stdout e stderr juntos) mascarada e truncada nos últimos ``max_output`` caracteres.
+
+    Falha ao iniciar vira o código 127 e tempo esgotado, 124.
+    """
     try:
         process = await asyncio.create_subprocess_exec(
             *args,
@@ -134,7 +146,7 @@ async def run_exec(
         await process.wait()
         return ExecResult(124, "tempo esgotado")
     text = mask_secrets(stdout.decode("utf-8", errors="replace"), collect_secret_values(os.environ))
-    return ExecResult(process.returncode or 0, text[-MAX_OUTPUT_CHARS:])
+    return ExecResult(process.returncode or 0, text[-max_output:])
 
 
 class _Git:
@@ -179,6 +191,40 @@ async def _current_version(git: _Git) -> Version:
         if result.returncode == 0 and (version := parse_tag(result.output.strip())) is not None:
             return version
     raise UpdateError("Não consegui descobrir a versão atual: este clone não está em nenhuma tag `vX.Y.Z`.")
+
+
+async def latest_official_version(
+    repo_url: str = branding.SOURCE_REPO_GIT, *, allow_protocol: str = "https", runner: Runner = run_exec
+) -> Version | None:
+    """Maior tag anotada oficial (``ls-remote`` não precisa de clone), ou ``None`` se a consulta falhar."""
+    command = git_command(None, allow_protocol, "ls-remote", "--tags", "--end-of-options", repo_url)
+    result = await runner(*command, cwd=None, env=git_env(os.environ), timeout=GIT_NETWORK_TIMEOUT)
+    if result.returncode != 0:
+        return None
+    return max(parse_ls_remote_annotated(result.output), default=None)
+
+
+def fetch_remote_changelog(tag: str, *, timeout: float = 10) -> str:
+    """``CHANGELOG.md`` da tag oficial (bloqueante: rode em executor). Vazio se a tag for inválida ou a consulta falhar."""
+    raw_base = branding.REPO_URL.replace("https://github.com/", RAW_BASE, 1)
+    if parse_tag(tag) is None or not raw_base.startswith(RAW_BASE):
+        return ""
+    url = f"{raw_base}/{tag}/{CHANGELOG_FILE}"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - URL https fixa, host conferido abaixo
+            if not response.geturl().startswith(RAW_BASE):
+                return ""
+            return response.read(MAX_CHANGELOG_BYTES).decode("utf-8", errors="replace")
+    except OSError, ValueError:
+        return ""
+
+
+async def installed_version(repo_dir: Path, *, runner: Runner = run_exec) -> Version | None:
+    """Versão do clone em ``repo_dir`` (tag no HEAD ou a mais próxima), ou ``None`` se não der para descobrir."""
+    try:
+        return await _current_version(_Git(Path(repo_dir), "https", runner))
+    except UpdateError:
+        return None
 
 
 def _python_supported(pyproject: str) -> bool:
