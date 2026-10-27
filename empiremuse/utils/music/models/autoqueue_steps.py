@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import traceback
 from typing import TYPE_CHECKING
 
 import disnake
@@ -65,7 +64,7 @@ async def _aq_source_tracks(self, req):
                     controller=True,
                 )
                 self.update = True
-                traceback.print_exc()
+                logger.exception("Falha em _aq_source_tracks")
                 exception = e
                 await asyncio.sleep(5)
 
@@ -120,7 +119,7 @@ async def _aq_source_tracks(self, req):
             try:
                 result = await self.bot.deezer.get_artist_radio_info(artist_id)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em _aq_source_tracks")
                 result = None
 
             if result:
@@ -156,7 +155,7 @@ async def _aq_source_tracks(self, req):
 
                     tracks.append(partial_track)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em _aq_source_tracks")
 
     elif track_data.info["sourceName"] == "soundcloud":
         try:
@@ -219,13 +218,13 @@ async def _aq_lastfm_tracks(self, req):
                 ]
                 self.lastfm_artists.insert(0, track_data.author)
             except LastFmException as e:
-                print(f"Last.FM recommendations error: {repr(e)}")
+                logger.warning("Last.FM recommendations error: %s (código %s)", type(e).__name__, e.code)
             except Exception as e:
                 if isinstance(e, ClientError):
                     # O str do erro do aiohttp traz a URL com api_key e sk: só o status vai para o log.
                     logger.warning("Last.FM recommendations error: %s", safe_error(e))
                 else:
-                    traceback.print_exc()
+                    logger.exception("Falha em _aq_lastfm_tracks")
 
         try:
             author = self.lastfm_artists.pop(0)
@@ -289,7 +288,7 @@ async def _aq_lastfm_tracks(self, req):
                         exception = e
                         continue
                 else:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _aq_lastfm_tracks")
                     exception = e
                     await asyncio.sleep(1.5)
                     continue
@@ -349,7 +348,7 @@ async def _aq_report_failure(self, req):
         )
         await self.text_channel.send(embed=embed, delete_after=10)
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha em _aq_report_failure")
     await asyncio.sleep(7)
     return True
     return False

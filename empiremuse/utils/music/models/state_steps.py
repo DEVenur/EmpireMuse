@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import logging
 import datetime
-import traceback
 
 import disnake
 
 from empiremuse.utils.others import send_idle_embed
+
+logger = logging.getLogger("empiremuse.player")
 
 # Sessões mais novas que isso (segundos) encerram com um embed simples em vez do skin desativado.
 SKIN_KEEP_MIN_SESSION_SECONDS = 15
@@ -51,7 +53,7 @@ async def _cu_static_session(self, inter: disnake.MessageInteraction = None) -> 
     try:
         await send_idle_embed(inter or self.message, self.command_log, bot=self.bot)
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha em _cu_static_session")
 
     await self.channel_cleanup()
 
@@ -74,7 +76,7 @@ async def _cu_close_player_message(self, inter: disnake.MessageInteraction = Non
             await _cu_close_controller_message(self)
 
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha em _cu_close_player_message")
 
     return False
 
@@ -106,7 +108,7 @@ async def _cu_close_thread_message(self, inter: disnake.MessageInteraction = Non
         )
         await _cu_archive_request_thread(self)
     except Exception:
-        print(f"Falha ao arquivar thread do servidor: {self.guild.name}\n{traceback.format_exc()}")
+        logger.exception("Falha ao arquivar thread do servidor")
 
 
 async def _cu_archive_request_thread(self) -> None:

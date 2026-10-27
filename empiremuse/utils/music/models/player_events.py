@@ -1,11 +1,25 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import asyncio
-import traceback
 
 import empiremuse.wavelink as wavelink
+from empiremuse.logs.context import guild_extra
+from empiremuse.rules.text import plain_snippet
 from empiremuse.utils.music.models.event_steps import _he_dispatch
+from empiremuse.utils.music.models.helpers import LAVALINK_LOG_LIMIT
+
+logger = logging.getLogger("empiremuse.player")
+
+# Só os códigos conhecidos têm chave própria: os de fechamento do WebSocket (RFC 6455, 1000-1015) e os da voz do Discord (4000-4022).
+# O code vem do JSON do nó (de terceiros): um nó hostil que o variasse faria cada evento virar uma chave própria.
+VOICE_CLOSE_CODES = frozenset((*range(1000, 1016), *range(4000, 4023)))
+
+
+def _voice_close_key(code: object) -> str:
+    """Chave de agregação do erro de voz: o próprio código se for um dos conhecidos (``VOICE_CLOSE_CODES``), senão ``other``."""
+    return str(code) if isinstance(code, int) and not isinstance(code, bool) and code in VOICE_CLOSE_CODES else "other"
 
 
 class PlayerEventsMixin:
@@ -36,19 +50,20 @@ class PlayerEventsMixin:
                     self.update = True
                 else:
                     await self.destroy(force=True)
-                    print(f"Bot: {self.bot.user} | Desconectado do canal de voz: {self.guild_id}")
+                    logger.debug("Desconectado do canal de voz: %s", self.guild_id)
                 return
 
             if event.code == 4014 and self.guild.me.voice:
                 pass
             else:
-                print(
-                    ("-" * 15) + f"\nErro no canal de voz!"
-                    f"\nBot: {self.bot.user} [{self.bot.user.id}] | "
-                    + ("Online" if self.bot.is_ready() else "Offline")
-                    + f"\nGuild: {self.guild.name} [{self.guild.id}]"
-                    f"\nCanal: {vc.name} [{vc.id}]"
-                    f"\nServer: {self.node.identifier} | code: {event.code} | reason: {event.reason}\n" + ("-" * 15)
+                logger.warning(
+                    "Erro no canal de voz: bot %s, canal %s, servidor de música %s, code %s, reason %s",
+                    "online" if self.bot.is_ready() else "offline",
+                    vc.id,
+                    self.node.identifier,
+                    event.code,
+                    plain_snippet(event.reason, LAVALINK_LOG_LIMIT),
+                    extra={"aggregate_key": _voice_close_key(event.code), **guild_extra(self.guild_id)},
                 )
 
             if self.is_closing:
@@ -112,7 +127,7 @@ class PlayerEventsMixin:
                 await _he_dispatch(self, event)
 
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em hook_events")
 
     async def track_end(self, ignore_track_loop=False):
         self.votes.clear()

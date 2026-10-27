@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import traceback
 from typing import TYPE_CHECKING
 
 import disnake
@@ -66,7 +65,7 @@ class PlayerVoiceMixin:
                                 )
                             )
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha em reconnect_voice_channel")
                     await self.destroy()
                     return
 
@@ -79,7 +78,7 @@ class PlayerVoiceMixin:
                     try:
                         await self.guild.me.edit(suppress=False)
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha em reconnect_voice_channel")
                 return
 
             if self.is_closing:
@@ -128,7 +127,7 @@ class PlayerVoiceMixin:
                         await asyncio.sleep(5)
                         continue
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha em reconnect_voice_channel")
 
             await asyncio.sleep(30)
 
@@ -174,11 +173,7 @@ class PlayerVoiceMixin:
         try:
             await self.text_channel.purge(check=check)
         except Exception:
-            print(
-                f"Falha ao limpar mensagens do canal {self.text_channel} [ID: {self.text_channel.id}]:\n"
-                f"{traceback.format_exc()}"
-            )
-            pass
+            logger.warning("Falha ao limpar mensagens do canal %s", self.text_channel.id, exc_info=True)
 
         self.channel_purged = True
 
@@ -202,7 +197,7 @@ class PlayerVoiceMixin:
                         self.queue.insert(0, self.current)
                     await self.process_next(start_position=self.position)
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em members_timeout")
             else:
                 self.auto_pause = False
             return
@@ -394,7 +389,7 @@ class PlayerVoiceMixin:
                         controller=True,
                     )
                     self.update = True
-                print(traceback.format_exc())
+                logger.exception("Falha em update_stage_topic")
 
         self.last_stage_title = msg
 
@@ -481,8 +476,8 @@ class PlayerVoiceMixin:
                         self.set_command_log(emoji="📶", text=txt, controller=True)
                         self.update = True
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _wait_for_new_node")
                 self._new_node_task = None
                 return
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em _wait_for_new_node")

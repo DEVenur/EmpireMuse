@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+import logging
 import asyncio
-import traceback
 from typing import Union
 
 import aiohttp
@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
+from empiremuse.logs.context import guild_extra
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -17,6 +18,8 @@ from empiremuse.utils.music.models import (
 from empiremuse.utils.others import (
     CustomContext,
 )
+
+logger = logging.getLogger("empiremuse.player")
 
 
 class PlayerLifecycleMixin:
@@ -127,7 +130,7 @@ class PlayerLifecycleMixin:
             except disnake.NotFound:
                 invite = None
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em create_player", extra=guild_extra(vc.guild.id if vc else None))
             else:
                 try:
                     if invite.channel.id != vc.id:
@@ -141,11 +144,11 @@ class PlayerLifecycleMixin:
             except KeyError:
                 pass
             else:
-                print(
-                    f"{'-' * 15}\n"
-                    f"Removendo invite: {invite} \n"
-                    + (f"Servidor: {vc.guild.name} [{vc.guild.id}]\nCanal: {vc.name} [{vc.id}]\n" if vc else "")
-                    + f"{'-' * 15}"
+                logger.debug(
+                    "Removendo invite: %s%s",
+                    invite,
+                    f" (servidor {vc.guild.id}, canal {vc.id})" if vc else "",
+                    extra=guild_extra(vc.guild.id if vc else None),
                 )
                 await self.bot.update_global_data(inter.guild_id, global_data, db_name=DBModel.guilds)
 
@@ -241,7 +244,7 @@ class PlayerLifecycleMixin:
             except TypeError:
                 player.message = None
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em create_player", extra=guild_extra(getattr(player, "guild_id", None)))
                 if (
                     hasattr(player.text_channel, "parent")
                     and isinstance(player.text_channel.parent, disnake.ForumChannel)
@@ -376,7 +379,7 @@ class PlayerLifecycleMixin:
                         try:
                             await before.channel.instance.edit(topic="atualização automática desativada")
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha em player_vc_disconnect")
                         player.stage_title_event = False
 
                 else:
@@ -387,7 +390,7 @@ class PlayerLifecycleMixin:
                                 player.bot.edit_voice_channel_status(status=None, channel_id=before.channel.id)
                             )
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em player_vc_disconnect")
 
         if (
             member.bot
@@ -399,7 +402,7 @@ class PlayerLifecycleMixin:
                 try:
                     await member.guild.me.edit(suppress=False)
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em player_vc_disconnect")
 
         if check:
             try:
@@ -416,7 +419,7 @@ class PlayerLifecycleMixin:
                 try:
                     await player.destroy(force=True)
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em player_vc_disconnect")
 
         # rich presence stuff
 
@@ -464,7 +467,7 @@ class PlayerLifecycleMixin:
                         wait=True,
                     )
                 except AttributeError:
-                    traceback.print_exc()
+                    logger.exception("Falha em player_vc_disconnect")
                     pass
 
                 await player.process_rpc(vc, users=[m for m in vc.voice_states if (m != member.id)])
@@ -580,7 +583,7 @@ class PlayerLifecycleMixin:
         try:
             await bot.update_data(guild_id, data, db_name=DBModel.guilds)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em reset_controller_db")
 
         try:
             player: LavalinkPlayer = bot.music.players[guild_id]

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import asyncio
-import traceback
 from typing import Union, List
 
 import disnake
@@ -20,6 +20,8 @@ from empiremuse.utils.music.models.state_steps import (
     _cu_voice_channel,
 )
 
+logger = logging.getLogger("empiremuse.player")
+
 
 class PlayerStateMixin:
     async def cleanup(self, inter: disnake.MessageInteraction = None):
@@ -35,7 +37,7 @@ class PlayerStateMixin:
             try:
                 await self.process_rpc(vc, close=True)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em cleanup")
 
             if self.static:
                 await _cu_static_session(self, inter)
@@ -83,7 +85,7 @@ class PlayerStateMixin:
                 try:
                     await channel.instance.delete()
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em process_destroy")
 
         await super().destroy(force=force, guild=self.guild)
 
@@ -127,7 +129,7 @@ class PlayerStateMixin:
             try:
                 await self.bot.ws_client.send(stats)
             except Exception:
-                print(traceback.format_exc())
+                logger.exception("Falha em _send_rpc_data")
 
     async def process_rpc(
         self,
@@ -265,4 +267,4 @@ class PlayerStateMixin:
                 self._rpc_update_task = self.bot.loop.create_task(self._send_rpc_data(users, stats))
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em process_rpc")

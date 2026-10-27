@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import itertools
 import random
-import traceback
 from itertools import cycle
 
 import disnake
@@ -44,7 +43,7 @@ class PlayerMessageMixin:
             try:
                 await self.process_rpc()
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em invoke_np")
 
         if self.retry_setup_hints:
             self.setup_hints()
@@ -99,7 +98,7 @@ class PlayerMessageMixin:
                 try:
                     await self.invoke_np()
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em message_updater")
 
                 continue
 
@@ -107,7 +106,7 @@ class PlayerMessageMixin:
                 try:
                     await self.invoke_np()
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em message_updater")
 
                 self.update = False
 

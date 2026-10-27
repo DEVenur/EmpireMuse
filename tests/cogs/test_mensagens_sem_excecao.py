@@ -669,10 +669,10 @@ class TestLacunasDaMutacao:
 
         p.report_error = AsyncMock(side_effect=encerrar)
 
-        with caplog.at_level(logging.WARNING, logger="empiremuse.utils.music.models"):
+        with caplog.at_level(logging.WARNING, logger="empiremuse.player"):
             await p.hook_events()
 
-        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.utils.music.models"))
+        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.player"))
         assert "m" * 100 in log and CODIGO in log, "o log do servidor leva a mensagem e o código"
         textos = [c.kwargs.get("text", c.args[0] if c.args else "") for c in p.set_command_log.call_args_list]
         assert any(CODIGO in t and "m" * 50 + "…" in t and "m" * 51 not in t for t in textos), textos

@@ -209,7 +209,7 @@ class Node:
             self.update_info(info)
 
         else:
-            print(f"📶 - {self._client.bot.user} - Iniciando servidor de música: {self.identifier}")
+            __log__.info("Iniciando servidor de música: %s", self.identifier)
             while not self._client.bot.is_closed():
                 try:
                     async with self._client.bot.session.get(
@@ -228,16 +228,22 @@ class Node:
                 except Exception as e:
                     if retries >= max_retries:
                         self._is_connecting = False
-                        print(
-                            f"❌ - {self._client.bot.user} - Falha ao conectar no servidor [{self.identifier}]."
-                            + (f"\nCausa: {safe_error(exception)}" if exception else "")
+                        __log__.error(
+                            "Falha ao conectar no servidor [%s].%s",
+                            self.identifier,
+                            f" Causa: {safe_error(exception)}" if exception else "",
+                            extra={"aggregate_key": self.identifier},
                         )
                         return
                     exception = e
                     if self.identifier != "LOCAL":
-                        print(
-                            f"⚠️ - {self._client.bot.user} - Falha ao conectar no servidor [{self.identifier}], "
-                            f"nova tentativa [{retries}/{max_retries}] em {backoff} segundos."
+                        __log__.warning(
+                            "Falha ao conectar no servidor [%s], nova tentativa [%s/%s] em %s segundos.",
+                            self.identifier,
+                            retries,
+                            max_retries,
+                            backoff,
+                            extra={"aggregate_key": self.identifier},
                         )
                     backoff += 2
                     retries += 1
@@ -265,7 +271,7 @@ class Node:
         self.available = True
         self._is_connecting = False
 
-        __log__.info(f"NODE | {self.identifier} connected:: {self.__repr__()}")
+        __log__.debug("NODE | %s connected:: %r", self.identifier, self)
 
     async def update_player(self, guild_id: int, data: dict, replace: bool = False):
         if not self.session_id:
@@ -367,16 +373,21 @@ class Node:
                 ) as resp:
                     if resp.status != 200:
                         if not retry_on_failure:
-                            __log__.info(
-                                f"REST | {self.identifier} | Status code ({resp.status}) while retrieving tracks. Not retrying."
+                            __log__.warning(
+                                "REST | %s | Status code (%s) while retrieving tracks. Not retrying.",
+                                self.identifier,
+                                resp.status,
                             )
                             return
 
                         retry = backoff.delay()
 
-                        __log__.info(
-                            f"REST | {self.identifier} | Status code ({resp.status}) while retrieving tracks. "
-                            f"Attempt {attempt} of 5, retrying in {retry} seconds."
+                        __log__.warning(
+                            "REST | %s | Status code (%s) while retrieving tracks. Attempt %s of 5, retrying in %s seconds.",
+                            self.identifier,
+                            resp.status,
+                            attempt,
+                            retry,
                         )
 
                         await asyncio.sleep(retry)
@@ -403,7 +414,7 @@ class Node:
             raise WavelinkException("There was an error while trying to load this track.")
 
         if loadtype == "NO_MATCHES":
-            __log__.info(f"REST | {self.identifier} | No tracks with query:: <{query}> found.")
+            __log__.debug("REST | %s | No tracks with query:: <%s> found.", self.identifier, query)
             return []
 
         if loadtype in ("LOAD_FAILED", "error"):
@@ -441,7 +452,7 @@ class Node:
             tracks = [new_data]
 
         if not tracks:
-            __log__.info(f"REST | {self.identifier} | No tracks with query:: <{query}> found.")
+            __log__.debug("REST | %s | No tracks with query:: <%s> found.", self.identifier, query)
             raise TrackNotFound(f"{self.identifier}: Track not found... | {query}")
 
         encoded_name = "track" if self.version == 3 else "encoded"
@@ -628,7 +639,7 @@ class Node:
 
     async def on_event(self, event) -> None:
         """Function which dispatches events when triggered on the Node."""
-        __log__.info(f"NODE | Event dispatched:: <{str(event)}> ({self.__repr__()})")
+        __log__.debug("NODE | Event dispatched:: <%s> (%r)", event, self)
         await event.player.hook(event)
 
         if not self.hook:
@@ -671,5 +682,5 @@ class Node:
         del self._client.nodes[self.identifier]
 
     async def _send(self, **data) -> None:
-        __log__.debug(f"NODE | Sending payload:: <{data}> ({self.__repr__()})")
+        __log__.debug("NODE | Sending payload:: <%s> (%r)", data, self)
         await self._websocket._send(**data)

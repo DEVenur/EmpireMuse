@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import traceback
 from typing import TYPE_CHECKING
 
 import disnake
@@ -147,7 +146,10 @@ class PlayerAutoqueueMixin:
                     req.selected_track = req.tracks[0]
                 except Exception:
                     if req.exceptions:
-                        print("Falha ao resolver PartialTrack:\n" + "\n".join(repr(e) for e in req.exceptions))
+                        logger.warning(
+                            "Falha ao resolver PartialTrack (%s)", ", ".join(type(e).__name__ for e in req.exceptions)
+                        )
+                        logger.debug("Exceções ao resolver PartialTrack: %r", req.exceptions)
                     return
 
             _rt_cache_selected_result(self, track, req)

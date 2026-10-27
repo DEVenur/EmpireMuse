@@ -24,7 +24,6 @@ SOFTWARE.
 import logging
 import re
 import time
-import traceback
 from typing import Optional, Union
 
 import disnake
@@ -374,7 +373,7 @@ class Player:
             try:
                 await channel.connect(cls=WavelinkVoiceClient, reconnect=False)
             except Exception:
-                traceback.print_exc()
+                __log__.exception("Falha em connect")
 
         elif guild.voice_client.channel.id != channel_id:
             await guild.voice_client.move_to(channel)
@@ -655,9 +654,9 @@ class Player:
                                 data = await resp.json()
                             except Exception:
                                 data = await resp.text()
-                            print(f"Ocorreu um erro ao finalizar player: {data}")
+                            __log__.warning("Ocorreu um erro ao finalizar player: %s", data)
                 except Exception:
-                    traceback.print_exc()
+                    __log__.exception("Falha em change_node")
 
         self.node = node
         self.node.players[int(self.guild_id)] = self
