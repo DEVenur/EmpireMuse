@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import itertools
 import random
-import traceback
 from itertools import cycle
 
 import disnake
@@ -320,7 +319,7 @@ async def _np_interaction_edit(self, req):
             await interaction.response.edit_message(allowed_mentions=self.allowed_mentions, **data)
         self.updating = False
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha em _np_interaction_edit")
     else:
         self.start_message_updater_task()
     return True
@@ -345,7 +344,7 @@ async def _np_message_edit(self, req):
             self.updating = False
             return True
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em _np_message_edit")
 
             try:
                 self.text_channel = self.bot.get_channel(self.text_channel.id) or await self.bot.fetch_channel(
@@ -419,7 +418,7 @@ async def _np_send_new(self, req):
         try:
             self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em _np_send_new")
         else:
             if self.static:
                 await self.channel_cleanup()

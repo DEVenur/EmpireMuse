@@ -81,7 +81,7 @@ async def _pn_next_track(self, req):
                 try:
                     track = await self.get_autoqueue_tracks()
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _pn_next_track")
                     self.locked = False
                     await asyncio.sleep(60)
                     if not self.current and (self.autoplay or self.keep_connected):
@@ -99,7 +99,7 @@ async def _pn_next_track(self, req):
                 return True
 
         except Exception:
-            print(traceback.format_exc())
+            logger.exception("Falha em _pn_next_track")
             track = None
 
     if not track:
@@ -133,7 +133,7 @@ async def _pn_sources(self, req):
                         )
                     )
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _pn_sources")
 
                 self.locked = False
                 self.native_yt = True
@@ -152,7 +152,7 @@ async def _pn_sources(self, req):
                         delete_after=10,
                     )
                 except Exception:
-                    print(traceback.format_exc())
+                    logger.exception("Falha em _pn_sources")
 
                 await asyncio.sleep(10)
 
@@ -257,7 +257,11 @@ async def _pn_native(self, req):
                 if not tracks:
                     if not self.native_yt:
                         if exceptions:
-                            print(exceptions)
+                            logger.warning(
+                                "Faixa sem resultado em outras plataformas (%s)",
+                                ", ".join(type(e).__name__ for e in exceptions),
+                            )
+                            logger.debug("Exceções ao resolver a faixa: %r", exceptions)
                         self.played.append(track)
                         self.set_command_log(
                             emoji="⚠️",
@@ -305,7 +309,7 @@ async def _pn_encoded(self, req):
                     delete_after=10,
                 )
             except Exception:
-                print(traceback.format_exc())
+                logger.exception("Falha em _pn_encoded")
 
             await asyncio.sleep(10)
 

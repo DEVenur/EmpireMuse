@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import asyncio
-import traceback
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.models.event_steps import _he_dispatch
+
+logger = logging.getLogger("empiremuse.player")
 
 
 class PlayerEventsMixin:
@@ -36,19 +38,19 @@ class PlayerEventsMixin:
                     self.update = True
                 else:
                     await self.destroy(force=True)
-                    print(f"Bot: {self.bot.user} | Desconectado do canal de voz: {self.guild_id}")
+                    logger.debug("Desconectado do canal de voz: %s", self.guild_id)
                 return
 
             if event.code == 4014 and self.guild.me.voice:
                 pass
             else:
-                print(
-                    ("-" * 15) + f"\nErro no canal de voz!"
-                    f"\nBot: {self.bot.user} [{self.bot.user.id}] | "
-                    + ("Online" if self.bot.is_ready() else "Offline")
-                    + f"\nGuild: {self.guild.name} [{self.guild.id}]"
-                    f"\nCanal: {vc.name} [{vc.id}]"
-                    f"\nServer: {self.node.identifier} | code: {event.code} | reason: {event.reason}\n" + ("-" * 15)
+                logger.warning(
+                    "Erro no canal de voz: bot %s, canal %s, servidor de música %s, code %s, reason %s",
+                    "online" if self.bot.is_ready() else "offline",
+                    vc.id,
+                    self.node.identifier,
+                    event.code,
+                    event.reason,
                 )
 
             if self.is_closing:
@@ -112,7 +114,7 @@ class PlayerEventsMixin:
                 await _he_dispatch(self, event)
 
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em hook_events")
 
     async def track_end(self, ignore_track_loop=False):
         self.votes.clear()

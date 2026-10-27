@@ -4,21 +4,25 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import pprint
-import traceback
 
 import disnake
 
 import empiremuse.wavelink as wavelink
+from empiremuse.logs.context import log_context
+from empiremuse.rules.error_code import safe_error_code
 from empiremuse.rules.text import plain_snippet
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import fix_characters, time_format
 from empiremuse.utils.music.errors import code_suffix
 from empiremuse.utils.music.models.helpers import (
+    LAVALINK_LOG_LIMIT,
     get_start_pos,
     lavalink_text,
-    log_lavalink_failure,
 )
 from empiremuse.utils.music.models.tracks import PartialTrack
+
+logger = logging.getLogger("empiremuse.player")
 
 # Causas reportadas pelo Lavalink que valem nova tentativa da mesma música (falhas de rede/decodificação).
 RETRYABLE_ERROR_CAUSES = (
@@ -44,17 +48,61 @@ MIRROR_NOT_FOUND_CAUSES = (
 )
 
 
+def _he_source(track) -> str:
+    return str(getattr(track, "source_name", None) or "desconhecida")
+
+
+def _he_duration(track) -> str:
+    duration = getattr(track, "duration", None)
+    return time_format(duration) if isinstance(duration, int | float) else "—"
+
+
+def _he_voice_channel_id(self):
+    return getattr(self, "channel_id", None)
+
+
+def _he_log_track_event(self, kind: str, track) -> None:
+    """Início e fim de faixa: DEBUG (o título só aqui, D4); aparecem só com o servidor em ``LOG_DEBUG_GUILDS`` ou ``LOG_LEVEL=DEBUG``."""
+    logger.debug(
+        "%s: %s (duração %s, origem %s, canal %s)",
+        kind,
+        getattr(track, "title", None),
+        _he_duration(track),
+        _he_source(track),
+        _he_voice_channel_id(self),
+    )
+
+
 async def _he_dispatch(self, event) -> None:
-    if isinstance(event, wavelink.TrackEnd):
-        await _he_track_end(self, event)
-    elif isinstance(event, wavelink.TrackStart):
-        await _he_track_start(self, event)
-    elif isinstance(event, wavelink.TrackException):
-        await _he_track_exception(self, event)
-    elif isinstance(event, wavelink.TrackStuck):
-        await _he_track_stuck(self)
-    else:
-        print(f"Unknown Wavelink event: {repr(event)}")
+    """Despacha o evento do Lavalink com o contexto de log (bot e servidor) e as métricas do pool."""
+    with log_context(bot=getattr(self.bot, "identifier", None), guild=self.guild.id):
+        metrics = getattr(getattr(self.bot, "pool", None), "metrics", None)
+        if isinstance(event, wavelink.TrackEnd):
+            if metrics:
+                metrics.track_ended(self.guild.id, str(getattr(event, "reason", "")))
+            _he_log_track_event(self, f"Faixa terminada ({getattr(event, 'reason', '?')})", self.last_track)
+            await _he_track_end(self, event)
+        elif isinstance(event, wavelink.TrackStart):
+            if metrics:
+                metrics.track_started(self.guild.id)
+            _he_log_track_event(self, "Faixa iniciada", self.current)
+            await _he_track_start(self, event)
+        elif isinstance(event, wavelink.TrackException):
+            await _he_track_exception(self, event)
+        elif isinstance(event, wavelink.TrackStuck):
+            if metrics:
+                metrics.error("track_stuck")
+            # Sem o título (D4): servidor (contexto), canal, duração, origem e a posição de quando travou.
+            logger.warning(
+                "Faixa travada: canal %s, duração %s, origem %s, posição %s",
+                _he_voice_channel_id(self),
+                _he_duration(self.current),
+                _he_source(self.current),
+                time_format(getattr(self, "position", 0) or 0),
+            )
+            await _he_track_stuck(self)
+        else:
+            logger.debug("Evento Wavelink desconhecido: %s", type(event).__name__)
 
 
 def _he_cancel_message_updater(self) -> None:
@@ -129,7 +177,7 @@ async def _he_track_start(self, event) -> None:
         # cancelamento da task do hook_events: não há o que limpar, só propagar
         raise
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha em _he_track_start")
 
     await asyncio.sleep(2)
     await self.update_stage_topic()
@@ -167,19 +215,43 @@ async def _he_track_stuck(self) -> None:
     await self.process_next()
 
 
+def _he_log_exception(self, event, track) -> str:
+    """Registra a falha da faixa (sem o título) e devolve o código curto que o usuário vê no embed.
+
+    WARNING (ERROR com ``severity=fault``); causa do plugin de espelhamento sem resultado vai para DEBUG. Conta nas métricas.
+    """
+    code = safe_error_code()
+    metrics = getattr(getattr(self.bot, "pool", None), "metrics", None)
+    if metrics:
+        metrics.error("track_exception")
+    cause = str(event.cause or "")
+    if cause.startswith(MIRROR_NOT_FOUND_CAUSES):
+        level = logging.DEBUG
+    elif str(event.severity).lower() == "fault":
+        level = logging.ERROR
+    else:
+        level = logging.WARNING
+    logger.log(
+        level,
+        "Falha ao reproduzir a música%s: canal %s, origem %s, nó %s, severidade %s, mensagem %s, causa %s",
+        f" [{code}]" if code else "",
+        _he_voice_channel_id(self),
+        _he_source(track),
+        event.node.identifier,
+        event.severity,
+        plain_snippet(event.message, LAVALINK_LOG_LIMIT),
+        plain_snippet(cause, LAVALINK_LOG_LIMIT),
+    )
+    return code
+
+
 def _he_exception_embed(self, event, track):
     node_info = (
         f"`{event.node.identifier}`"
         if event.node.identifier == self.node.identifier
         else f"`{self.node.identifier} | {event.node.identifier}`"
     )
-    error_code = log_lavalink_failure(
-        "Falha ao reproduzir a música",
-        message=event.message,
-        cause=event.cause,
-        severity=event.severity,
-        node=event.node.identifier,
-    )
+    error_code = _he_log_exception(self, event, track)
     embed = disnake.Embed(
         description=f"**Falha ao reproduzir música{' (parcial)' if isinstance(track, PartialTrack) else ''}:\n[{track.title}]({track.uri or track.search_uri})**\n"
         f"**Motivo:** {lavalink_text(event.message)}\n"
@@ -206,10 +278,11 @@ def _he_mirror_not_found_embed(self, track):
 
 
 async def _he_report_exception(self, embed, track, error_format) -> None:
-    print(
-        ("-" * 50) + f"\nErro ao reproduzir a música: {track.uri or track.search_uri}\n"
-        f"Servidor: {self.node.identifier}\n"
-        f"{error_format}\n" + ("-" * 50)
+    logger.debug(
+        "Erro ao reproduzir a música: %s | nó: %s\n%s",
+        track.uri or track.search_uri,
+        self.node.identifier,
+        error_format,
     )
 
     await self.report_error(embed, track)
@@ -349,7 +422,7 @@ async def _he_move_to_native_youtube(self, new_node) -> None:
                 delete_after=10,
             )
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em _he_move_to_native_youtube")
     await asyncio.sleep(5)
     await self.change_node(new_node.identifier)
     self.locked = False

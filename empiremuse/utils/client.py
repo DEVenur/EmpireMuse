@@ -41,7 +41,10 @@ from empiremuse.health import (
     is_healthy,
     write_heartbeat,
 )
-from empiremuse.logs import configure_logging, flush_logging, parse_log_settings, register_secret
+from empiremuse.logs import configure_logging, flush_logging, parse_log_settings, register_secret, tick_logging
+from empiremuse.logs.aggregate import AGGREGATE_WINDOW
+from empiremuse.logs.metrics import SUMMARY_PREFIX, MetricsCollector, NodeSample, format_summary
+from empiremuse.logs.metrics import process_stats as metrics_process_stats
 from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
 from empiremuse.rules.owner_shell import collect_secret_values
 from empiremuse.updater.notice import on_pool_ready
@@ -93,6 +96,16 @@ def read_guild_bots() -> Dict[str, List[str]]:
         return {}
 
 
+def _node_sample(identifier: str, node) -> NodeSample:
+    """Amostra de um nó do Lavalink a partir do ``stats`` já recebido; sem ``stats`` (ou indisponível) é tudo ``None``."""
+    stats = getattr(node, "stats", None)
+    if not stats or not getattr(node, "is_available", False):
+        return NodeSample(identifier, None, None, None)
+    return NodeSample(
+        identifier, stats.players, round(stats.lavalink_load * 100, 1), round(stats.memory_used / 1048576, 1)
+    )
+
+
 def parse_owner_ids(raw: Optional[str]) -> list[int]:
     """IDs numéricos de ``OWNER_IDS`` (separados por ``||``); vazios são ignorados e inválidos, descartados com aviso."""
     ids = []
@@ -132,6 +145,7 @@ class BotPool:
     # Defaults de classe (como o killing_state): fakes de BotPool criados com __new__ não passam pelo __init__.
     update_ready_checked = False  # on_pool_ready roda uma vez, na primeira vez em que o pool fica saudável
     update_watch_task: Optional[asyncio.Task] = None
+    logs_task: Optional[asyncio.Task] = None
     helper_watch_tasks: tuple[asyncio.Task, ...] | set[asyncio.Task] = ()
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
@@ -194,6 +208,8 @@ class BotPool:
         self.default_idling_skin = self.config.get("DEFAULT_IDLING_SKIN", "default")
         self.cache_updater_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
+        self.metrics = MetricsCollector()
+        self.logs_task: Optional[asyncio.Task] = None
         self.helper_watch_tasks: set[asyncio.Task] = set()  # referências fortes das tarefas do watch_helper
         # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
         self.update_lock = asyncio.Lock()
@@ -304,6 +320,77 @@ class BotPool:
                 except OSError as e:
                     logger.warning("Heartbeat não gravado: %s", type(e).__name__)
             await sleep(HEARTBEAT_INTERVAL)
+
+    def start_logs_task(self) -> None:
+        """Tarefa de manutenção do log (K9): sempre criada; ``METRICS_INTERVAL=0`` só desliga o resumo."""
+        self.logs_task = self.loop.create_task(self.logs_loop())
+
+    async def logs_loop(self, *, clock=time.monotonic, sleep=asyncio.sleep, process_stats=metrics_process_stats):
+        """A cada ``AGGREGATE_WINDOW`` fecha as janelas do agregador e amostra o pico; a cada ``metrics_interval`` loga o resumo.
+
+        ``process_stats(pid=None)`` devolve ``(cpu_percent, rss_mib)`` do processo Python (sem ``pid``) e do Java do Lavalink local
+        (com o ``pid``); injetável como o relógio e o ``sleep``.
+        """
+        interval = parse_log_settings(self.config, os.environ)[0].metrics_interval
+        summary_logger = logging.getLogger("empiremuse.metrics")
+        last_summary = clock()
+        while True:
+            await sleep(AGGREGATE_WINDOW)
+            try:
+                tick_logging()
+                self.metrics.sample_players(self._count_active_players())
+                now = clock()
+                if interval > 0 and now - last_summary >= interval:
+                    last_summary = now
+                    snapshot = self.metrics.snapshot_and_reset(now)
+                    inputs = await asyncio.to_thread(self._collect_summary_inputs, process_stats)
+                    for line in format_summary(snapshot, **inputs):
+                        # O 📊 é do formatter do console (emoji da categoria empiremuse.metrics); o arquivo não leva emoji.
+                        summary_logger.info("%s", line.removeprefix(SUMMARY_PREFIX))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("Falha na tarefa de manutenção do log (%s).", type(e).__name__)
+
+    def _count_active_players(self) -> int:
+        return sum(len(bot.music.players) for bot in self.get_all_bots() if getattr(bot, "music", None))
+
+    def _collect_summary_inputs(self, process_stats) -> dict:
+        """Amostras do resumo, só do que já está em memória (``bot.latency``, ``player.ping``, ``node.stats``, ``psutil``)."""
+        bots = [bot for bot in self.get_all_bots() if getattr(bot, "music", None)]
+        gateway_ms, voice_ms, players_active = [], [], 0
+        nodes: dict[str, NodeSample] = {}
+        for bot in bots:
+            latency = getattr(bot, "latency", None)
+            if isinstance(latency, int | float) and latency == latency and latency != float("inf"):
+                gateway_ms.append(latency * 1000)
+            for player in bot.music.players.values():
+                players_active += 1
+                if isinstance(getattr(player, "ping", None), int | float):
+                    voice_ms.append(float(player.ping))
+            for identifier, node in bot.music.nodes.items():
+                if identifier not in nodes:
+                    nodes[identifier] = _node_sample(identifier, node)
+        cpu_percent, rss_mib = process_stats()
+        java_pid = getattr(getattr(self, "lavalink_instance", None), "pid", None)
+        if java_pid and "LOCAL" in nodes:
+            java_cpu, java_rss = process_stats(java_pid)
+            local = nodes["LOCAL"]
+            nodes["LOCAL"] = NodeSample(
+                local.identifier,
+                local.players,
+                local.cpu_percent if local.cpu_percent is not None else java_cpu,
+                local.memory_mib if local.memory_mib is not None else java_rss,
+            )
+        return {
+            "guilds": len({getattr(guild, "id", guild) for bot in bots for guild in bot.guilds}),
+            "players_active": players_active,
+            "gateway_ms": gateway_ms,
+            "voice_ms": voice_ms,
+            "cpu_percent": cpu_percent,
+            "rss_mib": rss_mib,
+            "nodes": list(nodes.values()),
+        }
 
     async def connect_lavalink_queue_task(self, identifier: str):
         delay_secs = int(self.config.get("LAVALINK_QUEUE_DELAY", 1.5))
@@ -498,6 +585,8 @@ class BotPool:
         self.killing_state = True
         if self.heartbeat_task:  # encerrando: o container não deve mais parecer saudável
             self.heartbeat_task.cancel()
+        if self.logs_task:
+            self.logs_task.cancel()
         if self.update_watch_task:
             self.update_watch_task.cancel()
         for task in list(self.helper_watch_tasks):
@@ -1169,6 +1258,7 @@ class BotPool:
         asyncio.set_event_loop(self.loop)
 
         self.start_heartbeat()
+        self.start_logs_task()
         self.start_update_watch()
 
         for k, v in all_tokens.items():
