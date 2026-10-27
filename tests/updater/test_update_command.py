@@ -1057,7 +1057,7 @@ async def test_a_ready_docker_pending_update_is_left_to_the_post_boot_notice_wit
 async def test_a_live_watcher_of_this_process_refuses_without_touching_the_proxy(cog, d12, monkeypatch):
     pendente_docker_em_disco(d12.runtime)
     viva = asyncio.get_running_loop().create_future()  # nunca concluída: faz o papel da tarefa do watch_helper
-    monkeypatch.setattr(legacy_cmds, "_WATCH_TASKS", {viva})
+    monkeypatch.setattr(cog.bot.pool, "helper_watch_tasks", {viva}, raising=False)  # o registro vive no pool
 
     def nunca(caminho):
         raise AssertionError("o proxy não pode ser tocado com o vigia vivo")
@@ -1167,10 +1167,7 @@ async def vigia_viva(cog, d12, monkeypatch):
 
 async def test_a_reloaded_cog_still_sees_the_watcher_that_is_alive(cog, d12, vigia_viva, monkeypatch):
     """Recarregar o cog zera o que é do módulo; o vigia vivo precisa continuar valendo para a recusa (o registro está no pool)."""
-    monkeypatch.setattr(
-        legacy_cmds, "_WATCH_TASKS", set(), raising=False
-    )  # o estado de módulo de um cog recém-recarregado
-    recarregado = outro_cog(cog)
+    recarregado = outro_cog(cog)  # um Owner novo: nada do cog anterior sobrevive, só o registro do pool
 
     with pytest.raises(GenericError) as erro:
         await Owner.update.callback(recarregado, ctx_prefixo())
