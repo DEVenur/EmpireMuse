@@ -97,12 +97,13 @@ class TestRegiaoDoNo:
 
 @pytest.mark.asyncio
 class TestFonteDoRelatorio:
-    async def descricao(self, fonte: str) -> str:
+    async def descricao(self, fonte: str, servidor_nome: str = "Servidor", canal_nome: str | None = None) -> str:
         from empiremuse.utils.music.models.player import LavalinkPlayer
 
         fila: asyncio.Queue = asyncio.Queue()
-        eu = SimpleNamespace(voice=None)
-        servidor = SimpleNamespace(name="Servidor", id=1, me=eu, icon=None)
+        voz = SimpleNamespace(channel=SimpleNamespace(name=canal_nome, id=2)) if canal_nome is not None else None
+        eu = SimpleNamespace(voice=voz)
+        servidor = SimpleNamespace(name=servidor_nome, id=1, me=eu, icon=None)
         dono = SimpleNamespace(
             bot=SimpleNamespace(get_cog=lambda nome: SimpleNamespace(error_report_queue=fila)), guild=servidor
         )
@@ -118,6 +119,23 @@ class TestFonteDoRelatorio:
 
         linha = linha_com(texto, "**Fonte:**")
         assert linha.count("`") == 2 and links_alheios(linha) == [] and marcas_soltas(linha) == 0
+
+    async def test_a_guild_name_with_marks_cannot_close_the_code_span_or_make_a_link(self):
+        texto = await self.descricao("youtube", servidor_nome=NOME_COM_MARCAS)
+
+        linha = linha_com(texto, "**Servidor:**")
+        assert "](" not in linha and links_alheios(linha) == [] and linha.count("`") % 2 == 0
+
+    async def test_a_voice_channel_name_with_marks_cannot_close_the_code_span_or_make_a_link(self):
+        texto = await self.descricao("youtube", canal_nome=NOME_COM_MARCAS)
+
+        linha = linha_com(texto, "**Canal:**")
+        assert "](" not in linha and links_alheios(linha) == [] and linha.count("`") % 2 == 0
+
+    async def test_ordinary_guild_and_channel_names_are_kept(self):
+        texto = await self.descricao("youtube", servidor_nome="Servidor Comum", canal_nome="Geral")
+
+        assert "Servidor Comum" in linha_com(texto, "**Servidor:**") and "Geral" in linha_com(texto, "**Canal:**")
 
     async def test_an_ordinary_source_name_is_unchanged(self):
         assert linha_com(await self.descricao("youtube"), "**Fonte:**") == "**Fonte:** `youtube`"
