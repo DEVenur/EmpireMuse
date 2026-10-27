@@ -124,7 +124,9 @@ class WebSocket:
                     "WEBSOCKET %s | Connection Failure:: %s",
                     self._node.identifier,
                     safe_error(error),
-                    extra={"aggregate_key": self._node.identifier},
+                    # O nó e o motivo (HTTP <status> ou o nome da classe, nunca o texto da exceção): 403 e 503 do mesmo nó
+                    # são problemas diferentes e não se agregam.
+                    extra={"aggregate_key": f"{self._node.identifier}|{safe_error(error)}"},
                 )
             return
 
