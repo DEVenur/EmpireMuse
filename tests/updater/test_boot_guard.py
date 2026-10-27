@@ -5,6 +5,7 @@ Cada subida com um pendente ``git`` soma 1 em ``boots``; no 3º boot sem o pool 
 e um JSON inválido (ou velho demais) é apagado sem mexer em nada. Repositório git real em ``tmp_path``; o ``runner`` só grava e delega.
 """
 
+import asyncio
 import json
 import shutil
 import subprocess
@@ -13,7 +14,7 @@ import pytest
 
 from empiremuse.rules.release import Version
 from empiremuse.updater import boot_guard
-from empiremuse.updater.git_flow import EXIT_RESTART, run_exec
+from empiremuse.updater.git_flow import EXIT_RESTART, ExecResult, UpdateError, restore_checkout, run_exec
 from empiremuse.updater.state import PendingUpdate, pending_path, write_pending
 from tests.updater.test_git_flow import commit, git
 
@@ -24,12 +25,26 @@ DIGEST = "sha256:" + "ab" * 32
 
 
 class Gravador:
-    def __init__(self):
+    """Grava as chamadas e seus códigos de saída; ``resposta(args)`` pode devolver um ``ExecResult`` no lugar da execução real."""
+
+    def __init__(self, resposta=None):
         self.chamadas = []
+        self.resultados = []
+        self.resposta = resposta
 
     async def __call__(self, *args, **kwargs):
         self.chamadas.append(args)
-        return await run_exec(*args, **kwargs)
+        resultado = (self.resposta(args) if self.resposta else None) or await run_exec(*args, **kwargs)
+        self.resultados.append((args, resultado.returncode))
+        return resultado
+
+
+def e_instalacao(args) -> bool:
+    return "pip" in [str(a) for a in args] and "install" in [str(a) for a in args]
+
+
+def instalacao_falha(args):
+    return ExecResult(1, "falhou") if e_instalacao(args) else None
 
 
 @pytest.fixture
@@ -111,6 +126,32 @@ def test_the_third_boot_rolls_back_marks_the_pending_and_exits_with_75(mundo):
     assert any("checkout" in a and "--detach" in a and anterior in a for a in argvs)
     assert any(a[0] == python and "pip" in a and "install" in a and "--require-hashes" in a for a in argvs)
     assert em_disco(runtime)["status"] == "rolled_back" and em_disco(runtime)["prev_sha"] == anterior
+    assert [codigo for args, codigo in gravador.resultados if e_instalacao(args)] == [
+        0
+    ]  # a reinstalação do lock deu certo
+    assert all(codigo == 0 for _, codigo in gravador.resultados)
+
+
+def test_a_failing_reinstall_during_the_rollback_still_exits_with_75_and_keeps_the_mark(mundo):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=2))
+    gravador = Gravador(instalacao_falha)
+
+    with pytest.raises(SystemExit) as saida:
+        guardar(mundo, gravador)
+
+    assert saida.value.code == EXIT_RESTART
+    assert [codigo for args, codigo in gravador.resultados if e_instalacao(args)] == [1]
+    assert git(repo, "rev-parse", "HEAD") == anterior and em_disco(runtime)["status"] == "rolled_back"
+
+
+def test_restore_checkout_treats_a_non_zero_reinstall_as_an_update_error(mundo):
+    repo, _, anterior, python = mundo
+
+    with pytest.raises(UpdateError):
+        asyncio.run(restore_checkout(repo, anterior, python=python, runner=Gravador(instalacao_falha)))
+
+    assert git(repo, "rev-parse", "HEAD") == anterior
 
 
 def test_a_docker_pending_update_is_never_touched(mundo):

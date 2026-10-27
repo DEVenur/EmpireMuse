@@ -12,11 +12,13 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from empiremuse.rules.release import Version
+from empiremuse.updater import git_flow
 from empiremuse.updater.git_flow import UpdateError, apply_git_update, git_env, plan_git_update, run_exec
 from empiremuse.updater.state import UpdateRequest
 
@@ -511,3 +513,118 @@ def test_a_failing_dependency_install_also_rolls_back(mundo, python_falso, grava
     instalacoes = [a for a, _ in gravador.chamadas if "pip" in [str(x) for x in a] and "install" in [str(x) for x in a]]
     assert len(instalacoes) == 2
     assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+# ============================================================================ cancelamento: filho morto e reversão
+
+
+def test_cancelling_run_exec_kills_and_reaps_the_child_and_reraises():
+    """O shutdown cancela a tarefa: o git/pip não pode seguir vivo."""
+    capturado = []
+    criado = asyncio.Event()
+    original = asyncio.create_subprocess_exec
+
+    async def espiao(*args, **kwargs):
+        processo = await original(*args, **kwargs)
+        capturado.append(processo)
+        criado.set()
+        return processo
+
+    async def principal():
+        tarefa = asyncio.create_task(
+            run_exec(sys.executable, "-c", "import time; time.sleep(30)", cwd=None, env=os.environ, timeout=600)
+        )
+        await asyncio.wait_for(criado.wait(), 30)
+        tarefa.cancel()
+        propagou = vivo = False
+        try:
+            await tarefa
+        except asyncio.CancelledError:
+            propagou = True
+        finally:
+            vivo = capturado[0].returncode is None
+            if capturado[0].returncode is None:  # não deixa o filho de pé se a correção faltar
+                capturado[0].kill()
+                await capturado[0].wait()
+        return propagou, vivo
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(asyncio, "create_subprocess_exec", espiao)
+        propagou, vivo = asyncio.run(principal())
+
+    assert propagou and not vivo
+
+
+def test_a_timeout_still_returns_124_with_the_child_dead():
+    capturado = []
+    original = asyncio.create_subprocess_exec
+
+    async def espiao(*args, **kwargs):
+        processo = await original(*args, **kwargs)
+        capturado.append(processo)
+        return processo
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(asyncio, "create_subprocess_exec", espiao)
+        resultado = asyncio.run(
+            run_exec(sys.executable, "-c", "import time; time.sleep(30)", cwd=None, env=os.environ, timeout=0.2)
+        )
+
+    assert resultado.returncode == 124 and capturado[0].returncode is not None
+
+
+def runner_que_falha(plano, *, no_smoke=None, no_restore=None):
+    """Delega ao ``run_exec`` real, mas levanta ``no_smoke`` no teste de fumaça e ``no_restore`` no checkout do ``prev_sha``."""
+
+    async def runner(*args, **kwargs):
+        texto = [str(a) for a in args]
+        if no_smoke and "import empiremuse.utils.client" in texto:
+            raise no_smoke
+        if "checkout" in texto and plano.prev_sha in texto:
+            runner.restore_tentado = True
+            if no_restore:
+                raise no_restore
+        return await run_exec(*args, **kwargs)
+
+    runner.restore_tentado = False
+    return runner
+
+
+def test_a_cancellation_during_the_smoke_restores_the_checkout_and_reraises(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    with pytest.raises(asyncio.CancelledError):
+        aplicar(plano, local, python_falso, tmp_path, runner_que_falha(plano, no_smoke=asyncio.CancelledError()))
+
+    assert head(local) == plano.prev_sha
+    assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_an_oserror_writing_the_pending_file_restores_the_checkout_and_reraises(
+    mundo, python_falso, tmp_path, monkeypatch
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    def falha(*args, **kwargs):
+        raise OSError(28, "sem espaço")
+
+    monkeypatch.setattr(git_flow, "write_pending", falha)
+
+    with pytest.raises(OSError):
+        aplicar(plano, local, python_falso, tmp_path)
+
+    assert head(local) == plano.prev_sha
+    assert not (tmp_path / "runtime" / "update-pending.json").exists()
+
+
+def test_when_the_restore_also_fails_the_original_exception_is_the_one_that_rises(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = runner_que_falha(plano, no_smoke=asyncio.CancelledError(), no_restore=RuntimeError("falha do restore"))
+
+    with pytest.raises(asyncio.CancelledError):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert runner.restore_tentado and not (tmp_path / "runtime" / "update-pending.json").exists()
