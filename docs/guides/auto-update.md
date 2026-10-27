@@ -79,7 +79,7 @@ Pré-requisito: o repositório com **Releases imutáveis** ligadas e uma release
 | 67 | A versão alvo não é maior que a instalada | Nada mudou |
 | 68 | A imagem baixada não declara a versão anunciada | Nada mudou |
 | 70 | A atualização falhou e o compose voltou à versão anterior | Bot na versão anterior |
-| 71 | Falhou e a volta também falhou | Confira o servidor |
+| 71 | Falhou e a volta também falhou | O bot provavelmente está fora do ar, sem aviso no Discord. Confira o servidor; os backups ficam em `<pasta>/docker-compose.yml.bak-AAAAMMDD-HHMMSS`, para reverter à mão |
 
 No canal sai só o significado do código. As últimas linhas do log do auxiliar (sem segredos) vão por DM a quem pediu.
 
@@ -106,7 +106,10 @@ Restart=on-failure
 RestartForceExitStatus=75
 ```
 
-A guarda de boot (`boot_guard`) roda antes de importar o bot: se a versão nova não deixar o pool pronto em 2 subidas, na terceira ela volta ao commit anterior, reinstala o lock anterior e sai com 75.
+A guarda de boot (`boot_guard`) roda antes de importar o bot: se a versão nova não deixar o pool pronto em 2 subidas, na terceira ela volta ao commit anterior, reinstala o lock anterior e sai com 75. Além disso:
+
+- uma atualização interrompida no meio (estado `applying`) é revertida já na próxima subida, sem esperar 3 subidas;
+- se o estado não puder ser gravado (disco cheio ou somente leitura), o bot sobe como está, sem reverter, com um erro no log.
 
 ---
 
@@ -115,7 +118,9 @@ A guarda de boot (`boot_guard`) roda antes de importar o bot: se a versão nova 
 - **Lavalink fora do ar (R5).** O sucesso da subida exige um nó de áudio quando há nós esperados. Uma atualização boa, com o Lavalink fora do ar e 2 reinícios em 24 h, causa uma reversão: o aviso diz "falhou e voltou" e o dono repete o `update`. Confira o Lavalink antes de atualizar ou de repetir.
 - **Modo git.**
   - Se um arquivo seu (ou link) ocupa um caminho que a nova versão acrescenta, o `update` é recusado de antemão, com até 5 caminhos listados. A reversão só apaga arquivos idênticos aos da nova versão e mantém os seus.
-  - Edições em arquivos rastreados do clone são descartadas (`checkout --force`).
+  - Edições em arquivos rastreados feitas entre um `update` e a reversão dele são descartadas (`checkout --force`); o `update` em si recusa uma árvore rastreada suja.
   - Não rode `git` à mão no clone durante um `update` ou uma reversão: pode colidir com ela. Depois de 3 tentativas de reversão sem sucesso, o bot desiste com aviso.
 - **Painel da Hostinger.** O painel e o auxiliar editam o mesmo compose, então não edite o compose pelo painel durante um `update`. A tolerância do painel a um compose alterado por fora é validada no primeiro `update` real: depois dele, confira no editor YAML do painel se a versão nova aparece. O "Update project" do painel puxa e recria **todos** os serviços, por isso as duas linhas de imagem usam digest.
+- **Imagens antigas (R2).** Cada atualização deixa a imagem anterior no host e não há limpeza automática; rode `docker image prune` de tempos em tempos (confira antes o que ele remove).
+- **Atualização Docker travada (D12).** Se o auxiliar terminou depois de o bot desistir de acompanhá-lo (15 min), o estado pendente fica e o próximo `update` o resolve.
 - **Superfície.** O `docker.sock` equivale a root no host: por isso só o proxy e o auxiliar o veem, o proxy é mínimo e o bot é tratado como possivelmente comprometido.
