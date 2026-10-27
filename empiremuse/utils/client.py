@@ -97,6 +97,10 @@ def read_guild_bots() -> Dict[str, List[str]]:
         return {}
 
 
+class ModuleLoadError(Exception):
+    """Um módulo (cog) falhou na subida: o aviso (módulo + tipo) e o traceback em DEBUG já foram logados quando isto é levantado."""
+
+
 def _report_module_failure(bot_name, filename: str, error: BaseException) -> None:
     """Falha de cog: módulo e tipo da exceção em WARNING (sem traceback); o traceback só em DEBUG."""
     BootReport().step(f"Cog {filename}.py de {bot_name}", "warn", f"falhou ao carregar ({type(error).__name__})")
@@ -142,6 +146,7 @@ class BotPool:
     # Defaults de classe (como o killing_state): fakes de BotPool criados com __new__ não passam pelo __init__.
     update_ready_checked = False  # on_pool_ready roda uma vez, na primeira vez em que o pool fica saudável
     update_watch_task: Optional[asyncio.Task] = None
+    version_check_task: Optional[asyncio.Task] = None
     helper_watch_tasks: tuple[asyncio.Task, ...] | set[asyncio.Task] = ()
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
@@ -499,6 +504,8 @@ class BotPool:
             self.heartbeat_task.cancel()
         if self.update_watch_task:
             self.update_watch_task.cancel()
+        if self.version_check_task:
+            self.version_check_task.cancel()
         for task in list(self.helper_watch_tasks):
             task.cancel()
         for bot in self.get_all_bots():
@@ -1162,6 +1169,11 @@ class BotPool:
 
                     self.bot_mentions.update((f"<@!{bot.user.id}>", f"<@{bot.user.id}>"))
 
+                except ModuleLoadError:
+                    # O módulo e o tipo da falha já saíram em WARNING e o traceback em DEBUG: sem outro traceback em ERROR.
+                    logger.warning(
+                        "Configuração inicial do bot %s interrompida pela falha de um módulo.", bot.identifier
+                    )
                 except Exception:
                     logger.exception("Falha na configuração inicial do bot %s", bot.identifier)
 
@@ -1207,7 +1219,8 @@ class BotPool:
         message = ""
 
         self.loop.create_task(self.setup_pool_extras())
-        self.loop.create_task(check_new_version())  # em tarefa de fundo: nunca atrasa a subida
+        # Em tarefa de fundo (nunca atrasa a subida) e guardada no pool para o shutdown cancelar como as outras.
+        self.version_check_task = self.loop.create_task(check_new_version())
 
         if not self.bots:
             message = (
@@ -1699,12 +1712,12 @@ class BotCore(commands.AutoShardedBot):
                         except Exception as e:
                             _report_module_failure(bot_name, filename, e)
                             if not self.bot_ready:
-                                raise e
+                                raise ModuleLoadError(f"{filename}.py") from e
                             load_status["failed"].append(f"{filename}.py")
                     except Exception as e:
                         _report_module_failure(bot_name, filename, e)
                         if not self.bot_ready:
-                            raise e
+                            raise ModuleLoadError(f"{filename}.py") from e
                         load_status["failed"].append(f"{filename}.py")
 
         if load_modules_log and not self.bot_ready:

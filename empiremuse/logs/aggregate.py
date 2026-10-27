@@ -20,7 +20,7 @@ MAX_TEMPLATE_KEY_CHARS = 256
 MAX_CODED_REPEATS = 50
 MAX_EXC_SUMMARY_CHARS = 300
 
-type _AggregateKey = tuple[str, int, str, str | None, str | None]
+type _AggregateKey = tuple[str, int, str, str | None, str | None, str | None]
 
 
 def _normalize_template(raw: object) -> str:
@@ -119,6 +119,7 @@ class RepeatAggregator(logging.Filter):
                 record.empiremuse_template = template_key
             exc_text = getattr(record, "exc_text", None)
             tb_fp = getattr(record, "empiremuse_tb_fp", None)
+            template_fp = getattr(record, "empiremuse_template_fp", None)
             error_code = _valid_error_code(record)
             key: _AggregateKey = (
                 record.name,
@@ -126,6 +127,7 @@ class RepeatAggregator(logging.Filter):
                 template_key,
                 getattr(record, "empiremuse_exc_type", None),
                 tb_fp if isinstance(tb_fp, str) else None,
+                template_fp if isinstance(template_fp, str) else None,
             )
             to_emit: list[logging.LogRecord] = []
             with self._lock:

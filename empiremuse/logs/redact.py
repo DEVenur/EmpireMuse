@@ -253,6 +253,12 @@ class SanitizeAndRedact(logging.Filter):
                 if isinstance(record.msg, str)
                 else (_qualified_exc_type(type(record.msg)) or type(record.msg).__qualname__)
             )
+            # Mensagens longas que só diferem depois do corte do template não podem virar a mesma chave de agregação.
+            record.empiremuse_template_fp = (
+                hashlib.sha256(record.msg.encode("utf-8", errors="backslashreplace")).hexdigest()[:16]
+                if isinstance(record.msg, str) and len(record.msg) > MAX_TEMPLATE_KEY_CHARS
+                else None
+            )
             if record.args:
                 if isinstance(record.args, Mapping):
                     record.args = {key: _sanitize_arg(val) for key, val in record.args.items()}
