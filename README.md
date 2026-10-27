@@ -93,6 +93,7 @@ O sistema é estruturado em camadas modulares para desacoplar regras de negócio
 - **Motor de Áudio (`empiremuse/wavelink/` e `empiremuse/utils/music/`)**: Modelos de reprodução (`LavalinkPlayer`, `LavalinkTrack`), cliente de nós Lavalink e gerenciamento de subprocesso Java local (`local_lavalink.py`).
 - **Persistência (`empiremuse/utils/db.py`)**: Suporte híbrido transparente para MongoDB (produção) e TinyMongo local (desenvolvimento).
 - **Repositórios satélites**: [`EmpireMuse-LL-binaries`](https://github.com/EmpireCommunity/EmpireMuse-LL-binaries) `0.0.5` (Lavalink 4.2.2 e plugins, incluindo Lyrics 2.7.1), [`EmpireMuse-jishaku`](https://github.com/EmpireCommunity/EmpireMuse-jishaku) `v2.6.6.post3` (opcional, `ENABLE_JISHAKU`) e [`EmpireMuse-RPC-app`](https://github.com/EmpireCommunity/EmpireMuse-RPC-app) (Rich Presence).
+- **Atualizador (`empiremuse/updater/`)**: comando `update` do dono (modos `docker`, `panel`, `git` e `manual`); no Docker troca a imagem por digest através de um proxy mínimo, sem dar o `docker.sock` ao bot. Guia: [`docs/guides/auto-update.md`](docs/guides/auto-update.md).
 - **Cogs e Comandos (`empiremuse/cogs/`)**: Módulos de comandos de música, configurações de servidor, tratamento de erros, ajuda e integração com Last.fm.
 
 Para uma documentação aprofundada com fluxogramas, ciclo de vida e mapeamento completo de arquivos, consulte [`docs/architecture.md`](docs/architecture.md).

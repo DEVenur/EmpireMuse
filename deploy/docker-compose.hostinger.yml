@@ -3,13 +3,17 @@
 # preencha o .env a partir de deploy/env.example.hostinger (renomeado para .env).
 # O Docker Manager da Hostinger roda um arquivo único, sem env_file: toda a configuração fica inline aqui e o .env
 # só interpola os segredos em ${...} (cada valor com até 256 caracteres). Detalhes: docs/guides/docker.md, seção 3.6.
-# A cada release, atualize a tag da imagem abaixo (fluxo em docs/guides/release.md).
+# Auto-update (docs/guides/auto-update.md): o serviço updater-proxy abaixo deixa o comando /update trocar a imagem do bot.
+# As DUAS linhas de imagem (bot e updater-proxy) usam tag@sha256 com o digest do image-digest.txt da release
+# (docs/guides/release.md); o digest abaixo é um MARCADOR de zeros e precisa ser trocado na implantação. A linha do bot
+# tem de manter exatamente a forma "    image: or4cu1o/empiremuse:X.Y.Z@sha256:..." (4 espaços): é a que o auxiliar edita.
+# Sem o auto-update, apague o serviço updater-proxy, o volume updater-sock e, no bot, UPDATE_PROXY_SOCKET e o volume.
 name: empiremuse
 
 services:
   bot:
     container_name: empiremuse
-    image: or4cu1o/empiremuse:2.0.2
+    image: or4cu1o/empiremuse:2.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
     pull_policy: missing
     restart: unless-stopped
     stop_grace_period: 30s
@@ -42,6 +46,8 @@ services:
 
       # Configuração (sem segredos).
       DEFAULT_PREFIX: "!"
+      # Socket do proxy de atualização (serviço updater-proxy); o bot nunca recebe o grupo do Docker.
+      UPDATE_PROXY_SOCKET: /run/empiremuse-updater/updater.sock
       AUTO_DOWNLOAD_LAVALINK_SERVERLIST: "false"
       PLAYER_SESSIONS_MONGODB: "true"
       SENSITIVE_INFO_WARN: "false"
@@ -137,6 +143,7 @@ services:
       STREAMING_PRESENCES: ""
     volumes:
       - empiremuse-data:/data
+      - updater-sock:/run/empiremuse-updater
     # Produção atrás do Traefik (https://github.com/Or4cu1o/docker-compose-cookbook/tree/main/composes/traefik):
     # sem porta publicada; o Traefik alcança o bot pela rede externa "proxy".
     networks:
@@ -160,8 +167,49 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Proxy de atualização: a única peça com acesso ao docker.sock (equivale a root no host, por isso fica minúsculo,
+  # sem rede, só leitura e sem capabilities). Só aceita 5 operações sobre um container auxiliar de nome fixo; o auxiliar
+  # troca UMA linha deste compose e faz o "compose up" do bot. Detalhes e ameaças: docs/adr/0004-auto-update-proxy.md.
+  updater-proxy:
+    container_name: empiremuse-updater-proxy
+    # Nome completo (docker.io/...): a linha nunca casa com a do bot, que é a que o auxiliar edita. O digest é
+    # obrigatório: o "Update project" do painel puxa e recria todos os serviços, e só com tag um token vazado do Hub
+    # viraria root pelo proxy. Troque o marcador pelo digest do image-digest.txt da mesma release.
+    image: docker.io/or4cu1o/empiremuse:2.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    pull_policy: missing
+    restart: unless-stopped
+    command: ["/usr/local/bin/python3", "-I", "-S", "/app/empiremuse/updater/proxy.py"]
+    user: "10002:10001"
+    # GID do dono do docker.sock no host (stat -c %g /var/run/docker.sock), definido no .env.
+    group_add:
+      - "${DOCKER_GID:?defina DOCKER_GID no .env (stat -c %g /var/run/docker.sock)}"
+    environment:
+      # Caminho DESTE projeto no host: o auxiliar monta a pasta nesse mesmo caminho para ler e editar o compose.
+      UPDATER_PROJECT_DIR: /docker/empiremuse
+      # Só o bot (uid 10001) fala com o proxy.
+      UPDATER_PEER_UID: "10001"
+    healthcheck:
+      disable: true
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    pids_limit: 32
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - updater-sock:/run/empiremuse-updater
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   empiremuse-data:
+  updater-sock:
 
 networks:
   proxy:

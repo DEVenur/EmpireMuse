@@ -93,8 +93,8 @@ git push origin vX.Y.Z
 A produção roda na VPS da Hostinger (Docker Manager), com o compose de [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml) (ver [`docker.md`](docker.md), seção 3.6):
 
 1. Confira a imagem publicada (seção 5);
-2. Atualize a tag `image:` do compose na VPS para `or4cu1o/empiremuse:X.Y.Z`, guardando antes um backup do arquivo (`docker-compose.yml.bak-AAAAMMDD-HHMMSS`), e a do `deploy/docker-compose.hostinger.yml` no repositório no próximo PR;
-3. O dono reimplanta o projeto pelo painel da Hostinger;
+2. Com o auto-update ligado, o dono só manda o comando `update` (veja [`auto-update.md`](auto-update.md)). Na primeira implantação, ou sem o auto-update, atualize as duas linhas `image:` do compose na VPS (seção 5.4): a do bot como `    image: or4cu1o/empiremuse:X.Y.Z@sha256:<digest>` (4 espaços) e a do `updater-proxy` mantendo o prefixo, `docker.io/or4cu1o/empiremuse:X.Y.Z@sha256:<digest>` (se o bot ficar fora dessa forma, todo `update` falha com o código 65), guardando antes um backup do arquivo (`docker-compose.yml.bak-AAAAMMDD-HHMMSS`), e a do `deploy/docker-compose.hostinger.yml` no repositório no próximo PR;
+3. Sem o `update`, o dono reimplanta o projeto pelo painel da Hostinger;
 4. Valide em produção: logs da subida, reprodução (YouTube e SoundCloud), painel e RPC.
 
 ---
@@ -184,6 +184,10 @@ cosign verify \
 ```
 
 Use o mesmo digest para fixar a imagem como `or4cu1o/empiremuse:X.Y.Z@sha256:<digest>` em um compose.
+
+### 5.4 Digest para o Compose do Auto-update
+
+O [`deploy/docker-compose.hostinger.yml`](../../deploy/docker-compose.hostinger.yml) traz dois marcadores de zeros (`@sha256:000…`): a imagem do `bot` e a do `updater-proxy`. Troque os dois pelo conteúdo do `image-digest.txt` da GitHub Release da mesma versão (o comando de download está na seção 5.3); o passo a passo completo está em [`auto-update.md`](auto-update.md), seção 2.1. O `image-digest.txt` só é confiável em releases imutáveis (seção 4.4). O `update` só troca a linha do bot; a imagem do `updater-proxy` só muda quando o dono troca o digest dela à mão (por exemplo, sempre que o `CHANGELOG.md` citar o proxy).
 
 ---
 
