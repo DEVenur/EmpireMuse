@@ -30,6 +30,7 @@ PENDING_MAX_FUTURE_SECONDS = 300
 MAX_TIMESTAMP = 2**40  # ano ~36812; o que passa disso não é um instante, é arquivo corrompido ou forjado
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
+MAX_RESTORE_ATTEMPTS = 3  # tentativas de reversão do boot_guard antes de desistir (D11)
 FLOWS = ("git", "docker")
 STATUSES = ("applying", "pending", "ready", "rolled_back")
 
@@ -70,6 +71,7 @@ class PendingUpdate:
     digest: str | None = None
     boots: int = 0
     status: str = "pending"
+    restore_attempts: int = 0
     v: int = PENDING_VERSION
 
     def to_json(self) -> dict[str, Any]:
@@ -87,6 +89,7 @@ class PendingUpdate:
         }
         if self.flow == "git":
             data["prev_sha"] = self.prev_sha
+            data["restore_attempts"] = self.restore_attempts
         else:
             data["digest"] = self.digest
         return data
@@ -109,12 +112,13 @@ def parse_pending(data: object) -> PendingUpdate | None:
     if not isinstance(data, dict):
         return None
     flow = data.get("flow")
-    if flow not in FLOWS or set(data) != _KEYS_BY_FLOW[flow]:
+    if flow not in FLOWS or set(data) - {"restore_attempts"} != _KEYS_BY_FLOW[flow]:
         return None
     from_version = parse_version(data["from_version"]) if isinstance(data["from_version"], str) else None
     to_version = parse_version(data["to_version"]) if isinstance(data["to_version"], str) else None
     created_at = data["created_at"]
     boots = data["boots"]
+    attempts = data.get("restore_attempts", 0)  # ausente = 0 (pendentes gravados antes da D11)
     valid = (
         data["v"] == PENDING_VERSION
         and not isinstance(data["v"], bool)
@@ -127,6 +131,9 @@ def parse_pending(data: object) -> PendingUpdate | None:
         and 0 <= boots <= MAX_BOOTS
         and data["status"] in STATUSES
         and (data["status"] != "applying" or (flow == "git" and boots == 0))
+        and isinstance(attempts, int)
+        and not isinstance(attempts, bool)
+        and 0 <= attempts <= (MAX_RESTORE_ATTEMPTS if flow == "git" else 0)
     )
     if not valid:
         return None
@@ -149,6 +156,7 @@ def parse_pending(data: object) -> PendingUpdate | None:
         digest=digest if flow == "docker" else None,
         boots=boots,
         status=data["status"],
+        restore_attempts=attempts,
     )
 
 
