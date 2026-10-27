@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
-from empiremuse.rules.release import Version, parse_version
+from empiremuse.rules.release import Version, parse_current_version
 
 VERSION_ENV = "EMPIREMUSE_VERSION"
 
@@ -19,7 +19,7 @@ def image_version(environ: Mapping[str, str] = os.environ) -> Version | None:
     value = environ.get(VERSION_ENV)
     if value is None:
         return None
-    return parse_version(value)
+    return parse_current_version(value)
 
 
 def running_from_image(environ: Mapping[str, str] = os.environ) -> bool:

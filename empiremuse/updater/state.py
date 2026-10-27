@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from empiremuse.rules.release import Version, parse_tag, parse_version
+from empiremuse.rules.release import Version, parse_current_version, parse_tag, parse_version
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,8 @@ def parse_pending(data: object) -> PendingUpdate | None:
     flow = data.get("flow")
     if flow not in FLOWS or set(data) - {"restore_attempts"} != _KEYS_BY_FLOW[flow]:
         return None
-    from_version = parse_version(data["from_version"]) if isinstance(data["from_version"], str) else None
+    parse_from = parse_current_version if flow == "docker" else parse_version
+    from_version = parse_from(data["from_version"]) if isinstance(data["from_version"], str) else None
     to_version = parse_version(data["to_version"]) if isinstance(data["to_version"], str) else None
     created_at = data["created_at"]
     boots = data["boots"]
