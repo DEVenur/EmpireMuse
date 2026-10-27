@@ -1,7 +1,8 @@
-"""Versões de release do EmpireMuse: só ``X.Y.Z`` estrito, comparável por número, e as regras puras do update.
+"""Versões de release do EmpireMuse e as regras puras do update: alvos são só ``X.Y.Z`` estrito; a versão atual da
+imagem pode ser ``X.Y.Z-rc.N`` (``parse_current_version``, D13), com ``X.Y.Z-rc.N < X.Y.Z`` e ordenação numérica.
 
-Sem pré-release, sem build metadata, sem espaços e sem zero à esquerda; cada componente tem até 4 dígitos ASCII. O
-``fullmatch`` e o ``[0-9]`` valem de propósito: ``$`` aceitaria uma quebra de linha no fim e ``\\d`` aceitaria dígitos
+Sem outros pré-releases, sem build metadata, sem espaços e sem zero à esquerda; cada componente tem até 4 dígitos ASCII.
+O ``fullmatch`` e o ``[0-9]`` valem de propósito: ``$`` aceitaria uma quebra de linha no fim e ``\\d`` aceitaria dígitos
 de outros alfabetos. Funções puras, só stdlib.
 """
 
@@ -13,18 +14,26 @@ from typing import NamedTuple
 
 _COMPONENT = r"(0|[1-9][0-9]{0,3})"
 _VERSION = re.compile(rf"{_COMPONENT}\.{_COMPONENT}\.{_COMPONENT}")
+_CURRENT_VERSION = re.compile(rf"{_COMPONENT}\.{_COMPONENT}\.{_COMPONENT}(?:-rc\.{_COMPONENT})?")
 TAG_PREFIX = "v"
+STABLE_RC = 10_000
 
 
 class Version(NamedTuple):
-    """Versão ``major.minor.patch``; a ordenação é a da tupla (numérica, não textual)."""
+    """Versão ``major.minor.patch`` (ou ``major.minor.patch-rc.N`` quando ``rc != STABLE_RC``); a ordenação é a da tupla."""
 
     major: int
     minor: int
     patch: int
+    rc: int = STABLE_RC
+
+    @property
+    def is_prerelease(self) -> bool:
+        return self.rc != STABLE_RC
 
     def __str__(self) -> str:
-        return f"{self.major}.{self.minor}.{self.patch}"
+        base = f"{self.major}.{self.minor}.{self.patch}"
+        return f"{base}-rc.{self.rc}" if self.is_prerelease else base
 
 
 def parse_version(text: str) -> Version | None:
@@ -34,6 +43,15 @@ def parse_version(text: str) -> Version | None:
         return None
     major, minor, patch = (int(part) for part in match.groups())
     return Version(major, minor, patch)
+
+
+def parse_current_version(text: str) -> Version | None:
+    """``X.Y.Z`` ou ``X.Y.Z-rc.N`` estrito (versão atual da imagem, D13) → ``Version``; qualquer outra coisa → ``None``."""
+    match = _CURRENT_VERSION.fullmatch(text)
+    if match is None:
+        return None
+    major, minor, patch, rc = match.groups()
+    return Version(int(major), int(minor), int(patch), STABLE_RC if rc is None else int(rc))
 
 
 def parse_tag(name: str) -> Version | None:

@@ -12,9 +12,46 @@ def test_a_valid_version_is_parsed():
     assert image_version({VARIAVEL: "2.1.0"}) == Version(2, 1, 0)
 
 
-@pytest.mark.parametrize("valor", ["dev", "", "2.1", "v2.1.0", "2.1.0-rc.1", "02.1.0", " 2.1.0", "nada"])
+@pytest.mark.parametrize("valor", ["dev", "", "2.1", "v2.1.0", "02.1.0", " 2.1.0", "nada"])
 def test_dev_empty_and_invalid_values_are_not_a_version(valor):
     assert image_version({VARIAVEL: valor}) is None
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        "2.1.0-rc.02",
+        "2.1.0-RC.2",
+        "2.1.0-rc2",
+        "2.1.0-rc.",
+        "2.1.0-beta.1",
+        "2.1.0-rc.2+b",
+        "v2.1.0-rc.2",
+        "2.1.0-rc.2\n",
+    ],
+)
+def test_an_invalid_pre_release_is_not_a_version(valor):
+    assert image_version({VARIAVEL: valor}) is None
+
+
+@pytest.mark.parametrize("valor", ["2.1.0-rc.2", "2.1.0-rc.10", "2.1.0-rc.1"])
+def test_an_rc_image_version_is_the_current_version(valor):
+    versao = image_version({VARIAVEL: valor})
+
+    assert versao is not None and versao.is_prerelease and str(versao) == valor
+    assert versao < Version(2, 1, 0)
+
+
+def test_rc_versions_of_the_image_compare_by_number():
+    assert image_version({VARIAVEL: "2.1.0-rc.2"}) < image_version({VARIAVEL: "2.1.0-rc.10"})
+
+
+def test_the_stable_image_version_is_not_a_prerelease():
+    assert image_version({VARIAVEL: "2.1.0"}).is_prerelease is False
+
+
+def test_an_rc_image_is_running_from_image():
+    assert running_from_image({VARIAVEL: "2.1.0-rc.2"}) is True
 
 
 def test_without_the_variable_there_is_no_version():

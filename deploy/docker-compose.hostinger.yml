@@ -7,6 +7,7 @@
 # As DUAS linhas de imagem (bot e updater-proxy) usam tag@sha256 com o digest do image-digest.txt da release
 # (docs/guides/release.md); o digest abaixo é um MARCADOR de zeros e precisa ser trocado na implantação. A linha do bot
 # tem de manter exatamente a forma "    image: or4cu1o/empiremuse:X.Y.Z@sha256:..." (4 espaços): é a que o auxiliar edita.
+# A versão da linha atual também pode ser de teste ("X.Y.Z-rc.N@sha256:..."): o /update leva a próxima estável; só estáveis são oferecidas.
 # Sem o auto-update, apague o serviço updater-proxy, o volume updater-sock e, no bot, UPDATE_PROXY_SOCKET e o volume.
 name: empiremuse
 
