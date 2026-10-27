@@ -20,6 +20,7 @@ import pytest
 
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
+from tests.support.laco_do_pool import encerrar_laco
 
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"  # só o formato; não é um token real
 SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -51,9 +52,9 @@ def pool(monkeypatch, tmp_path):
     pool.node_check = MagicMock()
     pool.start_lavalink = AsyncMock()
     yield pool
-    if pool.loop is not None and not pool.loop.is_closed():
-        pool.loop.run_until_complete(asyncio.sleep(0))
-        pool.loop.close()
+    encerrar_laco(
+        pool.loop
+    )  # cancela o que o setup deixou (logs_task, version_check_task, dublês) antes de fechar o laço
     asyncio.set_event_loop(None)
 
 
