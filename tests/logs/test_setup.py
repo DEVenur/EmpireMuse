@@ -47,6 +47,11 @@ def instalar(raiz, console, relogio, tmp_path):
     """Chama o ``configure_logging`` real e devolve os handlers que ele instalou (console, arquivo)."""
 
     def _instalar(settings=None, segredos=(), **extra):
+        for handler in list(
+            raiz.handlers
+        ):  # o handler de captura do pytest formataria os argumentos de todo DEBUG e mascararia o que se mede
+            if type(handler).__module__.startswith("_pytest"):
+                raiz.removeHandler(handler)
         antes = list(raiz.handlers)
         configure_logging(
             settings or ajustes(),
