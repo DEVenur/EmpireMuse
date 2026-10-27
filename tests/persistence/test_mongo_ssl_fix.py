@@ -80,11 +80,24 @@ def test_the_connection_timeout_and_the_other_uri_parameters_are_kept(cliente):
     assert "retryWrites=true" in criado.uri
 
 
-def test_an_invalid_uri_raises_without_the_password_in_the_message(monkeypatch):
-    """Com o driver real (nada conecta na construção): a opção inválida estoura sem repetir a senha da URI."""
-    monkeypatch.delenv("MONGO_SSL_FIX", raising=False)
+@pytest.mark.parametrize("fix", [None, "true"], ids=["validando", "sem-validacao"])
+@pytest.mark.parametrize(
+    "uri",
+    [
+        f"http://usuario:{CANARIO}@host.exemplo/banco",
+        f"mongodb://usuario:{CANARIO}@host.exemplo:99999999/banco",
+        f"mongodb://usuario:{CANARIO}@/banco",
+    ],
+    ids=["esquema", "porta", "host-vazio"],
+)
+def test_an_invalid_uri_raises_without_the_password_in_the_message(monkeypatch, uri, fix):
+    """Com o driver real (nada conecta na construção): a URI que o AsyncMongoClient recusa estoura sem repetir a senha."""
+    if fix is None:
+        monkeypatch.delenv("MONGO_SSL_FIX", raising=False)
+    else:
+        monkeypatch.setenv("MONGO_SSL_FIX", fix)
 
     with pytest.raises(Exception) as erro:
-        MongoDatabase(f"mongodb://usuario:{CANARIO}@host.exemplo/banco?tls=talvez", timeout=5)
+        MongoDatabase(uri, timeout=5)
 
     assert CANARIO not in str(erro.value)
