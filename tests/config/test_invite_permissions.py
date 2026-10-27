@@ -3,19 +3,14 @@
 Antigo ``332892794064`` -> novo ``2533601240804560``: entram LER O HISTÓRICO DE MENSAGENS (bit 16), DEFINIR O STATUS DO CANAL DE VOZ (bit 48) e
 FIXAR MENSAGENS (bit 51); saem USAR COMANDOS DE APLICATIVO (bit 31) e PEDIR PARA FALAR (bit 32). Nenhum outro bit muda.
 
-EXCEÇÃO CONSCIENTE à regra do ``testing.md`` (testes não leem compose/docs/workflows): o teste de consistência abaixo LÊ ``.example.env``,
-``deploy/docker-compose.hostinger.yml`` e ``deploy/pterodactyl/egg-empiremuse.json`` por pedido expresso do dono. O mesmo número em quatro lugares
-já divergiu antes (o convite mudava num e não nos outros); a leitura é só de um valor numérico, nunca de texto de documentação.
+O mesmo número também vive em ``.example.env``, ``deploy/docker-compose.hostinger.yml`` e ``deploy/pterodactyl/egg-empiremuse.json``; por regra do
+``testing.md`` nenhum teste lê esses arquivos: a conferência deles é por revisão do diff.
 """
-
-import json
-import re
 
 import disnake
 import pytest
 
 from empiremuse import config_loader
-from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.critical
 
@@ -78,36 +73,3 @@ class TestValorPadrao:
 
         assert permissoes.view_channel and permissoes.send_messages and permissoes.embed_links
         assert permissoes.connect and permissoes.speak
-
-
-class TestOMesmoNumeroEmTodoLugar:
-    def test_example_env_carries_the_default(self):
-        texto = (RAIZ / ".example.env").read_text(encoding="utf-8")
-
-        valores = re.findall(r"^INVITE_PERMISSIONS=(\d+)\s*$", texto, flags=re.MULTILINE)
-
-        assert valores == [str(config_loader.DEFAULT_CONFIG["INVITE_PERMISSIONS"])]
-
-    def test_the_hostinger_compose_carries_the_default(self):
-        texto = (RAIZ / "deploy" / "docker-compose.hostinger.yml").read_text(encoding="utf-8")
-
-        valores = re.findall(r'^\s*INVITE_PERMISSIONS:\s*"?(\d+)"?\s*$', texto, flags=re.MULTILINE)
-
-        assert valores == [str(config_loader.DEFAULT_CONFIG["INVITE_PERMISSIONS"])]
-
-    def test_the_pterodactyl_egg_carries_the_default(self):
-        egg = json.loads((RAIZ / "deploy" / "pterodactyl" / "egg-empiremuse.json").read_text(encoding="utf-8"))
-
-        variaveis = [v for v in egg["variables"] if v["env_variable"] == "INVITE_PERMISSIONS"]
-
-        assert len(variaveis) == 1
-        assert variaveis[0]["default_value"] == str(config_loader.DEFAULT_CONFIG["INVITE_PERMISSIONS"])
-
-    def test_the_old_number_is_gone_from_the_three_files(self):
-        arquivos = [
-            RAIZ / ".example.env",
-            RAIZ / "deploy" / "docker-compose.hostinger.yml",
-            RAIZ / "deploy" / "pterodactyl" / "egg-empiremuse.json",
-        ]
-
-        assert [a.name for a in arquivos if str(ANTIGO) in a.read_text(encoding="utf-8")] == []
