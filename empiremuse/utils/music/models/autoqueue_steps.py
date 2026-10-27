@@ -61,7 +61,7 @@ async def _aq_source_tracks(self, req):
             except Exception as e:
                 is_transient = (
                     isinstance(e, (ClientConnectionError, asyncio.TimeoutError))
-                    or (isinstance(e, ClientResponseError) and (e.status is None or e.status >= 500))
+                    or (isinstance(e, ClientResponseError) and (not e.status or e.status >= 500))
                     or (isinstance(e, ClientError) and not isinstance(e, ClientResponseError))
                 )
                 logger.warning("Falha ao obter músicas recomendadas do Spotify (%s).", type(e).__name__)
