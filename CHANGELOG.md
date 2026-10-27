@@ -15,7 +15,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `LOG_DEBUG_GUILDS` (IDs de servidores, separados por vírgula, que registram em `DEBUG` mesmo com o nível global mais alto).
   - `METRICS_INTERVAL` (reservada para o resumo periódico de métricas da fase 3; ainda sem efeito; padrão 300, mínimo 60; 0 desliga).
 - **Agregação de erros repetidos**: avisos e erros iguais (mesmo logger, nível, modelo da mensagem e tipo de exceção) saem uma vez e viram um resumo por janela de 60 s, em vez de inundar o console e o arquivo.
-- **Relatório de subida por etapas (item 7, fase P2)**: a subida do bot mostra, em etapas, a pasta de execução, o Python, a versão do bot, os cogs carregados e os que falharam, o MongoDB com a latência, o Java, os nós do Lavalink e se há uma versão estável nova disponível.
+- **Relatório de subida por etapas (item 7, fase P2)**: a subida do bot mostra, em etapas, a pasta de execução, o Python, a versão do bot, os cogs carregados e os que falharam, o MongoDB, o Java, os nós do Lavalink e se há uma versão estável nova disponível.
 
 ### Alterado
 - **Sem `print` no caminho de subida (item 7, fase P2)**: a subida do bot deixa de usar `print`; tudo sai pelo log, com nível, cor e contexto.
