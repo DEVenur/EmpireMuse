@@ -31,6 +31,7 @@ CHANGELOG_MAX_CHARS = 3500
 WATCH_TIMEOUT = 900  # segundos esperando o auxiliar terminar
 WATCH_INTERVAL = 5
 DM_LOG_LINES = 20
+DM_MAX_CHARS = 1900  # o limite do Discord é 2000; a folga cobre o que o envio acrescentar
 MSG_IN_PROGRESS = "Já há uma atualização em andamento."
 
 # Significado de cada código de saída do auxiliar (constante única: o acompanhamento e o aviso pós-boot usam esta tabela).
@@ -200,6 +201,11 @@ async def send_helper_log(client: ProxyClient, report: Report, pending: PendingU
         lines = await client.helper_logs(DM_LOG_LINES)
     except UpdateError:
         return
+    # Mascara ANTES de cortar: um segredo na fronteira do corte não pode escapar do mascaramento pela metade.
     body = mask_secrets("\n".join(lines[:DM_LOG_LINES]), secrets)  # o proxy já devolve só as últimas DM_LOG_LINES
+    header = f"Log do auxiliar da atualização para {pending.to_version}:\n"
+    room = DM_MAX_CHARS - len(header)
+    if len(body) > room:
+        body = "…" + body[-(room - 1) :]  # o fim do log é a parte mais útil
     if body.strip():
-        await report.dm(f"Log do auxiliar da atualização para {pending.to_version}:\n{body}")
+        await report.dm(f"{header}{body}")
