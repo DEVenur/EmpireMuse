@@ -497,11 +497,14 @@ class Owner(commands.Cog):
             raise self._in_progress_error() from None
         if state is not None and state.running:
             raise self._in_progress_error()
-        code = None if state is None else state.exit_code
+        # Só ``exited`` tem código de saída de verdade: um auxiliar criado e nunca iniciado (created), morto (dead) ou em
+        # remoção também não roda, mas o ExitCode dele é 0 e não quer dizer "concluída".
+        finished = state is not None and state.status == "exited"
+        code = state.exit_code if finished else None
         await self._say(
             ctx, f"ℹ️ **Resultado da atualização anterior (para {pending.to_version}):** {describe_exit(code)}."
         )
-        if state is not None and state.exit_code != 0:
+        if finished and code != 0:
             await send_helper_log(client, DiscordReport(self.bot, pending), pending, self.secret_values())
         try:
             await client.remove_helper()
