@@ -180,7 +180,11 @@ class TestExcecoes:
         assert len(achados_do_arquivo) == EXCECOES[arquivo][1], (arquivo, achados_do_arquivo)
 
     def test_the_files_that_show_external_names_are_not_exceptions(self):
-        for arquivo in ("empiremuse/cogs/lastfm.py", "empiremuse/utils/music/interactions/fav_menu_text.py"):
+        for arquivo in (
+            "empiremuse/cogs/lastfm.py",
+            "empiremuse/utils/music/interactions/fav_menu_text.py",
+            "empiremuse/utils/others.py",
+        ):
             assert arquivo not in EXCECOES
 
     def test_the_helper_file_itself_is_the_only_file_excluded_without_a_reason(self):

@@ -3,13 +3,13 @@
 * S2: ``authors_md`` das faixas (``LavalinkTrack``/``PartialTrack``) e dos construtores do Spotify com nome E URL "com marcas".
 * S3: embeds de ``event_steps`` (falha de faixa e faixa sem resultado). Os demais renderizadores têm o teste-guarda de AST (S4).
 * S3b: ``skin_utils.replaces`` (placeholders de texto passam por ``fix_characters``, os de URL por ``md_url``).
-* S5: o ``BotCore`` nasce sem menção a ``@everyone``/cargos.
+* S5 saiu daqui: o teste de ``allowed_mentions`` do ``BotCore`` mora em ``feat/logs-erros`` (``client.py`` é do P4).
 * S6: a INGESTÃO não escapa nada (o texto cru continua indo para busca e scrobble); o escape é só na exibição.
 """
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import disnake
 import pytest
@@ -284,26 +284,6 @@ class TestPlaceholdersDeSkin:
         assert saida == "[Titulo Normal](https://ok.exemplo/faixa) por Autor Normal em Lista Normal"
 
 
-# ============================================================================ S5 — menções
-
-
-class TestMencoes:
-    @pytest.mark.asyncio
-    async def test_the_bot_starts_without_everyone_or_role_mentions(self):
-        from empiremuse.utils.client import BotCore
-
-        bot = BotCore(
-            command_prefix=commands.when_mentioned,
-            intents=disnake.Intents.none(),
-            pool=SimpleNamespace(config={"OWNER_IDS": ""}, loop=None),
-            identifier="teste",
-        )
-
-        permitidas = bot.allowed_mentions
-        assert permitidas is not None and permitidas.everyone is False and permitidas.roles is False
-        assert permitidas.users is True and permitidas.replied_user is True
-
-
 # ============================================================================ S6 — a ingestão não escapa nada
 
 
@@ -322,3 +302,53 @@ class TestIngestaoContinuaCrua:
         faixa = faixa_lavalink({"albumName": "Album [x]", "albumUrl": "https://ok.exemplo/al"})
 
         assert faixa.album_url == "https://ok.exemplo/al"
+
+
+# ============================================================================ S3 — o convite do controle ocioso (others.py)
+
+
+class TestControleOcioso:
+    """``send_idle_embed`` lista as plataformas aceitas: os links da marca saem do ``md_link``, não de texto montado à mão."""
+
+    PLATAFORMAS = {
+        "Youtube": "https://www.youtube.com/",
+        "Soundcloud": "https://soundcloud.com/",
+        "Spotify": "https://open.spotify.com/",
+        "Twitch": "https://www.twitch.tv/",
+    }
+
+    @pytest.mark.asyncio
+    async def test_the_brand_links_are_built_by_md_link_and_come_out_in_the_expected_form(self, monkeypatch):
+        import disnake as _disnake
+
+        from empiremuse.utils import others
+        from empiremuse.utils.music.converters import md_link as md_link_real
+
+        chamadas: list[tuple[str, str]] = []
+
+        def espiao(texto, url, **kwargs):
+            chamadas.append((texto, url))
+            return md_link_real(texto, url, **kwargs)
+
+        monkeypatch.setattr(others, "md_link", espiao)
+        canal_id = 123456789012345678
+        canal = MagicMock(spec=_disnake.TextChannel)
+        canal.id = canal_id
+        mensagem = MagicMock(spec=_disnake.Message)
+        mensagem.channel, mensagem.guild_id, mensagem.pinned = canal, 1, True
+        mensagem.edit = AsyncMock()
+        eu = MagicMock()
+        eu.display_avatar.replace.return_value.url = "https://cdn.exemplo/avatar.png"
+        mensagem.author = eu
+        mensagem.guild = SimpleNamespace(me=eu, id=1)
+        bot = SimpleNamespace(
+            music=SimpleNamespace(nodes={}), get_color=lambda *a: 0, get_global_command_named=lambda *a, **k: None
+        )
+        dados = {"player_controller": {"channel": str(canal_id), "fav_links": {}}}
+
+        await others.send_idle_embed(mensagem, "", bot=bot, guild_data=dados)
+
+        descricao = mensagem.edit.await_args.kwargs["embed"].description
+        assert dict(chamadas) == self.PLATAFORMAS
+        for nome, url in self.PLATAFORMAS.items():
+            assert f"[`{nome}`](<{url}>)" in descricao
