@@ -10,9 +10,9 @@ from aiohttp import ClientSession
 from disnake.ext import commands
 
 from empiremuse.logs.errors import command_context
-from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, scrub
+from empiremuse.logs.redact import MAX_MESSAGE_CHARS, MAX_TRACEBACK_CHARS, scrub
 from empiremuse.rules.error_code import safe_error_code
-from empiremuse.utils.music.converters import URL_REG
+from empiremuse.utils.music.converters import URL_REG, fix_characters
 from empiremuse.utils.music.errors import parse_error, PoolException, error_code_text
 from empiremuse.utils.others import send_message, CustomContext, string_to_file, paginator, check_cmd
 
@@ -476,20 +476,20 @@ class ErrorHandler(commands.Cog):
             embed.add_field(
                 name="Servidor:",
                 inline=False,
-                value=f"```\n{disnake.utils.escape_markdown(ctx.guild.name)}\nID: {ctx.guild.id}```",
+                value=f"```\n{fix_characters(ctx.guild.name)}\nID: {ctx.guild.id}```",
             )
 
             embed.add_field(
                 name="Canal de texto:",
                 inline=False,
-                value=f"```\n{disnake.utils.escape_markdown(ctx.channel.name)}\nID: {ctx.channel.id}```",
+                value=f"```\n{fix_characters(ctx.channel.name)}\nID: {ctx.channel.id}```",
             )
 
             if vc := ctx.author.voice:
                 embed.add_field(
                     name="Canal de voz (user):",
                     inline=False,
-                    value=f"```\n{disnake.utils.escape_markdown(vc.channel.name)}"
+                    value=f"```\n{fix_characters(vc.channel.name)}"
                     + (f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})" if vc.channel.user_limit else "")
                     + f"\nID: {vc.channel.id}```",
                 )
@@ -499,7 +499,7 @@ class ErrorHandler(commands.Cog):
                     embed.add_field(
                         name="Canal de voz (bot):",
                         inline=False,
-                        value=f"```\n{disnake.utils.escape_markdown(vcbot.channel.name)}"
+                        value=f"```\n{fix_characters(vcbot.channel.name)}"
                         + (
                             f" ({len(vcbot.channel.voice_states)}/{vcbot.channel.user_limit})"
                             if vcbot.channel.user_limit
@@ -526,13 +526,9 @@ class ErrorHandler(commands.Cog):
             embed.description = f"**Slash Command:**```\n{ctx.data.name}``` "
 
             if ctx.filled_options:
-                embed.description += (
-                    "**Options**```\n"
-                    + "\n".join(
-                        f"{k} -> {disnake.utils.escape_markdown(str(v))}" for k, v in ctx.filled_options.items()
-                    )
-                    + "```"
-                )
+                # Resumo por tipo (V-L4): str(Attachment) é a URL assinada da CDN, str(Member) é o nome e o texto livre pode ter segredo.
+                params = command_context(ctx, level=logging.ERROR)["params"]
+                embed.description += "**Options**```\n" + "\n".join(f"{k} -> {v}" for k, v in params.items()) + "```"
 
         except AttributeError:
             if self.bot.intents.message_content and not ctx.author.bot:
@@ -543,7 +539,9 @@ class ErrorHandler(commands.Cog):
                     message = ctx
                     type_ = "Mensagem"
 
-                embed.description = f"**{type_}:**```\n{message.content}```"
+                # O texto do usuário passa pelo saneamento e pelo redator único; as crases não fecham o bloco de código.
+                content = scrub(str(message.content), MAX_MESSAGE_CHARS).replace("`", "'")
+                embed.description = f"**{type_}:**```\n{content}```"
 
         return embed
 
