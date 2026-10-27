@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+import pytest_asyncio
 
 from empiremuse import paths
 from empiremuse.cogs import legacy_cmds
@@ -874,3 +875,329 @@ async def test_the_report_given_to_the_watcher_writes_to_the_origin_channel_and_
     for destino in (canal, usuario):
         permitido = destino.send.await_args.kwargs["allowed_mentions"]
         assert permitido.everyone is False and permitido.users is False and permitido.roles is False
+
+
+# ---------------------------------------------------------------------------- D12: pendente docker já existente que o comando consegue resolver
+
+
+def pendente_docker_em_disco(runtime, *, status: str = "pending") -> PendingUpdate:
+    pendente = PendingUpdate(
+        flow="docker",
+        from_version=DE,
+        to_version=PARA,
+        bot_id=1,
+        channel_id=CANAL,
+        requested_by=777,
+        created_at=time.time(),
+        digest="sha256:" + "ab" * 32,
+        status=status,
+    )
+    write_pending(runtime, pendente)
+    return pendente
+
+
+class AuxiliarFalso:
+    """Cliente do proxy para o D12: ``estado`` (ou ``None``), falhas por chamada e o registro da ordem."""
+
+    def __init__(self, ctx=None) -> None:
+        from empiremuse.updater.proxy_client import HelperState
+
+        self.HelperState = HelperState
+        self.estado: Any = None
+        self.falhas: dict[str, Exception] = {}
+        self.eventos: list[str] = []
+        self.defers_no_estado: int | None = None
+        self.ctx = ctx
+
+    def parado(self, codigo: int) -> "AuxiliarFalso":
+        self.estado = self.HelperState("exited", False, codigo, "ini", "fim")
+        return self
+
+    def rodando(self) -> "AuxiliarFalso":
+        self.estado = self.HelperState("running", True, 0, "ini", "")
+        return self
+
+    async def helper_state(self):
+        self.eventos.append("state")
+        if self.ctx is not None:
+            self.defers_no_estado = self.ctx.response.defer.await_count
+        if "state" in self.falhas:
+            raise self.falhas["state"]
+        return self.estado
+
+    async def remove_helper(self):
+        self.eventos.append("remove")
+        if "remove" in self.falhas:
+            raise self.falhas["remove"]
+
+
+@pytest.fixture
+def d12(cog, docker, ambiente, monkeypatch):
+    """Modo docker com o cliente do proxy, o envio do log e o relatório do Discord trocados no módulo do comando."""
+    auxiliar = AuxiliarFalso()
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", lambda caminho: auxiliar)
+    enviar_log = AsyncMock()
+    monkeypatch.setattr(legacy_cmds, "send_helper_log", enviar_log, raising=False)
+    relatorios: list[tuple[Any, Any]] = []
+
+    def relatorio(bot, pendente):
+        relatorios.append((bot, pendente))
+        return SimpleNamespace(bot=bot, pendente=pendente)
+
+    monkeypatch.setattr(legacy_cmds, "DiscordReport", relatorio, raising=False)
+    cog.secret_values = Mock(return_value=frozenset({"SEGREDO-1"}))
+    return SimpleNamespace(
+        auxiliar=auxiliar, enviar_log=enviar_log, relatorios=relatorios, cron=docker, runtime=ambiente.runtime
+    )
+
+
+def texto_do_primeiro_envio(ctx) -> str:
+    chamada = ctx.send.await_args_list[0]
+    embed = chamada.kwargs.get("embed")
+    return (chamada.args[0] if chamada.args else chamada.kwargs.get("content") or "") + (
+        embed.description if embed else ""
+    )
+
+
+@pytest.mark.parametrize("codigo", [66, 70, 71])
+async def test_a_stopped_helper_with_a_failure_is_reported_logged_by_dm_removed_and_the_new_update_goes_on(
+    cog, d12, codigo
+):
+    from empiremuse.updater import docker_flow
+
+    pendente = pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(codigo)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(codigo) in texto_do_primeiro_envio(
+        ctx
+    )  # o resultado da anterior, no canal do pedido
+    d12.enviar_log.assert_awaited_once()
+    cliente, relatorio, pend, segredos = d12.enviar_log.await_args.args
+    assert cliente is d12.auxiliar and relatorio.pendente.requested_by == 777 == pend.requested_by
+    assert segredos == frozenset({"SEGREDO-1"}) and pend.flow == "docker"
+    assert d12.auxiliar.eventos == ["state", "remove"] and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"] and ctx.send.await_count == 2  # o plano novo foi oferecido
+    assert cog.bot.pool.update_lock.locked()  # a trava passou para a janela de confirmação
+    assert pendente.status == "pending"
+
+
+@pytest.mark.parametrize(("estado", "codigo"), [("parado", 0), ("ausente", None)], ids=["saiu-com-0", "ausente"])
+async def test_a_helper_that_finished_well_or_is_gone_is_reported_without_dm_and_the_update_goes_on(
+    cog, d12, estado, codigo
+):
+    from empiremuse.updater import docker_flow
+
+    pendente_docker_em_disco(d12.runtime)
+    if estado == "parado":
+        d12.auxiliar.parado(0)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(codigo) in texto_do_primeiro_envio(ctx)
+    d12.enviar_log.assert_not_awaited()
+    assert "remove" in d12.auxiliar.eventos and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"]
+
+
+async def test_a_running_helper_refuses_without_removing_anything(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.rodando()
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == ["state"]
+    assert (d12.runtime / "update-pending.json").exists() and d12.cron.eventos == []
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_an_unreachable_proxy_refuses_and_keeps_the_pending_update(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.falhas["state"] = UpdateError("proxy de atualização inacessível")
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == [] and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_failing_removal_refuses_and_keeps_the_pending_update(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(66)
+    d12.auxiliar.falhas["remove"] = UpdateError("não removeu")
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == [] and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_ready_docker_pending_update_is_left_to_the_post_boot_notice_without_touching_the_proxy(
+    cog, d12, monkeypatch
+):
+    pendente_docker_em_disco(d12.runtime, status="ready")
+
+    def nunca(caminho):
+        raise AssertionError("o proxy não pode ser tocado com o pendente em 'ready'")
+
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", nunca)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+
+
+async def test_a_live_watcher_of_this_process_refuses_without_touching_the_proxy(cog, d12, monkeypatch):
+    pendente_docker_em_disco(d12.runtime)
+    viva = asyncio.get_running_loop().create_future()  # nunca concluída: faz o papel da tarefa do watch_helper
+    monkeypatch.setattr(cog.bot.pool, "helper_watch_tasks", {viva}, raising=False)  # o registro vive no pool
+
+    def nunca(caminho):
+        raise AssertionError("o proxy não pode ser tocado com o vigia vivo")
+
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", nunca)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    viva.cancel()
+    assert "andamento" in erro.value.text and (d12.runtime / "update-pending.json").exists()
+
+
+async def test_the_panel_defers_before_the_proxy_is_asked_about_the_old_helper(cog, d12):
+    pendente_docker_em_disco(d12.runtime)
+    ctx = ctx_painel()
+    d12.auxiliar.ctx = ctx
+    d12.auxiliar.parado(66)
+
+    await Owner.update.callback(cog, ctx)
+
+    assert d12.auxiliar.defers_no_estado == 1
+
+
+async def test_a_held_pool_lock_still_refuses_before_any_proxy_access_with_a_docker_pending_update(
+    cog, d12, monkeypatch
+):
+    pendente_docker_em_disco(d12.runtime)
+    await cog.bot.pool.update_lock.acquire()
+
+    def nunca(caminho):
+        raise AssertionError("a trava ocupada recusa antes de qualquer acesso ao proxy")
+
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", nunca)
+
+    with pytest.raises(GenericError):
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert cog.bot.pool.update_lock.locked()
+
+
+@pytest.mark.parametrize("situacao", ["created", "dead", "removing"])
+async def test_a_helper_that_never_ran_or_is_in_another_non_running_state_is_an_unknown_result(cog, d12, situacao):
+    """Um auxiliar CRIADO e nunca iniciado também tem ``Running=False`` e ``ExitCode=0``: só ``exited`` conta como terminado."""
+    from empiremuse.updater import docker_flow
+    from empiremuse.updater.proxy_client import HelperState
+
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.estado = HelperState(situacao, False, 0, "", "")
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(None) in texto_do_primeiro_envio(ctx)
+    assert docker_flow.describe_exit(0) not in texto_do_primeiro_envio(ctx)
+    d12.enviar_log.assert_not_awaited()
+    assert d12.auxiliar.eventos == ["state", "remove"] and not (d12.runtime / "update-pending.json").exists()
+    assert d12.cron.eventos == ["plano"] and ctx.send.await_count == 2
+
+
+async def test_an_exited_helper_with_exit_code_zero_is_still_a_completed_update(cog, d12):
+    from empiremuse.updater import docker_flow
+
+    pendente_docker_em_disco(d12.runtime)
+    d12.auxiliar.parado(0)
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert docker_flow.describe_exit(0) in texto_do_primeiro_envio(ctx)
+
+
+# ---------------------------------------------------------------------------- vigia do auxiliar: o registro vive no pool, não no módulo do cog
+
+
+def outro_cog(cog, *, bot_id: int | None = None) -> Owner:
+    """Um segundo ``Owner`` sobre o MESMO pool: o cog recarregado, ou o cog de outro bot do mesmo processo."""
+    bot = SimpleNamespace(**vars(cog.bot))
+    if bot_id is not None:
+        bot.user = SimpleNamespace(id=bot_id)
+    novo = Owner.__new__(Owner)
+    novo.bot = bot
+    novo.log_owner_command = Mock()
+    novo.secret_values = Mock(return_value=frozenset())
+    return novo
+
+
+@pytest_asyncio.fixture
+async def vigia_viva(cog, d12, monkeypatch):
+    """Confirma uma atualização docker cujo ``watch_helper`` NÃO termina: o vigia fica vivo até o fim do teste."""
+    solto = asyncio.Event()
+
+    async def vigia_bloqueado(*args, **kwargs):
+        await solto.wait()
+
+    monkeypatch.setattr(legacy_cmds, "watch_helper", vigia_bloqueado)
+    view = await oferecer(cog, ctx_prefixo())
+    await view.confirm.callback(clique())
+    for _ in range(5):  # deixa a tarefa do vigia começar
+        await asyncio.sleep(0)
+    pendente_docker_em_disco(d12.runtime)  # o que o início real teria gravado
+    d12.auxiliar.eventos.clear()
+    yield
+    solto.set()
+    await esperar_tarefas()
+
+
+async def test_a_reloaded_cog_still_sees_the_watcher_that_is_alive(cog, d12, vigia_viva, monkeypatch):
+    """Recarregar o cog zera o que é do módulo; o vigia vivo precisa continuar valendo para a recusa (o registro está no pool)."""
+    recarregado = outro_cog(cog)  # um Owner novo: nada do cog anterior sobrevive, só o registro do pool
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(recarregado, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []  # recusou sem tocar o proxy
+    assert (d12.runtime / "update-pending.json").exists()
+
+
+async def test_two_bots_of_the_same_pool_share_one_watcher_registry(cog, d12, vigia_viva):
+    do_outro_bot = outro_cog(cog, bot_id=BOT_ID + 1)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(do_outro_bot, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []
+    assert (d12.runtime / "update-pending.json").exists()
+
+
+async def test_two_pools_do_not_share_watchers(cog, d12, vigia_viva):
+    """O registro é por pool: um pool sem vigia vivo (outro processo simulado) não é bloqueado pelo vigia de outro."""
+    cog_de_outro_pool = outro_cog(cog)
+    cog_de_outro_pool.bot.pool = SimpleNamespace(
+        update_lock=asyncio.Lock(),
+        shutdown=AsyncMock(),
+        config={"RUN_RPC_SERVER": False},
+        update_ready_checked=False,
+        update_watch_task=None,
+    )
+    d12.auxiliar.parado(66)
+
+    await Owner.update.callback(cog_de_outro_pool, ctx_prefixo())
+
+    assert d12.auxiliar.eventos == ["state", "remove"]  # sem vigia vivo NESTE pool, o comando resolveu o pendente

@@ -51,8 +51,13 @@ class ProxyClient:
         try:
             async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                 async with session.request(method, f"http://proxy{path}", params=query, json=body) as response:
-                    data = await response.content.read(MAX_RESPONSE_BYTES + 1)
-                    return response.status, data[:MAX_RESPONSE_BYTES]
+                    # ``read(n)`` devolve só o que já chegou: lê até o EOF, com o teto valendo durante a leitura.
+                    received = bytearray()
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        received += chunk
+                        if len(received) > MAX_RESPONSE_BYTES:
+                            raise UpdateError(MSG_UNEXPECTED)
+                    return response.status, bytes(received)
         except (aiohttp.ClientError, TimeoutError, OSError) as error:
             raise UpdateError(MSG_UNREACHABLE) from error
 

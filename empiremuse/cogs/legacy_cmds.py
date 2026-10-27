@@ -39,12 +39,18 @@ from empiremuse.updater.git_flow import (
     plan_git_update,
     run_exec,
 )
-from empiremuse.updater.docker_flow import plan_docker_update, start_docker_update, watch_helper
+from empiremuse.updater.docker_flow import (
+    describe_exit,
+    plan_docker_update,
+    send_helper_log,
+    start_docker_update,
+    watch_helper,
+)
 from empiremuse.updater.mode import MODE_DOCKER, MODE_GIT, MODE_PANEL, update_mode
 from empiremuse.updater.notice import DiscordReport
 from empiremuse.updater.proxy_client import ProxyClient
 from empiremuse.updater.releases import fetch_changelog, list_releases
-from empiremuse.updater.state import UpdateRequest, read_pending
+from empiremuse.updater.state import UpdateRequest, clear_pending, read_pending
 from empiremuse.updater.views import ConfirmView
 from empiremuse.utils import branding
 from empiremuse.utils.client import BotCore
@@ -106,11 +112,17 @@ def format_git_log(data_list: list):
     return data
 
 
-_WATCH_TASKS: set[asyncio.Task] = set()  # referências fortes: o loop só guarda referência fraca das tarefas
+def _pool_watch_tasks(pool) -> set[asyncio.Task]:
+    """Conjunto de tarefas de acompanhamento do auxiliar no ``pool`` (criado sob demanda em fakes sem ``__init__``)."""
+    tasks = getattr(pool, "helper_watch_tasks", None)
+    if not isinstance(tasks, set):
+        tasks = set(tasks) if tasks else set()
+        pool.helper_watch_tasks = tasks
+    return tasks
 
 
-def _finish_watch(task: asyncio.Task) -> None:
-    _WATCH_TASKS.discard(task)
+def _finish_watch(tasks: set[asyncio.Task], task: asyncio.Task) -> None:
+    tasks.discard(task)
     if not task.cancelled() and task.exception() is not None:
         logger.warning("update: o acompanhamento do auxiliar terminou com erro", exc_info=task.exception())
 
@@ -442,8 +454,8 @@ class Owner(commands.Cog):
         if not await self.bot.is_owner(ctx.author):
             raise GenericError("**Apenas meu(s) desenvolvedor(es) pode(m) atualizar o bot.**")
         pool = self.bot.pool
-        if pool.update_lock.locked() or read_pending(paths.get_runtime_dir(), time.time()) is not None:
-            raise GenericError("**Já há uma atualização em andamento.** Aguarde o aviso de conclusão.")
+        if pool.update_lock.locked():
+            raise self._in_progress_error()
 
         await pool.update_lock.acquire()
         handed_over = False  # a trava passa para a janela de confirmação, que a solta ao cancelar, expirar ou terminar
@@ -452,6 +464,10 @@ class Owner(commands.Cog):
                 await (
                     ctx.response.defer()
                 )  # a consulta ao remoto passa de 3 s; o botão do painel expiraria antes da resposta
+            if (pending := read_pending(paths.get_runtime_dir(), time.time())) is not None:
+                await self._resolve_stale_pending(
+                    ctx, pending
+                )  # recusa (GenericError) ou libera um pendente Docker parado
             mode = update_mode(self.bot.config, os.environ, paths.PROJECT_DIR)
             if mode == MODE_GIT:
                 handed_over, text = await self._offer_git_update(ctx)
@@ -463,6 +479,52 @@ class Owner(commands.Cog):
             if not handed_over:
                 self._release_update_lock()
         return text
+
+    @staticmethod
+    def _in_progress_error() -> GenericError:
+        return GenericError("**Já há uma atualização em andamento.** Aguarde o aviso de conclusão.")
+
+    async def _resolve_stale_pending(self, ctx, pending) -> None:
+        """Pendente existente: recusa, a não ser que seja um pendente Docker cujo auxiliar já parou (ou sumiu).
+
+        Só tenta resolver com ``status == "pending"`` e sem nenhum acompanhamento deste processo vivo: com ``ready`` quem
+        resolve é o aviso pós-boot (resolver aqui entregaria o resultado duas vezes). Auxiliar rodando ou proxy
+        inacessível: recusa. Parado ou ausente: conta o resultado da atualização anterior no canal, manda o log mascarado
+        por DM quando ela falhou, remove o auxiliar e só com a remoção confirmada apaga o pendente (D12).
+        """
+        socket = self.bot.config.get("UPDATE_PROXY_SOCKET")
+        watching = any(not task.done() for task in _pool_watch_tasks(self.bot.pool))
+        if pending.flow != "docker" or pending.status != "pending" or watching or not socket:
+            raise self._in_progress_error()
+        client = ProxyClient(socket)
+        try:
+            state = await client.helper_state()
+        except UpdateError:
+            raise self._in_progress_error() from None
+        if state is not None and state.running:
+            raise self._in_progress_error()
+        # Só ``exited`` tem código de saída de verdade: um auxiliar criado e nunca iniciado (created), morto (dead) ou em
+        # remoção também não roda, mas o ExitCode dele é 0 e não quer dizer "concluída".
+        finished = state is not None and state.status == "exited"
+        code = state.exit_code if finished else None
+        await self._say(
+            ctx, f"ℹ️ **Resultado da atualização anterior (para {pending.to_version}):** {describe_exit(code)}."
+        )
+        if finished and code != 0:
+            await send_helper_log(client, DiscordReport(self.bot, pending), pending, self.secret_values())
+        try:
+            await client.remove_helper()
+        except UpdateError:
+            raise self._in_progress_error() from None
+        clear_pending(paths.get_runtime_dir())
+
+    async def _say(self, ctx, text: str) -> None:
+        """Mensagem solta no canal do comando (no painel, só para quem clicou)."""
+        embed = disnake.Embed(description=text, colour=self.bot.get_color())
+        if isinstance(ctx, CustomContext):
+            await ctx.send(embed=embed)
+        else:
+            await ctx.followup.send(embed=embed, ephemeral=True)
 
     async def _reply_update(self, ctx, text: str) -> Optional[str]:
         """No prefixo manda o embed e não devolve nada; no painel devolve o texto para o painel mostrar."""
@@ -576,11 +638,12 @@ class Owner(commands.Cog):
     def _watch_docker_update(self, client, pending) -> None:
         """Acompanha o auxiliar em segundo plano enquanto este processo viver (a tarefa não é cancelada por quem confirmou)."""
         report = DiscordReport(self.bot, pending)
+        tasks = _pool_watch_tasks(self.bot.pool)
         watcher = asyncio.create_task(
             watch_helper(client, pending, paths.get_runtime_dir(), report, secrets=self.secret_values())
         )
-        _WATCH_TASKS.add(watcher)
-        watcher.add_done_callback(_finish_watch)
+        tasks.add(watcher)
+        watcher.add_done_callback(partial(_finish_watch, tasks))
 
     async def _offer_git_update(self, ctx) -> tuple[bool, Optional[str]]:
         """Planeja e pede a confirmação. Devolve ``(trava_entregue, texto)``; a trava só é entregue se a janela foi enviada."""
