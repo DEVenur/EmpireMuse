@@ -32,6 +32,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
 
 ### Segurança
+- **Last.FM sobre HTTPS (S-30)**: as chamadas à API e o link de autorização passam a usar HTTPS, as credenciais vão no corpo do POST e os erros de rede do Last.FM são registrados sem a URL.
 - **Logs sem cabeçalhos de requisição (S-28)**: erros de conexão e de busca no Lavalink, Spotify e Deezer passam a registrar só o status HTTP ou o tipo do erro, sem os cabeçalhos da requisição (que incluíam a senha do Lavalink).
 - **`pip` removido da imagem de runtime** (Dockerfile do EmpireMuse): menos superfície no contêiner final. Quem instala pacotes em runtime (como `jsk pip` com `ENABLE_JISHAKU=true`) deixa de poder fazê-lo; a produção roda com o jishaku desligado.
 - **`.gitleaksignore`**: registra as impressões digitais de achados já auditados e sem segredo (cliente OAuth público do YouTube TV, senha publicada de um nó Lavalink público, fixture falso de teste e um modelo `.env-example` antigo), para `gitleaks git` e `gitleaks dir` ficarem limpos.
