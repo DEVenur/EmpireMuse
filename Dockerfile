@@ -153,6 +153,10 @@ RUN chmod -R a+rX /app
 # O runtime opera a partir do volume /data para que arquivos em cwd caiam em /data
 WORKDIR /data
 
+# Versão do bot dentro da imagem (X.Y.Z); o release.yml passa a da tag. "dev" é a imagem montada à mão, sem versão.
+# Declarado aqui, depois dos RUN, para uma versão nova não invalidar o cache das camadas acima.
+ARG EMPIREMUSE_VERSION=dev
+
 # Variáveis de ambiente operacionais do container
 ENV PATH="/opt/venv/bin:/opt/java/openjdk/bin:$PATH" \
     PYTHONPATH=/app \
@@ -164,14 +168,19 @@ ENV PATH="/opt/venv/bin:/opt/java/openjdk/bin:$PATH" \
     LAVALINK_HOME=/opt/lavalink \
     PORT=6000 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    EMPIREMUSE_VERSION=${EMPIREMUSE_VERSION} \
+    EMPIREMUSE_HEALTH_FILE=/tmp/empiremuse.health \
+    PYTHONSAFEPATH=1
 
 USER 10001:10001
 VOLUME ["/data"]
 EXPOSE 6000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, sys, urllib.request; sys.exit(0) if os.environ.get('RUN_RPC_SERVER', '').lower() != 'true' else urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '6000') + '/', timeout=4)" || exit 1
+# Saúde por heartbeat: o bot só renova o arquivo com todos os bots prontos e, havendo nós, ao menos um disponível
+# (empiremuse/health.py). O PYTHONSAFEPATH impede o "-m" de pôr o cwd (/data, gravável) no topo do sys.path.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=180s --start-interval=5s --retries=3 \
+    CMD ["python", "-m", "empiremuse.health"]
 
 ENTRYPOINT ["tini", "--"]
 CMD ["python", "-m", "empiremuse"]

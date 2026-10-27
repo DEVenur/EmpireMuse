@@ -18,6 +18,13 @@ jobs:
     name: Verificar se tag pertence a origin/main
     runs-on: ubuntu-latest
     steps:
+      - name: Validar o formato da tag
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Tag fora do formato vX.Y.Z[-rc.N]; nada é publicado."
+            exit 1
+          fi
+
       - name: Checkout do repositório
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,6 +76,11 @@ jobs:
       - verify-tag
       - verify-ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest: ${{ steps.digest.outputs.value }}
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,7 +111,23 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
 
+      - name: Recusar tag cuja imagem já foi publicada
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          # Reexecutar o job de uma tag publicada reconstruiria a imagem com outro digest e republicaria as tags,
+          # enquanto o image-digest.txt (imutável) guarda o digest antigo.
+          if out=$(docker buildx imagetools inspect "or4cu1o/empiremuse:${VERSION}" 2>&1); then
+            echo "::error::A imagem or4cu1o/empiremuse:${VERSION} já existe; uma versão publicada nunca é reconstruída."
+            exit 1
+          fi
+          if ! grep -qiE 'not found|manifest unknown|no such manifest' <<< "$out"; then
+            echo "::error::Não foi possível confirmar que a tag está livre: $out"
+            exit 1
+          fi
+
       - name: Build e push da imagem Docker
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -107,7 +135,91 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            EMPIREMUSE_VERSION=${{ steps.meta.outputs.version }}
           sbom: true
           provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Validar o digest publicado
+        id: digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Digest inválido devolvido pelo build."
+            exit 1
+          fi
+          echo "value=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Instalar o cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Assinar a imagem (cosign keyless)
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+        run: cosign sign --yes "or4cu1o/empiremuse@${DIGEST}"
+
+      - name: Verificar a assinatura (identidade deste workflow)
+        env:
+          DIGEST: ${{ steps.digest.outputs.value }}
+          IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+        run: |
+          cosign verify \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "$IDENTITY" \
+            "or4cu1o/empiremuse@${DIGEST}" > /dev/null
+
+  github-release:
+    name: Criar a GitHub Release com o digest
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Criar a release com notas e image-digest.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DIGEST: ${{ needs.docker.outputs.digest }}
+        run: |
+          if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Digest ausente ou inválido."
+            exit 1
+          fi
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Tag fora do formato vX.Y.Z[-rc.N]."
+            exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          PRERELEASE_FLAG=()
+          if [ -n "${BASH_REMATCH[2]}" ]; then
+            PRERELEASE_FLAG=(--prerelease)
+          fi
+          # Notas = seção "## [X.Y.Z]" do CHANGELOG.md, até a próxima seção "## [".
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            if [ ${#PRERELEASE_FLAG[@]} -eq 0 ]; then
+              echo "::error::O CHANGELOG.md não tem a seção [$VERSION]."
+              exit 1
+            fi
+            echo "Release candidate $GITHUB_REF_NAME." > notes.md
+          fi
+          printf '%s\n' "$DIGEST" > image-digest.txt
+          gh release create "$GITHUB_REF_NAME" image-digest.txt \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            "${PRERELEASE_FLAG[@]}"

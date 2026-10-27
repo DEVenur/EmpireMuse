@@ -281,6 +281,7 @@ def pool_para_shutdown(*bots):
     pool.lavalink_instance = FakeJava()
     pool.bots = list(bots)
     pool.guild_bots = {}
+    pool.heartbeat_task = None
     return pool
 
 

@@ -9,6 +9,7 @@ import logging
 import os
 import subprocess
 import threading
+import time
 import traceback
 from asyncio import get_running_loop
 from functools import partial
@@ -33,6 +34,13 @@ import empiremuse.wavelink as wavelink
 from empiremuse.serialization.cache import PLAYLIST_MAX_BYTES
 from empiremuse import paths
 from empiremuse.config_loader import load_config, resolve_port
+from empiremuse.health import (
+    HEALTH_FILE_ENV,
+    HEARTBEAT_INTERVAL,
+    clear_heartbeat,
+    is_healthy,
+    write_heartbeat,
+)
 from empiremuse.rules.git_remote import parse_remote_web_url
 from empiremuse.utils import branding
 from empiremuse.utils.file_log import build_file_log_handler
@@ -175,6 +183,8 @@ class BotPool:
         self.default_controllerless_skin = self.config.get("DEFAULT_CONTROLLERLESS_SKIN", "default")
         self.default_idling_skin = self.config.get("DEFAULT_IDLING_SKIN", "default")
         self.cache_updater_task: Optional[asyncio.Task] = None
+        self.heartbeat_task: Optional[asyncio.Task] = None
+        self.nodes_expected = False  # vira True quando o pool configura ao menos um nó (local ou da lista)
         self.lyric_data_cache = TTLCache(maxsize=30000, ttl=600 * 10)
         self.ytdl = CustomYTDL(
             {
@@ -228,6 +238,38 @@ class BotPool:
                 )
             except OSError as e:
                 logger.warning("Cache de playlists não gravado: %s", type(e).__name__)
+
+    def pool_is_healthy(self) -> bool:
+        """Bots ativos todos prontos e, havendo nós configurados, ao menos um nó disponível em qualquer bot."""
+        nodes_available = sum(
+            1 for bot in self.get_all_bots() for node in bot.music.nodes.values() if node.is_available
+        )
+        return is_healthy([bot.bot_ready for bot in self.bots], self.nodes_expected, nodes_available)
+
+    def start_heartbeat(self) -> None:
+        """Com ``EMPIREMUSE_HEALTH_FILE`` definida: apaga o heartbeat herdado (se não conseguir, encerra) e inicia a tarefa que o renova."""
+        path = os.environ.get(HEALTH_FILE_ENV)
+        if not path:
+            return
+        try:
+            clear_heartbeat(path)
+        except OSError as e:
+            # Falha fechada: um heartbeat herdado com menos de 60 s passaria no HEALTHCHECK antes de qualquer bot ficar pronto.
+            raise SystemExit(
+                f"Não foi possível apagar o heartbeat anterior ({path}): {e.strerror}. "
+                "Corrija as permissões do arquivo ou da pasta, ou apague-o à mão."
+            ) from e
+        self.heartbeat_task = self.loop.create_task(self.heartbeat_loop(path))
+
+    async def heartbeat_loop(self, path: str, *, clock=time.time, sleep=asyncio.sleep):
+        """Renova o heartbeat a cada ``HEARTBEAT_INTERVAL`` s, só com o pool saudável (o relógio e o sleep são injetáveis)."""
+        while True:
+            if self.pool_is_healthy():
+                try:
+                    await asyncio.to_thread(write_heartbeat, path, clock())
+                except OSError as e:
+                    logger.warning("Heartbeat não gravado: %s", type(e).__name__)
+            await sleep(HEARTBEAT_INTERVAL)
 
     async def connect_lavalink_queue_task(self, identifier: str):
         delay_secs = int(self.config.get("LAVALINK_QUEUE_DELAY", 1.5))
@@ -419,6 +461,8 @@ class BotPool:
     async def shutdown(self, exit_code: int = 1):
         self.exit_code = exit_code
         self.killing_state = True
+        if self.heartbeat_task:  # encerrando: o container não deve mais parecer saudável
+            self.heartbeat_task.cancel()
         for bot in self.get_all_bots():
             try:
                 if not bot.is_closed():
@@ -533,6 +577,8 @@ class BotPool:
             await asyncio.sleep(1)
 
     def node_check(self, lavalink_servers: dict, start_local=True):
+        self.nodes_expected = bool(start_local or lavalink_servers)
+
         if start_local and "LOCAL" not in lavalink_servers:
             localnode = {
                 "host": "127.0.0.1",
@@ -1068,6 +1114,8 @@ class BotPool:
         else:
             self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
+
+        self.start_heartbeat()
 
         for k, v in all_tokens.items():
             load_bot(k, v, load_modules_log=load_modules_log)

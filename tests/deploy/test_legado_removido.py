@@ -23,6 +23,7 @@ class TestDeployLegadoD1:
         pool.killing_state = False
         pool.lavalink_instance = MagicMock()
         pool.lavalink_instance.kill.side_effect = RuntimeError("falha lavalink")
+        pool.heartbeat_task = None
 
         bot_falho = AsyncMock()
         bot_falho.identifier = "bot_1"
