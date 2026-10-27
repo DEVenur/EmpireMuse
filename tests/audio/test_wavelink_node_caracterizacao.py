@@ -401,7 +401,7 @@ class TestBuildTrack:
             run(node.build_track("ENC"))
 
 
-class TestLyricsAndPotoken:
+class TestLyrics:
     def test_lyrics_require_the_plugin(self):
         node = make_node()
         node.info["plugins"] = {}
@@ -418,33 +418,6 @@ class TestLyricsAndPotoken:
         node.info["plugins"] = {"lyrics": "1"}
         with pytest.raises(RuntimeError):
             run(node.fetch_ytm_lyrics("abc"))
-
-    def test_refresh_potoken_posts_the_generated_tokens(self, monkeypatch):
-        class Navegador:
-            def __init__(self):
-                self.data = {"po_token": "PO", "visitor_data": "VD"}
-
-            async def start(self, **kwargs):
-                self.kwargs = kwargs
-
-        monkeypatch.setattr(node_module, "Browser", Navegador)
-        node = make_node(Resposta(status=204, text="feito"))
-        node._websocket = SimpleNamespace(headers={"H": "1"})
-        node._client.bot.config = {"POTOKEN_YTID": "abcdefghijk"}
-        assert run(node.refresh_potoken()) == "204: feito"
-        assert node.session.chamadas[0][2]["json"] == {"poToken": "PO", "visitorData": "VD"}
-
-    def test_refresh_potoken_reraises_when_the_browser_produced_nothing(self, monkeypatch):
-        class Navegador:
-            data = None
-
-            async def start(self, **kwargs):
-                raise RuntimeError("sem navegador")
-
-        monkeypatch.setattr(node_module, "Browser", Navegador)
-        node = make_node()
-        with pytest.raises(RuntimeError, match="sem navegador"):
-            run(node.refresh_potoken())
 
 
 # ============================================================================ eventos e ciclo de vida

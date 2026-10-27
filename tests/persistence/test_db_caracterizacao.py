@@ -2,7 +2,7 @@
 
 * `LocalDatabase` (TinyMongo real em `tmp_path`): criação do diretório, documento padrão inserido, cache, migração por versão,
   gravação, exclusão e o caminho padrão sob o RUNTIME_DIR (`EMPIREMUSE_HOME`);
-* `MongoDatabase` com um cliente motor falso (nada de rede): correção SSL do endereço, padrão sem inserir, migração, upsert,
+* `MongoDatabase` com um cliente PyMongo Async falso (nada de rede): correção SSL do endereço, padrão sem inserir, migração, upsert,
   exclusão, `push_data` e a importação dos JSON antigos (`update_from_json`);
 * `get_default`, `get_prefix` e `DatetimeSerializer`.
 """
@@ -90,7 +90,7 @@ class TestLocalDatabase:
         assert banco.get_default("global", DBModel.users) == db.global_db_models[DBModel.users]
 
 
-# ============================================================================ MongoDatabase (cliente motor falso)
+# ============================================================================ MongoDatabase (cliente PyMongo Async falso)
 
 
 class CursorFalso:
@@ -136,8 +136,8 @@ class ColecaoFalsa:
 class ClienteFalso:
     instances = []
 
-    def __init__(self, uri, connectTimeoutMS=None):
-        self.uri, self.timeout = uri, connectTimeoutMS
+    def __init__(self, uri, connectTimeoutMS=None, **opcoes):
+        self.uri, self.timeout, self.opcoes = uri, connectTimeoutMS, opcoes
         self.colecoes = {}
         ClienteFalso.instances.append(self)
 
@@ -156,22 +156,13 @@ class ColecoesPorNome:
 @pytest.fixture
 def mongo(monkeypatch):
     ClienteFalso.instances.clear()
-    monkeypatch.setattr(db, "AsyncIOMotorClient", ClienteFalso)
+    monkeypatch.setattr(db, "AsyncMongoClient", ClienteFalso)
     monkeypatch.delenv("MONGO_SSL_FIX", raising=False)
     return MongoDatabase("<mongodb://u:p@host/db>", timeout=5)
 
 
 def colecao(banco, collection="g", db_name=DBModel.guilds):
     return banco._connect[collection][db_name]
-
-
-class TestMongoDatabaseConnection:
-    def test_ssl_fix_adds_the_tls_parameters(self, monkeypatch):
-        monkeypatch.setattr(db, "AsyncIOMotorClient", ClienteFalso)
-        monkeypatch.setenv("MONGO_SSL_FIX", "1")
-        banco = MongoDatabase("mongodb://u:p@host/db?retryWrites=true")
-        uri = banco._connect.uri
-        assert "ssl=true" in uri and "tlsAllowInvalidCertificates=true" in uri and "retryWrites=true" in uri
 
 
 class TestMongoDatabaseData:

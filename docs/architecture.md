@@ -16,7 +16,7 @@ flowchart LR
     pool --> b1["BotCore #1<br/>(token A)"]
     pool --> b2["BotCore #2<br/>(token B)"]
     pool --> web["empiremuse/web_app.py<br/>tornado: /, /ws e /painel"]
-    pool --> db[("MongoDB (motor)<br/>ou TinyMongo local")]
+    pool --> db[("MongoDB (PyMongo Async)<br/>ou TinyMongo local")]
     b1 & b2 --> cogs["empiremuse/cogs/*.py<br/>(cogs)"]
     cogs --> req["empiremuse/utils/music/request_channel.py<br/>(setup e reset de canal)"]
     cogs --> rules["empiremuse/rules/<br/>(regras puras: só stdlib)"]
@@ -305,13 +305,13 @@ O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhad
 Auxiliar em `empiremuse/utils/music/user_limits.py`: cálculo de cota do usuário no bot (`quota_for`) integrando configurações do pool (`MAX_USER_FAVS`, `MAX_USER_INTEGRATIONS`), isenção do dono e texto padronizado de erro para o botão de favoritar (`track_fav_error_text`).
 
 **Direção de dependências e isolamento arquitetural**:
-1. O pacote `empiremuse/rules/` utiliza **exclusivamente a biblioteca padrão** do Python (sem dependência de `disnake`, `tornado`, `motor` ou outros módulos da aplicação);
+1. O pacote `empiremuse/rules/` utiliza **exclusivamente a biblioteca padrão** do Python (sem dependência de `disnake`, `tornado`, `pymongo` ou outros módulos da aplicação);
 2. Tanto o código do bot (`cogs` e `utils`) quanto o painel web (`panel/services`) importam diretamente de `empiremuse/rules/`;
 3. **O código de regras e os módulos do bot (`utils` e `cogs`) não importam `empiremuse.panel`**: o processo do bot inicializa o servidor web e o painel (`empiremuse/web_app.py`), mas a lógica de comandos, regras e componentes de interface do bot não dependem do painel (garantido por testes de AST e ausência de módulos do painel em `sys.modules` ao importar o bot, validados em `tests/rules/test_camadas.py`). Com a unificação completa das regras no PR 2, todas as reexportações transitórias em `empiremuse/panel/services/` foram eliminadas.
 
 ## 8. Persistência
 
-**Backends** (`empiremuse/utils/db.py`): `MongoDatabase` (motor, `empiremuse/utils/db.py`) ou `LocalDatabase` (TinyMongo em
+**Backends** (`empiremuse/utils/db.py`): `MongoDatabase` (PyMongo Async, `AsyncMongoClient`, `empiremuse/utils/db.py`) ou `LocalDatabase` (TinyMongo em
 `RUNTIME_DIR / "local_database"`, `empiremuse/utils/db.py`), ambos com cache TTL (`DBCACHE_SIZE`/`DBCACHE_TTL`). O acesso passa por
 `BotCore.get_data/update_data` (coleção = id do bot) e `BotCore.get_global_data/update_global_data` (coleção
 `global`) em `empiremuse/utils/client.py`.
@@ -367,7 +367,7 @@ Outros arquivos locais: `.app_commands_sync_data/<id>.json` (hash dos comandos j
 | **Deezer** | `empiremuse/utils/music/audio_sources/deezer.py` | API pública sem credenciais; metadados. |
 | **Last.fm** | `empiremuse/utils/music/lastfm_tools.py`, `empiremuse/cogs/lastfm.py` | Scrobble e perfil; exige `LASTFM_KEY/SECRET`. |
 | **YouTube / SoundCloud (yt-dlp)** | `CustomYTDL` (`empiremuse/utils/music/models/helpers.py`), `BotPool.__init__` em `empiremuse/utils/client.py` | `allowed_extractors` restrito a YouTube/SoundCloud no pool; extração sem download. |
-| **YouTube OAuth / PoToken** | `empiremuse/cogs/ll_yt_oauth.py`, `Node.refresh_potoken` em `empiremuse/wavelink/node.py`, `empiremuse/utils/music/youtube_trusted_session_generator.py` | Autenticação do plugin `youtube-plugin` do Lavalink e geração de `poToken` (`nodriver`). |
+| **YouTube OAuth** | `empiremuse/cogs/ll_yt_oauth.py` | Autenticação do plugin `youtube-plugin` do Lavalink. A geração de `poToken` (`nodriver`, `Node.refresh_potoken`) foi removida. |
 | **Discord** | `disnake` (2.12.2 do PyPI, `requirements.txt:1`) | Slash/prefix/menus de contexto; `AutoShardedBot`. |
 
 ## 10. Módulos → responsabilidade → tamanho

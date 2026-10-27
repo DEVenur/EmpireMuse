@@ -28,14 +28,12 @@ import json
 import logging
 import os
 import re
-import traceback
 from typing import Any, Callable, Dict, Optional, Union
 from urllib.parse import quote
 
 from rapidfuzz import fuzz
 
 from empiremuse.rules.title_match import title_matches
-from empiremuse.utils.music.youtube_trusted_session_generator import Browser
 from .backoff import ExponentialBackoff
 from .errors import *
 from .player import Player, Track, TrackPlaylist
@@ -267,29 +265,6 @@ class Node:
         self._is_connecting = False
 
         __log__.info(f"NODE | {self.identifier} connected:: {self.__repr__()}")
-
-    async def refresh_potoken(self, sandbox=True, browser_executable_path=None):
-        browser = Browser()
-
-        try:
-            ytid = self._client.bot.config["POTOKEN_YTID"]
-        except Exception:
-            ytid = "jNQXAC9IVRw"
-
-        try:
-            await browser.start(sandbox=sandbox, browser_executable_path=browser_executable_path, ytid=ytid)
-        except Exception as e:
-            if not browser.data:
-                raise e
-            else:
-                traceback.print_exc()
-
-        async with self.session.post(
-            url=f"{self.rest_uri}/youtube",
-            json={"poToken": browser.data["po_token"], "visitorData": browser.data["visitor_data"]},
-            headers=self._websocket.headers,
-        ) as r:
-            return f"{r.status}: {await r.text()}"
 
     async def update_player(self, guild_id: int, data: dict, replace: bool = False):
         if not self.session_id:

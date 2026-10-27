@@ -1,7 +1,7 @@
 """F3-5b — teste de arquitetura por ``ast``: a direção das dependências entre as camadas.
 
 * ``empiremuse/rules/**`` só importa a biblioteca padrão (e os próprios módulos de ``empiremuse.rules``): sem
-  ``disnake``, ``tornado``, ``motor`` nem qualquer outro módulo do projeto.
+  ``disnake``, ``tornado``, ``pymongo`` nem qualquer outro módulo do projeto.
 * ``empiremuse/utils/**`` e ``empiremuse/cogs/**`` não importam ``empiremuse.panel`` (o painel pode importar o bot, o
   bot não pode importar o painel).
 
