@@ -247,14 +247,18 @@ class BotPool:
         return is_healthy([bot.bot_ready for bot in self.bots], self.nodes_expected, nodes_available)
 
     def start_heartbeat(self) -> None:
-        """Com ``EMPIREMUSE_HEALTH_FILE`` definida: apaga o heartbeat herdado e inicia a tarefa que o renova."""
+        """Com ``EMPIREMUSE_HEALTH_FILE`` definida: apaga o heartbeat herdado (se não conseguir, encerra) e inicia a tarefa que o renova."""
         path = os.environ.get(HEALTH_FILE_ENV)
         if not path:
             return
         try:
             clear_heartbeat(path)
         except OSError as e:
-            logger.warning("Heartbeat anterior não apagado: %s", type(e).__name__)
+            # Falha fechada: um heartbeat herdado com menos de 60 s passaria no HEALTHCHECK antes de qualquer bot ficar pronto.
+            raise SystemExit(
+                f"Não foi possível apagar o heartbeat anterior ({path}): {e.strerror}. "
+                "Corrija as permissões do arquivo ou da pasta, ou apague-o à mão."
+            ) from e
         self.heartbeat_task = self.loop.create_task(self.heartbeat_loop(path))
 
     async def heartbeat_loop(self, path: str, *, clock=time.time, sleep=asyncio.sleep):
