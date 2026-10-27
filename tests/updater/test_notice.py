@@ -1,4 +1,4 @@
-"""A15 (item 18, P2) — ``deliver_update_notice(pool, *, runtime_dir, now, detect_version)``: o aviso pós-boot do update.
+"""A15/A14b (item 18, P2) — ``deliver_update_notice`` e ``on_pool_ready`` (decisão F3): o aviso pós-boot do update.
 
 Entregue uma única vez, pelo bot certo (``bot_id`` pronto), no canal de origem, com o DM a quem pediu como fallback, sem menções e sem
 sobrar pendente; pendente com mais de 24 h é descartado. Bots, canais e usuários são fakes; o relógio e a versão detectada são injetados.
@@ -13,7 +13,10 @@ import pytest
 
 from empiremuse import paths
 from empiremuse.rules.release import Version
-from empiremuse.updater.notice import deliver_update_notice
+import json
+
+from empiremuse.updater import boot_guard
+from empiremuse.updater.notice import deliver_update_notice, on_pool_ready
 from empiremuse.updater.state import PendingUpdate, pending_path, write_pending
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -59,8 +62,8 @@ def bot_falso(identificador=BOT_ID, pronto=True, canal=True, usuario=True):
     return bot
 
 
-def pool_com(*bots):
-    return SimpleNamespace(get_all_bots=lambda: list(bots))
+def pool_com(*bots, saudavel=True):
+    return SimpleNamespace(bots=list(bots), get_all_bots=lambda: list(bots), pool_is_healthy=lambda: saudavel)
 
 
 @pytest.fixture
@@ -175,20 +178,24 @@ async def test_without_channel_and_dm_it_only_logs_and_does_not_keep_the_pending
     assert "novidade" not in caplog.text and "Atualizado" not in caplog.text
 
 
-@pytest.mark.parametrize(
-    "bots",
-    [(), ("pronto-de-outro",), ("nao-pronto",)],
-    ids=["sem-bots", "so-outro-bot", "bot-certo-ainda-nao-pronto"],
-)
-async def test_nothing_is_delivered_or_consumed_until_the_requesting_bot_is_ready(runtime, bots):
-    mapa = {"pronto-de-outro": bot_falso(identificador=999), "nao-pronto": bot_falso(pronto=False)}
-    pool = pool_com(*(mapa[b] for b in bots))
+async def test_without_any_bot_nothing_is_delivered_or_consumed(runtime):
     write_pending(runtime, pendente())
 
-    await entregar(pool, runtime, PARA)
+    await entregar(pool_com(), runtime, PARA)
 
     assert pending_path(runtime).exists()
-    assert all(b.canal.send.await_count == 0 and b.usuario.send.await_count == 0 for b in mapa.values())
+
+
+async def test_when_the_requesting_bot_is_gone_another_ready_bot_delivers(runtime):
+    """F3: o bot que pediu pode ter falhado na subida (token inválido); outro bot pronto do pool entrega no mesmo canal."""
+    outro = bot_falso(identificador=999)
+    write_pending(runtime, pendente())
+
+    await entregar(pool_com(outro), runtime, PARA)
+
+    outro.canal.send.assert_awaited_once()
+    outro.get_channel.assert_called_once_with(CANAL)
+    assert not pending_path(runtime).exists()
 
 
 async def test_a_pending_update_older_than_24_hours_is_dropped_without_a_notice(runtime):
@@ -207,3 +214,106 @@ async def test_without_a_pending_update_nothing_happens(runtime):
     await entregar(pool_com(bot), runtime, PARA)
 
     bot.canal.send.assert_not_awaited()
+
+
+# ============================================================================ A14b — on_pool_ready (F3)
+
+
+def ao_ficar_pronto(pool, runtime, versao=PARA):
+    async def detectar(pendente_lido):
+        return versao
+
+    return on_pool_ready(pool, runtime_dir=runtime, now=lambda: AGORA, detect_version=detectar)
+
+
+def espiar_estado_no_envio(bot, runtime):
+    """Registra o ``status`` do arquivo pendente (ou ``None`` se não existe) no instante do envio ao canal."""
+    estados = []
+    original = bot.canal.send
+
+    async def enviar(*args, **kwargs):
+        arquivo = pending_path(runtime)
+        estados.append(json.loads(arquivo.read_text())["status"] if arquivo.exists() else None)
+        return await original(*args, **kwargs)
+
+    bot.canal.send = enviar
+    return estados
+
+
+async def test_with_the_requesting_bot_outside_the_pool_another_ready_bot_sends_once_after_marking_ready(runtime):
+    outro, terceiro = bot_falso(identificador=999), bot_falso(identificador=998)
+    pool = pool_com(outro, terceiro)  # o bot 111 (token que falhou) não está em pool.bots
+    write_pending(runtime, pendente(boots=2))
+    original = outro.canal.send
+    estados = espiar_estado_no_envio(outro, runtime)
+
+    await ao_ficar_pronto(pool, runtime)
+
+    assert len(estados) == 1 and estados[0] != "pending"  # nunca enviado com o pendente ainda como 'pending'
+    original.assert_awaited_once()
+    assert terceiro.canal.send.await_count == 0 and terceiro.usuario.send.await_count == 0
+    assert not pending_path(runtime).exists()
+
+
+async def test_the_pending_is_marked_ready_before_any_send(runtime):
+    outro = bot_falso(identificador=999)
+    write_pending(runtime, pendente(boots=2))
+    visto = []
+
+    async def enviar(*args, **kwargs):
+        visto.append(
+            json.loads(pending_path(runtime).read_text())["status"] if pending_path(runtime).exists() else "apagado"
+        )
+
+    outro.canal.send = enviar
+
+    await ao_ficar_pronto(pool_com(outro), runtime)
+
+    assert visto and visto[0] in ("ready", "apagado")
+
+
+async def test_without_the_channel_the_dm_goes_through_the_same_other_bot_once(runtime):
+    outro = bot_falso(identificador=999, canal=False)
+    write_pending(runtime, pendente())
+
+    await ao_ficar_pronto(pool_com(outro), runtime)
+
+    outro.canal.send.assert_not_awaited()
+    outro.usuario.send.assert_awaited_once()
+    assert sem_mencoes(outro.usuario.send.await_args)
+
+
+async def test_the_guard_after_a_ready_pool_neither_counts_nor_reverts(runtime):
+    outro = bot_falso(identificador=999)
+    write_pending(runtime, pendente(boots=2))
+    await ao_ficar_pronto(pool_com(outro), runtime)
+    chamadas = []
+
+    async def runner(*args, **kwargs):
+        chamadas.append(args)
+
+    boot_guard.run(runtime, runtime, AGORA, runner=runner)  # não levanta SystemExit
+
+    assert chamadas == []
+
+
+async def test_an_unhealthy_pool_changes_nothing_and_sends_nothing(runtime):
+    outro = bot_falso(identificador=999)
+    write_pending(runtime, pendente(boots=1))
+    antes = pending_path(runtime).read_bytes()
+
+    await ao_ficar_pronto(pool_com(outro, saudavel=False), runtime)
+
+    assert pending_path(runtime).read_bytes() == antes
+    assert outro.canal.send.await_count == 0 and outro.usuario.send.await_count == 0
+
+
+async def test_calling_on_pool_ready_twice_sends_only_once(runtime):
+    outro = bot_falso(identificador=999)
+    write_pending(runtime, pendente())
+    pool = pool_com(outro)
+
+    await ao_ficar_pronto(pool, runtime)
+    await ao_ficar_pronto(pool, runtime)
+
+    outro.canal.send.assert_awaited_once()

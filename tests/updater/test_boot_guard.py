@@ -147,3 +147,18 @@ def test_a_pending_update_older_than_a_day_is_discarded_without_rolling_back(mun
     guardar(mundo, gravador)
 
     assert not pending_path(runtime).exists() and gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("status", ["ready", "rolled_back"])
+def test_a_pending_update_already_ready_or_rolled_back_is_left_untouched(mundo, status):
+    """``ready`` = a subida deu certo (a guarda para de contar); ``rolled_back`` já foi revertido: nenhum dos dois conta nem reverte de novo."""
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=2, status=status))
+    antes = pending_path(runtime).read_bytes()
+    head = git(repo, "rev-parse", "HEAD")
+    gravador = Gravador()
+
+    guardar(mundo, gravador)
+
+    assert pending_path(runtime).read_bytes() == antes and gravador.chamadas == []
+    assert git(repo, "rev-parse", "HEAD") == head
