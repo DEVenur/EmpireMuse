@@ -15,6 +15,7 @@ from empiremuse.utils.music.checks import (
     has_player,
     is_dj,
 )
+from empiremuse.utils.music.converters import md_code
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -66,7 +67,7 @@ class NodesMixin:
         player.native_yt = True
 
         embed = disnake.Embed(
-            description=f"**O player foi migrado para o servidor de música:** `{node}`",
+            description=f"**O player foi migrado para o servidor de música:** {md_code(node)}",
             color=self.bot.get_color(player.guild.me),
         )
 

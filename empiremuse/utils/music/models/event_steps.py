@@ -257,7 +257,7 @@ def _he_exception_embed(self, event, track):
     embed = disnake.Embed(
         description=f"**Falha ao reproduzir música{' (parcial)' if isinstance(track, PartialTrack) else ''}:\n{md_link(track.title, track.uri or track.search_uri, code=False)}**\n"
         f"**Motivo:** {lavalink_text(event.message)}\n"
-        f"**Nível:** `{event.severity}`\n"
+        f"**Nível:** {md_code(event.severity)}\n"
         f"**Servidor de música:** {node_info}{code_suffix(error_code)}",
         color=disnake.Colour.red(),
     )
