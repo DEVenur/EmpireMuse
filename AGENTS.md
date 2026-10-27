@@ -29,7 +29,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/config_loader.py`: Carregamento, tipagem e precedência de configurações (`DEFAULT_CONFIG`, `.env`, `config.json`).
 - `empiremuse/web_app.py`: Servidor HTTP Tornado para página de status e relé WebSocket do RPC (Rich Presence).
 - `empiremuse/utils/client.py`: Classes centrais `BotPool` (gestão multi-bot, nós de áudio) e `BotCore` (bot disnake).
-- `empiremuse/utils/db.py`: Camada de persistência (`MongoDatabase` via motor e `LocalDatabase` via TinyMongo).
+- `empiremuse/utils/db.py`: Camada de persistência (`MongoDatabase` via PyMongo Async e `LocalDatabase` via TinyMongo).
 - `empiremuse/utils/others.py`: Decorador `pool_command`, classes de paginação, contexto e identificadores do controlador.
 - `empiremuse/utils/owner_panel.py`: Interface administrativa do dono do bot (`PanelView`).
 - `empiremuse/utils/music/models/`: Pacote dos modelos centrais de reprodução: `LavalinkPlayer` (`player.py` + mixins `player_*.py`), `LavalinkTrack`/`PartialTrack` (`tracks.py`) e auxiliares (`helpers.py`); o `__init__.py` reexporta os nomes públicos.

@@ -14,6 +14,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Compose de produção da VPS (`deploy/docker-compose.hostinger.yml` e `deploy/env.example.hostinger`)**: o compose de arquivo único usado na VPS da Hostinger (atrás do Traefik + Cloudflare) e o modelo do `.env` só com os segredos (valores vazios); ao usar, são renomeados para `docker-compose.yml` e `.env`.
 
 ### Alterado
+- **Driver do MongoDB: `motor` → PyMongo Async (item 6, fase S3)**: `MongoDatabase` passa a usar `pymongo.AsyncMongoClient` (API async GA do `pymongo>=4.13`); o contrato público (métodos, assinaturas e cache) não muda. `motor` sai do `requirements.txt` e dos locks. Documentação (`AGENTS.md`, `docs/architecture.md`) atualizada.
+- **Dependências atualizadas (item 6, fase S3)**: pacotes de produção e de desenvolvimento (incluindo `disnake`, `pytest`, `pytest-asyncio` e `pytest-cov`) no último release que o corte temporal permite, com os dois locks regerados com hashes e o corte único `--exclude-newer 2026-10-20T00:00:00Z`; os comandos de `ci.yml` e `docs/development.md` são idênticos aos cabeçalhos dos locks. A exceção de `setuptools` sai.
 - **Python 3.14 passa a ser o mínimo (mudança incompatível)**: o `ruff format` com alvo `py314` reescreveu `except (A, B):` como `except A, B:` (PEP 758) em 32 arquivos, então o código não importa mais no Python 3.13. Quem roda fora do Docker precisa do Python 3.14.
 - **Python 3.14 (item 6, fase S2)**: runtime e piso passam do 3.13 para o 3.14 na documentação (README, AGENTS.md, guias, templates do GitHub, descrição do egg) e no job `ci`; o `audioop-lts` segue condicionado ao 3.13+. Notas datadas nos ADR-0001 e ADR-0003.
 - **CI**: o uv passa a ser instalado com `--require-hashes` a partir de `.github/ci-uv-requirements.txt` (0.13.5, a mesma versão do Dockerfile), o novo job `ci-py315` roda a suíte no Python 3.15 sem bloquear o merge (`continue-on-error`).
@@ -22,10 +24,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
 
 ### Segurança
+- **`MONGO_SSL_FIX` com valor booleano estrito (CWE-295)**: antes qualquer valor não vazio desligava a validação do certificado TLS do MongoDB; agora só `true`, `1`, `yes` e `on` (sem diferenciar maiúsculas) a desligam, e vazio, ausente, `false` ou `0` validam. Com a validação desligada, o startup registra um WARNING (sem a URI). Mudança de comportamento para quem usava valores como `false` esperando o efeito oposto.
 - **Imagem Docker em Python 3.14.10 e uv 0.13.5**: a base `python:3.14-slim-trixie` fixada por digest e o uv 0.13.5 (corrige GHSA-hq85-5cpj-mr62), escolhido por estar fora da quarentena de 7 dias.
 - **Raízes emSign C1 e ECC C3 desconfiadas na imagem**: desativadas em `/etc/ca-certificates.conf` (a CA eMudhra foi removida do `certifi` 2026.10.23, mas o Debian ainda a confiava).
 
 ### Removido
+- **`nodriver` e o código morto que o usava (item 6, fase S3)**: saem o `nodriver`, `empiremuse/utils/music/youtube_trusted_session_generator.py`, o import em `wavelink/node.py`, `Node.refresh_potoken` e os testes `test_refresh_potoken_*`. Motivo de licença: o `nodriver` é AGPL-3.0 (0.32 e 0.50.x), incompatível com a GPL-2.0-only do projeto, e o único uso era código sem chamador em `empiremuse/`.
 - **Submódulos git** (`.gitmodules` e os links em `repos/`): `EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app` e `EmpireMuse-jishaku` passam a ser clones irmãos na raiz do workspace; ignores, workspace do VS Code, cobertura, `.coderabbit.yaml`, `AGENTS.md`, `docs/development.md`, ADR-0003 e o teste do RPC atualizados.
 - **Pesquisas da etapa P-0 do painel** (`docs/painel/pesquisa-backend.md`, `pesquisa-externa.md` e `pesquisa-frontend.md`), superadas pelo painel pronto e pelo ADR-0002.
 - **Regra `governanca-de-regras.md`** e a instrução correspondente no `.coderabbit.yaml`.
