@@ -10,7 +10,7 @@ import asyncio
 import os
 import sys
 from types import ModuleType
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -94,12 +94,15 @@ def pool(monkeypatch, tmp_path):
         return bot
 
     monkeypatch.setattr(client, "BotCore", bot_falso)
+    monkeypatch.setattr(client, "get_lavalink_servers", lambda: {})  # nunca baixa a lista de servidores
     pool = BotPool()
     for nome in ("run_bots", "setup_pool_extras", "cache_updater", "connect_rpc_ws"):
         setattr(pool, nome, AsyncMock())
     pool.node_check = MagicMock()
     pool.start_lavalink = AsyncMock()
-    return pool
+    # o setup escreve direto em os.environ (GIT_DIR, JISHAKU_*): o patch.dict desfaz tudo ao fim do teste
+    with patch.dict(os.environ):
+        yield pool
 
 
 def _setup_com_sistema(pool, monkeypatch, nome_do_sistema: str):
