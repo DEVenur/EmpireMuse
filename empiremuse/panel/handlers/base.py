@@ -117,9 +117,8 @@ class PanelResponseMixin:
             summary,
             f" [{code}]" if code else "",
             exc_info=(typ, value, tb),
-            extra={"error_code": code}
-            if code
-            else None,  # K15: o agregador usa o código para apontar o traceback já impresso
+            # K15: o agregador usa o código para apontar o traceback já impresso.
+            extra={"error_code": code} if code else None,
         )
 
     def set_default_headers(self) -> None:
