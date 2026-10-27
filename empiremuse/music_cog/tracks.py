@@ -8,6 +8,7 @@ import disnake
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.client import BotCore
+from empiremuse.utils.safe_error import safe_error
 from empiremuse.utils.music.audio_sources.spotify import spotify_link_regex, spotify_regex_w_user
 from empiremuse.utils.music.errors import (
     GenericError,
@@ -53,7 +54,7 @@ class TracksMixin:
                 )
             except Exception as e:
                 self.bot.dispatch("custom_error", ctx=ctx, error=e)
-                exceptions.add(repr(e))
+                exceptions.add(safe_error(e))
 
         if (
             not tracks
@@ -64,7 +65,7 @@ class TracksMixin:
                 tracks = await self.bot.pool.spotify.get_tracks(self.bot, user.id, query, search=True, check_title=80)
             except Exception as e:
                 self.bot.dispatch("custom_error", ctx=ctx, error=e)
-                exceptions.add(repr(e))
+                exceptions.add(safe_error(e))
 
         return tracks, node, exceptions
 
@@ -157,7 +158,7 @@ class TracksMixin:
 
                         except Exception as e:
                             self.bot.dispatch("custom_error", ctx=ctx, error=e)
-                            exceptions.add(repr(e))
+                            exceptions.add(safe_error(e))
                             continue
                     else:
                         search_query = f"{search_provider}:{query}"
@@ -172,7 +173,7 @@ class TracksMixin:
                     )
                 except Exception as e:
                     # traceback.print_exc()
-                    exceptions.add(repr(e))
+                    exceptions.add(safe_error(e))
 
                     if not isinstance(e, wavelink.TrackNotFound):
                         print(f"Falha ao processar busca...\n{query}\n{traceback.format_exc()}")

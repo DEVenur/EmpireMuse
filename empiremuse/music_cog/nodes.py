@@ -8,6 +8,7 @@ from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.client import BotCore
+from empiremuse.utils.safe_error import safe_error
 from empiremuse.utils.music.checks import (
     check_voice,
     has_player,
@@ -168,7 +169,7 @@ class NodesMixin:
                 await node._websocket._connect()
                 return
             except Exception as e:
-                error = repr(e)
+                error = safe_error(e)
 
             backoff *= 1.5
             if node.identifier != "LOCAL":

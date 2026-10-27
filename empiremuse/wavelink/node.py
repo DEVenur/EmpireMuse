@@ -34,6 +34,7 @@ from urllib.parse import quote
 from rapidfuzz import fuzz
 
 from empiremuse.rules.title_match import title_matches
+from empiremuse.utils.safe_error import safe_error
 from .backoff import ExponentialBackoff
 from .errors import *
 from .player import Player, Track, TrackPlaylist
@@ -229,7 +230,7 @@ class Node:
                         self._is_connecting = False
                         print(
                             f"❌ - {self._client.bot.user} - Falha ao conectar no servidor [{self.identifier}]."
-                            + (f"\nCausa: {repr(exception)}" if exception else "")
+                            + (f"\nCausa: {safe_error(exception)}" if exception else "")
                         )
                         return
                     exception = e
@@ -384,7 +385,9 @@ class Node:
                     try:
                         data = await resp.json()
                     except Exception as e:
-                        raise WavelinkException(f"{self.identifier}: Failed to parse json result. | Error: {repr(e)}")
+                        raise WavelinkException(
+                            f"{self.identifier}: Failed to parse json result. | Error: {safe_error(e)}"
+                        )
 
                     if isinstance(data, list):
                         return data
