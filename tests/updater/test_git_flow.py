@@ -206,6 +206,73 @@ def test_a_requires_python_above_the_interpreter_is_refused_before_any_checkout(
     assert head(local) == antes
 
 
+def retag(remoto: Path, arquivos: dict[str, str], mensagem: str = "2.1.0") -> None:
+    """Move a ``v2.1.0`` do remoto para um commit novo com ``arquivos`` e uma tag anotada com ``mensagem``."""
+    git(remoto, "tag", "-d", "v2.1.0")
+    commit(remoto, arquivos, "v2.1.0 refeita")
+    git(remoto, "tag", "-a", "v2.1.0", "-m", mensagem)
+
+
+def test_a_huge_changelog_with_the_target_section_on_top_still_yields_that_section(mundo):
+    remoto, local = mundo
+    antigas = "".join(f"## [1.{n}.0] - 2025-01-01\n" + "- item antigo\n" * 20 for n in range(500))
+    texto = (
+        "# Changelog\n\n## [2.1.0] - 2026-11-01\n- novidade da 2.1.0\n\n## [2.0.0] - 2026-09-01\n- base\n\n" + antigas
+    )
+    assert len(texto) > 100_000
+    retag(remoto, {"CHANGELOG.md": texto})
+
+    plano = planejar(remoto, local)
+
+    assert "novidade da 2.1.0" in plano.changelog and "item antigo" not in plano.changelog
+
+
+def test_a_requires_python_at_the_end_of_a_large_pyproject_is_still_checked(mundo):
+    remoto, local = mundo
+    enchimento = "".join(f"# linha de enchimento {n} {'x' * 60}\n" for n in range(100))
+    assert len(enchimento) > 4096
+    retag(remoto, {"pyproject.toml": '[project]\nname = "empiremuse"\n' + enchimento + 'requires-python = ">=99.0"\n'})
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
+def test_an_annotated_tag_with_a_five_kilobyte_message_is_accepted(mundo):
+    remoto, local = mundo
+    mensagem = "\n".join(f"nota {n:03d} " + "y" * 60 for n in range(90))
+    assert len(mensagem) > 5000
+    retag(remoto, {"app.txt": "v2.1.0 com tag grande\n"}, mensagem)
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)
+
+
+def test_a_tag_message_that_imitates_a_header_line_does_not_change_the_checked_header(mundo):
+    remoto, local = mundo
+    retag(remoto, {"app.txt": "v2.1.0 com isca\n"}, "introdução\ntag v9.9.9\nfim")
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)
+
+
+def test_a_tag_whose_header_names_another_tag_is_refused_even_if_the_message_says_its_name(mundo):
+    """``refs/tags/v2.1.0`` aponta para um objeto de tag cujo cabeçalho é ``tag outro-nome``; a mensagem repete ``tag v2.1.0`` de isca."""
+    remoto, local = mundo
+    git(remoto, "tag", "-d", "v2.1.0")
+    commit(remoto, {"app.txt": "v2.1.0 trocada\n"}, "v2.1.0 trocada")
+    git(remoto, "tag", "-a", "outro-nome", "-m", "isca\ntag v2.1.0\nfim")
+    objeto = git(remoto, "rev-parse", "refs/tags/outro-nome")
+    git(remoto, "update-ref", "refs/tags/v2.1.0", objeto)
+    git(remoto, "tag", "-d", "outro-nome")
+    antes = head(local)
+
+    with pytest.raises(UpdateError):
+        planejar(remoto, local)
+
+    assert head(local) == antes
+
+
 def test_a_hostile_global_gitconfig_has_no_effect(mundo, tmp_path, monkeypatch):
     remoto, local = mundo
     casa = tmp_path / "casa"

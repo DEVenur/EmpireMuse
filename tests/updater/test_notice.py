@@ -115,8 +115,8 @@ async def test_success_is_delivered_once_by_the_right_bot_in_the_right_channel(r
 
 @pytest.mark.parametrize(
     ("campos", "versao"),
-    [({"status": "rolled_back"}, DE), ({}, DE), ({"status": "rolled_back"}, PARA)],
-    ids=["rollback-pela-guarda", "versao-igual-a-origem", "rollback-mesmo-com-versao-nova"],
+    [({"status": "rolled_back"}, DE), ({}, DE)],
+    ids=["rollback-pela-guarda", "versao-igual-a-origem"],
 )
 async def test_a_failed_update_says_it_went_back(runtime, campos, versao):
     bot = bot_falso()
@@ -127,6 +127,19 @@ async def test_a_failed_update_says_it_went_back(runtime, campos, versao):
     descricao = bot.canal.send.await_args.kwargs["embed"].description
     assert "falhou" in descricao and "voltou para a versão 2.0.0" in descricao and "novidade" not in descricao
     assert not pending_path(runtime).exists()
+
+
+@pytest.mark.parametrize("versao", [PARA, None], ids=["subiu-a-versao-nova", "versao-nao-detectada"])
+async def test_a_rollback_that_is_not_confirmed_by_the_running_version_gets_the_uncertain_notice(runtime, versao):
+    """O aviso decide pela versão que SUBIU: o ``rolled_back`` da guarda de boot pode ter falhado em reverter o código."""
+    bot = bot_falso()
+    write_pending(runtime, pendente(status="rolled_back"))
+
+    await entregar(pool_com(bot), runtime, versao)
+
+    descricao = bot.canal.send.await_args.kwargs["embed"].description
+    assert "tentei voltar" in descricao and "não consegui confirmar a versão instalada" in descricao
+    assert "Atualizado" not in descricao and "novidade" not in descricao
 
 
 async def test_an_unconfirmed_version_gets_the_uncertain_notice(runtime):
