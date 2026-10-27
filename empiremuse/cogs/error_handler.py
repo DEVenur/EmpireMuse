@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import traceback
 from typing import TYPE_CHECKING, Optional, Union
 
 import disnake
 from aiohttp import ClientSession
 from disnake.ext import commands
 
+from empiremuse.logs.errors import command_context
+from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, scrub
 from empiremuse.rules.error_code import safe_error_code
 from empiremuse.utils.music.converters import URL_REG
 from empiremuse.utils.music.errors import parse_error, PoolException, error_code_text
@@ -55,17 +56,27 @@ class ErrorHandler(commands.Cog):
         token = self.bot.http.token
         return text.replace(token, "mytoken") if token else text
 
-    def log_unexpected_error(self, error: BaseException, origin: str) -> str:
+    def clean_for_webhook(self, text: str) -> str:
+        """Texto do relatório do webhook: o token deste bot mascarado e, em seguida, o saneamento e o redator único do log.
+
+        Assim o traceback mandado ao webhook não leva a senha de um nó, a URI do Mongo nem o token de outro bot, e o ESC é saneado.
+        """
+        return scrub(self.mask_token(text), MAX_TRACEBACK_CHARS)
+
+    def log_unexpected_error(self, error: BaseException, origin: str, ctx: object = None) -> str:
         """Registra o erro inesperado com o traceback completo (só no log do servidor) e devolve o código dele.
 
         O código (``ERR-…``) vai na mensagem do log, para o usuário e para o webhook; ``""`` se não foi possível gerar.
         """
         code = safe_error_code()
         error = getattr(error, "original", error)
+        # Só IDs e um resumo por tipo dos parâmetros (V-L4): nunca nome, conteúdo nem URL de anexo.
+        context = f" {command_context(ctx, level=logging.ERROR)}" if ctx is not None else ""
         logger.error(
-            "Erro inesperado no comando (%s)%s",
+            "Erro inesperado no comando (%s)%s%s",
             origin,
             f" [{code}]" if code else "",
+            context,
             exc_info=(type(error), error, error.__traceback__),
             # O agregador usa o código para apontar o traceback já impresso.
             extra={"error_code": code} if code else None,
@@ -148,7 +159,7 @@ class ErrorHandler(commands.Cog):
             components = self.components
 
             if not no_log:
-                code = self.log_unexpected_error(error, f"interação /{getattr(inter.data, 'name', '?')}")
+                code = self.log_unexpected_error(error, f"interação /{getattr(inter.data, 'name', '?')}", inter)
 
             kwargs["embed"] = disnake.Embed(
                 color=color, title="Ocorreu um erro no comando:", description=UNEXPECTED_ERROR_TEXT
@@ -161,6 +172,7 @@ class ErrorHandler(commands.Cog):
             kwargs["embed"].description += error_code_text(code)
 
         else:
+            logger.debug("Erro esperado no comando: %s", type(error).__name__)
             kwargs["embeds"] = []
 
             for p in paginator(error_msg):
@@ -170,8 +182,7 @@ class ErrorHandler(commands.Cog):
             try:
                 await send_message(inter, components=components, **kwargs)
             except Exception:
-                print(("-" * 50) + f"\n{error_msg}\n" + ("-" * 50))
-                traceback.print_exc()
+                logger.exception("Falha ao responder o erro ao usuário")
         else:
             send_webhook = True
 
@@ -187,7 +198,9 @@ class ErrorHandler(commands.Cog):
 
             await self.send_webhook(
                 embed=self.report_embed_with_code(inter, code),
-                file=string_to_file(self.mask_token(full_error_msg), self.traceback_filename("interaction", code)),
+                file=string_to_file(
+                    self.clean_for_webhook(full_error_msg), self.traceback_filename("interaction", code)
+                ),
             )
 
             await asyncio.sleep(20)
@@ -195,7 +208,7 @@ class ErrorHandler(commands.Cog):
             await self.webhook_max_concurrency.release(inter)
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o relatório de erro ao webhook")
 
     async def do_playcmd(self, ctx: CustomContext):
         if not self.bot.pool.config["ENABLE_SONGREQUEST_MENTION"]:
@@ -247,7 +260,7 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, commands.NotOwner):
-            print(f"{ctx.author} [{ctx.author.id}] não é dono do bot para usar o comando: {ctx.command.name}")
+            logger.debug("Usuário %s não é dono do bot para usar o comando: %s", ctx.author.id, ctx.command.name)
             return
 
         try:
@@ -288,7 +301,7 @@ class ErrorHandler(commands.Cog):
         if not error_msg:
             components = self.components
 
-            code = self.log_unexpected_error(error, f"prefixo {getattr(ctx.command, 'name', '?')}")
+            code = self.log_unexpected_error(error, f"prefixo {getattr(ctx.command, 'name', '?')}", ctx)
 
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(
@@ -306,6 +319,7 @@ class ErrorHandler(commands.Cog):
                 )
 
         else:
+            logger.debug("Erro esperado no comando: %s", type(error).__name__)
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(color=disnake.Colour.red(), description=error_msg)
             else:
@@ -352,7 +366,7 @@ class ErrorHandler(commands.Cog):
 
             await self.send_webhook(
                 embed=self.report_embed_with_code(ctx, code),
-                file=string_to_file(self.mask_token(full_error_msg), self.traceback_filename("prefixed", code)),
+                file=string_to_file(self.clean_for_webhook(full_error_msg), self.traceback_filename("prefixed", code)),
             )
 
             await asyncio.sleep(20)
@@ -360,7 +374,7 @@ class ErrorHandler(commands.Cog):
             await self.webhook_max_concurrency.release(ctx)
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o relatório de erro ao webhook")
 
     @commands.Cog.listener("on_button_click")
     async def on_error_report(self, inter: disnake.MessageInteraction):

@@ -275,7 +275,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             self._reject(CLOSE_MALFORMED, "Lista de ids inválida.")
             return
 
-        print(f"🤖 - Nova conexão - Bot: {ids} {self.request.remote_ip}")
+        logger.debug("Nova conexão - Bot: %s %s", ids, self.request.remote_ip)
         self.bot_ids = ids
         self.is_bot = True
         bots_ws.append(self)
@@ -305,7 +305,8 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self._forget_users()
         self.user_ids = ids
         self.token = token
-        print("\n".join(f"👤 - Nova conexão - User: {u}" for u in ids))
+        for u in ids:
+            logger.debug("Nova conexão - User: %s", u)
 
         for u_id in ids:
             self._replace_session(u_id)
@@ -389,15 +390,16 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self.connections.discard(self)
 
         if self.user_ids:
-            print("\n".join(f"👤 - Conexão Finalizada - User: {u}" for u in self.user_ids))
+            for u in self.user_ids:
+                logger.debug("Conexão Finalizada - User: %s", u)
             self._forget_users()
         elif self.is_bot:
             self._on_bot_close()
         else:
-            print(f"Conexão Finalizada - IP: {self.request.remote_ip}")
+            logger.debug("Conexão Finalizada - IP: %s", self.request.remote_ip)
 
     def _on_bot_close(self) -> None:
-        print(f"🌐 - Conexão Finalizada - Bot ID's: {self.bot_ids}")
+        logger.debug("Conexão Finalizada - Bot ID's: %s", self.bot_ids)
 
         if self in bots_ws:
             bots_ws.remove(self)
@@ -450,7 +452,7 @@ class WSClient:
 
         self.backoff = 7
 
-        print("🌐 - RPC client conectado, sincronizando rpc dos bots...")
+        logger.debug("RPC client conectado, sincronizando rpc dos bots...")
 
         if not self.all_bots:
             self.all_bots = self.pool.get_all_bots()
@@ -469,7 +471,7 @@ class WSClient:
             bot_ids.add(bot.user.id)
 
         if not bot_ids:
-            print("🌐 - Conexão com servidor RPC ignorado: Lista de bots vazia...")
+            logger.debug("Conexão com servidor RPC ignorada: lista de bots vazia...")
             return
 
         await self._send_json(
@@ -487,7 +489,7 @@ class WSClient:
                 if player.guild.me.voice.channel.voice_states:
                     bot.loop.create_task(player.process_rpc(player.last_channel))
 
-        print(f"🌐 - [RPC client] - Os dados de rpc foram sincronizados com sucesso.")
+        logger.debug("[RPC client] Os dados de rpc foram sincronizados com sucesso.")
 
     async def send(self, data: dict):
         # O servidor só aceita dados do bot depois do registro; o que for gerado antes é reenviado pela
@@ -524,12 +526,12 @@ class WSClient:
 
             except Exception as e:
                 if isinstance(e, aiohttp.WSServerHandshakeError):
-                    print(
-                        f"🌐 - Falha ao conectar no servidor RPC, tentando novamente em {(b := int(self.backoff))} segundo{'s'[: b ^ 1]}."
+                    logger.warning(
+                        "Falha ao conectar no servidor RPC, tentando novamente em %s segundo(s).", int(self.backoff)
                     )
                 else:
-                    print(
-                        f"🌐 - Conexão com servidor RPC perdida - Reconectando em {(b := int(self.backoff))} segundo{'s'[: b ^ 1]}."
+                    logger.warning(
+                        "Conexão com servidor RPC perdida - Reconectando em %s segundo(s).", int(self.backoff)
                     )
 
                 await asyncio.sleep(self.backoff)
@@ -539,7 +541,7 @@ class WSClient:
             message = await self.connection.receive()
 
             if message.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                print(f"🌐 - RPC Websocket Closed: {message.extra}\nReconnecting in {self.backoff}s")
+                logger.warning("RPC Websocket Closed: %s - reconectando em %ss", message.extra, self.backoff)
                 await asyncio.sleep(self.backoff)
                 continue
 
@@ -548,7 +550,7 @@ class WSClient:
                     logger.warning(
                         "Cliente RPC: o servidor recusou o registro (confira se RPC_SERVER_SECRET é o mesmo nos dois lados)."
                     )
-                print(f"🌐 - RPC Websocket Finalizado: {message.extra}")
+                logger.debug("RPC Websocket Finalizado: %s", message.extra)
                 return
 
             try:
@@ -609,12 +611,12 @@ def _build_panel(pool: BotPool, config: dict):
     try:
         settings = load_panel_settings(config)
     except PanelConfigError as e:
-        print(f"🖥️ - Painel web desativado por configuração inválida: {e}")
+        logging.getLogger("empiremuse.panel").warning("Painel web desativado por configuração inválida: %s", e)
         return None, False
 
     panel_app = build_panel_app(pool, settings)
     if panel_app:
-        print(f"🖥️ - Painel web ativo em {settings.base_url}/painel/")
+        logging.getLogger("empiremuse.panel").info("Painel web ativo em %s/painel/", settings.base_url)
     return panel_app, settings.trust_proxy
 
 

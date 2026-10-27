@@ -24,6 +24,11 @@ _SECRET_NAME = re.compile(
 )
 
 
+def is_secret_name(name: str) -> bool:
+    """Se o NOME de uma variável, chave ou parâmetro é de segredo (o valor nunca deve ir a log nem a relatório)."""
+    return bool(_SECRET_NAME.search(str(name)))
+
+
 def build_shell_env(environ: Mapping[str, str], *, windows: bool = False) -> dict[str, str]:
     """Cópia de ``environ`` só com as variáveis da allowlist (no Windows os nomes não diferenciam maiúsculas)."""
     allowed = SHELL_ENV_ALLOWLIST + (SHELL_ENV_ALLOWLIST_WINDOWS if windows else ())

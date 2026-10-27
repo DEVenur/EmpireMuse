@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import asyncio
 import datetime
 import traceback
@@ -180,7 +181,7 @@ class SongRequestsMixin:
             try:
                 await message.delete(delay=delay)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em delete_message")
 
     @commands.Cog.listener("on_song_request")
     async def song_requests(self, ctx: Optional[CustomContext], message: disnake.Message):
@@ -264,7 +265,7 @@ class SongRequestsMixin:
                 else:
                     await req.message.channel.send(error, delete_after=9)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em song_requests")
 
         await self.song_request_concurrency.release(req.message)
 
@@ -535,7 +536,7 @@ async def _sr_error_webhook(self, req):
         )
 
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha em _sr_error_webhook")
 
     await asyncio.sleep(20)
 

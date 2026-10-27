@@ -103,10 +103,24 @@ class PanelResponseMixin:
         summary = self._request_summary()
         if isinstance(value, tornado.web.HTTPError):
             if value.log_message:
-                logger.warning("%d %s: " + value.log_message, value.status_code, summary, *value.args)
+                try:
+                    detail = value.log_message % value.args
+                except (
+                    Exception
+                ):  # o modelo vem de quem levantou o HTTPError: um formato inválido não pode derrubar o log
+                    detail = value.log_message
+                logger.warning("%d %s: %s", value.status_code, summary, detail)
             return
         code = self._error_code = safe_error_code()  # o mesmo código vai ao log e à página de erro
-        logger.error("Uncaught exception %s%s", summary, f" [{code}]" if code else "", exc_info=(typ, value, tb))
+        logger.error(
+            "Uncaught exception %s%s",
+            summary,
+            f" [{code}]" if code else "",
+            exc_info=(typ, value, tb),
+            extra={"error_code": code}
+            if code
+            else None,  # K15: o agregador usa o código para apontar o traceback já impresso
+        )
 
     def set_default_headers(self) -> None:
         for name, value in SECURITY_HEADERS.items():

@@ -12,6 +12,8 @@ from empiremuse.rules.error_code import safe_error_code
 from empiremuse.utils.music.converters import time_format, perms_translations
 from empiremuse.wavelink import WavelinkException, TrackNotFound, MissingSessionID
 
+logger = logging.getLogger("empiremuse.errors")
+
 
 def error_code_text(code: str) -> str:
     """Linha com o código do erro para o usuário (vazia se não houve código)."""
@@ -277,7 +279,7 @@ def parse_error(
     if not error_txt:
         full_error_txt = "".join(traceback.format_exception(type(error), error, error.__traceback__))
         if not kwargs.get("no_log"):
-            print(full_error_txt)
+            logger.error("Erro inesperado", exc_info=(type(error), error, error.__traceback__))
     elif send_error:
         full_error_txt = "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
