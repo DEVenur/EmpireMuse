@@ -7,7 +7,7 @@ Como preparar o ambiente para desenvolver e testar o EmpireMuse. Para entender o
 
 | Item | Versão | Observação |
 |---|---|---|
-| Python | **3.14** | Runtime e piso do projeto (item 6); a CI também roda o 3.15 sem bloquear. `audioop-lts` (`requirements.txt`) cobre o módulo que saiu da biblioteca padrão. |
+| Python | **3.14** | Runtime e **mínimo** do projeto (item 6): o código usa `except A, B:` (PEP 758) e não importa no 3.13. A CI também roda o 3.15 sem bloquear. `audioop-lts` (`requirements.txt`) cobre o módulo que saiu da biblioteca padrão. |
 | [uv](https://docs.astral.sh/uv/) | recente | Gerenciador de venv/pacotes recomendado. |
 | Git | qualquer | Só para clonar o repositório e os submódulos; nenhuma dependência Python é instalada via Git. |
 | Java | **17+** | **Só** se for rodar o Lavalink local. Sem Java 17+, o bot tenta baixar um JDK sozinho (`validate_java` e `run_lavalink` em `empiremuse/utils/music/local_lavalink.py`). |
