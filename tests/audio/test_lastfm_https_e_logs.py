@@ -78,11 +78,11 @@ PARAMS = {"method": "track.scrobble", "api_key": "AK", "sk": SEGREDO, "api_sig":
 
 
 async def test_the_get_request_uses_https_and_keeps_the_query_params(lastfm):
-    await lastfm.request_lastfm(dict(PARAMS))
+    await lastfm.request_lastfm({"method": "artist.getSimilar", "api_key": "AK", "artist": "Artista"})
 
     ((metodo, url, kwargs),) = SessaoQueCaptura.chamadas
     assert metodo == "GET" and url.startswith("https://ws.audioscrobbler.com/2.0/")
-    assert kwargs["params"]["sk"] == SEGREDO
+    assert kwargs["params"]["artist"] == "Artista" and kwargs["params"]["api_key"] == "AK"
 
 
 async def test_the_post_request_uses_https_and_sends_the_credentials_in_the_body(lastfm):
