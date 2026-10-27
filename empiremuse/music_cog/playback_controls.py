@@ -12,12 +12,7 @@ from empiremuse.utils.music.checks import (
     check_stage_topic,
     check_queue_loading,
 )
-from empiremuse.utils.music.converters import (
-    time_format,
-    fix_characters,
-    string_to_seconds,
-    percentage,
-)
+from empiremuse.utils.music.converters import time_format, string_to_seconds, percentage, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -481,9 +476,9 @@ class PlaybackControlsMixin:
 
         txt = [
             f"definiu a quantidade de repetições da música "
-            f"[`{(fix_characters(player.current.title, 25))}`](<{player.current.uri or player.current.search_uri}>) para **{value}**.",
+            f"{md_link(player.current.title, player.current.uri or player.current.search_uri, limit=25)} para **{value}**.",
             f"🔄 **⠂{inter.author.mention} definiu a quantidade de repetições da música para [{value}]:**\n"
-            f"╰[`{player.current.title}`](<{player.current.uri or player.current.search_uri}>)",
+            f"╰{md_link(player.current.title, player.current.uri or player.current.search_uri)}",
         ]
 
         await self.interaction_message(inter, txt, rpc_update=True, emoji="🔄")

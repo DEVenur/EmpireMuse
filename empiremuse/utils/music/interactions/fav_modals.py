@@ -34,7 +34,7 @@ from empiremuse.rules.urls import check_url, clean_url
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.errors import GenericError, error_code_text, log_unexpected_error
 from empiremuse.utils.music.user_limits import quota_for
 from empiremuse.utils.others import (
@@ -201,7 +201,7 @@ class FavModalImport(disnake.ui.Modal):
             self.view.log = f"{s} favoritos foram importados com sucesso."
         else:
             name = next(iter(clean_data))
-            self.view.log = f"O favorito [`{name}`]({clean_data[name]}) foi importado com sucesso."
+            self.view.log = f"O favorito {md_link(name, clean_data[name])} foi importado com sucesso."
 
         return True
 
@@ -250,7 +250,7 @@ class FavModalImport(disnake.ui.Modal):
             self.view.log = f"{s} links foram importados com sucesso para a lista de favoritos do servidor."
         else:
             name = next(iter(clean_data))
-            self.view.log = f"O link [`{name}`]({clean_data[name]['url']}) foi importado com sucesso para a lista de links do servidor.."
+            self.view.log = f"O link {md_link(name, clean_data[name]['url'])} foi importado com sucesso para a lista de links do servidor.."
 
         await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
 
@@ -296,7 +296,7 @@ class FavModalImport(disnake.ui.Modal):
             self.view.log = f"{s} integrações foram importadas com sucesso."
         else:
             name = next(iter(clean_data))
-            self.view.log = f"A integração [`{name}`]({clean_data[name]['url']}) foi importada com sucesso."
+            self.view.log = f"A integração {md_link(name, clean_data[name]['url'])} foi importada com sucesso."
 
         return True
 
@@ -575,7 +575,7 @@ class FavModalAdd(disnake.ui.Modal):
 
         await inter.edit_original_message(
             embed=disnake.Embed(
-                description=f"**Integração adicionada/editada com sucesso:** [`{saved.name}`]({saved.url})\n"
+                description=f"**Integração adicionada/editada com sucesso:** {md_link(saved.name, saved.url)}\n"
                 "**Ela vai aparecer nas seguintes ocasições:** ```\n"
                 "- Ao usar o comando /play (selecionando a integração no preenchimento automático da busca)\n"
                 "- Ao clicar no botão de tocar favorito do player.\n"
@@ -585,7 +585,7 @@ class FavModalAdd(disnake.ui.Modal):
             view=None,
         )
 
-        self.view.log = f"[`{saved.name}`](<{saved.url}>) foi adicionado nas suas integrações."
+        self.view.log = f"{md_link(saved.name, saved.url)} foi adicionado nas suas integrações."
 
         return True
 

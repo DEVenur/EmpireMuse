@@ -57,7 +57,7 @@ from empiremuse.utils import branding
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import check_voice, check_requester_channel, can_connect
-from empiremuse.utils.music.converters import URL_REG
+from empiremuse.utils.music.converters import URL_REG, md_link
 from empiremuse.utils.music.errors import GenericError, NoVoice, code_suffix, log_unexpected_error
 from empiremuse.utils.music.interactions import SelectBotVoice
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
@@ -244,7 +244,7 @@ class Owner(commands.Cog):
 
     def format_log(self, data: list):
         return "\n".join(
-            f"[`{c['abbreviated_commit']}`]({self.bot.pool.remote_git_url}/commit/{c['commit']}) `- "
+            f"{md_link(c['abbreviated_commit'], f"{self.bot.pool.remote_git_url}/commit/{c['commit']}")} `- "
             f"{(c['subject'][:40].replace('`', '') + '...') if len(c['subject']) > 39 else c['subject']}` "
             f"(<t:{c['timestamp']}:R>)"
             for c in data
@@ -576,7 +576,7 @@ class Owner(commands.Cog):
         if latest is None:
             text = (
                 "**Não consegui consultar a versão disponível agora.**\n\n"
-                f"{action}\n[Versões publicadas]({branding.REPO_URL}/releases)"
+                f"{action}\n{md_link('Versões publicadas', f'{branding.REPO_URL}/releases', code=False)}"
             )
             return await self._reply_update(ctx, text)
         if installed is not None and latest <= installed:
@@ -592,7 +592,7 @@ class Owner(commands.Cog):
         notes = changelog_sections(raw, installed or Version(0, 0, 0), latest, MANUAL_CHANGELOG_CHARS)
         link = f"{branding.REPO_URL}/blob/v{latest}/CHANGELOG.md"
         title = f"🆕 **Versão disponível: {latest}**" + (f" (instalada: {installed})" if installed else "")
-        parts = [title, notes, f"{action}\n[CHANGELOG completo]({link})"]
+        parts = [title, notes, f"{action}\n{md_link('CHANGELOG completo', link, code=False)}"]
         return await self._reply_update(ctx, "\n\n".join(part for part in parts if part))
 
     async def _latest_release_version(self) -> Optional[Version]:
@@ -783,7 +783,7 @@ class Owner(commands.Cog):
 
         git_log += format_git_log(data)
 
-        txt = f"🔰 ** | [Atualizações recentes:]({self.bot.pool.remote_git_url}/commits/main)**\n\n" + self.format_log(
+        txt = f"🔰 ** | {md_link('Atualizações recentes:', f'{self.bot.pool.remote_git_url}/commits/main', code=False)}**\n\n" + self.format_log(
             git_log
         )
 
@@ -1077,12 +1077,12 @@ class Owner(commands.Cog):
             if isinstance(ctx, CustomContext):
                 await ctx.send(
                     embed=disnake.Embed(
-                        description=f"**O arquivo [source.zip]({msg.jump_url}) foi enviado no seu privado.**",
+                        description=f"**O arquivo {md_link('source.zip', msg.jump_url, code=False)} foi enviado no seu privado.**",
                         color=self.bot.get_color(ctx.guild.me),
                     )
                 )
             else:
-                return f"Arquivo [source.zip]({msg.jump_url}) foi enviado com sucesso no seu DM."
+                return f"Arquivo {md_link('source.zip', msg.jump_url, code=False)} foi enviado com sucesso no seu DM."
         except BaseException:
             # Falha (ou cancelamento) no meio do caminho não deixa um source.zip parcial para trás.
             with contextlib.suppress(OSError):
@@ -1396,7 +1396,7 @@ class Owner(commands.Cog):
                 except AttributeError:
                     func = inter.send
 
-        avatar_txt = mode if not use_hyperlink else f"[{mode}]({url})"
+        avatar_txt = mode if not use_hyperlink else md_link(mode, url, code=False)
 
         await func(f"O {avatar_txt} do bot {bot.user.mention} foi alterado com sucesso.", view=None, embed=None)
 

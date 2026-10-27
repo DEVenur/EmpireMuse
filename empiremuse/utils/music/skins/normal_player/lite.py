@@ -4,7 +4,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format
+from empiremuse.utils.music.converters import fix_characters, time_format, md_bracketed, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 
 
@@ -30,7 +30,7 @@ class LiteSkin:
         duration = "`🔴 Livestream`" if player.current.is_stream else time_format(player.current.duration)
 
         embed.description = (
-            f"> -# ▶️ **┃**[`{fix_characters(player.current.title, 45)}`]({player.current.uri or player.current.search_uri})\n"
+            f"> -# ▶️ **┃**{md_link(player.current.title, player.current.uri or player.current.search_uri, limit=45)}\n"
             f"> -# ℹ️ **┃**`{duration}`┃`{fix_characters(player.current.author, 18)}`┃"
         )
 
@@ -38,13 +38,13 @@ class LiteSkin:
             embed.description += f"<@{player.current.requester}>"
         else:
             try:
-                embed.description = f"[`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
+                embed.description = f"{md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
             except Exception:
                 embed.description = "`[Recomendada]`"
 
         if player.current.playlist_name:
             embed.description += (
-                f"\n> -# 🎼 **┃ Playlist:** [`{player.current.playlist_name}`]({player.current.playlist_url})"
+                f"\n> -# 🎼 **┃ Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url)}"
             )
 
         embed.set_thumbnail(player.current.thumb)

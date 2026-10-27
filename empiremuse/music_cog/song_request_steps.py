@@ -21,6 +21,7 @@ from empiremuse.utils.music.converters import (
     URL_REG,
     YOUTUBE_VIDEO_REG,
     music_source_image,
+    md_link,
 )
 from empiremuse.utils.music.errors import (
     GenericError,
@@ -168,8 +169,8 @@ async def _pr_playlist(self, req):
 
     else:
         player.set_command_log(
-            text=f"{message.author.mention} adicionou a playlist [`{fix_characters(tracks.data['playlistInfo']['name'], 20)}`]"
-            f"(<{tracks.tracks[0].playlist_url}>) `({len(tracks.tracks)})`.",
+            text=f"{message.author.mention} adicionou a playlist {md_link(tracks.data['playlistInfo']['name'], tracks.tracks[0].playlist_url, limit=20)}"
+            f" `({len(tracks.tracks)})`.",
             emoji="🎶",
         )
     if destroy_message:
@@ -244,7 +245,7 @@ async def _pr_single(self, req):
     else:
         duration = time_format(tracks[0].duration) if not tracks[0].is_stream else "🔴 Livestream"
         player.set_command_log(
-            text=f"{message.author.mention} adicionou [`{fix_characters(tracks[0].title, 20)}`](<{tracks[0].uri or tracks[0].search_uri}>) `({duration})`.",
+            text=f"{message.author.mention} adicionou {md_link(tracks[0].title, tracks[0].uri or tracks[0].search_uri, limit=20)} `({duration})`.",
             emoji="🎵",
         )
         if destroy_message:

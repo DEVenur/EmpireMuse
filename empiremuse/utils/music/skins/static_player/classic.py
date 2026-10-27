@@ -5,7 +5,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -31,7 +31,7 @@ class ClassicStaticSkin:
 
         queue_txt = ""
 
-        embed.description = f"[**{player.current.title}**]({player.current.uri or player.current.search_uri})\n\n"
+        embed.description = f"**{md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}**\n\n"
         embed.set_image(url=player.current.thumb)
         embed_top = None
 
@@ -53,13 +53,13 @@ class ClassicStaticSkin:
             f"🎧 **⠂Pedido por:** <@{player.current.requester}>\n"
         else:
             try:
-                mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendação', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendação`"
             txt += f"👍 **⠂Adicionado via:** {mode}\n"
 
         if player.current.playlist_name:
-            txt += f"📑 **⠂Playlist:** [`{fix_characters(player.current.playlist_name, limit=20)}`]({player.current.playlist_url})\n"
+            txt += f"📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}\n"
 
         if qsize := len(player.queue):
             data["content"] = "**Músicas na fila:**\n```ansi\n" + "\n".join(

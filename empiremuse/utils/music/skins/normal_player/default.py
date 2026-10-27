@@ -6,7 +6,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import time_format, get_button_style, music_source_image, md_link, md_bracketed
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -51,15 +51,14 @@ class DefaultSkin:
             "> -# 🔴 **⠂** `Livestream`\n"
             if player.current.is_stream
             else (
-                f"> -# ⏰ **⠂** `{time_format(player.current.duration)} [`"
-                + f"<t:{int((disnake.utils.utcnow() + datetime.timedelta(milliseconds=player.current.duration - player.position)).timestamp())}:R>`]`\n"
+                f"> -# ⏰ **⠂** {md_bracketed(f'<t:{int((disnake.utils.utcnow() + datetime.timedelta(milliseconds=player.current.duration - player.position)).timestamp())}:R>', prefix=f'{time_format(player.current.duration)} ')}\n"
                 if not player.paused
                 else ""
             )
         )
 
         txt = (
-            f"-# [`{player.current.single_title}`]({player.current.uri or player.current.search_uri})\n\n"
+            f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri)}\n\n"
             f"{duration}"
             f"> -# 👤 **⠂** {player.current.authors_md}"
         )
@@ -68,7 +67,7 @@ class DefaultSkin:
             txt += f"\n> -# ✋ **⠂** <@{player.current.requester}>"
         else:
             try:
-                mode = f" [`Recomendada`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendada', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendada`"
             txt += f"\n> -# 👍 **⠂** {mode}"
@@ -87,11 +86,11 @@ class DefaultSkin:
 
         if player.current.album_name:
             txt += (
-                f"\n> -# 💽 **⠂** [`{fix_characters(player.current.album_name, limit=36)}`]({player.current.album_url})"
+                f"\n> -# 💽 **⠂** {md_link(player.current.album_name, player.current.album_url, limit=36)}"
             )
 
         if player.current.playlist_name:
-            txt += f"\n> -# 📑 **⠂** [`{fix_characters(player.current.playlist_name, limit=36)}`]({player.current.playlist_url})"
+            txt += f"\n> -# 📑 **⠂** {md_link(player.current.playlist_name, player.current.playlist_url, limit=36)}"
 
         if (qlenght := len(player.queue)) and not player.mini_queue_enabled:
             txt += f"\n> -# 🎶 **⠂** `{qlenght} música{'s'[: qlenght ^ 1]} na fila`"
@@ -109,7 +108,7 @@ class DefaultSkin:
         if player.mini_queue_enabled:
             if len(player.queue):
                 queue_txt = "\n".join(
-                    f"-# `{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` [`{fix_characters(t.title, 21)}`]({t.uri})"
+                    f"-# `{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` {md_link(t.title, t.uri, limit=21)}"
                     for n, t in (enumerate(itertools.islice(player.queue, 3)))
                 )
 
@@ -130,7 +129,7 @@ class DefaultSkin:
 
             elif len(player.queue_autoplay):
                 queue_txt = "\n".join(
-                    f"-# `👍⠂{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` [`{fix_characters(t.title, 20)}`]({t.uri})"
+                    f"-# `👍⠂{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` {md_link(t.title, t.uri, limit=20)}"
                     for n, t in (enumerate(itertools.islice(player.queue_autoplay, 3)))
                 )
                 embed_queue = disnake.Embed(

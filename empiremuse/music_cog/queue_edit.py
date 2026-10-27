@@ -9,9 +9,7 @@ from empiremuse.utils.music.checks import (
     is_dj,
     check_queue_loading,
 )
-from empiremuse.utils.music.converters import (
-    fix_characters,
-)
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -91,8 +89,8 @@ class QueueEditMixin:
         player.queue.remove(track)
 
         txt = [
-            f"removeu a música [`{(fix_characters(track.title, 25))}`](<{track.uri or track.search_uri}>) da fila.",
-            f"♻️ **⠂{inter.author.mention} removeu a música da fila:**\n╰[`{track.title}`](<{track.uri or track.search_uri}>)",
+            f"removeu a música {md_link(track.title, track.uri or track.search_uri, limit=25)} da fila.",
+            f"♻️ **⠂{inter.author.mention} removeu a música da fila:**\n╰{md_link(track.title, track.uri or track.search_uri)}",
         ]
 
         await self.interaction_message(inter, txt, emoji="♻️")
@@ -217,7 +215,7 @@ class QueueEditMixin:
 
         if index <= 0:
             raise GenericError(
-                f"**A música **[`{track.title}`](<{track.uri or track.search_uri}>) já é a próxima da fila."
+                f"**A música **{md_link(track.title, track.uri or track.search_uri)} já é a próxima da fila."
             )
 
         if track.autoplay:
@@ -226,8 +224,8 @@ class QueueEditMixin:
             player.queue.rotate(0 - (index))
 
         txt = [
-            f"rotacionou a fila para a música [`{(fix_characters(track.title, limit=25))}`](<{track.uri or track.search_uri}>).",
-            f"🔃 **⠂{inter.author.mention} rotacionou a fila para a música:**\n╰[`{track.title}`](<{track.uri or track.search_uri}>).",
+            f"rotacionou a fila para a música {md_link(track.title, track.uri or track.search_uri, limit=25)}.",
+            f"🔃 **⠂{inter.author.mention} rotacionou a fila para a música:**\n╰{md_link(track.title, track.uri or track.search_uri)}.",
         ]
 
         if isinstance(inter, disnake.MessageInteraction):

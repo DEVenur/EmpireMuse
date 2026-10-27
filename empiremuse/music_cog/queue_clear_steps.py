@@ -15,11 +15,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
     check_queue_loading,
 )
-from empiremuse.utils.music.converters import (
-    time_format,
-    fix_characters,
-    string_to_seconds,
-)
+from empiremuse.utils.music.converters import time_format, fix_characters, string_to_seconds, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -231,7 +227,7 @@ def _qc_remove(self, req):
             if playlist == t.playlist_name.replace("️", "") or (
                 isinstance(inter, CustomContext) and playlist.lower() in t.playlist_name.replace("️", "").lower()
             ):
-                playlist_link = f"[`{fix_characters(t.playlist_name)}`](<{t.playlist_url}>)"
+                playlist_link = f"{md_link(t.playlist_name, t.playlist_url)}"
                 temp_filter.remove("playlist")
                 final_filters.add("playlist")
 
@@ -320,7 +316,7 @@ async def _qc_report(self, req):
 
     msg_txt = (
         f"### ♻️ ⠂{inter.author.mention} removeu {deleted_tracks} música{'s'[: deleted_tracks ^ 1]} da fila:\n"
-        + "\n".join(f"[`{fix_characters(t.title, 45)}`](<{t.uri}>)" for t in tracklist[:7])
+        + "\n".join(f"{md_link(t.title, t.uri, limit=45)}" for t in tracklist[:7])
     )
 
     if (trackcount := (len(tracklist) - 7)) > 0:

@@ -11,7 +11,7 @@ import disnake
 from rapidfuzz import fuzz
 
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import (
     error_code_text,
     log_unexpected_error,
@@ -114,7 +114,7 @@ class PlayerPlaybackMixin:
             embed = disnake.Embed(description="**Ocorreu um erro ao reproduzir a música:**")
 
             if self.current:
-                embed.description += f" [`{self.current.title}`]({self.current.uri})"
+                embed.description += f" {md_link(self.current.title, self.current.uri)}"
 
             embed.description += error_code_text(req.error_code)
 

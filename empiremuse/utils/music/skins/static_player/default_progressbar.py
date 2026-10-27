@@ -6,7 +6,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import ProgressBar, PlayerControls
 
@@ -55,7 +55,7 @@ class DefaultProgressbarStaticSkin:
         queue_img = ""
 
         txt = (
-            f"-# [`{player.current.single_title}`]({player.current.uri or player.current.search_uri})\n\n"
+            f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri)}\n\n"
             f"> -# 💠 **⠂Por:** {player.current.authors_md}"
         )
 
@@ -63,7 +63,7 @@ class DefaultProgressbarStaticSkin:
             txt += f"\n> -# ✋ **⠂Pedido por:** <@{player.current.requester}>"
         else:
             try:
-                mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendação', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendação`"
             txt += f"\n> -# 👍 **⠂Adicionado via:** {mode}"
@@ -86,10 +86,10 @@ class DefaultProgressbarStaticSkin:
             txt += f"\n> -# {e} **⠂Modo de repetição:** `{m}`"
 
         if player.current.album_name:
-            txt += f"\n> -# 💽 **⠂Álbum:** [`{fix_characters(player.current.album_name, limit=20)}`]({player.current.album_url})"
+            txt += f"\n> -# 💽 **⠂Álbum:** {md_link(player.current.album_name, player.current.album_url, limit=20)}"
 
         if player.current.playlist_name:
-            txt += f"\n> -# 📑 **⠂Playlist:** [`{fix_characters(player.current.playlist_name, limit=20)}`]({player.current.playlist_url})"
+            txt += f"\n> -# 📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}"
 
         if player.keep_connected:
             txt += "\n> -# ♾️ **⠂Modo 24/7:** `Ativado`"
@@ -128,7 +128,7 @@ class DefaultProgressbarStaticSkin:
                     duration = time_format(t.duration) if not t.is_stream else "🔴 Ao vivo"
 
                     queue_txt += (
-                        f"`┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"`┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"`└ ⏲️ {duration}`"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `✋` <@{t.requester}>\n"
@@ -140,7 +140,7 @@ class DefaultProgressbarStaticSkin:
                     )
 
                     queue_txt += (
-                        f"`┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"`┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"`└ ⏲️` {duration}"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `✋` <@{t.requester}>\n"
@@ -190,7 +190,7 @@ class DefaultProgressbarStaticSkin:
                     duration = time_format(t.duration) if not t.is_stream else "🔴 Ao vivo"
 
                     queue_txt += (
-                        f"-# `┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"-# `┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"-# `└ ⏲️ {duration}`"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `👍⠂Recomendada`\n"
@@ -202,7 +202,7 @@ class DefaultProgressbarStaticSkin:
                     )
 
                     queue_txt += (
-                        f"-# `┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"-# `┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"-# `└ ⏲️` {duration}"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `👍⠂Recomendada`\n"

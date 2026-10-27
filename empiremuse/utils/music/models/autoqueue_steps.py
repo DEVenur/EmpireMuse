@@ -10,7 +10,7 @@ import disnake
 from aiohttp import ClientConnectionError, ClientError, ClientResponseError
 
 import empiremuse.wavelink as wavelink
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.errors import (
     code_suffix,
     error_code_text,
@@ -138,7 +138,7 @@ async def _aq_source_tracks(self, req):
                 ]
 
                 authors_md = [
-                    f"[`{fix_characters(a['name'])}`]({_spotify_url(a)})"
+                    md_link(a['name'], _spotify_url(a))
                     for a in artists
                     if isinstance(a, dict) and a.get("name")
                 ]
@@ -187,7 +187,7 @@ async def _aq_source_tracks(self, req):
                         fix_characters(a["name"]) for a in artists if isinstance(a, dict) and a.get("name")
                     ]
                     authors_md = [
-                        f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})"
+                        md_link(a['name'], f"https://www.deezer.com/artist/{a['id']}")
                         for a in artists
                         if isinstance(a, dict) and a.get("name") and a.get("id")
                     ]
@@ -622,7 +622,7 @@ async def _rt_report_failure(self, track, e):
         logger, e, f"obtenção de informação da PartialTrack {track.uri or track.search_uri}"
     )
     embed = disnake.Embed(
-        description=f"**Falha ao obter informação de PartialTrack:\n[{track.title}]({track.uri or track.search_uri})**"
+        description=f"**Falha ao obter informação de PartialTrack:\n{md_link(track.title, track.uri or track.search_uri, code=False)}**"
         f"{error_code_text(error_code)}\n"
         f"**Servidor de música:** `{self.node.identifier}`",
         color=disnake.Colour.red(),

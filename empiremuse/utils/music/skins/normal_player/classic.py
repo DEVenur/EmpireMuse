@@ -5,7 +5,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import time_format, get_button_style, music_source_image, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -36,7 +36,7 @@ class ClassicSkin:
         bar = asset_url("ui_rainbow_bar_3.gif")
 
         embed_top = disnake.Embed(
-            color=color, description=f"### [{player.current.title}]({player.current.uri or player.current.search_uri})"
+            color=color, description=f"### {md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}"
         )
         embed.set_image(url=bar)
 
@@ -62,13 +62,13 @@ class ClassicSkin:
             txt += f"🎧 **⠂** <@{player.current.requester}>\n"
         else:
             try:
-                mode = f" [`Recomendada`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendada', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendada`"
             txt += f"> 👍 **⠂** {mode}\n"
 
         if player.current.playlist_name:
-            txt += f"📑 **⠂** [`{fix_characters(player.current.playlist_name, limit=19)}`]({player.current.playlist_url})\n"
+            txt += f"📑 **⠂** {md_link(player.current.playlist_name, player.current.playlist_url, limit=19)}\n"
 
         if qsize := len(player.queue):
             if not player.mini_queue_enabled:
@@ -76,7 +76,7 @@ class ClassicSkin:
             else:
                 queue_txt += "```ansi\n[0;33mPróximas Músicas:[0m```" + "\n".join(
                     f"`{(n + 1):02}) [{time_format(t.duration) if t.duration else '🔴 Livestream'}]` "
-                    f"[`{fix_characters(t.title, 29)}`]({t.uri})"
+                    f"{md_link(t.title, t.uri, limit=29)}"
                     for n, t in enumerate(itertools.islice(player.queue, 3))
                 )
 
@@ -86,7 +86,7 @@ class ClassicSkin:
         elif len(player.queue_autoplay):
             queue_txt += "```ansi\n[0;33mPróximas Músicas:[0m```" + "\n".join(
                 f"`👍⠂{(n + 1):02}) [{time_format(t.duration) if t.duration else '🔴 Livestream'}]` "
-                f"[`{fix_characters(t.title, 29)}`]({t.uri})"
+                f"{md_link(t.title, t.uri, limit=29)}"
                 for n, t in enumerate(itertools.islice(player.queue_autoplay, 3))
             )
 

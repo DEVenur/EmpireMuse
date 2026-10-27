@@ -18,12 +18,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
     check_player_perm,
 )
-from empiremuse.utils.music.converters import (
-    time_format,
-    fix_characters,
-    URL_REG,
-    music_source_image,
-)
+from empiremuse.utils.music.converters import time_format, fix_characters, URL_REG, music_source_image, md_link
 from empiremuse.utils.music.errors import (
     NoVoice,
 )
@@ -331,7 +326,7 @@ class PlayEnqueueMixin:
         if not track_url:
             track_url = tracks.uri or tracks.search_uri
 
-        log_text = f"{inter.author.mention} adicionou [`{fix_characters(tracks.title, 20)}`](<{track_url}>){pos_txt} `({duration})`."
+        log_text = f"{inter.author.mention} adicionou {md_link(tracks.title, track_url, limit=20)}{pos_txt} `({duration})`."
 
         loadtype = "track"
 
@@ -409,7 +404,7 @@ class PlayEnqueueMixin:
                 embed_description += (
                     "\n### Playlists carregadas:\n"
                     + "\n".join(
-                        f"[`{info['name']}`]({url}) `- {info['count']} música{'s'[: info['count'] ^ 1]}` "
+                        f"{md_link(info['name'], url)} `- {info['count']} música{'s'[: info['count'] ^ 1]}` "
                         for url, info in tracks_playlists.items()
                     )
                     + "\n"
@@ -421,7 +416,7 @@ class PlayEnqueueMixin:
             icon_url = music_source_image(tracks[0].info["sourceName"])
             log_text = f"{inter.author.mention} adicionou `{len(tracks)} músicas` via busca: `{query}`{pos_txt}."
             desc = "\n".join(
-                f"` {c + 1}. ` [`{fix_characters(t.title, 75)}`](<{t.uri}>) `{time_format(t.duration)}`"
+                f"` {c + 1}. ` {md_link(t.title, t.uri, limit=75)} `{time_format(t.duration)}`"
                 for c, t in enumerate(tracks)
             )
 
@@ -538,7 +533,7 @@ class PlayEnqueueMixin:
 
         loadtype = "playlist"
 
-        log_text = f"{inter.author.mention} adicionou a playlist [`{fix_characters(tracks.name, 20)}`](<{tracks.url}>){pos_txt} `({len(tracks.tracks)})`."
+        log_text = f"{inter.author.mention} adicionou a playlist {md_link(tracks.name, tracks.url, limit=20)}{pos_txt} `({len(tracks.tracks)})`."
 
         total_duration = 0
 
@@ -612,7 +607,7 @@ class PlayEnqueueMixin:
                     func = inter.send
 
             footer_txt = (
-                f"`♾️` [`{user_data['lastfm']['username']}`](https://www.last.fm/user/{user_data['lastfm']['username']})"
+                f"`♾️` {md_link(user_data['lastfm']['username'], f"https://www.last.fm/user/{user_data['lastfm']['username']}")}"
                 if user_data["lastfm"]["sessionkey"] and user_data["lastfm"]["scrobble"]
                 else ""
             )

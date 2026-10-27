@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import re
-import traceback
 from typing import Union, TYPE_CHECKING
+from urllib.parse import urlsplit
 
 import disnake
 
@@ -14,6 +15,8 @@ from empiremuse.utils.branding import asset_url
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 YOUTUBE_VIDEO_REG = re.compile(r"(https?://)?(www\.|music\.)?youtube\.(com|nl)/watch\?v=([-\w]+)")
 
@@ -44,7 +47,7 @@ async def google_search(bot, query: str, *, max_entries: int = 20) -> list:
             json_text = text[text.find("(") + 1 : text.rfind(")")]
             return [result[0] for result in json.loads(json_text)[1][:max_entries]]
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha na busca de sugestões do Google")
         return []
 
 
@@ -65,6 +68,51 @@ def fix_characters(text: str, limit: int = 0):
         text = f"{text[:limit]}..." if len(text) > limit else text
 
     return text
+
+
+_URL_ENCODE_RE = re.compile(r"[()<>`\x00-\x20\x7f]")
+_URL_SCHEMES = {"http", "https"}
+
+
+def _has_web_host(url: str) -> bool:
+    try:
+        parts = urlsplit(url)
+        return parts.scheme in _URL_SCHEMES and bool(parts.hostname)
+    except ValueError:
+        return False
+
+
+def md_url(url: object) -> str | None:
+    """URL http/https com host, pronta para ficar dentro de ``(<...>)``; ``None`` se não for uma."""
+    if not isinstance(url, str) or not _has_web_host(url):
+        return None
+
+    encoded = _URL_ENCODE_RE.sub(lambda m: f"%{ord(m.group()):02X}", url)
+
+    return encoded if _has_web_host(encoded) else None
+
+
+def md_code(text: object, *, limit: int = 0) -> str:
+    """Code span com texto externo, sem como fechá-lo por dentro."""
+    return f"`{fix_characters(str(text), limit) or '?'}`"
+
+
+def md_bracketed(inner: str) -> str:
+    """``[inner]`` em code spans, para conteúdo já seguro (menção, timestamp, link de ``md_link``) do próprio bot."""
+    return f"`[`{inner}`]`"
+
+
+def md_link(text: object, url: object, *, code: bool = True, limit: int = 0) -> str:
+    """Link mascarado ``[`texto`](<url>)`` com texto e URL externos neutralizados; sem URL válida sai só o rótulo."""
+    label = fix_characters(str(text), limit) or "?"
+
+    if not code:
+        label = disnake.utils.escape_markdown(label)
+
+    label = f"`{label}`" if code else label
+    safe_url = md_url(url)
+
+    return f"[{label}](<{safe_url}>)" if safe_url else label
 
 
 def time_format(milliseconds: Union[int, float], use_names: bool = False) -> str:

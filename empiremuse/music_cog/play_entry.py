@@ -16,10 +16,7 @@ from empiremuse.utils.music.checks import (
     check_deafen,
     check_pool_bots,
 )
-from empiremuse.utils.music.converters import (
-    URL_REG,
-    google_search,
-)
+from empiremuse.utils.music.converters import URL_REG, google_search, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
     MissingVoicePerms,
@@ -52,7 +49,7 @@ class PlayEntryMixin:
     async def message_play(self, inter: disnake.MessageCommandInteraction):
         if not inter.target.content:
             emb = disnake.Embed(
-                description=f"Não há texto na [mensagem]({inter.target.jump_url}) selecionada...",
+                description=f"Não há texto na {md_link('mensagem', inter.target.jump_url, code=False)} selecionada...",
                 color=disnake.Colour.red(),
             )
             await inter.send(embed=emb, ephemeral=True)
@@ -285,7 +282,7 @@ class PlayEntryMixin:
                 embed = disnake.Embed(color=self.bot.get_color(me))
 
                 embed.description = (
-                    f"**Preciso que algum staff me convide para falar no palco: [{channel.name}]({channel.jump_url}).**"
+                    f"**Preciso que algum staff me convide para falar no palco: {md_link(channel.name, channel.jump_url, code=False)}.**"
                 )
 
                 embed.set_footer(

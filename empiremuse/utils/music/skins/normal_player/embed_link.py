@@ -6,7 +6,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import time_format, fix_characters, get_button_style
+from empiremuse.utils.music.converters import time_format, fix_characters, get_button_style, md_bracketed, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -41,7 +41,7 @@ class EmbedLinkSkin:
         title = (
             f"`{fix_characters(player.current.title)}`"
             if not player.current.uri
-            else f"[`{fix_characters(player.current.title, 40)}`]({player.current.uri})"
+            else f"{md_link(player.current.title, player.current.uri, limit=40)}"
         )
 
         if player.paused:
@@ -51,7 +51,7 @@ class EmbedLinkSkin:
             txt += f"\n> -# ▶️ **⠂Tocando Agora:** {title}{duration_txt}"
             if not player.current.is_stream:
                 txt += (
-                    f" `[`<t:{int((disnake.utils.utcnow() + datetime.timedelta(milliseconds=player.current.duration - player.position)).timestamp())}:R>`]`"
+                    f" {md_bracketed(f'<t:{int((disnake.utils.utcnow() + datetime.timedelta(milliseconds=player.current.duration - player.position)).timestamp())}:R>')}"
                     if not player.paused
                     else ""
                 )
@@ -63,7 +63,7 @@ class EmbedLinkSkin:
             txt += f" <@{player.current.requester}>\n"
         else:
             try:
-                txt += f" [`[Música Recomendada]`](<{player.current.info['extra']['related']['uri']}>)"
+                txt += f" {md_bracketed(md_link('Música Recomendada', player.current.info['extra']['related']['uri']))}"
             except Exception:
                 txt += " `[Música Recomendada]`"
 

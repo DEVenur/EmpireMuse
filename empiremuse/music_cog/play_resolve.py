@@ -13,10 +13,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
-from empiremuse.utils.music.converters import (
-    YOUTUBE_VIDEO_REG,
-    music_source_image,
-)
+from empiremuse.utils.music.converters import YOUTUBE_VIDEO_REG, music_source_image, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -247,7 +244,7 @@ class PlayResolveMixin:
                 for page_index, page in enumerate(disnake.utils.as_chunks(info["entries"], 15)):
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"-# ` {(15 * page_index) + n + 1}. `[`{i['title']}`]({i['url']})"
+                            f"-# ` {(15 * page_index) + n + 1}. `{md_link(i['title'], i['url'])}"
                             for n, i in enumerate(page)
                         )
                         + "\n\n**Selecione uma playlist abaixo:**\n"

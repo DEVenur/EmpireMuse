@@ -10,7 +10,7 @@ import disnake
 
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import check_pool_bots
-from empiremuse.utils.music.converters import time_format
+from empiremuse.utils.music.converters import time_format, md_link
 from empiremuse.utils.others import (
     CustomContext,
     PlayerControls,
@@ -175,7 +175,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         if self.mode == ViewMode.fav_manager:
             try:
-                url = f"[`{self.current}`]({self.data['fav_links'][self.current]})"
+                url = f"{md_link(self.current, self.data['fav_links'][self.current])}"
                 del self.data["fav_links"][self.current]
             except Exception:
                 await inter.edit_original_message(f"**Não há favorito na lista com o nome:** {self.current}")
@@ -187,7 +187,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         elif self.mode == ViewMode.guild_fav_manager:
             try:
-                url = f"[`{self.current}`]({self.guild_data['player_controller']['fav_links'][self.current]})"
+                url = f"{md_link(self.current, self.guild_data['player_controller']['fav_links'][self.current])}"
                 del self.guild_data["player_controller"]["fav_links"][self.current]
             except KeyError:
                 try:
@@ -215,7 +215,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
                 item = item["url"]
 
             try:
-                url = f"[`{self.current}`]({item})"
+                url = f"{md_link(self.current, item)}"
                 del self.data["integration_links"][self.current]
             except Exception:
                 await inter.send(f"**Não há integração na lista com o nome:** {self.current}", ephemeral=True)

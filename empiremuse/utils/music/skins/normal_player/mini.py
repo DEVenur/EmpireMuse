@@ -5,7 +5,14 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import time_format, fix_characters, get_button_style, music_source_image
+from empiremuse.utils.music.converters import (
+    time_format,
+    fix_characters,
+    get_button_style,
+    music_source_image,
+    md_bracketed,
+    md_link,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -34,7 +41,7 @@ class MiniSkin:
 
         embed = disnake.Embed(
             color=embed_color,
-            description=f"-# [`{player.current.single_title}`]({player.current.uri or player.current.search_uri})",
+            description=f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri)}",
         )
         embed_queue = None
         queue_size = len(player.queue)
@@ -58,10 +65,10 @@ class MiniSkin:
                 embed.description += " `[🔁 fila]`"
 
         if not player.current.autoplay:
-            embed.description += f" `[`<@{player.current.requester}>`]`"
+            embed.description += f" {md_bracketed(f'<@{player.current.requester}>')}"
         else:
             try:
-                embed.description += f" [`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
+                embed.description += f" {md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
             except Exception:
                 embed.description += "` [Recomendada]`"
 
@@ -85,7 +92,7 @@ class MiniSkin:
                 embed_queue = disnake.Embed(
                     color=embed_color,
                     description="\n".join(
-                        f"`{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` [`{fix_characters(t.title, 38)}`]({t.uri})"
+                        f"`{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` {md_link(t.title, t.uri, limit=38)}"
                         for n, t in (enumerate(itertools.islice(player.queue, 5)))
                     ),
                 )

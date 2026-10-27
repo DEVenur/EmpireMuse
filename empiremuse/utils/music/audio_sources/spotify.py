@@ -20,7 +20,7 @@ from rapidfuzz import fuzz
 from empiremuse import paths
 from empiremuse.rules.ratelimit import retry_after_seconds
 from empiremuse.rules.title_match import title_matches
-from empiremuse.utils.music.converters import fix_characters, URL_REG
+from empiremuse.utils.music.converters import fix_characters, URL_REG, md_link
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, LavalinkPlaylist
 from empiremuse.utils.music.track_encoder import encode_track
@@ -414,7 +414,7 @@ class SpotifyClient:
                         pass
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                        f"{md_link(a['name'], a['external_urls']['spotify'])}" for a in result["artists"]
                     )
 
                     try:
@@ -469,7 +469,7 @@ class SpotifyClient:
             ]
 
             t.info["extra"]["authors_md"] = ", ".join(
-                f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                f"{md_link(a['name'], a['external_urls']['spotify'])}" for a in result["artists"]
             )
 
             try:
@@ -536,7 +536,7 @@ class SpotifyClient:
                 ]
 
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in track["artists"]
+                    f"{md_link(a['name'], a['external_urls']['spotify'])}" for a in track["artists"]
                 )
 
                 try:
@@ -646,11 +646,12 @@ class SpotifyClient:
                     if f"feat. {i['name'].lower()}" not in t["name"].lower()
                 ]
                 track.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{fix_characters(a['name'])}`](<"
-                    + a["external_urls"].get(
-                        "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
+                    md_link(
+                        a['name'],
+                        a["external_urls"].get(
+                            "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
+                        ),
                     )
-                    + ">)"
                     for a in t["artists"]
                 )
             else:

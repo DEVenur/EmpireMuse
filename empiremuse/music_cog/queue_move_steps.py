@@ -15,11 +15,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
     check_queue_loading,
 )
-from empiremuse.utils.music.converters import (
-    time_format,
-    fix_characters,
-    string_to_seconds,
-)
+from empiremuse.utils.music.converters import time_format, fix_characters, string_to_seconds, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -256,7 +252,7 @@ def _qm_select(self, req):
             if playlist == t.playlist_name.replace("️", "") or (
                 isinstance(inter, CustomContext) and playlist.lower() in t.playlist_name.replace("️", "").lower()
             ):
-                playlist_link = f"[`{fix_characters(t.playlist_name)}`]({t.playlist_url})"
+                playlist_link = f"{md_link(t.playlist_name, t.playlist_url)}"
                 temp_filter.remove("playlist")
                 final_filters.add("playlist")
 
@@ -352,9 +348,9 @@ async def _qm_move(self, req):
     if indexes:
         track = tracklist[0]
         txt = [
-            f"moveu a música [`{fix_characters(track.title, limit=25)}`](<{track.uri or track.search_uri}>) para a posição **[{position}]** da fila.",
+            f"moveu a música {md_link(track.title, track.uri or track.search_uri, limit=25)} para a posição **[{position}]** da fila.",
             f"↪️ **⠂{inter.author.mention} moveu uma música para a posição [{position}]:**\n"
-            f"╰[`{fix_characters(track.title, limit=43)}`](<{track.uri or track.search_uri}>)",
+            f"╰{md_link(track.title, track.uri or track.search_uri, limit=43)}",
         ]
 
         await self.interaction_message(inter, txt, emoji="↪️", components=components)
@@ -367,7 +363,7 @@ async def _qm_move(self, req):
         msg_txt = (
             f"### ↪️ ⠂{inter.author.mention} moveu {moved_tracks} música{'s'[: moved_tracks ^ 1]} para a posição {moved_tracks_txt} da fila:\n"
             + "\n".join(
-                f"`{position + n}.` [`{fix_characters(t.title, 45)}`](<{t.uri}>)" for n, t in enumerate(tracklist[:7])
+                f"`{position + n}.` {md_link(t.title, t.uri, limit=45)}" for n, t in enumerate(tracklist[:7])
             )
         )
 

@@ -6,7 +6,7 @@ from typing import List, Union, Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
-from empiremuse.utils.music.converters import time_format, fix_characters
+from empiremuse.utils.music.converters import time_format, fix_characters, md_link
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.others import (
     check_cmd,
@@ -226,7 +226,7 @@ class QueueInteraction(disnake.ui.View):
 
             if self.current_track == t:
                 txt += (
-                    f"`╔{'=' * 50}`\n`║` **{index}º) [{fix_characters(t.title, limit=37)}]({t.uri})**\n"
+                    f"`╔{'=' * 50}`\n`║` **{index}º) {md_link(t.title, t.uri, code=False, limit=37)}**\n"
                     f"`║ ⏲️`  **{duration}**"
                     + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                     + " **|** "
@@ -235,7 +235,7 @@ class QueueInteraction(disnake.ui.View):
                 )
             else:
                 txt += (
-                    f"`┌ {index})` [`{fix_characters(t.title, limit=45)}`]({t.uri})\n"
+                    f"`┌ {index})` {md_link(t.title, t.uri, limit=45)}\n"
                     f"`└ ⏲️ {duration}`"
                     + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                     + f" **|** "

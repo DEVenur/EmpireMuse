@@ -25,7 +25,7 @@ from empiremuse.rules.settings import add_dj_role as add_role, allowed_names
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import time_format
+from empiremuse.utils.music.converters import time_format, md_link, md_bracketed
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -1026,10 +1026,10 @@ class MusicSettings(commands.Cog):
 
         embed = disnake.Embed(
             description="```ansi\n[31;1mModo Normal:[0m``` "
-            + ", ".join(f"[`[{s}]`]({bot.player_skins[s].preview})" for s in skin_list)
+            + ", ".join(md_bracketed(md_link(s, bot.player_skins[s].preview)) for s in skin_list)
             + "\n\n"
             "```ansi\n[33;1mModo Fixo (Song-Request):[0m``` "
-            + ", ".join(f"[`[{s}]`]({bot.player_static_skins[s].preview})" for s in static_skin_list)
+            + ", ".join(md_bracketed(md_link(s, bot.player_static_skins[s].preview)) for s in static_skin_list)
             + "\n\n`Nota: No modo global a skin será aplicada globalmente em todos os bots.`",
             colour=bot.get_color(guild.me),
         ).set_image(asset_url("ui_rainbow_bar_2.gif"))
@@ -1097,13 +1097,13 @@ class MusicSettings(commands.Cog):
 
             if global_selected != select_view.skin_selected:
                 try:
-                    changed_skins_txt += f"Global - Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
+                    changed_skins_txt += f"Global - Modo Normal: {md_link(select_view.skin_selected, self.bot.player_skins[select_view.skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += f"Global - Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
             if global_static_selected != select_view.static_skin_selected:
                 try:
-                    changed_skins_txt += f"Global - Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
+                    changed_skins_txt += f"Global - Song Request: {md_link(select_view.static_skin_selected, self.bot.player_static_skins[select_view.static_skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
@@ -1114,7 +1114,7 @@ class MusicSettings(commands.Cog):
 
             if selected != select_view.skin_selected:
                 try:
-                    changed_skins_txt += f"Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
+                    changed_skins_txt += f"Modo Normal: {md_link(select_view.skin_selected, self.bot.player_skins[select_view.skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += (
                         f"Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
@@ -1122,7 +1122,7 @@ class MusicSettings(commands.Cog):
 
             if static_selected != select_view.static_skin_selected:
                 try:
-                    changed_skins_txt += f"Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
+                    changed_skins_txt += f"Song Request: {md_link(select_view.static_skin_selected, self.bot.player_static_skins[select_view.static_skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += f"Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
@@ -1439,7 +1439,7 @@ class MusicSettings(commands.Cog):
                     txt += "\n"
 
                 if node.website:
-                    txt += f"[`Website do server`]({node.website})\n"
+                    txt += f"{md_link('Website do server', node.website)}\n"
 
                 status = "🌟" if current_player else "✅"
 
@@ -1686,7 +1686,7 @@ class RPCCog(commands.Cog):
             color=self.bot.get_color(),
             description="**Mini-guia para usar o app para exibir a música que você está ouvindo via RPC:\n\n"
             "Faça o download do app (musicbot_rpc.zip) "
-            f"[aqui]({branding.RPC_APP_RELEASES_URL}).\n\n"
+            f"{md_link('aqui', branding.RPC_APP_RELEASES_URL, code=False)}.\n\n"
             "Extraia o musicbot_rpc.zip e na pasta abra o musicbot_rpc."
             "Adicione o link do websocket abaixo no app (aba: Socket Settings):** ```ansi\n"
             f"{(self.bot.config['RPC_PUBLIC_URL'] or self.bot.config['RPC_SERVER']).replace('$PORT', os.environ.get('PORT', '80'))}```",

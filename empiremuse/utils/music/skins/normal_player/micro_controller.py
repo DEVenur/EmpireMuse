@@ -4,7 +4,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, get_button_style, music_source_image
+from empiremuse.utils.music.converters import get_button_style, music_source_image, md_bracketed, md_link, md_code
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -33,15 +33,15 @@ class MicroController:
 
         embed = disnake.Embed(
             color=embed_color,
-            description=f"-# [`{fix_characters(player.current.single_title, 32)}`]({player.current.uri or player.current.search_uri}) "
-            f"[`{fix_characters(player.current.author, 12)}`] ",
+            description=f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri, limit=32)} "
+            f"[{md_code(player.current.author, limit=12)}] ",
         )
 
         if not player.current.autoplay:
             embed.description += f"<@{player.current.requester}>"
         else:
             try:
-                embed.description += f"[`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
+                embed.description += f"{md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
             except Exception:
                 embed.description += "`[Recomendada]`"
 

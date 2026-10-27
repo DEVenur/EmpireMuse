@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING
 import disnake
 
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import (
-    fix_characters,
-)
+from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
     EmptyFavIntegration,
@@ -330,7 +328,7 @@ class PlayMenusMixin:
                 embed = disnake.Embed(
                     color=self.bot.get_color(guild.me),
                     description="\n".join(
-                        f"{get_source_emoji_cfg(bot, i['url']) or ''} [`{fix_characters(i['option'].label, 45)}`]({check_url(i['url'])})"
+                        f"{get_source_emoji_cfg(bot, i['url']) or ''} {md_link(i['option'].label, check_url(i['url']), limit=45)}"
                         for i in fav_opts
                     ),
                 )

@@ -6,7 +6,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import time_format, get_button_style, music_source_image, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import ProgressBar, PlayerControls
 
@@ -54,7 +54,7 @@ class DefaultProgressbarSkin:
         vc_txt = ""
 
         txt = (
-            f"-# [`{player.current.single_title}`]({player.current.uri or player.current.search_uri})\n\n"
+            f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri)}\n\n"
             f"> -# 👤 **⠂** {player.current.authors_md}"
         )
 
@@ -62,7 +62,7 @@ class DefaultProgressbarSkin:
             txt += f"\n> -# ✋ **⠂** <@{player.current.requester}>"
         else:
             try:
-                mode = f" [`Recomendada`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendada', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendada`"
             txt += f"\n> -# 👍 **⠂** {mode}"
@@ -81,11 +81,11 @@ class DefaultProgressbarSkin:
 
         if player.current.album_name:
             txt += (
-                f"\n> -# 💽 **⠂** [`{fix_characters(player.current.album_name, limit=36)}`]({player.current.album_url})"
+                f"\n> -# 💽 **⠂** {md_link(player.current.album_name, player.current.album_url, limit=36)}"
             )
 
         if player.current.playlist_name:
-            txt += f"\n> -# 📑 **⠂** [`{fix_characters(player.current.playlist_name, limit=36)}`]({player.current.playlist_url})"
+            txt += f"\n> -# 📑 **⠂** {md_link(player.current.playlist_name, player.current.playlist_url, limit=36)}"
 
         if (qlenght := len(player.queue)) and not player.mini_queue_enabled:
             txt += f"\n> -# 🎶 **⠂** `{qlenght} música{'s'[: qlenght ^ 1]} na fila`"
@@ -105,7 +105,7 @@ class DefaultProgressbarSkin:
         if player.mini_queue_enabled:
             if qlenght:
                 queue_txt = "\n".join(
-                    f"`{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` [`{fix_characters(t.title, 21)}`]({t.uri})"
+                    f"`{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` {md_link(t.title, t.uri, limit=21)}"
                     for n, t in (enumerate(itertools.islice(player.queue, 3)))
                 )
 
@@ -129,7 +129,7 @@ class DefaultProgressbarSkin:
 
             elif len(player.queue_autoplay):
                 queue_txt = "\n".join(
-                    f"`👍⠂{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` [`{fix_characters(t.title, 21)}`]({t.uri})"
+                    f"`👍⠂{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` {md_link(t.title, t.uri, limit=21)}"
                     for n, t in (enumerate(itertools.islice(player.queue_autoplay, 3)))
                 )
                 embed_queue = disnake.Embed(

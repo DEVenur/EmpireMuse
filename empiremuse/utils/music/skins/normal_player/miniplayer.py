@@ -4,7 +4,13 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, get_button_style, music_source_image
+from empiremuse.utils.music.converters import (
+    fix_characters,
+    get_button_style,
+    music_source_image,
+    md_bracketed,
+    md_link,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -33,7 +39,7 @@ class MiniPlayer:
 
         embed = disnake.Embed(
             color=embed_color,
-            description=f"-# [{fix_characters(player.current.single_title, 48)}]({player.current.uri or player.current.search_uri})\n"
+            description=f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri, code=False, limit=48)}\n"
             f"-# **Uploader:** `{fix_characters(player.current.author, 17)}`\n",
         )
 
@@ -45,7 +51,7 @@ class MiniPlayer:
         else:
             try:
                 embed.description += (
-                    f"-# **Adicionado via:** [`[Recomendação]`]({player.current.info['extra']['related']['uri']})\n"
+                    f"-# **Adicionado via:** {md_bracketed(md_link('Recomendação', player.current.info['extra']['related']['uri']))}\n"
                 )
             except Exception:
                 embed.description += "-# **Adicionado via:** `[Recomendação]`\n"
