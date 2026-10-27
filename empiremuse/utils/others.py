@@ -509,7 +509,7 @@ async def send_idle_embed(
         isinstance(message.channel, (disnake.Thread, disnake.TextChannel))
         and not message.pinned
         and not is_forum
-        and target.guild.me.guild_permissions.manage_messages
+        and target.guild.me.guild_permissions.pin_messages
     ):
         await message.pin(reason="Player controller")
 
