@@ -45,7 +45,7 @@ Pré-requisito: o repositório com **Releases imutáveis** ligadas e uma release
 
    Na primeira vez, confira a assinatura desse digest com o `cosign verify` da seção 5.3 do [`release.md`](release.md) antes de fixá-lo.
 
-   Mantenha a linha do bot na forma exata, com 4 espaços (`    image: or4cu1o/empiremuse:X.Y.Z@sha256:…`): é a que o auxiliar edita. O proxy usa o nome completo (`docker.io/…`) para nunca casar com essa linha.
+   Mantenha a linha do bot na forma exata, com 4 espaços (`    image: or4cu1o/empiremuse:X.Y.Z@sha256:…`): é a que o auxiliar edita. O proxy usa o nome completo (`docker.io/or4cu1o/empiremuse:X.Y.Z@sha256:…`) para nunca casar com essa linha; se a do bot sair dessa forma, todo `update` falha com o código 65.
 2. **`DOCKER_GID` no `.env`.** Descubra o grupo dono do socket e preencha a variável (obrigatória enquanto o `updater-proxy` existir; só o proxy recebe esse grupo):
 
    ```bash
@@ -123,4 +123,5 @@ A guarda de boot (`boot_guard`) roda antes de importar o bot: se a versão nova 
 - **Painel da Hostinger.** O painel e o auxiliar editam o mesmo compose, então não edite o compose pelo painel durante um `update`. A tolerância do painel a um compose alterado por fora é validada no primeiro `update` real: depois dele, confira no editor YAML do painel se a versão nova aparece. O "Update project" do painel puxa e recria **todos** os serviços, por isso as duas linhas de imagem usam digest.
 - **Imagens antigas (R2).** Cada atualização deixa a imagem anterior no host e não há limpeza automática; rode `docker image prune` de tempos em tempos (confira antes o que ele remove).
 - **Atualização Docker travada (D12).** Se o auxiliar terminou depois de o bot desistir de acompanhá-lo (15 min), o estado pendente fica e o próximo `update` o resolve.
+- **Imagem do proxy.** O `update` só altera a linha do bot, nunca a do `updater-proxy`. Uma correção no proxy só chega à produção quando o dono troca o digest do proxy à mão no compose (por exemplo, sempre que o `CHANGELOG.md` citar o proxy), conferindo antes a assinatura (seção 5.3 do [`release.md`](release.md)).
 - **Superfície.** O `docker.sock` equivale a root no host: por isso só o proxy e o auxiliar o veem, o proxy é mínimo e o bot é tratado como possivelmente comprometido.
