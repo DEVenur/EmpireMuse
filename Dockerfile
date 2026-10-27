@@ -131,11 +131,16 @@ RUN rm -rf /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14 \
     ! /usr/local/bin/python3 -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)" && \
     ! /opt/venv/bin/python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pip') else 1)"
 
-# Criar usuário não-root fixo com nologin e preparar diretórios de dados e código
+# Criar usuário não-root fixo com nologin e preparar diretórios de dados e código.
+# /run/empiremuse-updater é o diretório do socket do proxy de atualização (docs/guides/auto-update.md): dono 10002 (o
+# proxy), grupo 10001 (o bot) e modo 0750, então o bot só atravessa o diretório e escreve no socket, sem poder apagá-lo
+# nem trocá-lo. O volume nomeado herda esse dono e modo na primeira montagem.
 RUN groupadd -g 10001 empiremuse && \
     useradd -u 10001 -g empiremuse -m -d /home/empiremuse -s /usr/sbin/nologin empiremuse && \
-    mkdir -p /data /app && \
+    mkdir -p /data /app /run/empiremuse-updater && \
     chown -R empiremuse:empiremuse /data && \
+    chown 10002:10001 /run/empiremuse-updater && \
+    chmod 0750 /run/empiremuse-updater && \
     chmod -R u=rwX,go=rX /opt/lavalink
 
 # Copiar os arquivos do código do bot como root (somente leitura para o usuário da app)
