@@ -6,6 +6,7 @@ Fixa o texto mostrado ao usuário para cada tipo de erro conhecido, o tratamento
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import logging
 import disnake
 import pytest
 from disnake.ext import commands
@@ -65,10 +66,16 @@ class TestNoPlayer:
 
 
 class TestGenericError:
-    def test_empty_text_is_treated_as_unknown(self, capsys):
-        out, full, *_ = parse(errors.GenericError(""))
+    def test_empty_text_is_treated_as_unknown(self, caplog):
+        with caplog.at_level(logging.ERROR, logger="empiremuse"):
+            out, full, *_ = parse(errors.GenericError(""))
         assert not out and "GenericError" in full
-        assert "GenericError" in capsys.readouterr().out
+        registros = [r for r in caplog.records if r.name == "empiremuse.errors" and r.levelno == logging.ERROR]
+        assert registros, "o erro inesperado precisa ir ao logger empiremuse.errors"
+        assert any(
+            (r.exc_info and r.exc_info[0] is errors.GenericError) or "GenericError" in (r.exc_text or "")
+            for r in registros
+        )
 
 
 class TestUnwrapping:
