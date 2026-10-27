@@ -15,7 +15,7 @@ O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins es
 | Componente | Versão / Tag | Origem e Observações |
 | :--- | :--- | :--- |
 | **Lavalink** | **4.2.2 oficial** | Versão estável com suporte a Java 17+ e protocolo de voz **DAVE (E2EE)**. Substitui builds de desenvolvimento (snapshots). |
-| **Java / JDK** | **17 ou superior** | Requisito do Lavalink 4.2.2 (Java 21 recomendado). Caso Java ≥ 17 não seja detectado no sistema, o bot baixa um JDK sob demanda. |
+| **Java / JDK** | **25 recomendado, 17 mínimo** | Requisito do Lavalink 4.2.2 (**Java 25 recomendado**, 17 é o mínimo). Caso Java ≥ 17 não seja detectado no sistema, o bot baixa um JDK sob demanda. |
 | **youtube-plugin** | Snapshot `2be8e542` | Build fixado pós-1.18.2 com correções críticas para clientes mobile/web e suporte a cifra remota. |
 | **LavaSrc** | **4.8.3** | Provedor de metadados e suporte a plataformas externas (Spotify e Deezer). |
 | **Lyrics** | **2.6.1** | Plugin oficial de letras de músicas (`dev.schlaubi.lyrics`). |
@@ -35,10 +35,17 @@ Para garantir a confiabilidade dos binários executados localmente, o EmpireMuse
 - O download é realizado em arquivo temporário isolado e movido atomicamente para o destino final somente após confirmação do hash. Em caso de divergência, o arquivo corrompido é excluído e o processo é abortado imediatamente.
 
 ### Download Seguro e Extração Atômica do JDK
-Caso Java 17+ não esteja disponível no sistema operacional do host, o bot gerencia o download de um JDK portátil da BellSoft Liberica com salvaguardas rigorosas:
+Caso Java 17+ não esteja disponível no sistema operacional do host, o bot gerencia o download de um JDK portátil da BellSoft Liberica com salvaguardas rigorosas (Liberica 25 LTS nas plataformas x64; o JDK 25 não tem build x86 32-bit, então as plataformas i586 ficam no último Liberica 21.0.x):
 - **Hash SHA-256 fixo**: O arquivo compactado (`.zip` no Windows, `.tar.gz` no Linux) é baixado via `download_verified` e conferido estritamente contra `JDK_DOWNLOADS` de `utils/branding.py`. Arquivos já presentes no disco só são aproveitados se o SHA-256 conferir na íntegra.
 - **Extração segura no Linux**: Membros do arquivo com componentes relativos (`..`) ou caminhos absolutos são rejeitados antes de qualquer extração, utilizando o filtro seguro `data` da biblioteca padrão `tarfile`.
 - **Atomicidade e integridade**: A descompactação ocorre em diretório temporário isolado e só é promovida para a pasta definitiva através de substituição atômica (`os.replace`) após conclusão bem-sucedida. Instalações quebradas ou interrompidas são substituídas por completo e uma instalação existente só é considerada utilizável se `bin/java` existir e for executável.
+
+### Opções da JVM do Lavalink local (GC e flags de acesso)
+O bot monta a linha de comando do Java em `_java_command` (`utils/music/local_lavalink.py`), lendo o major da JVM de `java -version` (`java_major_version`). Todas as opções vêm antes de `-jar Lavalink.jar`, nesta ordem: processadores, `-Xmx`, `-Xms`, GC, flags de acesso, diretório temporário, log, flag que desliga o log do corpo das requisições (`-Dlogging.request.includePayload=false`) e override.
+- **Coletor de lixo**: `-XX:+UseSerialGC` quando `LAVALINK_CPU_CORES` (também passado como `-XX:ActiveProcessorCount`) vale **1**; `-XX:+UseG1GC` com 2 ou mais. A escolha usa o valor configurado, não os núcleos do host. Sempre exatamente um GC. Não são usados `UseZGC`, `MaxRAMPercentage` nem AOT cache.
+- **Flags de acesso**: `--enable-native-access=ALL-UNNAMED` e `--sun-misc-unsafe-memory-access=allow` só entram em **Java 24 e 25**, faixa em que as duas existem e foram testadas. Com Java 17 a 23, 26 ou superior, ou major ilegível, nenhuma das duas é passada: é melhor uma JVM que sobe com avisos do que uma que recusa a opção. A faixa só sobe junto com o JRE da imagem, depois de um novo teste de subida.
+- **Tamanho do heap**: segue `LAVALINK_INITIAL_RAM` e `LAVALINK_RAM_LIMIT`, sem mudança.
+- **Trust store da JRE**: na imagem Docker, as raízes emSign C1, ECC C3 e ECC G3 (CA eMudhra; a ECC G3 saiu do `certifi` na 2026.10.19 e a C1 e a ECC C3 na 2026.10.23) são removidas do `cacerts` do Temurin com `keytool -delete`. Fora do Docker, o JDK de reserva da Liberica ainda as confia; é um risco residual aceito.
 
 ### Isolamento do Ambiente do Subprocesso (Allowlist)
 Ao iniciar o Lavalink local, o processo Java não herda as variáveis de ambiente arbitrárias do bot:
@@ -106,11 +113,12 @@ Para atualizar o EmpireMuse:
 ### Atualizar o JDK
 Quando for necessário atualizar a versão ou a release dos pacotes portáteis do JDK da BellSoft para novas versões homologadas:
 1. **Baixar o arquivo da BellSoft**:
-   Baixe o pacote oficial da plataforma desejada (Windows amd64/i586 `.zip`, Linux amd64/i586 `.tar.gz`) em um diretório temporário isolado (por exemplo, via `mktemp -d`), sem executar nem descompactar os arquivos.
+   Baixe o pacote oficial da plataforma desejada (Windows amd64/i586 `.zip`, Linux amd64/i586 `.tar.gz`; Liberica 25 LTS no x64 e o último 21.0.x no i586) em um diretório temporário isolado (por exemplo, via `mktemp -d`), sem executar nem descompactar os arquivos.
 2. **Conferir o SHA-1 publicado**:
    Valide a autenticidade do arquivo baixado contra o hash publicado pela BellSoft, consultando:
    - A API pública da BellSoft: `https://api.bell-sw.com/v1/liberica/releases` (verificando o campo `sha1` ou correspondente do artefato); ou
    - O arquivo `sha1sum.txt` oficial disponibilizado na página de release da BellSoft.
+   Confira também o `digest` SHA-256 do asset na release `bell-sw/Liberica` do GitHub (`gh api repos/bell-sw/Liberica/releases/tags/<versão>`): o SHA-256 do arquivo de `download.bell-sw.com` precisa ser igual a ele.
 3. **Calcular o SHA-256**:
    Calcule o hash SHA-256 do arquivo baixado localmente no terminal:
    ```bash

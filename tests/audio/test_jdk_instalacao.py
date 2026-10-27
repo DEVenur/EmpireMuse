@@ -92,6 +92,7 @@ def install(monkeypatch, tmp_path):
     started = []
     monkeypatch.setattr(ll.requests, "get", get)
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: None)
+    monkeypatch.setattr(ll, "java_major_version", lambda cmd, debug=False: 25)
     monkeypatch.setattr(ll.platform, "architecture", lambda *a, **k: ("64bit", "ELF"))
     monkeypatch.setattr(ll.platform, "system", lambda: "Linux")
     monkeypatch.setattr(ll.subprocess, "Popen", lambda args, **kw: started.append(list(args)))

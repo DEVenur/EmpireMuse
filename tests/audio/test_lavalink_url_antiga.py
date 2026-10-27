@@ -106,6 +106,7 @@ def net(monkeypatch, tmp_path):
 def popen(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
+    monkeypatch.setattr(ll, "java_major_version", lambda cmd, debug=False: 25)
     monkeypatch.setattr(ll.platform, "architecture", lambda *a, **k: ("64bit", "ELF"))
     started = []
     monkeypatch.setattr(ll.subprocess, "Popen", lambda args, **kw: started.append(list(args)))
