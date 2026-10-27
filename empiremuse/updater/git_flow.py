@@ -524,8 +524,18 @@ async def _is_target_file(git: _Git, repo: Path, name: str, entry: tuple[str, st
         return False
     if (mode == "100755") != bool(info.st_mode & stat.S_IXUSR):
         return False
-    result = await git("hash-object", "--end-of-options", name)
-    return result.returncode == 0 and result.output.strip() == sha
+    # Com os filtros do caminho (o ``eol=crlf`` do ``.gitattributes``) e sem eles: o restore roda DEPOIS do checkout do
+    # commit anterior, e se o próprio alvo trouxe a regra ela já não vale mais na árvore.
+    for flags in ((), ("--no-filters",)):
+        result = await git("hash-object", *flags, "--end-of-options", name)
+        if result.returncode == 0 and result.output.strip() == sha:
+            return True
+    try:
+        content = path.read_bytes()
+    except OSError:
+        return False
+    normalized = content.replace(b"\r\n", b"\n")  # o checkout do alvo gravou CRLF onde o blob tem LF
+    return hashlib.sha1(b"blob %d\0" % len(normalized) + normalized).hexdigest() == sha  # noqa: S324 - hash de objeto do git
 
 
 async def _remove_target_additions(git: _Git, repo: Path, names: list[str], target_commit: str) -> None:
