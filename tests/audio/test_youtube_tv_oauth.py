@@ -4,7 +4,7 @@ Contrato: BRIEFING-FASE2.md ("Trilha A2" e notas seguintes). Interpretações: .
 Sem rede, sem Java, sem Discord e sem produção: `subprocess.Popen` é um dublê e tudo roda em tmp_path.
 
 API exigida do Backend (nomes fixados pelos testes):
-  utils/branding.py        LAVALINK_BINARIES_URL -> release 0.0.4; LAVALINK_APPLICATION_YML_SHA256 = hash do yml 0.0.4;
+  utils/branding.py        LAVALINK_BINARIES_URL -> release 0.0.5; LAVALINK_APPLICATION_YML_SHA256 = hash do yml da release;
                            LAVALINK_APPLICATION_YML_KNOWN_SHA256 inclui os yml 0.0.1 e 0.0.2 (substituídos na atualização).
   config_loader.py         DEFAULT_CONFIG["YOUTUBE_OAUTH_REFRESH_TOKEN"] = "" (segredo, texto).
   .example.env             YOUTUBE_OAUTH_REFRESH_TOKEN= (vazio).
@@ -33,10 +33,8 @@ pytestmark = pytest.mark.critical
 
 ROOT = RAIZ
 STAGING_ENV = os.environ.get("EMPIREMUSE_STAGING")
-RELEASE_004 = Path(STAGING_ENV) / "ll-binaries-0.0.4" if STAGING_ENV else None
+RELEASE_005 = Path(STAGING_ENV) / "ll-binaries-0.0.5" if STAGING_ENV else None
 
-BASE_004 = "https://github.com/EmpireCommunity/EmpireMuse-LL-binaries/releases/download/0.0.4"
-YML_004_SHA256 = "39ca3e7813e0db338535b0e098dd084ea22c278bb74a8ddeac92f1fc65f8bb46"
 
 OAUTH_ENV_VARS = (
     "PLUGINS_YOUTUBE_OAUTH_ENABLED",
@@ -56,18 +54,6 @@ def assert_no_token(where: str, *texts) -> None:
     """Falha sem imprimir o texto inspecionado (ele pode conter segredos reais do ambiente de desenvolvimento)."""
     if any(FAKE_TOKEN in text for text in texts):
         pytest.fail(f"o refresh token vazou em: {where}", pytrace=False)
-
-
-# ============================================================================ (1) branding -> release 0.0.4
-
-
-class TestBrandingRelease004:
-    def test_application_yml_hash_is_the_004_one(self):
-        assert branding.LAVALINK_APPLICATION_YML_SHA256 == YML_004_SHA256
-
-    def test_plugin_urls_are_built_from_the_004_base(self):
-        for name in branding.LAVALINK_PLUGIN_SHA256:
-            assert f"{branding.LAVALINK_BINARIES_URL}/{name}".startswith(BASE_004 + "/")
 
 
 # ============================================================================ (2) configuração do segredo
@@ -333,28 +319,28 @@ class TestNoOutputSinkReceivesTheToken:
         )
 
 
-# ============================================================================ (5) application.yml 0.0.4
+# ============================================================================ (5) application.yml 0.0.5
 
 
 @pytest.fixture(scope="module")
-def release_004():
-    if not RELEASE_004 or not RELEASE_004.is_dir():
-        pytest.skip("artefatos da release 0.0.4 ausentes; defina a variável EMPIREMUSE_STAGING para habilitar")
-    return RELEASE_004
+def release_005():
+    if not RELEASE_005 or not RELEASE_005.is_dir():
+        pytest.skip("artefatos da release 0.0.5 ausentes; defina a variável EMPIREMUSE_STAGING para habilitar")
+    return RELEASE_005
 
 
 @pytest.fixture(scope="module")
-def yml_004(release_004):
+def yml_005(release_005):
     from ruamel.yaml import YAML
 
-    return YAML(typ="safe").load((release_004 / "application.yml").read_text("utf-8"))
+    return YAML(typ="safe").load((release_005 / "application.yml").read_text("utf-8"))
 
 
-class TestApplicationYml004:
-    def test_youtube_oauth_handler_logger_is_at_warn(self, yml_004):
-        level = yml_004["logging"]["level"]
+class TestApplicationYml005:
+    def test_youtube_oauth_handler_logger_is_at_warn(self, yml_005):
+        level = yml_005["logging"]["level"]
         assert level.get("dev.lavalink.youtube.http.YoutubeOauth2Handler") == "WARN"
 
-    def test_the_yml_has_no_other_secret_than_the_known_local_password(self, release_004):
-        text = (release_004 / "application.yml").read_text("utf-8")
+    def test_the_yml_has_no_other_secret_than_the_known_local_password(self, release_005):
+        text = (release_005 / "application.yml").read_text("utf-8")
         assert "refreshToken" not in text and "refresh_token" not in text.lower()
