@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -90,14 +91,15 @@ EXPORT_REFUSED_NAMES = frozenset(
 
 def is_export_refused(name: str) -> bool:
     """Se `name` (resolvido contra o cwd, com `..` e links) é um segredo conhecido, fica dentro da `.runtime/` do projeto
-    ou resolve para fora da raiz do projeto (link rastreado apontando para fora)."""
+    ou resolve para fora do projeto e do diretório de execução (link rastreado apontando para fora)."""
     try:
-        path = Path(name).resolve()
+        path = Path(name).resolve(strict=True)  # laço de links e link quebrado levantam OSError e são recusados
         project_dir = paths.PROJECT_DIR.resolve()
+        runtime_dir = paths.RUNTIME_DIR.resolve()
         dev_runtime = (paths.PROJECT_DIR / paths.DEV_RUNTIME_NAME).resolve()
     except OSError, ValueError, RuntimeError:
         return True  # caminho que nem resolve não vai para o zip
-    if project_dir not in path.parents:
+    if project_dir not in path.parents and runtime_dir not in path.parents:
         return True
     if path.name.lower() in EXPORT_REFUSED_NAMES:
         return True
@@ -972,85 +974,94 @@ class Owner(commands.Cog):
         env_temp = paths.RUNTIME_DIR / ".env-temp"
         example_env = paths.PROJECT_DIR / ".example.env"
 
-        if not env_temp.is_file():
-            shutil.copyfile(str(example_env), str(env_temp))
-
-        for i in SECRETS:
-            if not isinstance(SECRETS[i], str):
-                SECRETS[i] = str(SECRETS[i]).lower()
-            dotenv.set_key(str(env_temp), i, SECRETS[i])
-
-        filelist = ""
-        git_dir = os.environ.get("GIT_DIR", str(paths.RUNTIME_DIR / ".git"))
-        if os.path.isdir(git_dir):
-            try:
-                # Os caminhos saem relativos à árvore de trabalho, e o ``zip_dir`` os lê a partir do cwd do processo.
-                filelist = await run_git(
-                    "ls-files", "--others", "--exclude-standard", "--cached", git_dir=git_dir, cwd=Path.cwd()
-                )
-            except Exception:
-                filelist = ""
-
-        for folder, subfolder, files in os.walk(Path(__file__).resolve().parent):
-            for file in files:
-                if file.endswith(".py") and (filename := os.path.join(file)) not in filelist.split("\n"):
-                    filelist += f"\n{filename}"
-
-        for extra_dir in self.extra_dirs:
-            for dir_path, dir_names, filenames in os.walk(extra_dir):
-                filelist += "\n" + "\n".join(os.path.join(dir_path, file) for file in filenames)
-
-        for file in self.additional_files:
-            if os.path.isfile(file):
-                filelist += "\n" + file
-
-        await self.bot.loop.run_in_executor(None, self.zip_dir, filelist.split("\n"))
-
-        try:
-            os.remove(str(env_temp))
-        except OSError:
-            pass
-
         source_zip = paths.RUNTIME_DIR / "source.zip"
-
-        if (filesize := (os.path.getsize(str(source_zip))) / 1024) > 25600:
-            try:
-                os.remove(str(source_zip))
-            except Exception:
-                pass
-            raise GenericError(
-                f"**O tamanho do arquivo ultrapassou do limite de 25MB (tamanho atual: {humanize.naturalsize(filesize)})**"
-            )
-
         try:
-            embed = disnake.Embed(
-                description="**Não envie o arquivo source.zip ou o arquivo .env para terceiros, tenha cuidado ao postar "
-                "capturas de tela do conteúdo do arquivo .env e não compartilhe esse arquivo em locais públicos.**",
-                color=self.bot.get_color(ctx.guild.me),
-            )
-            embed.set_footer(text="Por medida de segurança, esta mensagem será deletada em 2 minutos.")
+            if not env_temp.is_file():
+                shutil.copyfile(str(example_env), str(env_temp))
 
-            msg = await ctx.author.send(
-                embed=embed,
-                file=disnake.File(str(source_zip), filename=f"{self.bot.user}_source.zip"),
-                delete_after=120,
-            )
+            for i in SECRETS:
+                if not isinstance(SECRETS[i], str):
+                    SECRETS[i] = str(SECRETS[i]).lower()
+                dotenv.set_key(str(env_temp), i, SECRETS[i])
 
-            os.remove(str(source_zip))
+            filelist = ""
+            git_dir = os.environ.get("GIT_DIR", str(paths.RUNTIME_DIR / ".git"))
+            if os.path.isdir(git_dir):
+                try:
+                    # Os caminhos saem relativos à árvore de trabalho, e o ``zip_dir`` os lê a partir do cwd do processo.
+                    filelist = await run_git(
+                        "ls-files", "--others", "--exclude-standard", "--cached", git_dir=git_dir, cwd=Path.cwd()
+                    )
+                except Exception:
+                    filelist = ""
 
-        except disnake.Forbidden:
-            os.remove(str(source_zip))
-            raise GenericError("Seu DM está desativado!")
+            for folder, subfolder, files in os.walk(Path(__file__).resolve().parent):
+                for file in files:
+                    if file.endswith(".py") and (filename := os.path.join(file)) not in filelist.split("\n"):
+                        filelist += f"\n{filename}"
 
-        if isinstance(ctx, CustomContext):
-            await ctx.send(
-                embed=disnake.Embed(
-                    description=f"**O arquivo [source.zip]({msg.jump_url}) foi enviado no seu privado.**",
+            for extra_dir in self.extra_dirs:
+                for dir_path, dir_names, filenames in os.walk(extra_dir):
+                    filelist += "\n" + "\n".join(os.path.join(dir_path, file) for file in filenames)
+
+            for file in self.additional_files:
+                if os.path.isfile(file):
+                    filelist += "\n" + file
+
+            await self.bot.loop.run_in_executor(None, self.zip_dir, filelist.split("\n"))
+
+            try:
+                os.remove(str(env_temp))
+            except OSError:
+                pass
+
+            if (filesize := (os.path.getsize(str(source_zip))) / 1024) > 25600:
+                try:
+                    os.remove(str(source_zip))
+                except Exception:
+                    pass
+                raise GenericError(
+                    f"**O tamanho do arquivo ultrapassou do limite de 25MB (tamanho atual: {humanize.naturalsize(filesize)})**"
+                )
+
+            try:
+                embed = disnake.Embed(
+                    description="**Não envie o arquivo source.zip ou o arquivo .env para terceiros, tenha cuidado ao postar "
+                    "capturas de tela do conteúdo do arquivo .env e não compartilhe esse arquivo em locais públicos.**",
                     color=self.bot.get_color(ctx.guild.me),
                 )
-            )
-        else:
-            return f"Arquivo [source.zip]({msg.jump_url}) foi enviado com sucesso no seu DM."
+                embed.set_footer(text="Por medida de segurança, esta mensagem será deletada em 2 minutos.")
+
+                msg = await ctx.author.send(
+                    embed=embed,
+                    file=disnake.File(str(source_zip), filename=f"{self.bot.user}_source.zip"),
+                    delete_after=120,
+                )
+
+                os.remove(str(source_zip))
+
+            except disnake.Forbidden:
+                os.remove(str(source_zip))
+                raise GenericError("Seu DM está desativado!")
+
+            if isinstance(ctx, CustomContext):
+                await ctx.send(
+                    embed=disnake.Embed(
+                        description=f"**O arquivo [source.zip]({msg.jump_url}) foi enviado no seu privado.**",
+                        color=self.bot.get_color(ctx.guild.me),
+                    )
+                )
+            else:
+                return f"Arquivo [source.zip]({msg.jump_url}) foi enviado com sucesso no seu DM."
+        except BaseException:
+            # Falha (ou cancelamento) no meio do caminho não deixa um source.zip parcial para trás.
+            with contextlib.suppress(OSError):
+                os.remove(str(source_zip))
+            raise
+        finally:
+            # O .env-temp carrega o TOKEN real: some em qualquer saída.
+            with contextlib.suppress(OSError):
+                os.remove(str(env_temp))
 
     @staticmethod
     def zip_dir(filelist: list):
@@ -1073,7 +1084,7 @@ class Owner(commands.Cog):
                             env_written = True
                     elif not is_export_refused(f):
                         zipf.write(f)
-                except FileNotFoundError, ValueError, RuntimeError:
+                except OSError, ValueError, RuntimeError:
                     continue
 
     @commands.is_owner()
