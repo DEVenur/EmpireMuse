@@ -59,6 +59,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Raízes emSign C1 e ECC C3 desconfiadas na imagem**: desativadas em `/etc/ca-certificates.conf` (a CA eMudhra foi removida do `certifi` 2026.10.23, mas o Debian ainda a confiava).
 
 ### Removido
+- **Aviso de bot público e licença GPL-2 no console**: o aviso herdado de bot público e o texto da licença GPL-2 deixam de aparecer no console; o aviso de servidores sem o dono ou a equipe continua.
 - **`nodriver` e o código morto que o usava (item 6, fase S3)**: saem o `nodriver`, `empiremuse/utils/music/youtube_trusted_session_generator.py`, o import em `wavelink/node.py`, `Node.refresh_potoken` e os testes `test_refresh_potoken_*`. Motivo de licença: o `nodriver` é AGPL-3.0 (0.32 e 0.50.x), incompatível com a GPL-2.0-only do projeto, e o único uso era código sem chamador em `empiremuse/`.
 - **Submódulos git** (`.gitmodules` e os links em `repos/`): `EmpireMuse-LL-binaries`, `EmpireMuse-RPC-app` e `EmpireMuse-jishaku` passam a ser clones irmãos na raiz do workspace; ignores, workspace do VS Code, cobertura, `.coderabbit.yaml`, `AGENTS.md`, `docs/development.md`, ADR-0003 e o teste do RPC atualizados.
 - **Pesquisas da etapa P-0 do painel** (`docs/painel/pesquisa-backend.md`, `pesquisa-externa.md` e `pesquisa-frontend.md`), superadas pelo painel pronto e pelo ADR-0002.
