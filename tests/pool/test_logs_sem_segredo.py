@@ -17,7 +17,7 @@ from empiremuse.music_cog.tracks import TracksMixin
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.wavelink.node import Node
-from tests.support.erros_http import SENHA, SessaoQueNaoEntendeJson, erro_response
+from tests.support.erros_http import CORPO_SECRETO, SENHA, SessaoComStatus, SessaoQueNaoEntendeJson, erro_response
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
 
@@ -28,7 +28,7 @@ def sem_espera(monkeypatch):
 
 
 def sem_segredo(texto: str) -> None:
-    assert SENHA not in texto and "RequestInfo" not in texto, texto
+    assert SENHA not in texto and CORPO_SECRETO not in texto and "RequestInfo" not in texto, texto
 
 
 async def test_check_node_final_failure_message_has_no_header(monkeypatch, capsys):
@@ -155,3 +155,57 @@ async def test_lavalink_tracks_exceptions_set_has_no_header():
     _, _, excecoes = await cog.get_lavalink_tracks("busca", SimpleNamespace(), SimpleNamespace(id=1), bot=bot)
 
     assert excecoes == {"HTTP 401"}
+
+
+# ============================================================================ /v4/info com status de erro: a causa é só "HTTP <status>"
+
+
+@pytest.mark.parametrize("status", [401, 500])
+async def test_check_node_http_status_failure_logs_only_the_status(monkeypatch, capsys, status):
+    monkeypatch.setattr(client.aiohttp, "ClientSession", lambda: SessaoComStatus(status))
+    pool = BotPool.__new__(BotPool)
+    pool.get_all_bots = lambda: []
+    pool.mongo_database = None
+
+    await pool.check_node({"host": "127.0.0.1", "port": 8090, "password": SENHA, "identifier": "NODE-X", "retries": 1})
+
+    saida = capsys.readouterr()
+    sem_segredo(saida.out + saida.err)
+    assert (
+        "Todas as tentativas de verificar o servidor [NODE-X] falharam" in saida.out and f"HTTP {status}" in saida.out
+    )
+
+
+@pytest.mark.parametrize("status", [401, 500])
+async def test_node_connect_http_status_failure_logs_only_the_status(capsys, status):
+    node = node_falso()
+    node.session = node._client.bot.session = SessaoComStatus(status)
+
+    await node.connect()
+
+    saida = capsys.readouterr()
+    sem_segredo(saida.out + saida.err)
+    assert "Falha ao conectar no servidor [NODE-X]" in saida.out and f"HTTP {status}" in saida.out
+
+
+@pytest.mark.parametrize("status", [401, 500])
+async def test_node_reconnect_http_status_failure_logs_only_the_status(capsys, status):
+    node = node_falso(
+        players={},
+        session_id=None,
+        uid=1,
+        _retry_dt=datetime.fromtimestamp(0, timezone.utc),
+        _retry_count=0,
+        _websocket=SimpleNamespace(_connect=AsyncMock(), is_connected=False),
+    )
+    sessao = SessaoComStatus(status)
+    cog = NodesMixin()
+    cog.bot = SimpleNamespace(
+        user="bot", session=sessao, config={"LAVALINK_RECONNECT_RETRIES": 2}, wait_until_ready=AsyncMock()
+    )
+
+    await cog.node_reconnect(node)
+
+    saida = capsys.readouterr()
+    sem_segredo(saida.out + saida.err)
+    assert "Falha ao reconectar no servidor [NODE-X]" in saida.out and f"HTTP {status}" in saida.out

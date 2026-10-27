@@ -24,3 +24,13 @@ def test_safe_error_is_the_status_or_the_class_name_only(erro, esperado):
     resumo = safe_error(erro)
 
     assert resumo == esperado and SENHA not in resumo
+
+
+@pytest.mark.parametrize("status", [401, 500])
+def test_an_http_status_error_is_summarized_and_carries_no_body(status):
+    from empiremuse.utils.safe_error import HTTPStatusError
+
+    erro = HTTPStatusError(status)
+
+    assert safe_error(erro) == f"HTTP {status}" and erro.status == status
+    assert str(erro) == f"HTTP {status}"

@@ -19,10 +19,8 @@ def erro_response(status: int = 401, classe=aiohttp.ClientResponseError) -> aioh
 class Resposta:
     """Resposta 200 cujo ``json()`` levanta ``erro`` (ou devolve ``corpo``)."""
 
-    status = 200
-
-    def __init__(self, corpo=None, erro=None):
-        self._corpo, self._erro = corpo, erro
+    def __init__(self, corpo=None, erro=None, status=200, texto=""):
+        self._corpo, self._erro, self.status, self._texto = corpo, erro, status, texto
 
     async def __aenter__(self):
         return self
@@ -36,7 +34,7 @@ class Resposta:
         return self._corpo
 
     async def text(self):
-        return ""
+        return self._texto
 
 
 class SessaoQueNaoEntendeJson:
@@ -44,3 +42,22 @@ class SessaoQueNaoEntendeJson:
 
     def get(self, *args, **kwargs):
         return Resposta(erro=erro_response(200, aiohttp.ContentTypeError))
+
+
+CORPO_SECRETO = "CORPO-SECRETO"
+
+
+class SessaoComStatus:
+    """``get`` responde ``status`` com um corpo de texto que também é segredo; usável como sessão e como gerenciador de contexto."""
+
+    def __init__(self, status: int):
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    def get(self, *args, **kwargs):
+        return Resposta(status=self.status, texto=CORPO_SECRETO)
