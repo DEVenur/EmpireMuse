@@ -48,14 +48,14 @@ def _uninstall() -> None:
     _installed.clear()
 
 
-def _file_handler(logs_dir: Path) -> logging.Handler | None:
+def _file_handler(logs_dir: Path) -> tuple[logging.Handler | None, str | None]:
+    """O handler do arquivo e, se ele não abriu, o tipo do erro (pasta sem permissão ou disco cheio não derruba a subida)."""
     from empiremuse.utils.file_log import build_file_log_handler  # import tardio: o file_log importa o pacote logs
 
     try:
-        return build_file_log_handler(logs_dir)
-    except OSError as e:  # pasta sem permissão ou disco cheio não pode derrubar a subida: segue só no console
-        logger.warning("Não foi possível abrir o arquivo de log (%s); seguindo só no console.", type(e).__name__)
-        return None
+        return build_file_log_handler(logs_dir), None
+    except OSError as e:
+        return None, type(e).__name__
 
 
 def configure_logging(
@@ -79,8 +79,11 @@ def configure_logging(
         console = _ConsoleHandler(stream if stream is not None else sys.stderr)
         console.setFormatter(ConsoleFormatter(settings.color))
         handlers: list[logging.Handler] = [console]
+        file_error = None
         if settings.file:
-            file_handler = _file_handler(logs_dir if logs_dir is not None else paths.RUNTIME_DIR / LOGS_DIR_NAME)
+            file_handler, file_error = _file_handler(
+                logs_dir if logs_dir is not None else paths.RUNTIME_DIR / LOGS_DIR_NAME
+            )
             if file_handler is not None:
                 file_handler.setFormatter(FileFormatter())
                 handlers.append(file_handler)
@@ -103,6 +106,8 @@ def configure_logging(
         root.setLevel(logging.DEBUG if settings.debug_guilds else settings.level)
         for name in LIBRARY_LOGGERS:
             logging.getLogger(name).setLevel(logging.WARNING)
+        if file_error is not None:  # depois do addHandler: o aviso sai pelo console já configurado
+            logger.warning("Não foi possível abrir o arquivo de log (%s); seguindo só no console.", file_error)
 
 
 def flush_logging() -> None:
