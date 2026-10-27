@@ -11,6 +11,7 @@ tag, ``rev-parse``…) e não mexe no HEAD; quem troca o código é ``apply_git_
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import logging
 import os
@@ -125,6 +126,14 @@ def git_command(repo_dir: Path | None, allow_protocol: str, *args: str) -> list[
     return command + list(args)
 
 
+async def _reap(process: asyncio.subprocess.Process) -> None:
+    """Mata o processo, se ainda roda, e espera o término."""
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+    await process.wait()
+
+
 async def run_exec(
     *args: str,
     cwd: str | os.PathLike[str] | None,
@@ -150,9 +159,11 @@ async def run_exec(
     try:
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout)
     except TimeoutError:
-        process.kill()
-        await process.wait()
+        await _reap(process)
         return ExecResult(124, "tempo esgotado")
+    except asyncio.CancelledError:
+        await _reap(process)  # cancelado (ex.: desligamento): o git/pip não pode seguir vivo sem dono
+        raise
     text = mask_secrets(stdout.decode("utf-8", errors="replace"), collect_secret_values(os.environ))
     return ExecResult(process.returncode or 0, text[-max_output:])
 
@@ -416,6 +427,17 @@ async def apply_git_update(
         )
         await _install_dependencies(runner, repo_dir, python)
         await _smoke_test(runner, repo_dir, python)
+        pending = PendingUpdate(
+            flow="git",
+            from_version=plan.current,
+            to_version=plan.target,
+            bot_id=request.bot_id,
+            channel_id=request.channel_id,
+            requested_by=request.requested_by,
+            created_at=now(),
+            prev_sha=plan.prev_sha,
+        )
+        write_pending(runtime_dir, pending)  # dentro do bloco: sem o pendente o boot_guard não protege o código novo
     except UpdateError as failure:
         try:
             await restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
@@ -427,15 +449,11 @@ async def apply_git_update(
         raise UpdateError(
             f"A atualização falhou ({failure}); o código foi revertido para a versão {plan.current}."
         ) from failure
-    pending = PendingUpdate(
-        flow="git",
-        from_version=plan.current,
-        to_version=plan.target,
-        bot_id=request.bot_id,
-        channel_id=request.channel_id,
-        requested_by=request.requested_by,
-        created_at=now(),
-        prev_sha=plan.prev_sha,
-    )
-    write_pending(runtime_dir, pending)
+    except Exception, asyncio.CancelledError:
+        # Cancelamento, erro do disco ao gravar o pendente...: o checkout novo não pode ficar aplicado sem proteção.
+        try:
+            await restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
+        except Exception:  # a falha do restore não pode esconder a exceção original
+            logger.error("update: a reversão para %s falhou", plan.prev_sha, exc_info=True)
+        raise  # sempre a exceção original (nunca engole o CancelledError)
     return pending
