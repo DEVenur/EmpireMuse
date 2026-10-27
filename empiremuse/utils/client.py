@@ -60,11 +60,6 @@ from empiremuse.utils.others import CustomContext, token_regex, sort_dict_recurs
 from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
 
-if os.name != "nt":
-    import uvloop
-
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
 logger = logging.getLogger(__name__)
 
 
@@ -309,7 +304,7 @@ class BotPool:
         self.stop_lavalink()
 
         if not self.loop:
-            self.loop = asyncio.get_event_loop()
+            self.loop = asyncio.get_running_loop()
 
         try:
             process = await self.loop.run_in_executor(
@@ -1066,7 +1061,12 @@ class BotPool:
 
         load_modules_log = True
 
-        self.loop = asyncio.new_event_loop()
+        if os.name != "nt":
+            import uvloop
+
+            self.loop = uvloop.new_event_loop()
+        else:
+            self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
 
         for k, v in all_tokens.items():

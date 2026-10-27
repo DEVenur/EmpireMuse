@@ -665,7 +665,7 @@ class FavModalAdd(disnake.ui.Modal):
         else:
             base_url, label = f"https://soundcloud.com/{soundcloud_regex.search(url).group(1)}/sets", "[SC]:"
 
-        loop = self.view.bot.loop or asyncio.get_event_loop()
+        loop = self.view.bot.loop or asyncio.get_running_loop()
 
         try:
             info = await loop.run_in_executor(
