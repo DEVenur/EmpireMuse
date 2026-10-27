@@ -55,7 +55,7 @@ async def _aq_source_tracks(self, req):
 
         for i in range(3):
             try:
-                result = await self.bot.spotify.track_search(tracks_search[0].author, limit=50)
+                result = await self.bot.spotify.track_search(tracks_search[0].author, limit=10)
                 exception = None
                 break
             except (ClientError, asyncio.TimeoutError) as e:
