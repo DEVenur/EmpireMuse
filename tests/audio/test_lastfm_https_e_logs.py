@@ -179,3 +179,102 @@ async def test_the_mix_error_shown_to_the_user_has_no_secret():
 
     sem_segredo(erro.value.error)
     assert "HTTP 200" in erro.value.error
+
+
+# ============================================================================ credenciais de sessão só no corpo (POST), nunca na URL
+
+SK, TOKEN, SIG = "SK-DO-USUARIO", "TOKEN-DE-AUTH", "ASSINATURA"
+CORPO = {"user": {"name": "u"}, "token": TOKEN, "session": {"key": "k"}, "similarartists": {"artist": []}}
+
+
+class Pedidos:
+    """Sessão que registra o pedido e, como o aiohttp, só põe na URL o que foi em ``params=`` (o corpo do POST não aparece nela)."""
+
+    chamadas: list = []
+    quebrar = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    def _resposta(self, metodo, url, kwargs):
+        self.chamadas.append((metodo, url, kwargs))
+        consulta = "&".join(f"{k}={v}" for k, v in (kwargs.get("params") or {}).items())
+        erro = erro_response(200, aiohttp.ContentTypeError, url=f"{url}?{consulta}") if self.quebrar else None
+        return RespostaCom(erro)
+
+    def get(self, url, **kwargs):
+        return self._resposta("GET", url, kwargs)
+
+    def post(self, url, **kwargs):
+        return self._resposta("POST", url, kwargs)
+
+
+class RespostaCom:
+    def __init__(self, erro):
+        self.erro = erro
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def json(self):
+        if self.erro:
+            raise self.erro
+        return CORPO
+
+
+@pytest.fixture
+def pedidos(monkeypatch):
+    Pedidos.chamadas, Pedidos.quebrar = [], False
+    monkeypatch.setattr(lastfm_tools, "ClientSession", Pedidos)
+    api = LastFM.__new__(LastFM)
+    api.api_key, api.api_secret = "AK", "SECRET"
+    return api
+
+
+@pytest.mark.parametrize(
+    "chamar",
+    [lambda api: api.user_info(SK), lambda api: api.get_session_key(TOKEN)],
+    ids=["user_info", "get_session_key"],
+)
+async def test_calls_with_session_secrets_go_by_post_with_the_secrets_only_in_the_body(pedidos, chamar):
+    await chamar(pedidos)
+
+    ((metodo, url, kwargs),) = Pedidos.chamadas
+    assert metodo == "POST" and url == "https://ws.audioscrobbler.com/2.0/"
+    assert not kwargs.get("params")
+    corpo = kwargs["data"]
+    assert corpo["api_key"] == "AK" and (corpo.get("sk") == SK or corpo.get("token") == TOKEN)
+
+
+@pytest.mark.parametrize(
+    "chamar",
+    [lambda api: api.get_token(), lambda api: api.get_similar_artists("Artista")],
+    ids=["get_token", "get_similar_artists"],
+)
+async def test_reads_with_only_the_api_key_stay_as_get_with_query_params(pedidos, chamar):
+    await chamar(pedidos)
+
+    ((metodo, url, kwargs),) = Pedidos.chamadas
+    assert metodo == "GET" and url == "https://ws.audioscrobbler.com/2.0/"
+    assert kwargs["params"]["api_key"] == "AK" and "sk" not in kwargs["params"] and "token" not in kwargs["params"]
+
+
+@pytest.mark.parametrize(
+    "chamar",
+    [lambda api: api.user_info(SK), lambda api: api.get_session_key(TOKEN)],
+    ids=["user_info", "get_session_key"],
+)
+async def test_the_error_of_a_call_with_session_secrets_does_not_carry_them(pedidos, chamar):
+    Pedidos.quebrar = True
+
+    with pytest.raises(aiohttp.ContentTypeError) as erro:
+        await chamar(pedidos)
+
+    texto = str(erro.value) + repr(erro.value)
+    assert SK not in texto and TOKEN not in texto and "api_sig" not in texto
