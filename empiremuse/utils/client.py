@@ -41,7 +41,7 @@ from empiremuse.health import (
     is_healthy,
     write_heartbeat,
 )
-from empiremuse.rules.git_remote import parse_remote_web_url
+from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
 from empiremuse.updater.notice import deliver_update_notice
 from empiremuse.utils import branding
 from empiremuse.utils.file_log import build_file_log_handler
@@ -878,7 +878,7 @@ class BotPool:
             pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
         if not self.remote_git_url:
-            self.remote_git_url = self.config["SOURCE_REPO"].removesuffix(".git")
+            self.remote_git_url = sanitized_repo_url(self.config["SOURCE_REPO"], branding.REPO_URL)
 
         prefix = get_prefix if intents.message_content else commands.when_mentioned
 

@@ -24,6 +24,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse import paths
 from empiremuse.config_loader import DEFAULT_CONFIG, load_config
 from empiremuse.rules.errors import RuleError
+from empiremuse.rules.git_remote import sanitized_repo_url
 from empiremuse.rules.owner_shell import build_shell_env, collect_secret_values, mask_secrets
 from empiremuse.rules.release import Version, changelog_sections
 from empiremuse.rules.settings import validate_prefix
@@ -556,7 +557,7 @@ class Owner(commands.Cog):
             )
 
         if not self.bot.pool.remote_git_url:
-            self.bot.pool.remote_git_url = self.bot.config["SOURCE_REPO"].removesuffix(".git")
+            self.bot.pool.remote_git_url = sanitized_repo_url(self.bot.config["SOURCE_REPO"], branding.REPO_URL)
 
         git_log = []
 

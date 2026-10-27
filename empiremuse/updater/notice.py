@@ -46,23 +46,33 @@ def _read_text(path: Path) -> str:
 
 
 def build_notice(pending: PendingUpdate, running: Version | None, changelog: str) -> disnake.Embed:
-    """Embed do resultado: sucesso (versão == ``to``), volta (``rolled_back`` ou versão == ``from``) ou resultado incerto."""
+    """Embed do resultado, decidido pela versão que de fato subiu (``running``), não só pelo estado gravado.
+
+    ``running == from`` → voltou; ``running == to`` com o pendente ainda ``pending`` → sucesso; qualquer outra combinação
+    (inclusive ``rolled_back`` cuja reversão não se confirmou) → resultado incerto.
+    """
     link = f"{branding.REPO_URL}/blob/v{pending.to_version}/CHANGELOG.md"
-    if pending.status == "pending" and running == pending.to_version:
-        text = f"✅ **Atualizado de {pending.from_version} para {pending.to_version}.**"
-        if changelog:
-            text += f"\n\n{changelog}"
-        return disnake.Embed(description=f"{text}\n\n[Histórico completo]({link})", colour=COLOR_OK)
-    if pending.status == "rolled_back" or running == pending.from_version:
+    if running == pending.from_version:
         text = (
             f"⚠️ **A atualização para {pending.to_version} falhou e o bot voltou para a versão {pending.from_version}.**"
             f"\nVeja o log do servidor para o motivo."
         )
         return disnake.Embed(description=text, colour=COLOR_FAIL)
-    text = (
-        f"❔ **A atualização de {pending.from_version} para {pending.to_version} terminou, mas não consegui confirmar a "
-        "versão instalada.**\nConfira o servidor."
-    )
+    if pending.status == "pending" and running == pending.to_version:
+        text = f"✅ **Atualizado de {pending.from_version} para {pending.to_version}.**"
+        if changelog:
+            text += f"\n\n{changelog}"
+        return disnake.Embed(description=f"{text}\n\n[Histórico completo]({link})", colour=COLOR_OK)
+    if pending.status == "rolled_back":
+        text = (
+            f"❔ **A atualização para {pending.to_version} falhou e tentei voltar para a versão {pending.from_version}, "
+            "mas não consegui confirmar a versão instalada.**\nConfira o servidor."
+        )
+    else:
+        text = (
+            f"❔ **A atualização de {pending.from_version} para {pending.to_version} terminou, mas não consegui confirmar a "
+            "versão instalada.**\nConfira o servidor."
+        )
     return disnake.Embed(description=text, colour=COLOR_UNKNOWN)
 
 

@@ -20,6 +20,7 @@ import sys
 import time
 import tomllib
 import urllib.request
+import http.client
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 
@@ -157,10 +158,17 @@ class _Git:
         self._allow_protocol = allow_protocol
         self._runner = runner
 
-    async def __call__(self, *args: str, error: str | None = None, timeout: float = GIT_TIMEOUT) -> ExecResult:
-        """Roda o git; com ``error`` uma saída diferente de 0 levanta ``UpdateError(error)`` (o detalhe vai só para o log)."""
+    async def __call__(
+        self, *args: str, error: str | None = None, timeout: float = GIT_TIMEOUT, max_output: int | None = None
+    ) -> ExecResult:
+        """Roda o git; com ``error`` uma saída diferente de 0 levanta ``UpdateError(error)`` (o detalhe vai só para o log).
+
+        ``max_output`` (para arquivos lidos com ``git show``) só é repassado ao runner quando pedido: o padrão guarda o fim
+        da saída e cortaria o começo de um arquivo grande.
+        """
         command = git_command(self._repo_dir, self._allow_protocol, *args)
-        result = await self._runner(*command, cwd=self._repo_dir, env=git_env(os.environ), timeout=timeout)
+        extra = {} if max_output is None else {"max_output": max_output}
+        result = await self._runner(*command, cwd=self._repo_dir, env=git_env(os.environ), timeout=timeout, **extra)
         if error is not None and result.returncode != 0:
             logger.warning("update: git %s falhou (código %s): %s", args[0], result.returncode, result.output)
             raise UpdateError(error)
@@ -198,7 +206,9 @@ async def latest_official_version(
 ) -> Version | None:
     """Maior tag anotada oficial (``ls-remote`` não precisa de clone), ou ``None`` se a consulta falhar."""
     command = git_command(None, allow_protocol, "ls-remote", "--tags", "--end-of-options", repo_url)
-    result = await runner(*command, cwd=None, env=git_env(os.environ), timeout=GIT_NETWORK_TIMEOUT)
+    result = await runner(
+        *command, cwd=None, env=git_env(os.environ), timeout=GIT_NETWORK_TIMEOUT, max_output=MAX_CHANGELOG_BYTES
+    )
     if result.returncode != 0:
         return None
     return max(parse_ls_remote_annotated(result.output), default=None)
@@ -215,7 +225,7 @@ def fetch_remote_changelog(tag: str, *, timeout: float = 10) -> str:
             if not response.geturl().startswith(RAW_BASE):
                 return ""
             return response.read(MAX_CHANGELOG_BYTES).decode("utf-8", errors="replace")
-    except OSError, ValueError:
+    except OSError, ValueError, http.client.HTTPException:
         return ""
 
 
@@ -277,6 +287,7 @@ async def plan_git_update(
         repo_url,
         error="Não consegui consultar as versões no repositório oficial.",
         timeout=GIT_NETWORK_TIMEOUT,
+        max_output=MAX_CHANGELOG_BYTES,
     )
     annotated = parse_ls_remote_annotated(listing.output)
     target = pick_target(current, annotated)
@@ -299,8 +310,11 @@ async def plan_git_update(
         raise UpdateError(refused)
     if await git.single_line("cat-file", "-t", "--end-of-options", f"refs/tags/{tag}", error=refused) != "tag":
         raise UpdateError(refused)
-    header = await git("cat-file", "-p", "--end-of-options", f"refs/tags/{tag}", error=refused)
-    if f"\ntag {tag}\n" not in "\n" + header.output:
+    # O campo "tag" do objeto (não o texto da mensagem, que pode ser grande e conter qualquer linha).
+    named = await git.single_line(
+        "for-each-ref", "--format=%(tag)", "--end-of-options", f"refs/tags/{tag}", error=refused
+    )
+    if named != tag:
         raise UpdateError(refused)
     target_commit = await git.sha(f"refs/tags/{tag}^{{commit}}", error=refused)
     ancestor = await git("merge-base", "--is-ancestor", "--end-of-options", target_commit, MAIN_REF)
@@ -314,14 +328,16 @@ async def plan_git_update(
     if tag not in seen:
         write_seen_tags(runtime_dir, {**seen, tag: tag_object_sha})
 
-    pyproject = await git("show", "--end-of-options", f"{target_commit}:pyproject.toml", error=refused)
+    pyproject = await git(
+        "show", "--end-of-options", f"{target_commit}:pyproject.toml", error=refused, max_output=MAX_CHANGELOG_BYTES
+    )
     if not _python_supported(pyproject.output):
         raise UpdateError(
             f"A versão {target} exige uma versão do Python maior que a deste servidor; a atualização foi recusada."
         )
     await _require_clean_tree(git, repo_dir)
 
-    log = await git("show", "--end-of-options", f"{target_commit}:{CHANGELOG_FILE}")
+    log = await git("show", "--end-of-options", f"{target_commit}:{CHANGELOG_FILE}", max_output=MAX_CHANGELOG_BYTES)
     changelog = changelog_sections(log.output, current, target, CHANGELOG_MAX_CHARS) if log.returncode == 0 else ""
     prev_sha = await git.sha("HEAD", error="Não consegui ler o commit atual do clone.")
     return GitPlan(current, target, tag_object_sha, target_commit, prev_sha, changelog)
