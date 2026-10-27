@@ -191,20 +191,21 @@ def test_start_heartbeat_removes_the_inherited_file_before_anything_is_written(t
     encerrar(laco, pool)
 
 
-def test_start_heartbeat_still_starts_the_task_when_the_old_file_cannot_be_removed(monkeypatch, laco):
+def test_start_heartbeat_aborts_the_boot_when_the_old_file_cannot_be_removed(monkeypatch, laco):
+    """Fail-closed (V11): um heartbeat herdado com menos de 60 s passaria no HEALTHCHECK antes de qualquer bot ficar pronto."""
     monkeypatch.setenv(HEALTH_FILE_ENV, "/qualquer/saude")
 
     def falha(caminho):
-        raise PermissionError("sem permissão")
+        raise PermissionError(13, "sem permissão")
 
     monkeypatch.setattr(client, "clear_heartbeat", falha)
     pool = pool_com()
     pool.loop = laco
 
-    pool.start_heartbeat()
+    with pytest.raises(SystemExit, match="/qualquer/saude"):
+        pool.start_heartbeat()
 
-    assert isinstance(pool.heartbeat_task, asyncio.Task)
-    encerrar(laco, pool)
+    assert pool.heartbeat_task is None and not asyncio.all_tasks(laco)
 
 
 def test_without_the_variable_start_heartbeat_does_nothing(monkeypatch, laco):
