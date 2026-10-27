@@ -277,7 +277,10 @@ async def test_a_proxy_that_never_answers_times_out_as_the_same_error(proxy_clie
 
     servidor.rotas[("GET", f"{HELPER}/json")] = travado
 
-    with pytest.raises(UpdateError) as erro:
-        await proxy_client.ProxyClient(servidor.caminho).helper_state()
+    try:
+        with pytest.raises(UpdateError) as erro:
+            await proxy_client.ProxyClient(servidor.caminho).helper_state()
+    finally:
+        nunca.set()  # solta o handler: senão o encerramento do servidor espera o tempo de graça inteiro
 
     assert str(erro.value) == INACESSIVEL and servidor.caminho not in str(erro.value)
