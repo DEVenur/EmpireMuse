@@ -697,3 +697,7 @@ class TestLinhasDistintasDoJava:
 
         for texto in self.textos(lavalink_com_stderr, tmp_path, [linha]):
             assert linha in texto and "[log] falha" not in texto
+
+    def test_six_identical_lines_give_the_first_plus_a_summary_of_five(self, lavalink_com_stderr, tmp_path):
+        for texto in self.textos(lavalink_com_stderr, tmp_path, ["Address already in use"] * 6):
+            assert texto.count("repetida 5×") == 1 and texto.count("Address already in use") == 2
