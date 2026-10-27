@@ -284,9 +284,10 @@ AGORA = 1_800_000_000.0
 PEDIDO = UpdateRequest(bot_id=111, channel_id=222, requested_by=333)
 
 PYTHON_FALSO = """#!/bin/sh
-if [ "$2 $3" = "pip install" ] && [ -f "$FAKE_PIP_FALHA" ]; then rm -f "$FAKE_PIP_FALHA"; exit 1; fi
+d=$(dirname "$0")
+if [ "$2 $3" = "pip install" ] && [ -f "$d/pip_falha" ]; then rm -f "$d/pip_falha"; exit 1; fi
 case "$1" in
-  -c) [ -f "$FAKE_SMOKE_FALHA" ] && exit 1 ;;
+  -c) [ -f "$d/smoke_falha" ] && exit 1 ;;
 esac
 exit 0
 """
@@ -294,12 +295,11 @@ exit 0
 
 @pytest.fixture
 def python_falso(tmp_path, monkeypatch):
-    """Interpretador falso (sai 0, ou 1 conforme as marcas) e ``uv`` ausente: o caminho é ``python -m pip install``."""
+    """Interpretador falso e ``uv`` ausente (o caminho é ``python -m pip install``). As marcas de falha ficam AO LADO do script, porque o
+    ambiente mínimo do contrato (V6) não repassa variáveis do teste ao processo."""
     script = tmp_path / "python-falso"
     script.write_text(PYTHON_FALSO, encoding="utf-8")
     script.chmod(0o755)
-    monkeypatch.setenv("FAKE_SMOKE_FALHA", str(tmp_path / "smoke_falha"))
-    monkeypatch.setenv("FAKE_PIP_FALHA", str(tmp_path / "pip_falha"))
     monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)
     return script
 
