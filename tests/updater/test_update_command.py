@@ -589,7 +589,7 @@ def docker(cog, ambiente, monkeypatch):
     cog.bot.config = {"UPDATE_PROXY_SOCKET": SOCKET}
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.0")
     cron = Cronologia(cog.bot.pool)
-    pendente = SimpleNamespace(marca="pendente-docker")
+    pendente = SimpleNamespace(marca="pendente-docker", channel_id=CANAL, requested_by=DONO)
 
     async def planejar(*args, **kwargs):
         cron.eventos.append("plano")
@@ -759,3 +759,118 @@ async def test_a_failed_rollback_is_recorded_as_an_error_in_the_log(cog, ambient
 
     assert [r for r in caplog.records if r.levelno >= logging.ERROR and r.name == legacy_cmds.logger.name]
     cog.bot.pool.shutdown.assert_awaited_once_with(EXIT_RESTART)  # o reinício continua
+
+
+# ---------------------------------------------------------------------------- P4: critérios do contrato (A16, A24, A26) que o modo docker também cumpre
+
+
+async def test_a_non_owner_is_refused_in_the_docker_mode_even_through_the_panel(cog, docker):
+    cog.bot.is_owner.return_value = False
+
+    with pytest.raises(GenericError):
+        await Owner.update.callback(cog, ctx_painel(autor=7))
+
+    assert docker.eventos == [] and not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_held_pool_lock_refuses_a_second_docker_update_without_planning(cog, docker):
+    await cog.bot.pool.update_lock.acquire()
+
+    with pytest.raises(GenericError):
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert docker.eventos == [] and cog.bot.pool.update_lock.locked()  # a recusa não solta a trava de quem a tem
+
+
+async def test_the_docker_mode_is_logged_with_the_versions(cog, docker):
+    await oferecer(cog, ctx_prefixo())
+
+    argumentos = cog.log_owner_command.call_args.args
+    assert argumentos[1:] == ("update", "docker 2.0.0->2.1.0")
+
+
+async def test_only_the_author_can_confirm_the_docker_update(cog, docker):
+    """O framework chama ``interaction_check`` antes do botão: um clique de outro usuário não passa e nada é iniciado."""
+    view = await oferecer(cog, ctx_prefixo())
+
+    assert await view.interaction_check(clique(autor=999)) is False
+    assert await view.interaction_check(clique(autor=DONO)) is True
+    await esperar_tarefas()
+
+    assert docker.eventos == ["plano"] and cog.bot.pool.update_lock.locked()
+
+
+async def test_an_expired_docker_confirmation_frees_the_lock_and_starts_nothing(cog, docker):
+    ctx = ctx_prefixo()
+    view = await oferecer(cog, ctx)
+
+    await view.on_timeout()
+
+    assert docker.eventos == ["plano"] and not cog.bot.pool.update_lock.locked()
+    assert "expirou" in ctx.send.return_value.edit.await_args.kwargs["content"]
+
+
+async def test_confirming_cancels_the_old_ready_watch_task(cog, docker):
+    cog.bot.pool.update_watch_task = Mock()
+    tarefa = cog.bot.pool.update_watch_task
+    view = await oferecer(cog, ctx_prefixo())
+
+    await view.confirm.callback(clique())
+    await esperar_tarefas()
+
+    tarefa.cancel.assert_called_once()
+
+
+async def test_an_unreachable_proxy_at_the_start_is_friendly_and_leaves_no_pending_file(
+    cog, docker, ambiente, monkeypatch
+):
+    """A26: com o início REAL (não o mock), um proxy inacessível não deixa pendente nem vigia."""
+    from empiremuse.updater import docker_flow
+
+    class ProxyMorto:
+        def __init__(self, caminho) -> None:
+            pass
+
+        async def helper_state(self):
+            raise UpdateError("proxy de atualização inacessível")
+
+    monkeypatch.setattr(legacy_cmds, "start_docker_update", docker_flow.start_docker_update)
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", ProxyMorto)
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    descricao = interacao.edit_original_message.await_args.kwargs["embed"].description
+    assert "proxy de atualização inacessível" in descricao and SOCKET not in descricao
+    assert "vigia" not in docker.eventos and not (ambiente.runtime / "update-pending.json").exists()
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_the_report_given_to_the_watcher_writes_to_the_origin_channel_and_dms_the_requester(cog, docker):
+    canal, usuario = SimpleNamespace(send=AsyncMock()), SimpleNamespace(send=AsyncMock())
+    cog.bot.get_channel = Mock(return_value=canal)
+    cog.bot.get_user = Mock(return_value=usuario)
+    view = await oferecer(cog, ctx_prefixo())
+    await view.confirm.callback(clique())
+    await esperar_tarefas()
+    relatorio = docker.args_vigia[3]
+
+    await relatorio.channel("significado do código")
+    await relatorio.dm("linha 1\nlinha 2")
+
+    cog.bot.get_channel.assert_called_with(CANAL)
+    cog.bot.get_user.assert_called_with(DONO)
+
+    def texto(mock) -> str:
+        chamada = mock.send.await_args
+        embed = chamada.kwargs.get("embed")
+        return (chamada.args[0] if chamada.args else chamada.kwargs.get("content") or "") + (
+            embed.description if embed else ""
+        )
+
+    assert "significado do código" in texto(canal) and "linha 2" in texto(usuario)
+    for destino in (canal, usuario):
+        permitido = destino.send.await_args.kwargs["allowed_mentions"]
+        assert permitido.everyone is False and permitido.users is False and permitido.roles is False
