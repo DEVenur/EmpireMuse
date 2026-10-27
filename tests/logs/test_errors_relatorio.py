@@ -13,7 +13,8 @@ import pytest
 
 from empiremuse.cogs.error_handler import ErrorHandler
 from empiremuse.logs.redact import MAX_MESSAGE_CHARS, register_secret
-from tests.logs.apoio_erros import anexo, membro, sem_nomes, servidor
+from empiremuse.logs.setup import configure_logging
+from tests.logs.apoio_erros import SERVIDOR, anexo, configuracao, membro, novo_fluxo, sem_nomes, servidor
 
 
 def links_alheios(texto: str) -> list[str]:
@@ -105,6 +106,38 @@ class TestOpcoesDoSlash:
 
         assert sem_nomes(descricao) == [] and TEXTO_LIVRE not in descricao
         assert "ex=" not in descricao and "hm=" not in descricao
+
+
+class TestBlocoDeOpcoes:
+    """Servidor em ``LOG_DEBUG_GUILDS``: o texto livre aparece (redigido) e o ``content_type`` do anexo é texto do cliente; nenhum fecha o bloco."""
+
+    TIPO_HOSTIL = "image/png" + TRES_CRASES + "[x](https://y.invalido)"
+    TEXTO_HOSTIL = "toque " + TRES_CRASES + "[clique](https://x.invalido)"
+    TRES_ASPAS = "'" * 3
+
+    def descricao(self, *, em_debug: bool) -> str:
+        debug = frozenset({SERVIDOR}) if em_debug else frozenset()
+        configure_logging(configuracao(debug_guilds=debug), [], stream=novo_fluxo())
+        opcoes = {"busca": self.TEXTO_HOSTIL, "arquivo": anexo(self.TIPO_HOSTIL, 10)}
+
+        return tratador().build_report_embed(slash(opcoes)).description
+
+    def test_the_options_block_closes_only_at_the_end(self):
+        descricao = self.descricao(em_debug=True)
+
+        assert descricao.count(TRES_CRASES) == 4  # "Slash Command" (abre e fecha) + "Options" (abre e fecha)
+
+    def test_the_backticks_become_single_quotes_and_the_text_stays_readable(self):
+        descricao = self.descricao(em_debug=True)
+
+        assert self.TRES_ASPAS in descricao and "clique" in descricao and "toque" in descricao
+        assert "image/png" in descricao
+
+    def test_without_the_guild_in_debug_the_free_text_is_still_only_its_length(self):
+        descricao = self.descricao(em_debug=False)
+
+        assert f"str(len={len(self.TEXTO_HOSTIL)})" in descricao and "clique" not in descricao
+        assert descricao.count(TRES_CRASES) == 4
 
 
 class TestConteudoDoPrefixo:
