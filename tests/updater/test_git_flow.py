@@ -743,3 +743,30 @@ def test_a_double_cancellation_never_leaves_new_code_without_a_pending_mark(mund
 
     arquivo = tmp_path / "runtime" / "update-pending.json"
     assert head(local) == plano.prev_sha or (arquivo.exists() and pendente_em_disco(tmp_path)["status"] == "applying")
+
+
+def test_an_unexpected_error_with_a_failing_restore_raises_rollback_failed_and_keeps_the_mark(
+    mundo, python_falso, tmp_path
+):
+    """Só o cancelamento sobe como cancelamento; outro erro com restore falho vira ``UpdateRollbackFailed`` (o comando reinicia)."""
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano, smoke=RuntimeError("boom"), restore=git_flow.ExecResult(1, "falhou"))
+
+    with pytest.raises(git_flow.UpdateRollbackFailed) as erro:
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert "boom" not in str(erro.value) and "próximo início" in str(erro.value)
+    assert isinstance(erro.value.__cause__, RuntimeError) and pendente_em_disco(tmp_path)["status"] == "applying"
+
+
+def test_an_unexpected_error_with_a_good_restore_reraises_the_original_and_clears_the_mark(
+    mundo, python_falso, tmp_path
+):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        aplicar(plano, local, python_falso, tmp_path, roteiro(plano, smoke=RuntimeError("boom")))
+
+    assert head(local) == plano.prev_sha and not (tmp_path / "runtime" / "update-pending.json").exists()
