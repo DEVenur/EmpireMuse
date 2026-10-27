@@ -41,6 +41,8 @@ def sem_segredo(texto: str) -> None:
 
 
 class RespostaJson:
+    status = 200
+
     async def __aenter__(self) -> Self:
         return self
 
@@ -219,6 +221,8 @@ class Pedidos:
 
 
 class RespostaCom:
+    status = 200
+
     def __init__(self, erro: Exception | None) -> None:
         self.erro = erro
 
