@@ -8,6 +8,7 @@ from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.client import BotCore
+from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.music.checks import (
     check_voice,
     has_player,
@@ -160,7 +161,7 @@ class NodesMixin:
                         node.version = 4
                         node.update_info(await r.json())
                     elif r.status != 404:
-                        raise Exception(f"{self.bot.user} - [{r.status}]: {await r.text()}"[:300])
+                        raise HTTPStatusError(r.status)
                     else:
                         node.version = 3
                         node.info["sourceManagers"] = ["youtube", "soundcloud", "http"]
@@ -168,7 +169,7 @@ class NodesMixin:
                 await node._websocket._connect()
                 return
             except Exception as e:
-                error = repr(e)
+                error = safe_error(e)
 
             backoff *= 1.5
             if node.identifier != "LOCAL":

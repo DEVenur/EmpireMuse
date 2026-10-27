@@ -46,6 +46,7 @@ from empiremuse.updater.notice import on_pool_ready
 from empiremuse.updater.state import read_pending
 from empiremuse.utils import branding
 from empiremuse.utils.file_log import build_file_log_handler
+from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
@@ -545,7 +546,7 @@ class BotPool:
         while True:
             if retries >= max_retries:
                 print(
-                    f"❌ - Todas as tentativas de verificar o servidor [{data['identifier']}] falharam. Causa: {repr(exception)}"
+                    f"❌ - Todas as tentativas de verificar o servidor [{data['identifier']}] falharam. Causa: {safe_error(exception) if exception else 'desconhecida'}"
                 )
                 return
             else:
@@ -560,7 +561,7 @@ class BotPool:
                                 print(f"❌ - Lavalink Server [{data['identifier']}] - Senha incorreta!")
                                 return
                             elif r.status != 404:
-                                raise Exception(f"❌ - [{r.status}]: {await r.text()}"[:300])
+                                raise HTTPStatusError(r.status)
                             else:
                                 data["info"] = {"check_version": 3, "sourceManagers": ["youtube", "soundcloud", "http"]}
                             break
@@ -598,7 +599,7 @@ class BotPool:
                                     resp.raise_for_status()
                         except Exception as e:
                             print(
-                                f"🌋 - Falha ao aplicar o Youtube refreshToken no servidor lavalink: {data['identifier']} - {repr(e)}"
+                                f"🌋 - Falha ao aplicar o Youtube refreshToken no servidor lavalink: {data['identifier']} - {safe_error(e)}"
                             )
                             break
                         else:
