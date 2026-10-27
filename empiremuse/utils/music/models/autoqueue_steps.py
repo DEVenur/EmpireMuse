@@ -55,58 +55,81 @@ async def _aq_source_tracks(self, req):
 
         for i in range(3):
             try:
-                result = await self.bot.spotify.track_search(tracks_search[0].author, limit=100)
+                result = await self.bot.spotify.track_search(tracks_search[0].author, limit=50)
+                exception = None
                 break
-            except Exception as e:
+            except (ClientError, asyncio.TimeoutError) as e:
                 self.set_command_log(
                     emoji="⚠️",
                     text=f"Falha ao obter músicas recomendadas do spotify, tentativa {i + 1} de 3.",
                     controller=True,
                 )
                 self.update = True
-                logger.exception("Falha em _aq_source_tracks")
+                logger.warning("Falha ao obter músicas recomendadas do Spotify (%s).", type(e).__name__)
+                logger.debug("Detalhe da falha no Spotify:", exc_info=True)
                 exception = e
                 await asyncio.sleep(5)
+            except Exception as e:
+                logger.warning("Falha ao obter músicas recomendadas do Spotify (%s).", type(e).__name__)
+                logger.debug("Detalhe da falha no Spotify:", exc_info=True)
+                exception = e
+                break
 
         if result:
             tracks = []
+            items = (result.get("tracks") if isinstance(result, dict) else {}) or {}
+            if isinstance(items, dict):
+                items = items.get("items") or []
+            if not isinstance(items, list):
+                items = []
 
-            for t in result["tracks"]:
+            for t in items:
+                if not isinstance(t, dict):
+                    continue
+
                 try:
-                    thumb = t["album"]["images"][0]["url"]
-                except IndexError, KeyError:
+                    thumb = t.get("album", {}).get("images", [])[0]["url"]
+                except IndexError, KeyError, TypeError:
                     thumb = ""
 
+                artists = t.get("artists") or []
+                first_artist = (
+                    artists[0].get("name") if artists and isinstance(artists[0], dict) else None
+                ) or "Unknown Artist"
+
                 partial_track = PartialTrack(
-                    uri=t["external_urls"]["spotify"],
-                    author=t["artists"][0]["name"] or "Unknown Artist",
-                    title=t["name"],
+                    uri=(t.get("external_urls") or {}).get("spotify") or "",
+                    author=first_artist,
+                    title=t.get("name") or "",
                     thumb=thumb,
-                    duration=t["duration_ms"],
+                    duration=t.get("duration_ms") or 0,
                     source_name="spotify",
-                    identifier=t["id"],
+                    identifier=t.get("id") or "",
                     requester=self.bot.user.id,
                     autoplay=True,
                 )
 
                 partial_track.info["extra"]["authors"] = [
                     fix_characters(i["name"])
-                    for i in t["artists"]
-                    if f"feat. {i['name'].lower()}" not in t["name"].lower()
+                    for i in artists
+                    if isinstance(i, dict)
+                    and i.get("name")
+                    and f"feat. {i['name'].lower()}" not in (t.get("name") or "").lower()
                 ]
 
                 partial_track.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in t["artists"]
+                    f"[`{a['name']}`]({(a.get('external_urls') or {}).get('spotify', '')})"
+                    for a in artists
+                    if isinstance(a, dict) and a.get("name")
                 )
 
-                try:
-                    if t["album"]["name"] != t["name"]:
-                        partial_track.info["extra"]["album"] = {
-                            "name": t["album"]["name"],
-                            "url": t["album"]["external_urls"]["spotify"],
-                        }
-                except AttributeError, KeyError:
-                    pass
+                album = t.get("album")
+                if isinstance(album, dict) and album.get("name") and album.get("name") != t.get("name"):
+                    album_urls = album.get("external_urls") or {}
+                    partial_track.info["extra"]["album"] = {
+                        "name": album["name"],
+                        "url": album_urls.get("spotify"),
+                    }
 
                 tracks.append(partial_track)
 
@@ -271,6 +294,9 @@ async def _aq_lastfm_tracks(self, req):
                     autoplay=True,
                     requester=self.bot.user.id,
                 )
+            except wavelink.TrackNotFound as e:
+                logger.debug("Autoplay: sem faixas para %s: %s", query, e)
+                continue
             except Exception as e:
                 if [
                     err for err in ("Could not find tracks from mix", "Could not read mix page") if err in str(e)
