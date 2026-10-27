@@ -25,3 +25,6 @@ f1d234a03abb3a18393ce364962e832a5533e360
 2938e2acd27c6b9c6c2fb58bdfbdf4a2f37352d3
 # refactor(ki29): Music perde nós, despacho do controlador, pedidos, faixas e ciclo de vida do player para mixins
 dbce4cdc9fe83fb06bdd135f6b884edd3ef14f66
+
+# style: aplica o ruff format 0.17.1 (só formatação, item 6 / S2)
+026df856fd93b070acab8b885aa6c0bb4f0605dc
