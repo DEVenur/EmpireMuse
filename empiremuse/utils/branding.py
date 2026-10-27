@@ -55,16 +55,16 @@ LAVALINK_APPLICATION_YML_KNOWN_SHA256 = frozenset(
 # asset em bell-sw/Liberica (GitHub Releases), e o SHA-1 baixado igual ao da api.bell-sw.com. Só então grave o SHA-256.
 JDK_DOWNLOADS = {
     "windows-amd64": (
-        "https://download.bell-sw.com/java/25.0.4.1+1/bellsoft-jdk25.0.4.1+1-windows-amd64.zip",
-        "fba1429ebbb62af18701f8f32e7aa1a2d07b87c93521b74d6f4afbf480a52010",
+        "https://download.bell-sw.com/java/25.0.5.0.3+5/bellsoft-jdk25.0.5.0.3+5-windows-amd64.zip",
+        "d7c90823ea2a24778d7499a82379b5e18c7ce3f4cc7a9d9c9af5b133abe148f0",
     ),
     "windows-i586": (
         "https://download.bell-sw.com/java/21.0.13.0.3+5/bellsoft-jdk21.0.13.0.3+5-windows-i586.zip",
         "fc643ea5aa3fde487ee020c412cb5919acae98af16e8ec3b0965ff5149c1a9ae",
     ),
     "linux-amd64": (
-        "https://download.bell-sw.com/java/25.0.4.1+1/bellsoft-jdk25.0.4.1+1-linux-amd64-lite.tar.gz",
-        "7cd6e87f3c356d8a971f281033c1a8850c85cf1b20724e6ef398a958e9d6be3d",
+        "https://download.bell-sw.com/java/25.0.5.0.3+5/bellsoft-jdk25.0.5.0.3+5-linux-amd64-lite.tar.gz",
+        "15943cdc94632bd2f299b17e6b9602e5de99631122529bab242f5514ddc00249",
     ),
     "linux-i586": (
         "https://download.bell-sw.com/java/21.0.13.0.3+5/bellsoft-jdk21.0.13.0.3+5-linux-i586-lite.tar.gz",
