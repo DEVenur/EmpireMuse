@@ -2,8 +2,9 @@
 
 Repositórios git reais e locais em ``tmp_path`` (``file://`` com ``allow_protocol="file"``). O ``HOME`` e a configuração do git do
 ambiente são isolados; o interpretador das dependências e do smoke é um ``python`` falso (script ``sh``) que registra o que recebeu.
-Nomes do contrato: ``plan_git_update``, ``apply_git_update(plan, repo_dir, python=...)``, ``git_env``, ``UpdateError``, ``GitPlan``
-(``current``, ``target``, ``tag_object_sha``, ``target_commit``, ``prev_sha``, ``changelog``) e ``update-state.json`` em ``RUNTIME_DIR``.
+Assinaturas do contrato (3.5, 3.6): ``plan_git_update(repo_dir, repo_url, *, allow_protocol, runner=run_exec)`` e
+``apply_git_update(plan, request, repo_dir, runtime_dir, *, python, runner=run_exec, now=time.time) -> PendingUpdate``. O ``runner`` injetado
+só grava as chamadas e delega ao ``run_exec`` real; o resto (``update-state.json``) fica em ``RUNTIME_DIR``.
 """
 
 import asyncio
@@ -16,7 +17,8 @@ from pathlib import Path
 import pytest
 
 from empiremuse.rules.release import Version
-from empiremuse.updater.git_flow import UpdateError, apply_git_update, git_env, plan_git_update
+from empiremuse.updater.git_flow import UpdateError, apply_git_update, git_env, plan_git_update, run_exec
+from empiremuse.updater.state import UpdateRequest
 
 pytestmark = pytest.mark.critical
 
@@ -75,8 +77,8 @@ def url(remoto: Path) -> str:
     return f"file://{remoto}"
 
 
-def planejar(remoto: Path, local: Path):
-    return asyncio.run(plan_git_update(local, url(remoto), allow_protocol="file"))
+def planejar(remoto: Path, local: Path, runner=run_exec):
+    return asyncio.run(plan_git_update(local, url(remoto), allow_protocol="file", runner=runner))
 
 
 def head(repo: Path) -> str:
@@ -241,20 +243,21 @@ CHAVES_PERMITIDAS = {"PATH", "HOME", "LANG", "GIT_TERMINAL_PROMPT", "GIT_CONFIG_
 
 @pytest.fixture
 def gravador(monkeypatch):
-    """Registra cada subprocesso criado (``argv`` e ``env``) e proíbe o shell."""
-    chamadas = []
-    real = asyncio.create_subprocess_exec
+    """Runner injetado: grava ``(argv, env)`` de cada chamada e delega ao ``run_exec`` real; o shell fica proibido."""
 
-    async def exec_gravado(*args, **kwargs):
-        chamadas.append((args, kwargs.get("env")))
-        return await real(*args, **kwargs)
+    class Gravador:
+        def __init__(self):
+            self.chamadas = []
+
+        async def __call__(self, *args, **kwargs):
+            self.chamadas.append((args, kwargs.get("env")))
+            return await run_exec(*args, **kwargs)
 
     async def sem_shell(*args, **kwargs):
         raise AssertionError("create_subprocess_shell não pode ser usado no fluxo de atualização")
 
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", exec_gravado)
     monkeypatch.setattr(asyncio, "create_subprocess_shell", sem_shell)
-    return chamadas
+    return Gravador()
 
 
 def test_every_git_runs_without_shell_with_the_security_options_and_the_minimal_env(mundo, gravador, monkeypatch):
@@ -262,10 +265,10 @@ def test_every_git_runs_without_shell_with_the_security_options_and_the_minimal_
     for nome in ("TOKEN", "MONGO", "GITHUB_TOKEN", "GIT_DIR", "GIT_WORK_TREE", "GIT_ASKPASS"):
         monkeypatch.setenv(nome, "valor-secreto")
 
-    planejar(remoto, local)
+    planejar(remoto, local, runner=gravador)
 
-    gits = [(a, e) for a, e in gravador if Path(str(a[0])).name == "git"]
-    assert gits and len(gits) == len(gravador)
+    gits = [(a, e) for a, e in gravador.chamadas if Path(str(a[0])).name == "git"]
+    assert gits and len(gits) == len(gravador.chamadas)
     for argv, env in gits:
         argv = [str(a) for a in argv]
         for opcao in OPCOES_DE_SEGURANCA:
@@ -277,9 +280,10 @@ def test_every_git_runs_without_shell_with_the_security_options_and_the_minimal_
 
 # ============================================================================ apply: dependências, smoke e rollback
 
+AGORA = 1_800_000_000.0
+PEDIDO = UpdateRequest(bot_id=111, channel_id=222, requested_by=333)
+
 PYTHON_FALSO = """#!/bin/sh
-printf '%s\\n' "$*" >> "$FAKE_LOG"
-env > "$FAKE_ENV"
 if [ "$2 $3" = "pip install" ] && [ -f "$FAKE_PIP_FALHA" ]; then rm -f "$FAKE_PIP_FALHA"; exit 1; fi
 case "$1" in
   -c) [ -f "$FAKE_SMOKE_FALHA" ] && exit 1 ;;
@@ -290,80 +294,112 @@ exit 0
 
 @pytest.fixture
 def python_falso(tmp_path, monkeypatch):
-    log, envlog, falha = tmp_path / "python.log", tmp_path / "python.env", tmp_path / "smoke_falha"
+    """Interpretador falso (sai 0, ou 1 conforme as marcas) e ``uv`` ausente: o caminho é ``python -m pip install``."""
     script = tmp_path / "python-falso"
     script.write_text(PYTHON_FALSO, encoding="utf-8")
     script.chmod(0o755)
-    monkeypatch.setenv("FAKE_LOG", str(log))
-    monkeypatch.setenv("FAKE_ENV", str(envlog))
-    monkeypatch.setenv("FAKE_SMOKE_FALHA", str(falha))
+    monkeypatch.setenv("FAKE_SMOKE_FALHA", str(tmp_path / "smoke_falha"))
     monkeypatch.setenv("FAKE_PIP_FALHA", str(tmp_path / "pip_falha"))
-    monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)  # sem uv: o caminho é `python -m pip install`
-    return script, log, envlog, falha
+    monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)
+    return script
 
 
-def aplicar(plano, local, python):
-    return asyncio.run(apply_git_update(plano, local, python=str(python)))
+def aplicar(plano, local, script, tmp_path, runner=run_exec):
+    return asyncio.run(
+        apply_git_update(
+            plano, PEDIDO, local, tmp_path / "runtime", python=str(script), runner=runner, now=lambda: AGORA
+        )
+    )
 
 
-def test_apply_leaves_head_detached_on_the_tag_commit_and_records_the_pending_update(mundo, python_falso, tmp_path):
+def pendente_em_disco(tmp_path) -> dict:
+    return json.loads((tmp_path / "runtime" / "update-pending.json").read_text())
+
+
+def test_apply_leaves_head_detached_on_the_tag_commit_and_returns_the_pending_update(
+    mundo, python_falso, gravador, tmp_path
+):
     remoto, local = mundo
-    script, log, envlog, _ = python_falso
     plano = planejar(remoto, local)
 
-    aplicar(plano, local, script)
+    pendente = aplicar(plano, local, python_falso, tmp_path, gravador)
 
     assert head(local) == plano.target_commit
     assert subprocess.run(["git", "-C", str(local), "symbolic-ref", "-q", "HEAD"], capture_output=True).returncode != 0
-    chamadas = log.read_text().splitlines()
+    chamadas = [" ".join(str(a) for a in argv) for argv, _ in gravador.chamadas]
     assert any("-m pip install" in c and "--require-hashes" in c and "requirements-lock.txt" in c for c in chamadas)
     assert any("import empiremuse.utils.client" in c for c in chamadas)
     assert any("-m compileall" in c and "empiremuse" in c for c in chamadas)
-    pendente = json.loads((tmp_path / "runtime" / "update-pending.json").read_text())
-    assert pendente["flow"] == "git" and pendente["prev_sha"] == plano.prev_sha and pendente["boots"] == 0
+    assert (pendente.v, pendente.flow, pendente.boots, pendente.status) == (1, "git", 0, "pending")
+    assert (str(pendente.from_version), str(pendente.to_version)) == ("2.0.0", "2.1.0")
+    assert (pendente.bot_id, pendente.channel_id, pendente.requested_by) == (111, 222, 333)
+    assert pendente.created_at == AGORA and pendente.prev_sha == plano.prev_sha
 
 
-def test_the_dependency_install_and_the_smoke_never_see_secrets(mundo, python_falso, monkeypatch):
+def test_the_pending_file_is_written_with_the_contract_fields_and_mode_0600(mundo, python_falso, tmp_path):
     remoto, local = mundo
-    script, _, envlog, _ = python_falso
+    plano = planejar(remoto, local)
+
+    aplicar(plano, local, python_falso, tmp_path)
+
+    arquivo = tmp_path / "runtime" / "update-pending.json"
+    assert arquivo.stat().st_mode & 0o777 == 0o600
+    assert pendente_em_disco(tmp_path) == {
+        "v": 1,
+        "flow": "git",
+        "from_version": "2.0.0",
+        "to_version": "2.1.0",
+        "bot_id": 111,
+        "channel_id": 222,
+        "requested_by": 333,
+        "created_at": AGORA,
+        "prev_sha": plano.prev_sha,
+        "boots": 0,
+        "status": "pending",
+    }
+
+
+def test_the_dependency_install_and_the_smoke_never_see_secrets(mundo, python_falso, gravador, tmp_path, monkeypatch):
+    remoto, local = mundo
     plano = planejar(remoto, local)
     for nome in ("TOKEN", "MONGO", "GITHUB_TOKEN", "GIT_DIR"):
         monkeypatch.setenv(nome, "valor-secreto")
 
-    aplicar(plano, local, script)
+    aplicar(plano, local, python_falso, tmp_path, gravador)
 
-    ambiente = envlog.read_text()
-    assert "valor-secreto" not in ambiente
-    assert not any(linha.startswith(("TOKEN=", "MONGO=", "GIT_DIR=")) for linha in ambiente.splitlines())
+    do_python = [(argv, env) for argv, env in gravador.chamadas if Path(str(argv[0])).name == "python-falso"]
+    assert len(do_python) == 3  # instalação, import e compileall
+    for _, env in do_python:
+        assert "valor-secreto" not in env.values()
+        assert not {"TOKEN", "MONGO", "GITHUB_TOKEN"} & set(env) and not any(k.startswith("GIT_DIR") for k in env)
 
 
 def test_a_failing_smoke_rolls_back_to_prev_sha_reinstalls_the_lock_and_leaves_no_pending(
-    mundo, python_falso, tmp_path
+    mundo, python_falso, gravador, tmp_path
 ):
     remoto, local = mundo
-    script, log, _, falha = python_falso
     plano = planejar(remoto, local)
-    falha.write_text("1", encoding="utf-8")
+    (tmp_path / "smoke_falha").write_text("1", encoding="utf-8")
 
     with pytest.raises(UpdateError):
-        aplicar(plano, local, script)
+        aplicar(plano, local, python_falso, tmp_path, gravador)
 
     assert head(local) == plano.prev_sha
-    instalacoes = [c for c in log.read_text().splitlines() if "-m pip install" in c]
+    instalacoes = [a for a, _ in gravador.chamadas if "pip" in [str(x) for x in a] and "install" in [str(x) for x in a]]
     assert len(instalacoes) == 2  # a do alvo e a do lock anterior
     assert not (tmp_path / "runtime" / "update-pending.json").exists()
 
 
-def test_a_failing_dependency_install_also_rolls_back(mundo, python_falso, tmp_path):
+def test_a_failing_dependency_install_also_rolls_back(mundo, python_falso, gravador, tmp_path):
     """A 1ª instalação (a do alvo) falha; a reinstalação do lock anterior passa."""
     remoto, local = mundo
-    script, log, _, _ = python_falso
     plano = planejar(remoto, local)
     (tmp_path / "pip_falha").write_text("1", encoding="utf-8")
 
     with pytest.raises(UpdateError):
-        aplicar(plano, local, script)
+        aplicar(plano, local, python_falso, tmp_path, gravador)
 
     assert head(local) == plano.prev_sha
-    assert len([c for c in log.read_text().splitlines() if "-m pip install" in c]) == 2
+    instalacoes = [a for a, _ in gravador.chamadas if "pip" in [str(x) for x in a] and "install" in [str(x) for x in a]]
+    assert len(instalacoes) == 2
     assert not (tmp_path / "runtime" / "update-pending.json").exists()
