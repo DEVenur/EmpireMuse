@@ -7,6 +7,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-27
+
+Atualização da stack (Python 3.14, Java 25, PyMongo Async), atualização automática do bot no Docker pelo comando `update` e correções de segurança.
+
 ### Adicionado
 - **Atualização do bot por tag anotada e aviso pós-reinício (item 18, fase P2)**: o comando `update` (prefixo e botão "Atualizar Bot" do painel) volta a funcionar em checkouts git fora de container e ganha os modos `git`, `panel` (imagem Docker sem proxy: mostra a versão e manda atualizar pelo painel da hospedagem) e `manual`. Só o dono aciona e confirma (60 s), um `update` por vez. A confirmação mostra de → para, o "o que mudou" do `CHANGELOG.md` e o aviso de que o bot fica indisponível e reinicia ao fim; sem supervisor detectável (`INVOCATION_ID`, ou seja, sem systemd), avisa que o bot vai parar e precisa ser iniciado à mão. Nos modos `panel` e `manual`, se a consulta da versão disponível falhar, o bot responde "Não consegui consultar a versão disponível agora." com a ação do modo e o link das versões publicadas.
 - **Reinício e aviso pós-boot**: ao aplicar, o bot sai com o código 75 e o supervisor (systemd com `Restart=on-failure` e `RestartForceExitStatus=75`) o reinicia. A subida só é dada como boa quando o pool inteiro está saudável (não só o bot que pediu). O aviso sai pelo bot que pediu ou, se ele não está mais no pool, pelo primeiro bot pronto, no canal de origem (ou por DM, sem menções): "Atualizado de A para B" com o "o que mudou", ou que a atualização falhou e voltou à versão anterior. Com uma atualização pendente, o pool é reavaliado a cada 5 s até ficar saudável; sem pendente, não há essa vigia.
@@ -532,7 +536,8 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/releases/tag/v2.0.0
