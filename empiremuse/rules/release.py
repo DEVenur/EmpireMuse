@@ -1,7 +1,8 @@
-"""Versões de release do EmpireMuse: só ``X.Y.Z`` estrito, comparável por número, e as regras puras do update.
+"""Versões de release do EmpireMuse e as regras puras do update: alvos são só ``X.Y.Z`` estrito; a versão atual da
+imagem pode ser ``X.Y.Z-rc.N`` (``parse_current_version``, D13), com ``X.Y.Z-rc.N < X.Y.Z`` e ordenação numérica.
 
-Sem pré-release, sem build metadata, sem espaços e sem zero à esquerda; cada componente tem até 4 dígitos ASCII. O
-``fullmatch`` e o ``[0-9]`` valem de propósito: ``$`` aceitaria uma quebra de linha no fim e ``\\d`` aceitaria dígitos
+Sem outros pré-releases, sem build metadata, sem espaços e sem zero à esquerda; cada componente tem até 4 dígitos ASCII.
+O ``fullmatch`` e o ``[0-9]`` valem de propósito: ``$`` aceitaria uma quebra de linha no fim e ``\\d`` aceitaria dígitos
 de outros alfabetos. Funções puras, só stdlib.
 """
 
