@@ -192,7 +192,7 @@ Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.tx
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z --exclude-newer-package yt-dlp=2026-10-21T22:00:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z --exclude-newer-package setuptools=2026-10-19T20:20:00Z requirements.txt -o requirements-lock.txt
 
 # Lock universal de desenvolvimento
-uv pip compile --generate-hashes --universal --exclude-newer 2026-10-16T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
+uv pip compile --generate-hashes --universal --exclude-newer 2026-10-20T00:00:00Z requirements-dev.txt -o requirements-dev-lock.txt
 ```
 
 #### Justificativa das isenções pontuais de corte temporal
