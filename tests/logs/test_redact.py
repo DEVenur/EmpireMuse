@@ -477,3 +477,126 @@ class TestScrub:
 
     def test_scrub_of_clean_short_text_is_identity(self):
         assert scrub("tudo certo com a versão 2.1.0", 8192) == "tudo certo com a versão 2.1.0"
+
+
+# ============================================================================ argumentos que não são texto nem número nativo (CodeRabbit r4393628119)
+
+
+class Opaco:
+    """Objeto qualquer cujo ``str()`` e ``repr()`` carregam controles e segredos diferentes."""
+
+    def __init__(self, texto_str: str, texto_repr: str) -> None:
+        self._s, self._r = texto_str, texto_repr
+
+    def __str__(self) -> str:
+        return self._s
+
+    def __repr__(self) -> str:
+        return self._r
+
+
+class TestArgumentosNaoTexto:
+    def test_percent_r_of_an_exception_keeps_the_repr(self):
+        record = passar(registro("falha: %r", ValueError("msg")))
+
+        assert record.getMessage() == "falha: ValueError('msg')"
+
+    def test_percent_s_of_an_exception_keeps_the_text(self):
+        record = passar(registro("falha: %s", ValueError("msg")))
+
+        assert record.getMessage() == "falha: msg"
+
+    def test_percent_d_of_a_decimal_formats_correctly(self):
+        from decimal import Decimal
+
+        record = passar(registro("%d itens", Decimal(3)))
+
+        assert record.getMessage() == "3 itens" and record.msg != OMITTED
+
+    def test_percent_dot_one_f_of_a_fraction_formats_correctly(self):
+        from fractions import Fraction
+
+        record = passar(registro("%.1f", Fraction(1, 2)))
+
+        assert record.getMessage() == "0.5" and record.msg != OMITTED
+
+    @pytest.mark.parametrize("formato", ["%d", "%i", "%5.2f", "%e", "%s", "%r"])
+    def test_numeric_formats_give_what_plain_logging_gives_for_decimal_and_fraction(self, formato):
+        from decimal import Decimal
+        from fractions import Fraction
+
+        for valor in (Decimal("2.50"), Fraction(3, 4)):
+            try:
+                esperado = formato % valor
+            except TypeError:
+                continue  # o formato não aceita o tipo nem no logging puro
+            record = passar(registro(formato, valor))
+            assert record.getMessage() == esperado and record.msg != OMITTED
+
+    def test_the_arguments_are_not_turned_into_text_when_they_are_numbers_of_any_kind(self):
+        from decimal import Decimal
+
+        record = passar(registro("%d-%s", Decimal(7), Decimal("1.5")))
+
+        assert record.getMessage() == "7-1.5"
+
+    def test_a_secret_in_the_str_of_an_arbitrary_object_is_masked(self):
+        register_secret("segredo-no-str-do-objeto-1")
+
+        record = passar(registro("obj: %s", Opaco("tem segredo-no-str-do-objeto-1 aqui", "Opaco()")))
+
+        assert record.getMessage() == "obj: tem *** aqui"
+
+    def test_a_secret_in_the_repr_of_an_arbitrary_object_is_masked(self):
+        register_secret("segredo-no-repr-do-objeto-2")
+
+        record = passar(registro("obj: %r", Opaco("x", "Opaco(token='segredo-no-repr-do-objeto-2')")))
+
+        assert "segredo-no-repr-do-objeto-2" not in record.getMessage() and REDACTED in record.getMessage()
+
+    def test_control_characters_in_the_str_of_an_arbitrary_object_are_sanitised_like_any_value(self):
+        record = passar(registro("obj: %s", Opaco("a\n2026-10-27 ERROR falso\x1b[2J", "Opaco()")))
+
+        mensagem = record.getMessage()
+        assert "\n" not in mensagem and "\x1b" not in mensagem and "⏎" in mensagem
+
+    def test_control_characters_in_the_repr_of_an_arbitrary_object_are_sanitised_like_any_value(self):
+        record = passar(registro("obj: %r", Opaco("x", "Opaco('a\nb\x9b‮')")))
+
+        mensagem = record.getMessage()
+        assert not any(c in mensagem for c in ("\n", "\x9b", "‮")) and "⏎" in mensagem
+
+    def test_s_and_r_conversions_in_one_message_are_each_redacted(self):
+        register_secret("segredo-nas-duas-formas-3")
+        por_str = Opaco("str segredo-nas-duas-formas-3", "x")
+        por_repr = Opaco("y", "repr segredo-nas-duas-formas-3")
+
+        record = passar(registro("%s | %r", por_str, por_repr))
+
+        assert "segredo-nas-duas-formas-3" not in record.getMessage() and record.getMessage().count(REDACTED) == 2
+
+    def test_the_same_object_used_with_s_and_with_r_is_handled_per_conversion(self):
+        register_secret("segredo-do-mesmo-objeto-4")
+        objeto = Opaco("str segredo-do-mesmo-objeto-4\nlinha", "repr segredo-do-mesmo-objeto-4\nlinha")
+
+        record = passar(registro("%(o)s | %(o)r", {"o": objeto}))
+
+        mensagem = record.getMessage()
+        assert "segredo-do-mesmo-objeto-4" not in mensagem and "\n" not in mensagem and mensagem.count("⏎") == 2
+
+    def test_an_exception_message_with_a_line_break_is_sanitised_in_percent_s_and_percent_r(self):
+        record = passar(registro("%s / %r", ValueError("a\nb"), ValueError("c\nd")))
+
+        assert "\n" not in record.getMessage()
+
+    def test_a_mapping_argument_with_non_text_values_keeps_their_conversions(self):
+        from decimal import Decimal
+
+        record = passar(registro("%(n)d e %(e)r", {"n": Decimal(4), "e": KeyError("k")}))
+
+        assert record.getMessage() == "4 e KeyError('k')"
+
+    def test_an_object_that_is_neither_text_nor_number_is_still_printed_by_the_message(self):
+        record = passar(registro("lista: %s", ["a", 1, None]))
+
+        assert record.getMessage() == "lista: ['a', 1, None]"
