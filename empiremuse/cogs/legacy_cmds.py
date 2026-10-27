@@ -441,10 +441,21 @@ class Owner(commands.Cog):
         return text
 
     async def _describe_manual_update(self, ctx, mode: str) -> Optional[str]:
-        """Modos em que o bot não se atualiza sozinho (imagem gerenciada ou código solto): só informa a versão disponível."""
+        """Modos em que o bot não se atualiza sozinho (imagem gerenciada ou código solto): informa a versão e a ação do modo.
+
+        A consulta da versão depende do ``git`` do servidor, que a imagem Docker não tem: no modo ``panel`` a resposta traz
+        a ação do modo mesmo sem a versão (o fluxo Docker passa a consultar as releases do GitHub).
+        """
         latest = await latest_official_version()
         installed = image_version() if mode == MODE_PANEL else None
         self.log_owner_command(ctx, "update", f"{mode} {installed or '?'}->{latest or '?'}")
+        if latest is None and mode == MODE_PANEL:
+            text = (
+                "**Não consegui consultar a versão disponível agora.**\n\n"
+                "Atualize pelo painel da hospedagem: este bot roda numa imagem gerenciada por ela.\n"
+                f"[Versões publicadas]({branding.REPO_URL}/releases)"
+            )
+            return await self._reply_update(ctx, text)
         if latest is None:
             return await self._reply_update(
                 ctx, "**Não consegui consultar a versão oficial agora.** Tente de novo mais tarde."
