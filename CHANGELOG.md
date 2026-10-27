@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Segurança
+- **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
+
 ### Removido
 - **Aviso de bot público e licença GPL-2 no console**: o aviso herdado de bot público e o texto da licença GPL-2 deixam de aparecer no console; o aviso de servidores sem o dono ou a equipe continua.
 
