@@ -17,7 +17,7 @@ import pytest
 from empiremuse.rules.release import Version
 from empiremuse.updater import boot_guard
 from empiremuse.updater.git_flow import EXIT_RESTART, ExecResult, UpdateError, restore_checkout, run_exec
-from tests.support.alvo_git import ALVO_GIT, alvo_git
+from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, pending_path, write_pending
 from tests.updater.test_git_flow import commit, git
 
@@ -86,7 +86,7 @@ def pendente(anterior: str, *, flow="git", boots=0, status="pending", criado=AGO
         digest=DIGEST if flow == "docker" else None,
         boots=boots,
         status=status,
-        **(alvo_git(ALVO_DO_CENARIO.get("sha", ALVO_GIT)) if flow == "git" else {}),
+        target_commit=ALVO_DO_CENARIO.get("sha", ALVO_GIT) if flow == "git" else None,
     )
 
 

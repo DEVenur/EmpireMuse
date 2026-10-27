@@ -17,7 +17,7 @@ import json
 
 from empiremuse.updater import boot_guard
 from empiremuse.updater.notice import deliver_update_notice, on_pool_ready
-from tests.support.alvo_git import alvo_git
+from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, pending_path, write_pending
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -40,7 +40,7 @@ def pendente(**campos) -> PendingUpdate:
         "created_at": AGORA - 120,
         "prev_sha": SHA,
         "boots": 1,
-        **alvo_git(),
+        "target_commit": ALVO_GIT,
     }
     return PendingUpdate(**{**base, **campos})
 

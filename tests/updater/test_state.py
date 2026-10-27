@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from empiremuse.rules.release import Version
-from tests.support.alvo_git import alvo_git
+from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, parse_pending, pending_path, read_pending, write_pending
 
 pytestmark = pytest.mark.critical
@@ -30,7 +30,7 @@ def pendente(created_at: float) -> PendingUpdate:
         requested_by=3,
         created_at=created_at,
         prev_sha="a" * 40,
-        **alvo_git(),
+        target_commit=ALVO_GIT,
     )
 
 

@@ -468,6 +468,7 @@ def test_the_pending_file_is_written_with_the_contract_fields_and_mode_0600(mund
         "boots": 0,
         "status": "pending",
         "restore_attempts": 0,
+        "target_commit": plano.target_commit,
     }
 
 

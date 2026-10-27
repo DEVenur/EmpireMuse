@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from empiremuse.rules.release import Version
-from tests.support.alvo_git import alvo_git
+from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, write_pending
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
@@ -37,7 +37,7 @@ def pendente(runtime):
             requested_by=3,
             created_at=time.time(),
             prev_sha="a" * 40,
-            **alvo_git(),
+            target_commit=ALVO_GIT,
         ),
     )
 
