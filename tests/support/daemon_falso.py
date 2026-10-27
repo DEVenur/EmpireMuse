@@ -71,13 +71,14 @@ class DaemonFalso:
             do_GET = do_POST = do_DELETE = do_PUT = do_HEAD = _tratar
 
         self.servidor = _Servidor(caminho_do_socket, Manipulador)
-        self.fio = threading.Thread(target=self.servidor.serve_forever, daemon=True)
+        self.fio = threading.Thread(target=self.servidor.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         self.fio.start()
 
     def reiniciar(self):
         self.requisicoes: list[Requisicao] = []
         self.containers: dict[str, dict] = {}
         self.imagem_presente = False
+        self.forcadas: dict[tuple[str, str], tuple[int, bytes]] = {}
 
     def adicionar_container(self, nome: str, *, rotulos=None, linhas_de_log=(), estado=None):
         self.containers[nome] = {
@@ -106,6 +107,9 @@ class DaemonFalso:
         return status, "application/json", json.dumps(dados).encode()
 
     def _responder(self, req: Requisicao):
+        if (req.metodo, req.caminho) in self.forcadas:
+            status, corpo = self.forcadas[(req.metodo, req.caminho)]
+            return status, "application/json", corpo
         partes = [p for p in req.caminho.split("/") if p]
         if req.metodo == "GET" and req.caminho.startswith("/images/") and req.caminho.endswith("/json"):
             return (
