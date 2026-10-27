@@ -31,7 +31,7 @@ MAX_TIMESTAMP = 2**40  # ano ~36812; o que passa disso não é um instante, é a
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
 FLOWS = ("git", "docker")
-STATUSES = ("pending", "ready", "rolled_back")
+STATUSES = ("applying", "pending", "ready", "rolled_back")
 
 _SHA1 = re.compile(r"[0-9a-f]{40}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -54,7 +54,8 @@ class UpdateRequest:
 class PendingUpdate:
     """Atualização em andamento; ``prev_sha`` vale no fluxo git e ``digest`` no fluxo Docker (o outro fica ``None``).
 
-    ``status``: ``pending`` (subindo; o ``boot_guard`` conta), ``ready`` (o pool ficou saudável; o aviso ainda não saiu) ou
+    ``status``: ``applying`` (só git: apply em andamento, árvore possivelmente meio aplicada; o ``boot_guard`` reverte já),
+    ``pending`` (subindo; o ``boot_guard`` conta), ``ready`` (o pool ficou saudável; o aviso ainda não saiu) ou
     ``rolled_back`` (o ``boot_guard`` reverteu o código).
     """
 
@@ -125,6 +126,7 @@ def parse_pending(data: object) -> PendingUpdate | None:
         and not isinstance(boots, bool)
         and 0 <= boots <= MAX_BOOTS
         and data["status"] in STATUSES
+        and (data["status"] != "applying" or (flow == "git" and boots == 0))
     )
     if not valid:
         return None
@@ -222,7 +224,8 @@ def read_pending(runtime_dir: Path, now: float) -> PendingUpdate | None:
         logger.warning("Arquivo de atualização pendente com data no futuro; descartado.")
         clear_pending(runtime_dir)
         return None
-    if now - pending.created_at > PENDING_MAX_AGE_SECONDS:
+    # ``applying`` nunca expira por idade: uma árvore meio aplicada continua perigosa depois de um dia desligado.
+    if pending.status != "applying" and now - pending.created_at > PENDING_MAX_AGE_SECONDS:
         logger.warning("Arquivo de atualização pendente com mais de 24 h; descartado.")
         clear_pending(runtime_dir)
         return None

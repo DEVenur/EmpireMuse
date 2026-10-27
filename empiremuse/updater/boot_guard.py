@@ -2,8 +2,9 @@
 
 Roda em ``__main__.main()`` ANTES de importar o ``BotPool`` (um erro de import no código novo derrubaria o bot antes de
 qualquer outra proteção). Só stdlib no import. Só age quando existe um pendente do fluxo git: cada subida soma um ``boots``;
-quando o pool fica saudável o pendente vira ``ready`` (e o aviso pós-boot o apaga), então só quem nunca fica pronto chega ao limite. O fluxo
-Docker não é tocado (quem desfaz é o auxiliar, com ``--wait``).
+quando o pool fica saudável o pendente vira ``ready`` (e o aviso pós-boot o apaga), então só quem nunca fica pronto chega ao limite. Um
+pendente ``applying`` (o processo morreu ou a reversão falhou no meio do apply) é revertido já no primeiro boot, sem contar.
+O fluxo Docker não é tocado (quem desfaz é o auxiliar, com ``--wait``).
 """
 
 from __future__ import annotations
@@ -27,15 +28,22 @@ def run(
 ) -> None:
     """Conta a subida e, no terceiro boot sem o bot ficar pronto, reverte o código e sai com ``EXIT_RESTART`` (75)."""
     pending = read_pending(runtime_dir, now)
-    if pending is None or pending.flow != "git" or pending.status != "pending":
+    if pending is None or pending.flow != "git" or pending.status not in ("applying", "pending"):
         return
-    boots = pending.boots + 1
-    if boots <= MAX_BOOTS_WITHOUT_READY:
+    # ``applying``: o processo morreu (ou a reversão falhou) no meio do apply, com a árvore possivelmente meio aplicada.
+    # Reverte já, sem contar subidas: não há o que esperar de um código que nem terminou de ser instalado.
+    boots = pending.boots + 1 if pending.status == "pending" else 0
+    if pending.status == "pending" and boots <= MAX_BOOTS_WITHOUT_READY:
         write_pending(runtime_dir, dataclasses.replace(pending, boots=boots))
         return
     # Marca antes de reverter: se a reversão falhar, as próximas subidas não repetem a tentativa em laço.
     write_pending(runtime_dir, dataclasses.replace(pending, boots=boots, status="rolled_back"))
-    logger.error("O código novo não ficou pronto em %d subidas; voltando ao commit anterior.", MAX_BOOTS_WITHOUT_READY)
+    if pending.status == "applying":
+        logger.error("A atualização anterior não terminou de ser aplicada; voltando ao commit anterior.")
+    else:
+        logger.error(
+            "O código novo não ficou pronto em %d subidas; voltando ao commit anterior.", MAX_BOOTS_WITHOUT_READY
+        )
     try:
         if pending.prev_sha is None:
             raise UpdateError("sem commit anterior")

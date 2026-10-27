@@ -116,7 +116,7 @@ async def deliver_update_notice(
     """Entrega o aviso do pendente por um bot pronto do pool (o que pediu, ou outro); sem bot pronto não faz nada."""
     runtime_dir = runtime_dir or paths.get_runtime_dir()
     pending = read_pending(runtime_dir, now())
-    if pending is None:
+    if pending is None or pending.status == "applying":  # ``applying`` é do boot_guard: nem avisa nem apaga
         return
     bot = _sender(pool, pending)
     if bot is None:
