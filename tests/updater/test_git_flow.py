@@ -1260,3 +1260,60 @@ def test_an_owner_bat_file_with_other_content_on_the_same_path_is_kept(restore, 
         restore.restaurar()
 
     assert (restore.repo / "script.bat").read_bytes() == b"echo do dono\r\n" and "script.bat" in caplog.text
+
+
+# ---------------------------------------------------------------------------- restore: o .gitattributes é do PRÓPRIO alvo (a regra some depois do checkout do prev)
+
+
+class CenarioGitattributesDoAlvo:
+    """prev com ``.gitattributes`` sem regra; o alvo o ALTERA para ``*.bat eol=crlf`` e acrescenta ``script.bat``.
+    A interrupção deixa HEAD/índice no prev, o ``.gitattributes`` do alvo e o ``script.bat`` com CRLF (como o checkout do alvo gravou) na árvore."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.repo = tmp_path / "clone_attr"
+        self.repo.mkdir()
+        git(self.repo, "init", "-q", "-b", "main")
+        self.prev = commit(self.repo, {"a.txt": "a1\n", ".gitattributes": "# sem regras\n"}, "prev")
+        self.alvo = commit(self.repo, {".gitattributes": "*.bat eol=crlf\n", "script.bat": "linha1\nlinha2\n"}, "alvo")
+        git(self.repo, "reset", "-q", self.prev)  # HEAD/índice no prev; a árvore segue com os arquivos do alvo
+        (self.repo / "script.bat").write_bytes(b"linha1\r\nlinha2\r\n")
+        self.python = tmp_path / "python-falso-attr"
+        self.python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        self.python.chmod(0o755)
+
+    def restaurar(self):
+        return asyncio.run(
+            git_flow.restore_checkout(self.repo, self.prev, self.alvo, python=str(self.python), runner=run_exec)
+        )
+
+
+@pytest.fixture
+def attr_do_alvo(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)
+    return CenarioGitattributesDoAlvo(tmp_path)
+
+
+def test_a_crlf_file_written_under_the_targets_own_gitattributes_is_still_the_targets_and_is_removed(attr_do_alvo):
+    """Depois do ``checkout --force prev`` a regra ``eol=crlf`` já não vale: o hash com filtros dos bytes CRLF não bate com o blob (LF)."""
+    attr_do_alvo.restaurar()
+
+    assert not os.path.lexists(attr_do_alvo.repo / "script.bat")
+    assert (attr_do_alvo.repo / ".gitattributes").read_text() == "# sem regras\n"  # o do prev voltou
+    assert git(attr_do_alvo.repo, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+def test_an_owner_file_with_other_content_on_the_same_path_is_kept_in_that_scenario_too(attr_do_alvo, caplog):
+    (attr_do_alvo.repo / "script.bat").write_bytes(b"echo do dono\r\n")
+
+    with caplog.at_level(logging.WARNING):
+        attr_do_alvo.restaurar()
+
+    assert (attr_do_alvo.repo / "script.bat").read_bytes() == b"echo do dono\r\n" and "script.bat" in caplog.text
+
+
+def test_an_lf_file_identical_to_the_targets_blob_is_removed_in_that_scenario_as_well(attr_do_alvo):
+    (attr_do_alvo.repo / "script.bat").write_bytes(b"linha1\nlinha2\n")  # bytes exatamente iguais ao blob
+
+    attr_do_alvo.restaurar()
+
+    assert not os.path.lexists(attr_do_alvo.repo / "script.bat")
