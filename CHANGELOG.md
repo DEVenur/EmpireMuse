@@ -13,8 +13,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   - `LOG_COLOR` (`on` ou `off`; padrão `on`, só no console).
   - `LOG_FILE` (`auto`, `on` ou `off`; padrão `auto`: grava arquivo fora da imagem Docker e não grava dentro dela). `ENABLE_LOGGER` continua valendo como sinônimo de `LOG_FILE=on` e nunca desliga nada.
   - `LOG_DEBUG_GUILDS` (IDs de servidores, separados por vírgula, que registram em `DEBUG` mesmo com o nível global mais alto).
-  - `METRICS_INTERVAL` (reservada para o resumo periódico de métricas da fase 3; ainda sem efeito; padrão 300, mínimo 60; 0 desliga).
+  - `METRICS_INTERVAL` (segundos entre os resumos periódicos de métricas; padrão 300, mínimo 60; 0 desliga o resumo).
 - **Agregação de erros repetidos**: avisos e erros iguais (mesmo logger, nível, modelo da mensagem e tipo de exceção) saem uma vez e viram um resumo por janela de 60 s, em vez de inundar o console e o arquivo.
+- **Eventos do player no log (item 7, fase P3)**: início e fim de faixa, pausa, troca de nó e erros saem no log com servidor, canal, duração e origem. O título da faixa só aparece em `DEBUG`. Em escala o `INFO` fica silencioso: início e fim de faixa vão para `DEBUG` e só os problemas sobem para `WARNING`.
+- **Resumo periódico de métricas**: a cada `METRICS_INTERVAL` o log traz faixas tocadas, erros por tipo, players ativos, CPU e RAM do Python e do Java local, nós do Lavalink e latência do gateway e da voz.
+- **Estado dos nós de áudio no log**: as transições de cada nó (conectado, caído) e o caso de todos indisponíveis são registradas.
+
+### Alterado
+- **Cerca de 100 `print` migrados para o log (item 7, fase P3)**: as mensagens passam a ter nível, cor, contexto e redação de segredos.
 
 ### Segurança
 - **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
