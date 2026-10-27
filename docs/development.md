@@ -189,6 +189,10 @@ uv pip install --require-hashes -r requirements-dev-lock.txt # pytest, pytest-as
 Caso dependências sejam alteradas em `requirements.txt` ou `requirements-dev.txt`, os lockfiles devem ser regerados a partir da raiz com resolução universal e corte temporal de segurança utilizando `uv==0.13.5`:
 
 ```bash
+# Fixa o uv na versão da CI (0.13.5, com hashes)
+python -m pip install --require-hashes -r .github/ci-uv-requirements.txt
+uv --version  # deve imprimir uv 0.13.5
+
 # Lock universal de produção
 uv pip compile --generate-hashes --universal --exclude-newer 2026-10-20T00:00:00Z --exclude-newer-package yt-dlp=2026-10-26T22:30:00Z --exclude-newer-package certifi=2026-10-23T12:00:00Z --exclude-newer-package brotli=2026-10-22T15:00:00Z --exclude-newer-package brotlicffi=2026-10-22T17:00:00Z requirements.txt -o requirements-lock.txt
 
