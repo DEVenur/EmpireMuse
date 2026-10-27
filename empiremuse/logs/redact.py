@@ -10,11 +10,15 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import numbers
+import operator
 import re
 import threading
 import traceback
 from collections.abc import Iterable, Mapping
 from contextlib import suppress
+from decimal import Decimal
+from fractions import Fraction
 from urllib.parse import quote
 
 from empiremuse.rules.owner_shell import MIN_SECRET_LENGTH, mask_secrets
@@ -136,14 +140,65 @@ def scrub(text: str, limit: int) -> str:
     return cap(redact(sanitize_text(text)), limit)
 
 
+_PLAIN_NUMBER_BASES: tuple[type, ...] = (int, float, complex, Decimal, Fraction)
+
+
+def _is_plain_number(value: object) -> bool:
+    """Número da stdlib sem ``__str__``/``__repr__`` próprios: não carrega texto de terceiros, então passa como está."""
+    if not isinstance(value, numbers.Number):
+        return False
+    kind = type(value)
+    return any(
+        issubclass(kind, base) and kind.__str__ is base.__str__ and kind.__repr__ is base.__repr__
+        for base in _PLAIN_NUMBER_BASES
+    )
+
+
+class _SanitizedArg:
+    """Envolve um argumento de log: ``%s`` e ``%r`` devolvem o ``str()``/``repr()`` original saneado e redigido.
+
+    Preguiçoso de propósito: só chama ``str`` ou ``repr`` do objeto quando o formato pede (um ``__str__`` que levanta
+    continua levantando em ``getMessage`` e o filtro troca o registro pelo aviso). O teto de tamanho fica no ``scrub`` final,
+    depois da redação (cortar aqui deixaria um segredo pela metade).
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def __str__(self) -> str:
+        return redact(sanitize_value(str(self._value)))
+
+    def __repr__(self) -> str:
+        return redact(sanitize_value(repr(self._value)))
+
+
+class _SanitizedNumberArg(_SanitizedArg):
+    """Como ``_SanitizedArg`` para número com ``__str__``/``__repr__`` próprio: ``%d``/``%f``/``%x`` seguem funcionando."""
+
+    __slots__ = ()
+
+    def __int__(self) -> int:
+        return int(self._value)  # type: ignore[call-overload]
+
+    def __index__(self) -> int:
+        return operator.index(self._value)  # type: ignore[call-overload]
+
+    def __float__(self) -> float:
+        return float(self._value)  # type: ignore[arg-type]
+
+
 def _sanitize_arg(value: object) -> object:
-    if value is None or isinstance(value, int | float | bool):
+    if value is None or isinstance(value, bool) or _is_plain_number(value):
         return value
     if isinstance(value, str):
         return sanitize_value(value)
     if isinstance(value, Mapping):
         return {key: _sanitize_arg(item) for key, item in value.items()}
-    return sanitize_value(str(value))
+    if isinstance(value, numbers.Number):
+        return _SanitizedNumberArg(value)
+    return _SanitizedArg(value)
 
 
 def _qualified_exc_type(exc_type: object) -> str | None:
