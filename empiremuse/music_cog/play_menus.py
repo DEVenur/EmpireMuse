@@ -2,7 +2,7 @@
 """Menus de favoritos, integrações, músicas recentes e fila salva do `/play`."""
 
 import datetime
-import traceback
+import logging
 from typing import TYPE_CHECKING
 
 import disnake
@@ -22,6 +22,8 @@ from empiremuse.utils.others import (
     song_request_buttons,
     get_source_emoji_cfg,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.music_cog.play_state import PlayState
@@ -161,7 +163,7 @@ class PlayMenusMixin:
             try:
                 await func(embed=embed, components=song_request_buttons)
             except AttributeError:
-                traceback.print_exc()
+                logger.exception("Falha ao atualizar a mensagem de pedido de música")
                 pass
             return True
 
@@ -418,7 +420,7 @@ class PlayMenusMixin:
                         try:
                             await select_interaction.response.edit_message(embed=embed, components=song_request_buttons)
                         except AttributeError:
-                            traceback.print_exc()
+                            logger.exception("Falha ao atualizar a mensagem de pedido de música")
                     return True
 
                 if select_interaction.data.values[0] == "cancel":

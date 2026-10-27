@@ -2,8 +2,7 @@
 """Resolução da busca do `/play`: perfis, links e serviço de busca."""
 
 import datetime
-import pprint
-import traceback
+import logging
 from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse, parse_qs
 
@@ -34,6 +33,8 @@ from empiremuse.music_cog.shared import (
     sc_profile_regex,
     is_discord_attachment_url,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.music_cog.play_state import PlayState
@@ -171,7 +172,7 @@ class PlayResolveMixin:
 
                 try:
                     if not info["entries"]:
-                        pprint.pprint(info)
+                        logger.debug("Info da busca: %s", info)
                         raise GenericError(f"**Conteúdo indisponível (ou privado):**\n{query}")
                 except KeyError:
                     raise GenericError("**Ocorreu um erro ao tentar obter resultados para a opção selecionada...**")
@@ -303,7 +304,7 @@ class PlayResolveMixin:
                     try:
                         await func(embed=embed, components=song_request_buttons)
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha ao atualizar a mensagem de pedido de música")
                     return True
 
                 query = info["entries"][int(view.selected[14:])]["url"]
@@ -399,7 +400,7 @@ class PlayResolveMixin:
                 try:
                     await func(embed=embed, components=song_request_buttons)
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha ao atualizar a mensagem de pedido de música")
                 return True
 
             if view.selected == "music":

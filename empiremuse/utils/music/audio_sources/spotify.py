@@ -328,7 +328,7 @@ class SpotifyClient:
 
                 self.spotify_cache["expires_at"] = time.time() + self.spotify_cache["expires_in"]
 
-                print("🎶 - Access token do spotify obtido com sucesso via API Oficial.")
+                logger.info("Access token do spotify obtido com sucesso via API Oficial.")
 
         finally:
             self.token_refresh = False
@@ -414,7 +414,7 @@ class SpotifyClient:
                         pass
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        f"{md_link(a['name'], a['external_urls']['spotify'])}" for a in result["artists"]
+                        md_link(a["name"], a["external_urls"]["spotify"]) for a in result["artists"]
                     )
 
                     try:
@@ -469,7 +469,7 @@ class SpotifyClient:
             ]
 
             t.info["extra"]["authors_md"] = ", ".join(
-                f"{md_link(a['name'], a['external_urls']['spotify'])}" for a in result["artists"]
+                md_link(a["name"], a["external_urls"]["spotify"]) for a in result["artists"]
             )
 
             try:
@@ -536,7 +536,7 @@ class SpotifyClient:
                 ]
 
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"{md_link(a['name'], a['external_urls']['spotify'])}" for a in track["artists"]
+                    md_link(a["name"], a["external_urls"]["spotify"]) for a in track["artists"]
                 )
 
                 try:
@@ -647,7 +647,7 @@ class SpotifyClient:
                 ]
                 track.info["extra"]["authors_md"] = ", ".join(
                     md_link(
-                        a['name'],
+                        a["name"],
                         a["external_urls"].get(
                             "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
                         ),

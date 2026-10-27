@@ -85,9 +85,7 @@ class DefaultSkin:
             txt += f"\n> -# {e} **⠂** `Repetição: {m}`"
 
         if player.current.album_name:
-            txt += (
-                f"\n> -# 💽 **⠂** {md_link(player.current.album_name, player.current.album_url, limit=36)}"
-            )
+            txt += f"\n> -# 💽 **⠂** {md_link(player.current.album_name, player.current.album_url, limit=36)}"
 
         if player.current.playlist_name:
             txt += f"\n> -# 📑 **⠂** {md_link(player.current.playlist_name, player.current.playlist_url, limit=36)}"

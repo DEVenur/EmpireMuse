@@ -6,7 +6,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import time_format, fix_characters, get_button_style, md_bracketed, md_link
+from empiremuse.utils.music.converters import time_format, get_button_style, md_bracketed, md_link, md_code
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -39,9 +39,9 @@ class EmbedLinkSkin:
             duration_txt = f"\n> -# `⏰` **⠂Duração:** `{time_format(player.current.duration)}`"
 
         title = (
-            f"`{fix_characters(player.current.title)}`"
+            md_code(player.current.title)
             if not player.current.uri
-            else f"{md_link(player.current.title, player.current.uri, limit=40)}"
+            else md_link(player.current.title, player.current.uri, limit=40)
         )
 
         if player.paused:

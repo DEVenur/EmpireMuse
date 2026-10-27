@@ -13,7 +13,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse.logs.context import log_context
 from empiremuse.rules.error_code import safe_error_code
 from empiremuse.rules.text import plain_snippet
-from empiremuse.utils.music.converters import time_format, md_link
+from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.errors import code_suffix
 from empiremuse.utils.music.models.helpers import (
     LAVALINK_LOG_LIMIT,
@@ -249,7 +249,7 @@ def _he_log_exception(self, event, track) -> str:
 
 def _he_exception_embed(self, event, track):
     node_info = (
-        f"`{event.node.identifier}`"
+        md_code(event.node.identifier)
         if event.node.identifier == self.node.identifier
         else f"`{self.node.identifier} | {event.node.identifier}`"
     )
@@ -414,7 +414,7 @@ async def _he_recover_from_youtube(self, track, send_report) -> None:
 
 async def _he_move_to_native_youtube(self, new_node) -> None:
     self.native_yt = True
-    txt = f"Devido a restrições do youtube no servidor `{self.node.identifier}` o player foi movido para o servidor `{new_node.identifier}`."
+    txt = f"Devido a restrições do youtube no servidor {md_code(self.node.identifier)} o player foi movido para o servidor {md_code(new_node.identifier)}."
     if self.controller_mode:
         self.set_command_log(txt, emoji="⚠️", controller=True)
     elif self.text_channel:
@@ -433,7 +433,7 @@ async def _he_move_to_native_youtube(self, new_node) -> None:
 
 async def _he_warn_youtube_fallback(self, send_report) -> None:
     txt = (
-        f"Devido a restrições do youtube no servidor `{self.node.identifier}`. Durante a sessão atual "
+        f"Devido a restrições do youtube no servidor {md_code(self.node.identifier)}. Durante a sessão atual "
         "será feito uma tentativa de obter a mesma música em outras plataformas de música usando o nome "
         "das músicas do youtube que estão na fila (talvez a música tocada seja diferente do esperado "
         "ou até mesmo ignoradas caso não retorne resultados)."

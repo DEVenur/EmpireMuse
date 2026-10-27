@@ -161,7 +161,7 @@ async def _pc_lastfm(self, req):
     await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
     await interaction.edit_original_message(
         embed=disnake.Embed(
-            description=f"**O scrobble/registro de músicas foi {'ativado' if user_data['lastfm']['scrobble'] else 'desativado'} na conta: {md_link(user_data['lastfm']['username'], f"https://www.last.fm/user/{user_data['lastfm']['username']}", code=False)}.**",
+            description=f"**O scrobble/registro de músicas foi {'ativado' if user_data['lastfm']['scrobble'] else 'desativado'} na conta: {md_link(user_data['lastfm']['username'], f'https://www.last.fm/user/{user_data["lastfm"]["username"]}', code=False)}.**",
             color=self.bot.get_color(),
         )
     )
@@ -357,7 +357,7 @@ async def _pc_favorite_save(self, req):
 
     await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 
-    self.bot.dispatch("fav_add", interaction.user, user_data, md_link(info['name'], info['url']))
+    self.bot.dispatch("fav_add", interaction.user, user_data, md_link(info["name"], info["url"]))
 
     global_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.guilds)
 

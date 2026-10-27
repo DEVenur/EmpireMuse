@@ -69,7 +69,9 @@ class MiniStaticSkin:
             embed.description += f" {md_bracketed(f'<@{player.current.requester}>')}"
         else:
             try:
-                embed.description += f" {md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
+                embed.description += (
+                    f" {md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
+                )
             except Exception:
                 embed.description += "` [Recomendada]`"
 

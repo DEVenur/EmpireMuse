@@ -8,7 +8,6 @@ import re
 import shutil
 import sys
 import time
-import traceback
 from functools import partial
 from pathlib import Path
 from typing import Union, Optional
@@ -244,7 +243,7 @@ class Owner(commands.Cog):
 
     def format_log(self, data: list):
         return "\n".join(
-            f"{md_link(c['abbreviated_commit'], f"{self.bot.pool.remote_git_url}/commit/{c['commit']}")} `- "
+            f"{md_link(c['abbreviated_commit'], f'{self.bot.pool.remote_git_url}/commit/{c["commit"]}')} `- "
             f"{(c['subject'][:40].replace('`', '') + '...') if len(c['subject']) > 39 else c['subject']}` "
             f"(<t:{c['timestamp']}:R>)"
             for c in data
@@ -783,8 +782,9 @@ class Owner(commands.Cog):
 
         git_log += format_git_log(data)
 
-        txt = f"🔰 ** | {md_link('Atualizações recentes:', f'{self.bot.pool.remote_git_url}/commits/main', code=False)}**\n\n" + self.format_log(
-            git_log
+        txt = (
+            f"🔰 ** | {md_link('Atualizações recentes:', f'{self.bot.pool.remote_git_url}/commits/main', code=False)}**\n\n"
+            + self.format_log(git_log)
         )
 
         if isinstance(ctx, CustomContext):
@@ -1412,8 +1412,9 @@ class Owner(commands.Cog):
                 async with session.get(self.bot.config["LAVALINK_SERVER_LIST"], allow_redirects=False) as r:
                     ini_file = validated_server_list(r.status, await r.read())
         except ClientError, asyncio.TimeoutError:
-            traceback.print_exc()
-            print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
+            logger.warning(
+                "Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.", exc_info=True
+            )
             ini_file = validated_server_list(None, None)
 
         with open(paths.RUNTIME_DIR / "lavalink.ini", "wb") as f:

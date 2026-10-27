@@ -4,7 +4,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, md_bracketed, md_link
+from empiremuse.utils.music.converters import time_format, md_bracketed, md_link, md_code
 from empiremuse.utils.music.models import LavalinkPlayer
 
 
@@ -31,14 +31,14 @@ class LiteSkin:
 
         embed.description = (
             f"> -# ▶️ **┃**{md_link(player.current.title, player.current.uri or player.current.search_uri, limit=45)}\n"
-            f"> -# ℹ️ **┃**`{duration}`┃`{fix_characters(player.current.author, 18)}`┃"
+            f"> -# ℹ️ **┃**`{duration}`┃{md_code(player.current.author, limit=18)}┃"
         )
 
         if not player.current.autoplay:
             embed.description += f"<@{player.current.requester}>"
         else:
             try:
-                embed.description = f"{md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
+                embed.description = md_bracketed(md_link("Recomendada", player.current.info["extra"]["related"]["uri"]))
             except Exception:
                 embed.description = "`[Recomendada]`"
 

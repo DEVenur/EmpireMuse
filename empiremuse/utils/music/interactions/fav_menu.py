@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-import traceback
+import logging
 from io import BytesIO
 from typing import Union, TYPE_CHECKING
 
@@ -33,6 +33,8 @@ from empiremuse.utils.music.interactions.fav_menu_components import (
 from empiremuse.utils.music.interactions.fav_menu_text import (
     FavMenuTextMixin,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
@@ -175,7 +177,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         if self.mode == ViewMode.fav_manager:
             try:
-                url = f"{md_link(self.current, self.data['fav_links'][self.current])}"
+                url = md_link(self.current, self.data["fav_links"][self.current])
                 del self.data["fav_links"][self.current]
             except Exception:
                 await inter.edit_original_message(f"**Não há favorito na lista com o nome:** {self.current}")
@@ -187,13 +189,13 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         elif self.mode == ViewMode.guild_fav_manager:
             try:
-                url = f"{md_link(self.current, self.guild_data['player_controller']['fav_links'][self.current])}"
+                url = md_link(self.current, self.guild_data["player_controller"]["fav_links"][self.current])
                 del self.guild_data["player_controller"]["fav_links"][self.current]
             except KeyError:
                 try:
                     await process_idle_embed(self.bot, guild, guild_data=self.guild_data)
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha ao atualizar o embed ocioso do player")
 
                 await inter.edit_original_message(
                     embed=disnake.Embed(
@@ -215,7 +217,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
                 item = item["url"]
 
             try:
-                url = f"{md_link(self.current, item)}"
+                url = md_link(self.current, item)
                 del self.data["integration_links"][self.current]
             except Exception:
                 await inter.send(f"**Não há integração na lista com o nome:** {self.current}", ephemeral=True)
@@ -296,7 +298,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
             try:
                 await process_idle_embed(self.bot, guild, guild_data=self.guild_data)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao atualizar o embed ocioso do player")
 
             self.log = "Lista de favoritos do server foi limpa com sucesso!"
 

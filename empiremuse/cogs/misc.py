@@ -7,7 +7,6 @@ import json
 import os.path
 import platform
 import logging
-import traceback
 from copy import deepcopy
 from itertools import cycle
 from os import getpid
@@ -164,7 +163,7 @@ class Misc(commands.Cog):
                         name, url = i.split("||")
                         activities.append({"name": name, "url": url.strip(" "), "type": "streaming"})
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha ao processar uma atividade de presença")
 
             if not activities:
                 return
@@ -229,7 +228,7 @@ class Misc(commands.Cog):
                 await asyncio.sleep(self.bot.config["PRESENCE_INTERVAL"])
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha no loop de presença do bot")
 
     @commands.Cog.listener("on_guild_join")
     async def guild_add(self, guild: disnake.Guild):
@@ -357,7 +356,7 @@ class Misc(commands.Cog):
                         except disnake.Forbidden:
                             pass
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha ao enviar a mensagem de boas-vindas")
                         break
 
         if not channel:
@@ -671,7 +670,7 @@ class Misc(commands.Cog):
             if user_data["custom_prefix"]:
                 embed.description += f"> ⌨️ **⠂Seu prefixo de usuário:** `{disnake.utils.escape_markdown(user_data['custom_prefix'], as_needed=True)}`\n"
 
-        links = md_bracketed(md_link('Source', branding.REPO_URL))
+        links = md_bracketed(md_link("Source", branding.REPO_URL))
 
         if bot.config["SUPPORT_SERVER"]:
             links = f"{md_bracketed(md_link('Suporte', bot.config['SUPPORT_SERVER']))}  **|** {links}"
@@ -737,7 +736,15 @@ class Misc(commands.Cog):
 
             kwargs = {}
 
-            invite = f"{md_link(bot.user.name, disnake.utils.oauth_url(bot.user.id, permissions=disnake.Permissions(bot.config['INVITE_PERMISSIONS']), scopes=('bot',), **kwargs))}"
+            invite = md_link(
+                bot.user.name,
+                disnake.utils.oauth_url(
+                    bot.user.id,
+                    permissions=disnake.Permissions(bot.config["INVITE_PERMISSIONS"]),
+                    scopes=("bot",),
+                    **kwargs,
+                ),
+            )
 
             if bot.appinfo.flags.gateway_message_content_limited:
                 invite += f" `[{len(bot.guilds)}/100]`"
@@ -866,27 +873,30 @@ class Misc(commands.Cog):
         if guild_avatar_url:
             embeds.append(
                 disnake.Embed(
-                    description=f"{user.mention} **{md_link('avatar (server)', guild_avatar_url, code=False)}**", color=color
+                    description=f"{user.mention} **{md_link('avatar (server)', guild_avatar_url, code=False)}**",
+                    color=color,
                 ).set_image(url=guild_avatar_url)
             )
 
         if guild_banner_url:
             embeds.append(
                 disnake.Embed(
-                    description=f"{user.mention} **{md_link('banner (server)', guild_banner_url, code=False)}**", color=color
+                    description=f"{user.mention} **{md_link('banner (server)', guild_banner_url, code=False)}**",
+                    color=color,
                 ).set_image(url=guild_banner_url)
             )
 
         embeds.append(
-            disnake.Embed(description=f"{user.mention} **{md_link('avatar (user)', user_avatar_url, code=False)}**", color=color).set_image(
-                url=user_avatar_url
-            )
+            disnake.Embed(
+                description=f"{user.mention} **{md_link('avatar (user)', user_avatar_url, code=False)}**", color=color
+            ).set_image(url=user_avatar_url)
         )
 
         if user_banner_url:
             embeds.append(
                 disnake.Embed(
-                    description=f"{user.mention} **{md_link('banner (user)', user_banner_url, code=False)}**", color=color
+                    description=f"{user.mention} **{md_link('banner (user)', user_banner_url, code=False)}**",
+                    color=color,
                 ).set_image(url=user_banner_url)
             )
 
@@ -959,18 +969,18 @@ class GuildLog(commands.Cog):
             if URL_REG.match(bot.config["BOT_ADD_REMOVE_LOG"]):
                 self.hook_url = bot.config["BOT_ADD_REMOVE_LOG"]
             else:
-                print("URL do webhook inválido (para envio de logs ao adicionar/remover bot).")
+                logger.warning("URL do webhook inválido (para envio de logs ao adicionar/remover bot).")
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: disnake.Guild):
-        print(f"😭 - Bot {self.bot.user.name} foi removido(a) do servidor: {guild.name} - [{guild.id}]")
+        logger.info("Bot %s foi removido(a) do servidor [%s]", self.bot.user.name, guild.id)
 
         try:
             await self.bot.music.players[guild.id].destroy()
         except KeyError:
             pass
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao tratar a remoção do bot do servidor")
 
         if not self.hook_url:
             return
@@ -978,20 +988,20 @@ class GuildLog(commands.Cog):
         try:
             await self.send_hook(guild, title="Me removeram do servidor", color=disnake.Color.red())
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o aviso de remoção do servidor")
 
         await self.bot.update_appinfo()
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: disnake.Guild):
-        print(f"🎉 - Bot {self.bot.user.name} foi adicionado(a) no servidor: {guild.name} - [{guild.id}]")
+        logger.info("Bot %s foi adicionado(a) no servidor [%s]", self.bot.user.name, guild.id)
 
         try:
             guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)
             guild_data["player_controller"] = deepcopy(db_models[DBModel.guilds]["player_controller"])
             await self.bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao tratar a entrada do bot no servidor")
 
         if not self.hook_url:
             return
@@ -999,7 +1009,7 @@ class GuildLog(commands.Cog):
         try:
             await self.send_hook(guild, title="Me adicionaram em um novo servidor", color=disnake.Color.green())
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o aviso de entrada no servidor")
 
         await self.bot.update_appinfo()
 

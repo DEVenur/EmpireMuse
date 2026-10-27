@@ -141,7 +141,9 @@ class NowPlayingMixin:
             txt += f"> 👍 **⠂Adicionado via:** {mode}\n"
 
         if player.current.playlist_name:
-            txt += f"> 📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}\n"
+            txt += (
+                f"> 📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}\n"
+            )
 
         try:
             txt += f"> *️⃣ **⠂Canal de voz:** {player.guild.me.voice.channel.jump_url}\n"

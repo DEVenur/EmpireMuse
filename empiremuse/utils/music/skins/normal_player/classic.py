@@ -5,7 +5,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import time_format, get_button_style, music_source_image, md_link
+from empiremuse.utils.music.converters import time_format, get_button_style, music_source_image, md_link, md_code
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -36,7 +36,8 @@ class ClassicSkin:
         bar = asset_url("ui_rainbow_bar_3.gif")
 
         embed_top = disnake.Embed(
-            color=color, description=f"### {md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}"
+            color=color,
+            description=f"### {md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}",
         )
         embed.set_image(url=bar)
 
@@ -56,7 +57,7 @@ class ClassicSkin:
         else:
             duration = f"⏰ **⠂** `{time_format(player.current.duration)}`"
 
-        txt = f"{duration}\n👤 **⠂** `{player.current.author}`\n"
+        txt = f"{duration}\n👤 **⠂** {md_code(player.current.author)}\n"
 
         if not player.current.autoplay:
             txt += f"🎧 **⠂** <@{player.current.requester}>\n"

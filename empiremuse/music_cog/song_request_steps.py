@@ -22,6 +22,7 @@ from empiremuse.utils.music.converters import (
     YOUTUBE_VIDEO_REG,
     music_source_image,
     md_link,
+    md_code,
 )
 from empiremuse.utils.music.errors import (
     GenericError,
@@ -204,7 +205,7 @@ async def _pr_single(self, req):
 
     if isinstance(message.channel, disnake.Thread) and not isinstance(message.channel.parent, disnake.ForumChannel):
         embed.description = (
-            f"💠 **⠂ Uploader:** `{track.author}`\n"
+            f"💠 **⠂ Uploader:** {md_code(track.author)}\n"
             f"✋ **⠂ Pedido por:** {message.author.mention}\n"
             f"⏰ **⠂ Duração:** `{time_format(track.duration) if not track.is_stream else '🔴 Livestream'}`"
         )

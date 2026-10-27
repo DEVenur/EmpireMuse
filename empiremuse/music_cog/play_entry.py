@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import asyncio
 from typing import Union
 
@@ -38,6 +39,8 @@ from empiremuse.music_cog.shared import (
     play_mc,
     playlist_opts,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PlayEntryMixin:
@@ -205,7 +208,7 @@ class PlayEntryMixin:
         try:
             player = bot.music.players[guild_id]
         except KeyError:
-            print(f"Player debug test 20: {bot.user} | {self.bot.user}")
+            logger.debug("Player debug test 20: %s | %s", bot.user, self.bot.user)
             raise GenericError(
                 f"**O player do bot {bot.user.mention} foi finalizado antes de conectar no canal de voz "
                 f"(ou o player não foi inicializado)...\nPor via das dúvidas tente novamente.**"
@@ -281,9 +284,7 @@ class PlayEntryMixin:
             else:
                 embed = disnake.Embed(color=self.bot.get_color(me))
 
-                embed.description = (
-                    f"**Preciso que algum staff me convide para falar no palco: {md_link(channel.name, channel.jump_url, code=False)}.**"
-                )
+                embed.description = f"**Preciso que algum staff me convide para falar no palco: {md_link(channel.name, channel.jump_url, code=False)}.**"
 
                 embed.set_footer(
                     text="💡 Dica: para me permitir falar no palco automaticamente será necessário me conceder "

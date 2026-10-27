@@ -39,7 +39,7 @@ class EmbedLinkStaticSkin:
         title = (
             fix_characters(player.current.title)
             if not player.current.uri
-            else f"{md_link(player.current.title, player.current.uri, code=False)}"
+            else md_link(player.current.title, player.current.uri, code=False)
         )
 
         if player.paused:

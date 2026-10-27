@@ -5,7 +5,14 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image, md_link
+from empiremuse.utils.music.converters import (
+    fix_characters,
+    time_format,
+    get_button_style,
+    music_source_image,
+    md_link,
+    md_code,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
 
@@ -31,7 +38,9 @@ class ClassicStaticSkin:
 
         queue_txt = ""
 
-        embed.description = f"**{md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}**\n\n"
+        embed.description = (
+            f"**{md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}**\n\n"
+        )
         embed.set_image(url=player.current.thumb)
         embed_top = None
 
@@ -47,7 +56,7 @@ class ClassicStaticSkin:
         else:
             duration = f"⏰ **⠂Duração:** `{time_format(player.current.duration)}`"
 
-        txt = f"{duration}\n💠 **⠂Uploader:** `{player.current.author}`\n"
+        txt = f"{duration}\n💠 **⠂Uploader:** {md_code(player.current.author)}\n"
 
         if not player.current.autoplay:
             f"🎧 **⠂Pedido por:** <@{player.current.requester}>\n"

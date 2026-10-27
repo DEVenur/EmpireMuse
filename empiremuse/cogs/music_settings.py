@@ -6,7 +6,7 @@ import datetime
 import os
 import random
 import string
-import traceback
+import logging
 from typing import TYPE_CHECKING, Union, Optional
 
 import disnake
@@ -49,6 +49,8 @@ from empiremuse.utils.music.request_channel import (
     find_request_channel,
     reset_request_channel,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -251,7 +253,7 @@ class PlayerSettings(disnake.ui.View):
             else:
                 await self.ctx.edit_original_message(content="Alterações salvas com sucesso!", view=None, embed=None)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao salvar as alterações do menu de configurações")
         await self.save_data()
         self.stop()
 
@@ -608,7 +610,7 @@ class MusicSettings(commands.Cog):
                 except disnake.NotFound:
                     pass
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha inesperada no menu de configurações")
 
                 return
 
@@ -1174,7 +1176,7 @@ class MusicSettings(commands.Cog):
             try:
                 await player.destroy_message()
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao apagar a mensagem do player")
 
             player.skin = select_view.skin_selected
             player.skin_static = select_view.static_skin_selected
@@ -1191,7 +1193,7 @@ class MusicSettings(commands.Cog):
                 if player.controller_mode and not [m for m in player.guild.me.voice.channel.members if not m.bot]:
                     player.start_auto_skip()
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao iniciar o auto-skip")
 
             await player.invoke_np(force=True)
             await asyncio.sleep(1.5)

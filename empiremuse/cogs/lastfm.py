@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-import traceback
 from typing import TYPE_CHECKING, Optional, List
 
 import disnake
@@ -133,7 +132,7 @@ class LastFMView(disnake.ui.View):
             self.last_timestamp = int((disnake.utils.utcnow() + datetime.timedelta(minutes=5)).timestamp())
 
         await interaction.send(
-            f'### {md_link('Clique aqui', self.auth_url, code=False)} para vincular sua conta do last.fm (na página clique em "allow")\n\n'
+            f'### {md_link("Clique aqui", self.auth_url, code=False)} para vincular sua conta do last.fm (na página clique em "allow")\n\n'
             f"`O link expira em` <t:{self.last_timestamp}:R> `(Caso esteja expirado, clique no botão novamente).`\n\n"
             f'`Atenção: Não mostre o link do "clique aqui" pra ninguem e nem envie em locais '
             f"públicos, pois esse link pode conceder acesso a sua conta do last.fm`\n\n"
@@ -227,10 +226,10 @@ class LastFmCog(commands.Cog):
                 txt += f"> `🌎` **⠂País:** `{lastfm_user['country']}`\n"
 
             if playcount := lastfm_user["playcount"]:
-                txt += f"> `🔊` **⠂Total de músicas reproduzidas:** {md_link(f'{int(playcount):,}', f"https://www.last.fm/user/{lastfm_user['name']}/library")}\n"
+                txt += f"> `🔊` **⠂Total de músicas reproduzidas:** {md_link(f'{int(playcount):,}', f'https://www.last.fm/user/{lastfm_user["name"]}/library')}\n"
 
             if playlists := lastfm_user["playlists"] != "0":
-                txt += f"> `📄` **⠂Playlists públicas:** {md_link(f'{int(playlists):,}', f"https://www.last.fm/user/{lastfm_user['name']}/playlists")}\n"
+                txt += f"> `📄` **⠂Playlists públicas:** {md_link(f'{int(playlists):,}', f'https://www.last.fm/user/{lastfm_user["name"]}/playlists')}\n"
 
             try:
                 slashcmd = (
@@ -357,7 +356,7 @@ class LastFmCog(commands.Cog):
 
                     embeds.append(embed)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao montar os embeds do last.fm")
 
         else:
             embeds = [
@@ -610,7 +609,7 @@ class LastFmCog(commands.Cog):
                             )
                         )
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha inesperada no scrobble do last.fm")
 
                     if not result:
                         try:
@@ -622,7 +621,7 @@ class LastFmCog(commands.Cog):
                                 )
                             )
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha inesperada no scrobble do last.fm")
 
                     if not result:
                         if self.bot.config["USE_YTM_TRACKINFO_SCROBBLE"]:
@@ -632,10 +631,10 @@ class LastFmCog(commands.Cog):
                                 )
                             except Exception as e:
                                 if not isinstance(e, wavelink.TrackNotFound):
-                                    traceback.print_exc()
+                                    logger.exception("Falha inesperada no scrobble do last.fm")
 
                     if not result:
-                        print(f"⚠️ - Last.FM Scrobble - Sem resultados para a música: {track_query}")
+                        logger.debug("Last.FM Scrobble - Sem resultados para a música: %s", track_query)
                         self.bot.last_fm.cache[track_query] = {}
                         await self.bot.last_fm.scrobble_save_cache_async()
                         await self.save_scrobble(query=track_query, track=track, users=users)
@@ -653,7 +652,7 @@ class LastFmCog(commands.Cog):
                     await self.bot.last_fm.scrobble_save_cache_async()
 
                 if not fmdata:
-                    print(f"⚠️ - Last.FM Scrobble - Ignorado: {track_query}")
+                    logger.debug("Last.FM Scrobble - Ignorado: %s", track_query)
                     await self.save_scrobble(query=track_query, track=track, users=users)
                     return
 
@@ -693,7 +692,7 @@ class LastFmCog(commands.Cog):
                     await self.bot.last_fm.track_scrobble(**kwargs)
             except Exception as e:
                 if isinstance(e, LastFmException):
-                    print(f"last.fm failed! user: {fminfo['user_id']} - code: {e.code} - message: {e.message}")
+                    logger.warning("last.fm failed! %s - code: %s", type(e).__name__, e.code)
                     if e.code == 9:
                         user_data = await self.bot.get_global_data(fminfo["user_id"], db_name=DBModel.users)
                         user_data["lastfm"]["sessionkey"] = ""
@@ -711,7 +710,7 @@ class LastFmCog(commands.Cog):
                     # O str do erro do aiohttp traz a URL com api_key, sk e api_sig: só o status vai para o log.
                     logger.warning("last.fm request failed! user: %s - %s", fminfo["user_id"], safe_error(e))
                 else:
-                    traceback.print_exc()
+                    logger.exception("Falha inesperada no scrobble do last.fm")
                 continue
 
             player.lastfm_users[fminfo["user_id"]] = {
@@ -739,9 +738,8 @@ class LastFmCog(commands.Cog):
 
 def setup(bot):
     if not bot.pool.config["LASTFM_KEY"] or not bot.pool.config["LASTFM_SECRET"]:
-        print(
-            ("=" * 48)
-            + "\n⚠️ - Os recursos do Last.FM estarão desativados devido a falta de configuração do LASTFM_KEY e LASTFM_SECRET"
+        logger.warning(
+            "Os recursos do Last.FM estarão desativados devido a falta de configuração do LASTFM_KEY e LASTFM_SECRET"
         )
         return
     bot.add_cog(LastFmCog(bot))

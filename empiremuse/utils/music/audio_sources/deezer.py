@@ -103,7 +103,7 @@ class DeezerClient:
                         continue
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        md_link(a['name'], f"https://www.deezer.com/artist/{a['id']}") for a in artists
+                        md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
                     )
                     t.info["extra"]["artist_id"] = result["artist"]["id"]
 
@@ -148,7 +148,7 @@ class DeezerClient:
 
             t.info["extra"]["authors"] = [a["name"] for a in artists]
             t.info["extra"]["authors_md"] = ", ".join(
-                md_link(a['name'], f"https://www.deezer.com/artist/{a['id']}") for a in artists
+                md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
             )
             t.info["extra"]["artist_id"] = result["artist"]["id"]
 
@@ -201,7 +201,7 @@ class DeezerClient:
 
                 t.info["extra"]["authors"] = [a["name"] for a in artists]
                 t.info["extra"]["authors_md"] = ", ".join(
-                    md_link(a['name'], f"https://www.deezer.com/artist/{a['id']}") for a in artists
+                    md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
                 )
                 t.info["extra"]["artist_id"] = result["artist"]["id"]
 
@@ -286,7 +286,7 @@ class DeezerClient:
 
             track.info["extra"]["authors"] = [a["name"] for a in artists]
             track.info["extra"]["authors_md"] = ", ".join(
-                md_link(a['name'], f"https://www.deezer.com/artist/{a['id']}") for a in artists
+                md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
             )
             track.info["extra"]["artist_id"] = t["artist"]["id"]
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Montagem da fila, resposta ao usuário e conexão do `/play`."""
 
+import logging
 import asyncio
 from io import BytesIO
 from random import shuffle
@@ -18,7 +19,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
     check_player_perm,
 )
-from empiremuse.utils.music.converters import time_format, fix_characters, URL_REG, music_source_image, md_link
+from empiremuse.utils.music.converters import time_format, fix_characters, URL_REG, music_source_image, md_link, md_code
 from empiremuse.utils.music.errors import (
     NoVoice,
 )
@@ -27,6 +28,8 @@ from empiremuse.utils.others import (
     PlayerControls,
     update_inter,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.music_cog.play_state import PlayState
@@ -326,7 +329,9 @@ class PlayEnqueueMixin:
         if not track_url:
             track_url = tracks.uri or tracks.search_uri
 
-        log_text = f"{inter.author.mention} adicionou {md_link(tracks.title, track_url, limit=20)}{pos_txt} `({duration})`."
+        log_text = (
+            f"{inter.author.mention} adicionou {md_link(tracks.title, track_url, limit=20)}{pos_txt} `({duration})`."
+        )
 
         loadtype = "track"
 
@@ -336,7 +341,7 @@ class PlayEnqueueMixin:
             icon_url=music_source_image(tracks.info["sourceName"]),
         )
         embed.set_thumbnail(url=tracks.thumb)
-        embed.description = f"`{fix_characters(tracks.author, 15)}`**┃**`{time_format(tracks.duration) if not tracks.is_stream else '🔴 Livestream'}`**┃**{inter.author.mention}"
+        embed.description = f"{md_code(tracks.author, limit=15)}**┃**`{time_format(tracks.duration) if not tracks.is_stream else '🔴 Livestream'}`**┃**{inter.author.mention}"
         emoji = "🎵"
         if reg_query is not None and tracks.uri:
             reg_query = {"name": tracks.title, "url": tracks.uri}
@@ -484,7 +489,7 @@ class PlayEnqueueMixin:
                         else:
                             tracks.data["playlistInfo"]["thumb"] = playlist_data["thumbnail_url"]
                 except Exception as e:
-                    print(f"Falha ao obter artwork da playlist (oembed): {oembed_url} | {repr(e)}")
+                    logger.warning("Falha ao obter artwork da playlist (oembed): %s", type(e).__name__)
 
             else:
                 try:
@@ -518,7 +523,7 @@ class PlayEnqueueMixin:
 
                     tracks.data["playlistInfo"]["thumb"] = playlist_data["thumbnails"][0]["url"]
                 except Exception as e:
-                    print(f"Falha ao obter artwork da playlist: {q} | {repr(e)}")
+                    logger.warning("Falha ao obter artwork da playlist: %s", type(e).__name__)
 
         req.image_file = image_file
 
@@ -607,7 +612,7 @@ class PlayEnqueueMixin:
                     func = inter.send
 
             footer_txt = (
-                f"`♾️` {md_link(user_data['lastfm']['username'], f"https://www.last.fm/user/{user_data['lastfm']['username']}")}"
+                f"`♾️` {md_link(user_data['lastfm']['username'], f'https://www.last.fm/user/{user_data["lastfm"]["username"]}')}"
                 if user_data["lastfm"]["sessionkey"] and user_data["lastfm"]["scrobble"]
                 else ""
             )

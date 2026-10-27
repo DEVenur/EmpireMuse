@@ -97,9 +97,12 @@ def md_code(text: object, *, limit: int = 0) -> str:
     return f"`{fix_characters(str(text), limit) or '?'}`"
 
 
-def md_bracketed(inner: str) -> str:
-    """``[inner]`` em code spans, para conteúdo já seguro (menção, timestamp, link de ``md_link``) do próprio bot."""
-    return f"`[`{inner}`]`"
+def md_bracketed(inner: str, *, prefix: str = "") -> str:
+    """``[inner]`` em code spans, para conteúdo já seguro (menção, timestamp, link de ``md_link``) do próprio bot.
+
+    ``prefix`` (também do próprio bot) fica dentro do primeiro code span, antes do ``[``.
+    """
+    return f"`{prefix}[`{inner}`]`"
 
 
 def md_link(text: object, url: object, *, code: bool = True, limit: int = 0) -> str:

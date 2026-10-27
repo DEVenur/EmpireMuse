@@ -10,7 +10,7 @@ import disnake
 from aiohttp import ClientConnectionError, ClientError, ClientResponseError
 
 import empiremuse.wavelink as wavelink
-from empiremuse.utils.music.converters import fix_characters, md_link
+from empiremuse.utils.music.converters import fix_characters, md_link, md_code
 from empiremuse.utils.music.errors import (
     code_suffix,
     error_code_text,
@@ -138,9 +138,7 @@ async def _aq_source_tracks(self, req):
                 ]
 
                 authors_md = [
-                    md_link(a['name'], _spotify_url(a))
-                    for a in artists
-                    if isinstance(a, dict) and a.get("name")
+                    md_link(a["name"], _spotify_url(a)) for a in artists if isinstance(a, dict) and a.get("name")
                 ]
                 partial_track.info["extra"]["authors_md"] = ", ".join(authors_md)
 
@@ -187,7 +185,7 @@ async def _aq_source_tracks(self, req):
                         fix_characters(a["name"]) for a in artists if isinstance(a, dict) and a.get("name")
                     ]
                     authors_md = [
-                        md_link(a['name'], f"https://www.deezer.com/artist/{a['id']}")
+                        md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}")
                         for a in artists
                         if isinstance(a, dict) and a.get("name") and a.get("id")
                     ]
@@ -384,7 +382,7 @@ async def _aq_report_failure(self, req):
             error_msg = (
                 f"**Mensagem:** {lavalink_text(exception.message)}\n"
                 f"**Nível:** `{exception.severity}`\n"
-                f"**Servidor de música:** `{self.node.identifier}`{code_suffix(error_code)}"
+                f"**Servidor de música:** {md_code(self.node.identifier)}{code_suffix(error_code)}"
             )
         else:
             error_code = log_unexpected_error(logger, exception, "autoplay")
@@ -624,7 +622,7 @@ async def _rt_report_failure(self, track, e):
     embed = disnake.Embed(
         description=f"**Falha ao obter informação de PartialTrack:\n{md_link(track.title, track.uri or track.search_uri, code=False)}**"
         f"{error_code_text(error_code)}\n"
-        f"**Servidor de música:** `{self.node.identifier}`",
+        f"**Servidor de música:** {md_code(self.node.identifier)}",
         color=disnake.Colour.red(),
     )
     await self.report_error(embed, track)

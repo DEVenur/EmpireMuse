@@ -15,7 +15,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
     check_queue_loading,
 )
-from empiremuse.utils.music.converters import time_format, fix_characters, string_to_seconds, md_link
+from empiremuse.utils.music.converters import time_format, string_to_seconds, md_link, md_code
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -227,7 +227,7 @@ def _qc_remove(self, req):
             if playlist == t.playlist_name.replace("️", "") or (
                 isinstance(inter, CustomContext) and playlist.lower() in t.playlist_name.replace("️", "").lower()
             ):
-                playlist_link = f"{md_link(t.playlist_name, t.playlist_url)}"
+                playlist_link = md_link(t.playlist_name, t.playlist_url)
                 temp_filter.remove("playlist")
                 final_filters.add("playlist")
 
@@ -268,13 +268,13 @@ async def _qc_report(self, req):
 
     try:
         final_filters.remove("song_name")
-        txt.append(f"**Inclui nome:** `{fix_characters(song_name)}`")
+        txt.append(f"**Inclui nome:** {md_code(song_name)}")
     except Exception:
         pass
 
     try:
         final_filters.remove("song_author")
-        txt.append(f"**Inclui nome no uploader/artista:** `{fix_characters(song_author)}`")
+        txt.append(f"**Inclui nome no uploader/artista:** {md_code(song_author)}")
     except Exception:
         pass
 
@@ -316,7 +316,7 @@ async def _qc_report(self, req):
 
     msg_txt = (
         f"### ♻️ ⠂{inter.author.mention} removeu {deleted_tracks} música{'s'[: deleted_tracks ^ 1]} da fila:\n"
-        + "\n".join(f"{md_link(t.title, t.uri, limit=45)}" for t in tracklist[:7])
+        + "\n".join(md_link(t.title, t.uri, limit=45) for t in tracklist[:7])
     )
 
     if (trackcount := (len(tracklist) - 7)) > 0:
