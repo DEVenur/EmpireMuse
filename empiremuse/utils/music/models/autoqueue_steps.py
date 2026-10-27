@@ -7,7 +7,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 import disnake
-from aiohttp import ClientError
+from aiohttp import ClientConnectionError, ClientError, ClientResponseError
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.converters import fix_characters
@@ -58,22 +58,25 @@ async def _aq_source_tracks(self, req):
                 result = await self.bot.spotify.track_search(tracks_search[0].author, limit=10)
                 exception = None
                 break
-            except (ClientError, asyncio.TimeoutError) as e:
-                self.set_command_log(
-                    emoji="⚠️",
-                    text=f"Falha ao obter músicas recomendadas do spotify, tentativa {i + 1} de 3.",
-                    controller=True,
-                )
-                self.update = True
-                logger.warning("Falha ao obter músicas recomendadas do Spotify (%s).", type(e).__name__)
-                logger.debug("Detalhe da falha no Spotify:", exc_info=True)
-                exception = e
-                await asyncio.sleep(5)
             except Exception as e:
+                is_transient = (
+                    isinstance(e, (ClientConnectionError, asyncio.TimeoutError))
+                    or (isinstance(e, ClientResponseError) and (e.status is None or e.status >= 500))
+                    or (isinstance(e, ClientError) and not isinstance(e, ClientResponseError))
+                )
                 logger.warning("Falha ao obter músicas recomendadas do Spotify (%s).", type(e).__name__)
                 logger.debug("Detalhe da falha no Spotify:", exc_info=True)
                 exception = e
-                break
+                if is_transient:
+                    self.set_command_log(
+                        emoji="⚠️",
+                        text=f"Falha ao obter músicas recomendadas do spotify, tentativa {i + 1} de 3.",
+                        controller=True,
+                    )
+                    self.update = True
+                    await asyncio.sleep(5)
+                else:
+                    break
 
         if result:
             tracks = []
@@ -87,6 +90,11 @@ async def _aq_source_tracks(self, req):
                 if not isinstance(t, dict):
                     continue
 
+                uri = (t.get("external_urls") or {}).get("spotify") or ""
+                identifier = t.get("id") or ""
+                if not uri or not identifier:
+                    continue
+
                 try:
                     thumb = t.get("album", {}).get("images", [])[0]["url"]
                 except IndexError, KeyError, TypeError:
@@ -98,13 +106,13 @@ async def _aq_source_tracks(self, req):
                 ) or "Unknown Artist"
 
                 partial_track = PartialTrack(
-                    uri=(t.get("external_urls") or {}).get("spotify") or "",
+                    uri=uri,
                     author=first_artist,
                     title=t.get("name") or "",
                     thumb=thumb,
                     duration=t.get("duration_ms") or 0,
                     source_name="spotify",
-                    identifier=t.get("id") or "",
+                    identifier=identifier,
                     requester=self.bot.user.id,
                     autoplay=True,
                 )
