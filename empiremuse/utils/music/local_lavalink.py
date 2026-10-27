@@ -17,7 +17,12 @@ from typing import Callable, Dict, List, Mapping, Optional, Tuple
 import requests
 
 from empiremuse import paths
+from empiremuse.logs import register_secret
 from empiremuse.utils import branding
+
+# Senha fixa do nó LOCAL (a do application.yml do repositório); registrada no redator para nunca sair em log.
+LOCAL_LAVALINK_PASSWORD = "youshallnotpass"
+register_secret(LOCAL_LAVALINK_PASSWORD)
 
 logger = logging.getLogger(__name__)
 

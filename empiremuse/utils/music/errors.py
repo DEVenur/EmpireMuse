@@ -35,6 +35,8 @@ def log_unexpected_error(log: logging.Logger, error: BaseException, what: str) -
         what,
         f" [{code}]" if code else "",
         exc_info=(type(error), error, error.__traceback__),
+        # O agregador usa o código para apontar o traceback já impresso.
+        extra={"error_code": code} if code else None,
     )
     return code
 

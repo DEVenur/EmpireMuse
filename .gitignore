@@ -77,6 +77,9 @@ source.zip
 *.log
 .logs/
 logs/
+# O pacote de código e os testes do log (item 7) também se chamam logs/
+!empiremuse/logs/
+!tests/logs/
 
 # --- Lavalink Local, Java e Configuração de Nós ---
 *.jar

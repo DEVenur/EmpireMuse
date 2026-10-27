@@ -1,0 +1,189 @@
+"""Item 7 (P1, Turbine) — B3 (nome do bot saneado), B5 (``extra`` vence o contexto) e B6 (``LevelGate``, V-L7).
+
+Registros montados à mão, sem handler. O contexto vive em ``ContextVar``: cada tarefa do asyncio enxerga o seu.
+"""
+
+import asyncio
+import logging
+
+import pytest
+
+from empiremuse.logs.context import ContextFilter, LevelGate, log_bot, log_context, log_guild
+from tests.logs.apoio import registro
+
+pytestmark = pytest.mark.critical
+
+A, B = 111111111111111111, 222222222222222222
+INFO, DEBUG, WARNING, ERROR = logging.INFO, logging.DEBUG, logging.WARNING, logging.ERROR
+
+
+def contexto_de(record):
+    ContextFilter().filter(record)
+    return getattr(record, "bot", None), getattr(record, "guild", None)
+
+
+class TestContexto:
+    def test_the_context_variables_default_to_none(self):
+        assert log_bot.get() is None and log_guild.get() is None
+
+    def test_a_record_inside_the_context_gets_the_bot_and_the_guild(self):
+        with log_context(bot="Alfa", guild=A):
+            assert contexto_de(registro("x")) == ("Alfa", A)
+
+    def test_a_record_outside_any_context_has_none(self):
+        bot, guild = contexto_de(registro("x"))
+
+        assert bot is None and guild is None
+
+    def test_the_context_is_restored_on_exit_and_on_error(self):
+        with pytest.raises(RuntimeError), log_context(bot="Alfa", guild=A):
+            raise RuntimeError("falha dentro do contexto")
+
+        assert log_bot.get() is None and log_guild.get() is None
+
+    def test_nested_contexts_override_and_restore(self):
+        with log_context(bot="Alfa", guild=A):
+            with log_context(guild=B):
+                assert contexto_de(registro("x"))[1] == B
+            assert contexto_de(registro("x")) == ("Alfa", A)
+
+    def test_the_filter_always_lets_the_record_through(self):
+        assert ContextFilter().filter(registro("x")) is True
+
+    def test_each_asyncio_task_sees_its_own_context(self):
+        vistos = {}
+
+        async def tarefa(guild, pronto, liberar):
+            with log_context(bot=f"bot{guild}", guild=guild):
+                pronto.set()
+                await liberar.wait()
+                vistos[guild] = contexto_de(registro("x"))
+
+        async def principal():
+            liberar = asyncio.Event()
+            prontos = [asyncio.Event(), asyncio.Event()]
+            tarefas = [asyncio.create_task(tarefa(g, p, liberar)) for g, p in zip((A, B), prontos)]
+            for pronto in prontos:
+                await pronto.wait()
+            liberar.set()
+            await asyncio.gather(*tarefas)
+
+        asyncio.run(principal())
+
+        assert vistos == {A: (f"bot{A}", A), B: (f"bot{B}", B)}
+
+
+class TestExtraVence:
+    def test_extra_guild_wins_over_the_context(self):
+        with log_context(guild=A):
+            assert contexto_de(registro("x", guild=B))[1] == B
+
+    def test_extra_bot_wins_over_the_context(self):
+        with log_context(bot="Alfa"):
+            assert contexto_de(registro("x", bot="Beta"))[0] == "Beta"
+
+    def test_extra_guild_alone_works_without_a_context(self):
+        assert contexto_de(registro("x", guild=B))[1] == B
+
+    @pytest.mark.parametrize("valor", ["123", "1\nERROR forjado", 12.5, ["1"], None])
+    def test_a_guild_that_is_not_an_int_is_not_accepted(self, valor):
+        guild = contexto_de(registro("x", guild=valor))[1]
+
+        assert guild is None or isinstance(guild, int)
+        assert guild != valor or valor is None
+
+
+class TestNomeDoBot:
+    def test_the_bot_name_is_sanitised_against_line_breaks_and_escape_sequences(self):
+        with log_context(bot="ev\nil\x1b[2J‮"):
+            bot = contexto_de(registro("x"))[0]
+
+        assert bot == "ev⏎il�[2J�"
+
+    def test_the_bot_name_from_extra_is_sanitised_too(self):
+        bot = contexto_de(registro("x", bot="a\rb\x9b"))[0]
+
+        assert bot == "a⏎b�"
+
+    def test_an_ordinary_name_is_untouched(self):
+        with log_context(bot="Empire Muse 2 ✨"):
+            assert contexto_de(registro("x"))[0] == "Empire Muse 2 ✨"
+
+
+# ============================================================================ B6 — LevelGate
+
+
+def com_servidor(nome, nivel, guild=None):
+    record = registro("x", nivel=nivel, nome=nome)
+    record.guild = guild
+    return record
+
+
+class TestLevelGate:
+    def gate(self, nivel=INFO, guildas=(A,)):
+        return LevelGate(nivel, frozenset(guildas))
+
+    @pytest.mark.parametrize("nivel", [INFO, WARNING, ERROR, logging.CRITICAL])
+    def test_records_at_or_above_the_level_always_pass(self, nivel):
+        assert self.gate().filter(com_servidor("qualquer.coisa", nivel)) is True
+
+    def test_a_debug_of_a_server_in_debug_passes(self):
+        assert self.gate().filter(com_servidor("empiremuse.player", DEBUG, A)) is True
+
+    def test_a_debug_of_another_server_does_not_pass(self):
+        assert self.gate().filter(com_servidor("empiremuse.player", DEBUG, B)) is False
+
+    def test_a_debug_without_a_server_does_not_pass(self):
+        assert self.gate().filter(com_servidor("empiremuse.player", DEBUG, None)) is False
+
+    def test_without_debug_guilds_a_debug_never_passes(self):
+        assert self.gate(guildas=()).filter(com_servidor("empiremuse.player", DEBUG, A)) is False
+
+    @pytest.mark.parametrize(
+        "nome", ["empiremuse", "empiremuse.wavelink", "empiremuse.player.fila", "empiremuse.utils.music.models"]
+    )
+    def test_our_own_loggers_pass_in_debug_for_a_server_in_debug(self, nome):
+        assert self.gate().filter(com_servidor(nome, DEBUG, A)) is True
+
+    @pytest.mark.parametrize(
+        "nome",
+        [
+            "charset_normalizer",
+            "requests",
+            "curl_cffi",
+            "dns.resolver",
+            "dnspython",
+            "disnake.gateway",
+            "empiremusex",
+            "empiremuse_extra.x",
+        ],
+    )
+    def test_third_party_debug_never_passes_even_inside_a_server_in_debug(self, nome):
+        assert self.gate().filter(com_servidor(nome, DEBUG, A)) is False
+
+    def test_third_party_warnings_still_pass(self):
+        assert self.gate().filter(com_servidor("requests", WARNING, A)) is True
+
+    def test_with_the_level_at_debug_everything_passes(self):
+        assert self.gate(DEBUG, ()).filter(com_servidor("charset_normalizer", DEBUG, None)) is True
+
+    def test_a_record_without_the_guild_attribute_is_handled(self):
+        assert self.gate().filter(registro("x", nivel=DEBUG, nome="empiremuse.player")) is False
+
+    def test_the_filter_is_total_for_anything_that_is_not_a_record(self):
+        assert self.gate().filter(object()) in (True, False)  # type: ignore[arg-type]
+
+    def test_the_gate_does_not_format_the_arguments(self):
+        chamadas = []
+
+        class Espia:
+            def __str__(self):
+                chamadas.append(1)
+                return "espia"
+
+        record = registro("x %s", Espia(), nivel=DEBUG, nome="empiremuse.player")
+        record.guild = B
+
+        self.gate().filter(record)
+
+        assert chamadas == []

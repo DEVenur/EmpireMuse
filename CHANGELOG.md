@@ -7,8 +7,18 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Adicionado
+- **Log centralizado com a biblioteca padrão (item 7, fase P1)**: o pacote `empiremuse/logs/` configura o `logging` do processo num ponto só. Console com cor por severidade (nunca no arquivo), contexto de bot e servidor em cada linha e arquivo de log opcional. Chaves novas no `.example.env`:
+  - `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING` ou `ERROR`; padrão `INFO`).
+  - `LOG_COLOR` (`on` ou `off`; padrão `on`, só no console).
+  - `LOG_FILE` (`auto`, `on` ou `off`; padrão `auto`: grava arquivo fora da imagem Docker e não grava dentro dela). `ENABLE_LOGGER` continua valendo como sinônimo de `LOG_FILE=on` e nunca desliga nada.
+  - `LOG_DEBUG_GUILDS` (IDs de servidores, separados por vírgula, que registram em `DEBUG` mesmo com o nível global mais alto).
+  - `METRICS_INTERVAL` (reservada para o resumo periódico de métricas da fase 3; ainda sem efeito; padrão 300, mínimo 60; 0 desliga).
+- **Agregação de erros repetidos**: avisos e erros iguais (mesmo logger, nível, modelo da mensagem e tipo de exceção) saem uma vez e viram um resumo por janela de 60 s, em vez de inundar o console e o arquivo.
+
 ### Segurança
 - **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
+- **Redator único de segredos em todos os destinos do log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 
 ### Removido
 - **Aviso de bot público e licença GPL-2 no console**: o aviso herdado de bot público e o texto da licença GPL-2 deixam de aparecer no console; o aviso de servidores sem o dono ou a equipe continua.

@@ -64,7 +64,22 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def install_log_hooks() -> None:
+    """Instala os ganchos de exceção com redação (``logs.hooks``) antes de qualquer outra coisa.
+
+    O import é tardio e tolerante: um erro no pacote de log do código recém-atualizado não pode impedir o ``boot_guard`` de voltar
+    ao commit anterior (os ganchos padrão do Python seguem valendo).
+    """
+    try:
+        from empiremuse.logs.hooks import install_early_hooks
+
+        install_early_hooks()
+    except Exception as e:
+        print(f"[log] ganchos de exceção não instalados ({type(e).__name__})", file=sys.stderr)
+
+
 def main():
+    install_log_hooks()
     enter_runtime_dir()
     # Antes de importar o bot: um erro de import no código recém-atualizado não pode impedir a volta ao commit anterior.
     boot_guard.run(paths.get_runtime_dir(), paths.PROJECT_DIR, time.time())

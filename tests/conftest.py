@@ -11,6 +11,10 @@ Isolamento da ``.runtime/`` de desenvolvimento (F3-7, D5): a pasta ``PROJECT_DIR
 worktrees, então a suíte se comportaria de um jeito num lugar e de outro no outro. A guarda a faz parecer ausente.
 """
 
+import logging
+import sys
+import threading
+
 import pytest
 
 from tests.support.runtime_guard import DEV_RUNTIME_DIRNAME, REAL_PROJECT_DIR, hide_path
@@ -29,3 +33,39 @@ def _isolate_real_dotenv(monkeypatch):
 @pytest.fixture(autouse=True)
 def _hide_dev_runtime(monkeypatch):
     hide_path(monkeypatch, REAL_PROJECT_DIR / DEV_RUNTIME_DIRNAME)
+
+
+BIBLIOTECAS_COM_NIVEL_FIXO = (
+    "disnake",
+    "aiohttp",
+    "asyncio",
+    "tornado",
+    "urllib3",
+    "pymongo",
+    "motor",
+    "websockets",
+    "PIL",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_logging_state():
+    """Um teste que chama ``configure_logging`` (direto ou via ``BotPool.setup``) não pode deixar a cadeia de filtros do item 7 no root.
+
+    Os filtros zeram ``exc_info`` e trocam ``msg``/``args``; sem esta restauração o ``caplog`` de um teste que rode DEPOIS enxerga o registro já
+    processado. Volta o que existia: handlers (menos os que o próprio pytest põe por fase), nível do root, nível dos loggers de biblioteca e os
+    ganchos globais de exceção.
+    """
+    raiz = logging.getLogger()
+    handlers, nivel = list(raiz.handlers), raiz.level
+    niveis = {nome: logging.getLogger(nome).level for nome in BIBLIOTECAS_COM_NIVEL_FIXO}
+    ganchos = (sys.excepthook, threading.excepthook)
+    yield
+    for handler in list(raiz.handlers):
+        if handler not in handlers and not type(handler).__module__.startswith("_pytest"):
+            raiz.removeHandler(handler)
+            handler.close()
+    raiz.setLevel(nivel)
+    for nome, valor in niveis.items():
+        logging.getLogger(nome).setLevel(valor)
+    sys.excepthook, threading.excepthook = ganchos
