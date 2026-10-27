@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-import math
 import os
 import re
 import stat
@@ -28,6 +27,7 @@ SEEN_TAGS_FILE = "update-state.json"
 PENDING_VERSION = 1
 PENDING_MAX_AGE_SECONDS = 24 * 3600
 PENDING_MAX_FUTURE_SECONDS = 300
+MAX_TIMESTAMP = 2**40  # ano ~36812; o que passa disso não é um instante, é arquivo corrompido ou forjado
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
 FLOWS = ("git", "docker")
@@ -95,6 +95,14 @@ def _positive_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
+def _valid_timestamp(value: object) -> bool:
+    """Instante em segundos dentro de ``0..MAX_TIMESTAMP`` (int ou float). A faixa é checada ANTES de qualquer conversão:
+    um inteiro gigante do JSON estouraria ``math.isfinite``/``float``. NaN e infinito caem fora da faixa."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return False
+    return 0 <= value <= MAX_TIMESTAMP
+
+
 def parse_pending(data: object) -> PendingUpdate | None:
     """``PendingUpdate`` do JSON já lido, ou ``None`` se qualquer campo estiver fora do esquema."""
     if not isinstance(data, dict):
@@ -112,9 +120,7 @@ def parse_pending(data: object) -> PendingUpdate | None:
         and from_version is not None
         and to_version is not None
         and all(_positive_int(data[key]) for key in ("bot_id", "channel_id", "requested_by"))
-        and isinstance(created_at, int | float)
-        and not isinstance(created_at, bool)
-        and math.isfinite(created_at)
+        and _valid_timestamp(created_at)
         and isinstance(boots, int)
         and not isinstance(boots, bool)
         and 0 <= boots <= MAX_BOOTS
@@ -223,19 +229,27 @@ def read_pending(runtime_dir: Path, now: float) -> PendingUpdate | None:
     return pending
 
 
+class SeenTagsError(Exception):
+    """O histórico de tags existe, mas não pôde ser lido: seguir reescreveria o arquivo e perderia as tags já vistas."""
+
+
 def read_seen_tags(runtime_dir: Path) -> dict[str, str]:
-    """Tag → SHA do objeto da tag já vistas; arquivo ausente ou inválido vale como vazio (nada foi visto)."""
+    """Tag → SHA do objeto da tag já vistas. Arquivo AUSENTE vale como vazio (nada foi visto); existente e ilegível ou
+    inválido levanta ``SeenTagsError`` (quem chama aborta em vez de sobrescrever o histórico)."""
     try:
         data = _read_json(Path(runtime_dir) / SEEN_TAGS_FILE)
-    except OSError, ValueError, RecursionError:
+    except FileNotFoundError:
         return {}
+    except (OSError, ValueError, RecursionError) as error:
+        raise SeenTagsError("histórico de tags ilegível") from error
     if not isinstance(data, dict):
-        return {}
-    return {
-        tag: sha
-        for tag, sha in data.items()
-        if isinstance(tag, str) and parse_tag(tag) is not None and isinstance(sha, str) and _SHA1.fullmatch(sha)
-    }
+        raise SeenTagsError("histórico de tags fora do formato")
+    seen: dict[str, str] = {}
+    for tag, sha in data.items():
+        if not (isinstance(tag, str) and parse_tag(tag) is not None and isinstance(sha, str) and _SHA1.fullmatch(sha)):
+            raise SeenTagsError("entrada inválida no histórico de tags")
+        seen[tag] = sha
+    return seen
 
 
 def write_seen_tags(runtime_dir: Path, seen: dict[str, str]) -> None:

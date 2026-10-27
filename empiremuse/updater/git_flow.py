@@ -33,7 +33,14 @@ from empiremuse.rules.release import (
     parse_tag,
     pick_target,
 )
-from empiremuse.updater.state import PendingUpdate, UpdateRequest, read_seen_tags, write_pending, write_seen_tags
+from empiremuse.updater.state import (
+    PendingUpdate,
+    SeenTagsError,
+    UpdateRequest,
+    read_seen_tags,
+    write_pending,
+    write_seen_tags,
+)
 from empiremuse.utils import branding
 
 logger = logging.getLogger(__name__)
@@ -322,7 +329,13 @@ async def plan_git_update(
         raise UpdateError(f"A tag {tag} não está na `main` oficial; a atualização foi recusada.")
 
     runtime_dir = paths.get_runtime_dir()
-    seen = read_seen_tags(runtime_dir)
+    try:
+        seen = read_seen_tags(runtime_dir)
+    except SeenTagsError as error:
+        raise UpdateError(
+            "Não consegui ler o histórico de versões (update-state.json); a atualização foi abortada e o arquivo não foi alterado."
+            " Corrija ou apague esse arquivo e tente de novo."
+        ) from error
     if seen.get(tag, tag_object_sha) != tag_object_sha:
         raise UpdateError(f"A tag {tag} mudou desde que foi vista pela primeira vez; a atualização foi recusada.")
     if tag not in seen:
