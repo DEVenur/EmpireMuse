@@ -691,3 +691,9 @@ class TestLinhasDistintasDoJava:
 
         for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
             assert "única B" in texto and texto.count("repetida 9×") == 1
+
+    def test_percent_signs_inside_a_java_line_never_break_the_formatting(self, lavalink_com_stderr, tmp_path):
+        linha = "GC pausa 100% do heap %d %s %(x)s fim"
+
+        for texto in self.textos(lavalink_com_stderr, tmp_path, [linha]):
+            assert linha in texto and "[log] falha" not in texto
