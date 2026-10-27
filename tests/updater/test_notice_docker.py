@@ -18,6 +18,7 @@ from empiremuse.updater import notice
 from empiremuse.updater.git_flow import UpdateError
 from empiremuse.updater.state import PendingUpdate, pending_path, read_pending, write_pending
 from empiremuse import paths
+from tests.support.alvo_git import ALVO_GIT
 from tests.updater.test_notice import AGORA, CANAL, CHANGELOG, bot_falso, pool_com, sem_mencoes
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -219,7 +220,7 @@ async def test_the_pending_update_is_gone_before_the_send_so_the_delivery_is_sin
 
 async def test_a_pending_git_update_is_not_touched_by_the_docker_notice(runtime):
     bot = bot_falso()
-    git = dataclasses.replace(pendente_docker(), flow="git", digest=None, prev_sha="a" * 40)
+    git = dataclasses.replace(pendente_docker(), flow="git", digest=None, prev_sha="a" * 40, target_commit=ALVO_GIT)
     write_pending(runtime, git)
     cliente = ClienteFalso([estado(rodando=False, codigo=0)])
 
