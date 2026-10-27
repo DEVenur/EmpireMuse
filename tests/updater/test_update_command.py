@@ -8,6 +8,7 @@ import asyncio
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -16,6 +17,7 @@ from empiremuse import paths
 from empiremuse.cogs import legacy_cmds
 from empiremuse.cogs.legacy_cmds import Owner
 from empiremuse.rules.release import Version
+from empiremuse.updater import releases
 from empiremuse.updater.git_flow import EXIT_RESTART, GitPlan, UpdateError
 from empiremuse.updater.state import PendingUpdate, UpdateRequest, read_pending, write_pending
 from empiremuse.updater.views import ConfirmView
@@ -383,14 +385,40 @@ async def test_a_failed_update_does_not_restart_and_frees_the_lock(cog, ambiente
 # ============================================================================ modos sem atualização automática
 
 
+def releases_do_github(monkeypatch, *, versao=PARA, falha=None, antes=None):
+    """O modo ``panel`` (imagem sem git) consulta as releases do GitHub; a lista e o CHANGELOG são trocados nos dois lugares possíveis."""
+
+    async def lista(session):
+        if antes:
+            antes()
+        if falha:
+            raise falha
+        return [releases.Release(versao, f"v{versao}", "https://exemplo.invalido/image-digest.txt")]
+
+    async def changelog(session, tag):
+        return "## [2.1.0]\n- novidade da 2.1.0\n"
+
+    for nome, fn in (("list_releases", lista), ("fetch_changelog", changelog)):
+        monkeypatch.setattr(releases, nome, fn)
+        if hasattr(legacy_cmds, nome):
+            monkeypatch.setattr(legacy_cmds, nome, fn)
+
+    def sem_ls_remote(*args, **kwargs):
+        raise AssertionError("a imagem não tem git: o modo painel não pode usar o ls-remote")
+
+    monkeypatch.setattr(legacy_cmds, "latest_official_version", sem_ls_remote)
+    monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", sem_ls_remote)
+
+
 @pytest.fixture
 def versoes(monkeypatch):
     monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=PARA))
     monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", lambda tag: "## [2.1.0]\n- novidade da 2.1.0\n")
 
 
-async def test_the_panel_mode_shows_the_version_and_points_to_the_host_panel(cog, ambiente, versoes, monkeypatch):
+async def test_the_panel_mode_shows_the_version_and_points_to_the_host_panel(cog, ambiente, monkeypatch):
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
+    releases_do_github(monkeypatch)
 
     texto = await Owner.update.callback(cog, ctx_painel())
 
@@ -398,8 +426,9 @@ async def test_the_panel_mode_shows_the_version_and_points_to_the_host_panel(cog
     assert not cog.bot.pool.update_lock.locked()
 
 
-async def test_the_panel_mode_on_the_latest_version_says_so(cog, ambiente, versoes, monkeypatch):
+async def test_the_panel_mode_on_the_latest_version_says_so(cog, ambiente, monkeypatch):
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.1.0")
+    releases_do_github(monkeypatch)
 
     texto = await Owner.update.callback(cog, ctx_painel())
 
@@ -422,7 +451,7 @@ async def test_the_prefix_command_sends_an_embed_instead_of_returning_text(cog, 
 async def test_the_panel_mode_still_points_to_the_host_panel_when_the_version_lookup_fails(cog, ambiente, monkeypatch):
     """A imagem não tem o binário do git: a consulta da versão oficial pode falhar, e o dono ainda precisa saber que atualiza pelo painel."""
     monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
-    monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=None))
+    releases_do_github(monkeypatch, falha=UpdateError("Não consegui consultar as versões publicadas agora."))
 
     texto = await Owner.update.callback(cog, ctx_painel())
 
@@ -467,6 +496,8 @@ def modo_com_consulta_registrada(modo: str, ambiente, monkeypatch, ctx) -> None:
         return
     if modo == "painel":
         monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
+        releases_do_github(monkeypatch, antes=lambda: vistos.append(ctx.response.defer.await_count))
+        return
     monkeypatch.setattr(legacy_cmds, "latest_official_version", consulta)
     monkeypatch.setattr(legacy_cmds, "fetch_remote_changelog", lambda tag: "## [2.1.0]\n- novidade\n")
 
@@ -506,3 +537,164 @@ async def test_a_prefix_command_is_never_deferred(cog, ambiente, monkeypatch, mo
     ctx.response.defer.assert_not_awaited()
     ctx.defer.assert_not_awaited()
     assert ctx.defers_na_rede == [0]
+
+
+# ============================================================================ P4: modo docker (proxy configurado em UPDATE_PROXY_SOCKET)
+
+SOCKET = "/run/empiremuse/updater.sock"
+PLANO_DOCKER = SimpleNamespace(current=DE, target=PARA, digest="sha256:" + "ab" * 32, changelog="- novidade da 2.1.0")
+
+
+class Cronologia:
+    """Anota a ordem entre a parada da checagem de ready, o início do auxiliar e o acompanhamento."""
+
+    def __init__(self, pool) -> None:
+        self.pool = pool
+        self.eventos: list[str] = []
+        self.ready_checked_no_inicio: bool | None = None
+        self.args_inicio: tuple[Any, ...] = ()
+        self.args_vigia: tuple[Any, ...] = ()
+        self.socket: str | None = None
+
+
+@pytest.fixture
+def docker(cog, ambiente, monkeypatch):
+    """Modo docker: socket configurado, imagem 2.0.0 e o fluxo (plano, início, vigia, cliente) trocado por mocks no módulo do comando."""
+    cog.bot.config = {"UPDATE_PROXY_SOCKET": SOCKET}
+    monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.0")
+    cron = Cronologia(cog.bot.pool)
+    pendente = SimpleNamespace(marca="pendente-docker")
+
+    async def planejar(*args, **kwargs):
+        cron.eventos.append("plano")
+        cron.args_plano = (args, kwargs)
+        return PLANO_DOCKER
+
+    async def iniciar(*args, **kwargs):
+        cron.eventos.append("inicio")
+        cron.ready_checked_no_inicio = cog.bot.pool.update_ready_checked
+        cron.args_inicio = args
+        return pendente
+
+    async def vigiar(*args, **kwargs):
+        cron.eventos.append("vigia")
+        cron.args_vigia = args
+
+    def fabrica(caminho):
+        cron.socket = caminho
+        return SimpleNamespace(socket=caminho)
+
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", planejar)
+    monkeypatch.setattr(legacy_cmds, "start_docker_update", iniciar)
+    monkeypatch.setattr(legacy_cmds, "watch_helper", vigiar)
+    monkeypatch.setattr(legacy_cmds, "ProxyClient", fabrica)
+    cron.pendente = pendente
+    cron.planejar, cron.iniciar = planejar, iniciar
+    return cron
+
+
+async def esperar_tarefas() -> None:
+    atual = asyncio.current_task()
+    await asyncio.gather(*(t for t in asyncio.all_tasks() if t is not atual), return_exceptions=True)
+
+
+async def test_the_docker_mode_offers_the_update_planned_from_the_image_version(cog, docker):
+    ctx = ctx_prefixo()
+
+    view = await oferecer(cog, ctx)
+
+    args, kwargs = docker.args_plano
+    assert (args[1] if len(args) > 1 else kwargs["current"]) == DE  # a versão da imagem (EMPIREMUSE_VERSION)
+    descricao = ctx.send.await_args.kwargs["embed"].description
+    assert (
+        "2.0.0" in descricao
+        and "2.1.0" in descricao
+        and "novidade da 2.1.0" in descricao
+        and "indisponível" in descricao
+    )
+    assert view is not None and cog.bot.pool.update_lock.locked()  # a trava passou para a janela
+
+
+async def test_through_the_panel_the_docker_mode_defers_first_and_sends_an_ephemeral_confirmation(cog, docker):
+    ctx = ctx_painel()
+
+    texto = await Owner.update.callback(cog, ctx)
+
+    ctx.response.defer.assert_awaited_once()
+    assert ctx.followup.send.await_args.kwargs["ephemeral"] is True and texto == "Confirmação enviada só para você."
+
+
+async def test_without_a_newer_release_the_docker_mode_says_so_and_frees_the_lock(cog, docker, monkeypatch):
+    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
+    ctx = ctx_prefixo()
+
+    await Owner.update.callback(cog, ctx)
+
+    assert "mais recente" in ctx.send.await_args.kwargs["embed"].description
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_a_planning_error_becomes_a_friendly_message_and_frees_the_lock(cog, docker, monkeypatch):
+    monkeypatch.setattr(
+        legacy_cmds,
+        "plan_docker_update",
+        AsyncMock(side_effect=UpdateError("Não consegui consultar as versões publicadas agora.")),
+    )
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "Não consegui consultar as versões publicadas agora." in erro.value.text
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_confirming_stops_the_ready_check_then_starts_the_helper_then_watches_it(cog, docker):
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    assert docker.eventos == ["plano", "inicio", "vigia"]
+    assert docker.ready_checked_no_inicio is True  # a checagem de ready do processo velho já estava encerrada
+    assert docker.socket == SOCKET
+    cliente, plano, pedido = docker.args_inicio[0], docker.args_inicio[1], docker.args_inicio[2]
+    assert cliente.socket == SOCKET and plano is PLANO_DOCKER
+    assert pedido == UpdateRequest(bot_id=BOT_ID, channel_id=CANAL, requested_by=DONO)
+    assert docker.args_vigia[1] is docker.pendente  # o acompanhamento recebe o pendente devolvido
+    interacao.edit_original_message.assert_awaited()
+    assert not cog.bot.pool.update_lock.locked()
+
+
+async def test_the_docker_flow_never_restarts_the_process_itself(cog, docker):
+    view = await oferecer(cog, ctx_prefixo())
+
+    await view.confirm.callback(clique())
+    await esperar_tarefas()
+
+    cog.bot.pool.shutdown.assert_not_awaited()  # quem troca o container é o auxiliar
+
+
+async def test_a_start_error_is_shown_in_the_channel_without_watching_and_frees_the_lock(cog, docker, monkeypatch):
+    monkeypatch.setattr(
+        legacy_cmds, "start_docker_update", AsyncMock(side_effect=UpdateError("proxy de atualização inacessível"))
+    )
+    view = await oferecer(cog, ctx_prefixo())
+    interacao = clique()
+
+    await view.confirm.callback(interacao)
+    await esperar_tarefas()
+
+    descricao = interacao.edit_original_message.await_args.kwargs["embed"].description
+    assert descricao.startswith("❌") and "proxy de atualização inacessível" in descricao
+    assert "vigia" not in docker.eventos and not cog.bot.pool.update_lock.locked()
+    cog.bot.pool.shutdown.assert_not_awaited()
+
+
+async def test_the_docker_mode_refuses_a_second_update_while_one_is_pending(cog, docker, ambiente):
+    pendente_em_disco(ambiente.runtime)
+
+    with pytest.raises(GenericError) as erro:
+        await Owner.update.callback(cog, ctx_prefixo())
+
+    assert "andamento" in erro.value.text and "plano" not in docker.eventos
