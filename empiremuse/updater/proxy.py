@@ -166,7 +166,22 @@ image_lines() {
 
 dc() { docker compose -p "$project" --project-directory "$dir" -f "$F" "$@"; }
 
+# Quem grava o compose ou o .env decide o que este auxiliar (root, com o docker.sock) sobe: só aceita o que é do próprio
+# usuário do auxiliar, sem link simbólico e sem escrita para grupo e outros.
+trusted() {
+  [ ! -L "$1" ] || return 1
+  owner=$(stat -c %u "$1") || return 1
+  [ "$owner" = "$(id -u)" ] || return 1
+  mode=$(stat -c %a "$1") || return 1
+  [ $((0$mode & 022)) -eq 0 ]
+}
 [ -f "$F" ] && [ -r "$F" ] || die compose 65
+trusted "$dir" || die compose-perm 65
+trusted "$F" || die compose-perm 65
+if [ -e "$dir/.env" ] || [ -L "$dir/.env" ]; then
+  trusted "$dir/.env" || die compose-perm 65
+fi
+
 count=$(image_lines | awk 'END { print NR }') || die compose 65
 [ "$count" = "1" ] || die compose 65
 current=$(image_lines) || die compose 65
@@ -363,7 +378,7 @@ def create_template(config: Config, target: str) -> dict[str, Any]:
             "SecurityOpt": ["no-new-privileges:true"],
             "ReadonlyRootfs": True,
             "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=16m"},
-            "NetworkMode": "bridge",
+            "NetworkMode": "none",  # só fala com o daemon pelo docker.sock; quem baixa a imagem é o daemon
             "AutoRemove": False,
             "RestartPolicy": {"Name": "no"},
             "Memory": 268435456,
