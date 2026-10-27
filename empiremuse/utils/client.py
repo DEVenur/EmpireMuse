@@ -41,11 +41,12 @@ from empiremuse.health import (
     is_healthy,
     write_heartbeat,
 )
+from empiremuse.logs import configure_logging, flush_logging, parse_log_settings, register_secret
 from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
+from empiremuse.rules.owner_shell import collect_secret_values
 from empiremuse.updater.notice import on_pool_ready
 from empiremuse.updater.state import read_pending
 from empiremuse.utils import branding
-from empiremuse.utils.file_log import build_file_log_handler
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
@@ -56,7 +57,7 @@ from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
 from empiremuse.utils.music.legacy_notice import log_ignored_legacy_data
 from empiremuse.utils.music.lavalink_server_list import validated_server_list
-from empiremuse.utils.music.local_lavalink import run_lavalink, watch_lavalink_process
+from empiremuse.utils.music.local_lavalink import LOCAL_LAVALINK_PASSWORD, run_lavalink, watch_lavalink_process
 from empiremuse.utils.music.models import (
     music_mode,
     LavalinkPlayer,
@@ -521,6 +522,8 @@ class BotPool:
                     exc_info=True,
                 )
 
+        flush_logging()  # por último: sai a contagem dos repetidos que ainda estava pendente
+
     async def connect_node(self, bot: BotCore, data: dict):
         while not bot.bot_ready:
             await asyncio.sleep(3)
@@ -594,6 +597,8 @@ class BotPool:
             else:
                 if tokens := mongo_data.get("refresh_tokens"):
                     for v in tokens.values():
+                        if isinstance(v, str):
+                            register_secret(v)
                         try:
                             async with ClientSession() as session:
                                 resp = await session.post(
@@ -621,7 +626,7 @@ class BotPool:
             localnode = {
                 "host": "127.0.0.1",
                 "port": os.environ.get("SERVER_PORT") or 8090,
-                "password": "youshallnotpass",
+                "password": LOCAL_LAVALINK_PASSWORD,
                 "identifier": "LOCAL",
                 "region": "us_central",
                 "retries": 120,
@@ -797,12 +802,15 @@ class BotPool:
     def setup(self):
         self.load_skins()
 
-        if self.config["ENABLE_LOGGER"]:
-            logs_dir = paths.RUNTIME_DIR / ".logs"
-
-            logger = logging.getLogger()
-            logger.setLevel(logging.DEBUG)
-            logger.addHandler(build_file_log_handler(logs_dir))
+        log_settings, log_warnings = parse_log_settings(self.config, os.environ)
+        configure_logging(log_settings, collect_secret_values(self.config, os.environ))
+        for log_warning in log_warnings:  # logados só agora, já com o log configurado
+            logger.warning("%s", log_warning)
+        # O collect_secret_values só vê o valor INTEIRO de variáveis com nome de segredo: os tokens dos bots de servidor
+        # (guild_bots.json) são registrados à parte, e as senhas dos nós mais abaixo, depois de montada a lista.
+        for guild_bot_tokens in read_guild_bots().values():
+            for guild_bot_token in guild_bot_tokens:
+                register_secret(guild_bot_token)
 
         log_ignored_legacy_data()  # depois do arquivo de log, para o aviso constar nele
 
@@ -860,6 +868,11 @@ class BotPool:
                     )
                     value["search_providers"] = value.get("search_providers", "").strip().split()
                     LAVALINK_SERVERS[key] = value
+
+        # As 3 fontes (JSON do ambiente, lavalink.ini e lista baixada) já estão em LAVALINK_SERVERS neste ponto.
+        for node in LAVALINK_SERVERS.values():
+            if isinstance(node, dict) and isinstance(node.get("password"), str):
+                register_secret(node["password"])
 
         if start_local := (self.config["RUN_LOCAL_LAVALINK"] is True or not LAVALINK_SERVERS):
             pass
