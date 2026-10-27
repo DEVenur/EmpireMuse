@@ -1587,29 +1587,18 @@ class BotCore(commands.AutoShardedBot):
                 if not [dev for dev in owners if check_member(dev, guild)]:
                     guilds.add(guild)
 
-            warn_msg = (
-                f"Atenção: O bot [{self.user}] (ID: {self.user.id}) foi configurado no portal do desenvolvedor "
-                "como bot público\n"
-                "lembrando que se caso o bot seja divulgado pra ser adicionado publicamente o mesmo terá que "
-                "estar sob as condições da licença GPL-2 "
-                f"(obra derivada de {branding.UPSTREAM_NAME}, de {branding.UPSTREAM_AUTHOR}): "
-                f"{branding.LICENSE_URL}\n"
-                "Caso não queira seguir as condições da licença no seu bot, você pode deixar o bot privado desmarcando a "
-                f"opção public bot acessando o link: https://discord.com/developers/applications/{self.user.id}/bot"
-            )
-
             if guilds:
-                warn_msg += (
-                    "\n\nAtualmente o bot se encontra em servidores no qual o dono do bot (ou membro da equipe) não "
-                    f"estão ou que não possuem permissão de gerenciar servidor pra adicionar o próprio bot "
-                    f"[{self.user}] nos servidores abaixo:\n\n"
+                warn_msg = (
+                    f"Atenção: O bot [{self.user}] (ID: {self.user.id}) se encontra em servidores nos quais o dono do "
+                    "bot (ou membro da equipe) não está ou que não possuem permissão de gerenciar servidor para "
+                    f"adicionar o próprio bot [{self.user}] nos servidores abaixo:\n\n"
                     + "\n".join(f"{g.name} [ID: {g.id}]" for g in list(guilds)[:10])
                 )
 
                 if (gcount := len(guilds)) > 10:
                     warn_msg += f"\ne em mais {gcount - 10} servidor(es)."
 
-            print(("=" * 50) + f"\n{warn_msg}\n" + ("=" * 50))
+                print(("=" * 50) + f"\n{warn_msg}\n" + ("=" * 50))
 
     async def on_application_command_autocomplete(self, inter: disnake.ApplicationCommandInteraction):
         if not self.bot_ready or not self.is_ready():
