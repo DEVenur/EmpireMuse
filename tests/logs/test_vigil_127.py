@@ -9,6 +9,8 @@ vale DEPOIS da redação. ``guild_extra``: ``'9' * 5000`` estoura o limite do ``
 
 import logging
 
+import empiremuse.wavelink as wavelink
+
 import pytest
 
 from empiremuse.logs.context import guild_extra
@@ -70,11 +72,11 @@ class TestCodigoDeVoz:
         for texto in destinos.textos():
             assert "repetida 1×" in texto
 
-    async def test_the_range_edges_inside_keep_their_own_keys(self, destinos):
-        await self.disparar([1001, 4999])
+    async def test_two_known_codes_keep_their_own_keys(self, destinos):
+        await self.disparar([1001, 4021])
 
         for texto in destinos.textos():
-            assert "code 1001" in texto and "code 4999" in texto and "repetida" not in texto
+            assert "code 1001" in texto and "code 4021" in texto and "repetida" not in texto
 
     async def test_a_real_code_and_an_out_of_range_one_are_different_keys(self, destinos):
         await self.disparar([4006, 77_777])
@@ -221,3 +223,81 @@ def console_de_sessao():
     saida = io.StringIO()
     configure_logging(LogSettings(logging.INFO, False, False, frozenset(), 300), [], stream=saida, clock=Relogio())
     return saida
+
+
+# ============================================================================ V-127-1 (resto): só os códigos CONHECIDOS têm chave própria; a razão é cortada
+
+CODIGOS_CONHECIDOS = [
+    *range(1001, 1016),
+    *range(4000, 4022),
+]  # 1000 e 4022 saem antes do aviso; 1000-1015 (RFC 6455), 4000-4022 (voz)
+
+
+@pytest.mark.asyncio
+class TestSoCodigosConhecidos:
+    async def disparar(self, codigos, canal=10):
+        for codigo in codigos:
+            jogador = jogador_de_voz(canal)
+            await PlayerEventsMixin.hook(jogador, fechou(codigo, jogador))
+
+    async def test_a_thousand_distinct_codes_in_the_unassigned_gaps_all_land_on_the_other_key(self, destinos):
+        await self.disparar([*range(1016, 1516), *range(4023, 4523)])
+
+        for texto in destinos.textos():
+            assert texto.count("Erro no canal de voz") == 2 and "repetida 999×" in texto
+
+    @pytest.mark.parametrize(
+        "faixa", [range(1016, 4000), range(4023, 5000), range(5000, 5100)], ids=["1016-3999", "4023-4999", "5000+"]
+    )
+    async def test_every_integer_outside_the_known_sets_aggregates_together(self, destinos, faixa):
+        await self.disparar(list(faixa)[:50])
+
+        for texto in destinos.textos():
+            assert "repetida 49×" in texto
+
+    async def test_each_known_code_gets_its_own_line(self, destinos):
+        await self.disparar(CODIGOS_CONHECIDOS)
+
+        for texto in destinos.textos():
+            assert texto.count("Erro no canal de voz") == len(CODIGOS_CONHECIDOS) and "repetida" not in texto
+            assert all(f"code {codigo}," in texto for codigo in CODIGOS_CONHECIDOS)
+
+    async def test_a_known_and_an_unknown_code_are_different_keys(self, destinos):
+        await self.disparar([4006, 4023])
+
+        for texto in destinos.textos():
+            assert "code 4006" in texto and "code 4023" in texto and "repetida" not in texto
+
+    async def test_4006_and_4014_keep_two_lines_and_non_ints_stay_on_other(self, destinos):
+        await self.disparar([4006, 4014, "abc", 1.5, None, True])
+
+        for texto in destinos.textos():
+            assert "code 4006" in texto and "code 4014" in texto and "repetida 3×" in texto
+
+
+def fechou_com(codigo, razao, jogador):
+    return wavelink.WebsocketClosed({"player": jogador, "reason": razao, "code": codigo, "guildID": 1})
+
+
+@pytest.mark.asyncio
+class TestRazaoDoNo:
+    async def linhas(self, destinos, razao):
+        jogador = jogador_de_voz(10)
+        await PlayerEventsMixin.hook(jogador, fechou_com(4006, razao, jogador))
+        return [linha for texto in destinos.textos() for linha in texto.splitlines() if "Erro no canal de voz" in linha]
+
+    async def test_a_one_megabyte_reason_is_cut_at_a_thousand_characters(self, destinos):
+        for linha in await self.linhas(destinos, "R" * 1_000_000):
+            assert len(linha) <= 1500 and "R" * 1000 in linha and "R" * 1001 not in linha
+
+    async def test_control_characters_in_the_reason_are_neutralised(self, destinos):
+        for linha in await self.linhas(destinos, "ruim\x1b[2Jcom\rcontroles\u202e"):
+            assert not any(c in linha for c in ("\x1b", "\r", "\u202e")) and "ruim" in linha
+
+    async def test_a_short_reason_comes_out_whole(self, destinos):
+        for linha in await self.linhas(destinos, "motivo curto e inteiro"):
+            assert "motivo curto e inteiro" in linha
+
+    async def test_a_reason_that_is_not_text_does_not_break_the_log(self, destinos):
+        for linha in await self.linhas(destinos, None):
+            assert "Erro no canal de voz" in linha
