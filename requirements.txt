@@ -16,7 +16,6 @@ urllib3>=2.5.0
 async-timeout
 cachetools
 rapidfuzz
-nodriver==0.32
 ruamel.yaml
 setuptools>=84.1.0; python_version>='3.12'
 audioop-lts; python_version>='3.13'
