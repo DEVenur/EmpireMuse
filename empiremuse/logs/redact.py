@@ -1,0 +1,178 @@
+"""Saneamento de caracteres de controle, redação de segredos e teto de tamanho dos registros de log (item 7, 3.5).
+
+Funções puras sobre texto mais o redator único do processo (``configure_secrets`` / ``register_secret`` / ``redact`` /
+``scrub``) e o filtro ``SanitizeAndRedact``. Só usa a stdlib e ``empiremuse.rules.owner_shell``; não importa nada de
+``empiremuse.logs``.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import threading
+from collections.abc import Iterable, Mapping
+from contextlib import suppress
+from urllib.parse import quote
+
+from empiremuse.rules.owner_shell import MIN_SECRET_LENGTH, mask_secrets
+
+REDACTED = "***"
+OMITTED = "[registro omitido: falha ao redigir]"
+MAX_MESSAGE_CHARS = 8192
+MAX_TRACEBACK_CHARS = 32768
+
+_LINE_BREAKS = re.compile(r"[\r\n\u2028\u2029]")
+# C0 exceto \t (\x09) e \n (\x0a) — inclui \r (\x0d) e ESC (\x1b) — mais DEL (\x7f), C1 (\x80-\x9f),
+# separadores de linha/parágrafo Unicode (\u2028-\u2029) e controles bidirecionais (\u202a-\u202e, \u2066-\u2069).
+_TEXT_CONTROLS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+_DISCORD_TOKEN = re.compile(r"[\w-]{23,28}\.[\w-]{6,7}\.[\w-]{27,}")
+_WEBHOOK_TOKEN = re.compile(r"(/api(?:/v\d+)?/webhooks/\d+/)[A-Za-z0-9._~-]+")
+_URL_USERINFO = re.compile(r"://[^/\s@]+@")
+_QUERY_SECRET_NAMES = r"api_key|apikey|api_sig|sk|token|access_token|refresh_token|client_secret|password|key|signature"
+_QUERY_SECRET = re.compile(rf"([?&](?:{_QUERY_SECRET_NAMES})=)[^&#\s'\")]*", re.IGNORECASE)
+_DICT_SECRET_NAMES = rf"{_QUERY_SECRET_NAMES}|sessionkey|session_key|authorization"
+_DICT_SECRET = re.compile(
+    rf"""(?P<q1>['"])(?P<k>{_DICT_SECRET_NAMES})(?P=q1)(?P<sep>\s*:\s*)(?P<q2>['"])(?:\\.|(?!(?P=q2)).)*(?P=q2)""",
+    re.IGNORECASE,
+)
+_AUTH_HEADER = re.compile(r"(\bauthorization\s*:\s*)(?:[A-Za-z]+\s+)?[^\s,'\"\r\n}]+", re.IGNORECASE)
+
+_LOCK = threading.Lock()
+_base_secrets: frozenset[str] = frozenset()
+_runtime_secrets: frozenset[str] = frozenset()
+_all_secrets: frozenset[str] = frozenset()
+
+
+def _expand_secret(value: object) -> frozenset[str]:
+    if not isinstance(value, str) or len(value) < MIN_SECRET_LENGTH:
+        return frozenset()
+    encoded = quote(value, safe="")
+    if encoded != value and len(encoded) >= MIN_SECRET_LENGTH:
+        return frozenset((value, encoded))
+    return frozenset((value,))
+
+
+def configure_secrets(values: Iterable[str]) -> None:
+    """Troca o conjunto base de segredos (config + ambiente) mantendo os registrados via ``register_secret``."""
+    global _base_secrets, _all_secrets
+    expanded: set[str] = set()
+    for value in values:
+        expanded.update(_expand_secret(value))
+    new_base = frozenset(expanded)
+    with _LOCK:
+        _base_secrets = new_base
+        _all_secrets = _base_secrets | _runtime_secrets
+
+
+def register_secret(value: str) -> None:
+    """Registra um segredo aprendido em tempo de execução e sua forma URL-encoded (piso ``MIN_SECRET_LENGTH``)."""
+    global _runtime_secrets, _all_secrets
+    added = _expand_secret(value)
+    if not added:
+        return
+    with _LOCK:
+        _runtime_secrets = _runtime_secrets | added
+        _all_secrets = _base_secrets | _runtime_secrets
+
+
+def sanitize_value(text: str) -> str:
+    """Saneia valor interpolado: quebras de linha viram ``⏎``; controles (exceto ``\\t``) e bidi viram ``\ufffd``."""
+    return _TEXT_CONTROLS.sub("\ufffd", _LINE_BREAKS.sub("⏎", text))
+
+
+def sanitize_text(text: str) -> str:
+    """Saneia texto mantendo ``\\n`` e ``\\t``; demais controles (inclusive ``\\r`` e ESC) e bidi viram ``\ufffd``."""
+    return _TEXT_CONTROLS.sub("\ufffd", text)
+
+
+def cap(text: str, limit: int) -> str:
+    """Corta ``text`` em ``limit`` caracteres e acrescenta ``… [+N]`` quando excede o limite."""
+    if len(text) <= limit:
+        return text
+    dropped = len(text) - limit
+    return f"{text[:limit]}… [+{dropped}]"
+
+
+def redact(text: str) -> str:
+    """Troca valores registrados (do mais longo ao mais curto) e padrões conhecidos de segredo por ``***``."""
+    secrets = _all_secrets
+    if secrets:
+        text = mask_secrets(text, secrets)
+    text = _DISCORD_TOKEN.sub(REDACTED, text)
+    text = _WEBHOOK_TOKEN.sub(rf"\1{REDACTED}", text)
+    text = _URL_USERINFO.sub(f"://{REDACTED}@", text)
+    text = _QUERY_SECRET.sub(rf"\1{REDACTED}", text)
+    text = _DICT_SECRET.sub(rf"\g<q1>\g<k>\g<q1>\g<sep>\g<q2>{REDACTED}\g<q2>", text)
+    return _AUTH_HEADER.sub(rf"\1{REDACTED}", text)
+
+
+def scrub(text: str, limit: int) -> str:
+    """Aplica ``sanitize_text`` → ``redact`` → ``cap`` nesta ordem."""
+    return cap(redact(sanitize_text(text)), limit)
+
+
+def _sanitize_arg(value: object) -> object:
+    if value is None or isinstance(value, int | float | bool):
+        return value
+    if isinstance(value, str):
+        return sanitize_value(value)
+    if isinstance(value, Mapping):
+        return {key: _sanitize_arg(item) for key, item in value.items()}
+    return sanitize_value(str(value))
+
+
+def _qualified_exc_type(exc_type: object) -> str | None:
+    if exc_type is None:
+        return None
+    module = getattr(exc_type, "__module__", None)
+    qualname = getattr(exc_type, "__qualname__", getattr(exc_type, "__name__", None))
+    if not isinstance(qualname, str):
+        return None
+    if isinstance(module, str) and module:
+        return f"{module}.{qualname}"
+    return qualname
+
+
+class SanitizeAndRedact(logging.Filter):
+    """Filtro total de saneamento, redação e corte; executa só na 1ª passagem por ``LogRecord``."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if getattr(record, "empiremuse_redacted", False):
+                return True
+            record.empiremuse_template = record.msg
+            if record.args:
+                if isinstance(record.args, Mapping):
+                    record.args = {key: _sanitize_arg(val) for key, val in record.args.items()}
+                elif isinstance(record.args, tuple):
+                    record.args = tuple(_sanitize_arg(val) for val in record.args)
+                else:
+                    record.args = (_sanitize_arg(record.args),)
+            message = record.getMessage()
+            record.msg = scrub(message, MAX_MESSAGE_CHARS)
+            record.args = None
+            if record.exc_info and isinstance(record.exc_info, tuple) and record.exc_info[0] is not None:
+                record.empiremuse_exc_type = _qualified_exc_type(record.exc_info[0])
+                formatted = logging.Formatter().formatException(record.exc_info)
+                record.exc_text = scrub(formatted, MAX_TRACEBACK_CHARS)
+                record.exc_info = None
+            elif record.exc_text:
+                record.exc_text = scrub(str(record.exc_text), MAX_TRACEBACK_CHARS)
+                record.empiremuse_exc_type = getattr(record, "empiremuse_exc_type", None)
+            else:
+                record.empiremuse_exc_type = None
+            if record.stack_info:
+                record.stack_info = scrub(str(record.stack_info), MAX_TRACEBACK_CHARS)
+            record.empiremuse_redacted = True
+        except Exception:
+            with suppress(Exception):
+                record.msg = OMITTED
+                record.args = None
+                record.exc_info = None
+                record.exc_text = None
+                record.stack_info = None
+                record.empiremuse_template = getattr(record, "empiremuse_template", OMITTED)
+                record.empiremuse_exc_type = None
+                record.empiremuse_redacted = True
+        return True

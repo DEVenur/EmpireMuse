@@ -1,0 +1,68 @@
+"""Ganchos iniciais de exceção não tratada instalados antes de ``configure_logging`` (item 7, 3.2, V-L9).
+
+Configura o redator único do processo com os segredos de ``environ`` (``collect_secret_values``) e instala
+``sys.excepthook`` e ``threading.excepthook`` para nunca escrever tracebacks crus no stderr durante a subida.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import threading
+import traceback
+from collections.abc import Mapping
+from contextlib import suppress
+from types import TracebackType
+from typing import TextIO
+
+from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, configure_secrets, scrub
+from empiremuse.rules.owner_shell import collect_secret_values
+
+
+def _write_scrubbed_traceback(
+    exc_type: type[BaseException],
+    exc_value: BaseException | None,
+    exc_tb: TracebackType | None,
+    stream: TextIO | None,
+    *,
+    header: str = "",
+) -> None:
+    with suppress(Exception):
+        formatted = header + "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        sanitized = scrub(formatted, MAX_TRACEBACK_CHARS)
+        target = stream if stream is not None else sys.stderr
+        if target is None:
+            return
+        if not sanitized.endswith("\n"):
+            sanitized += "\n"
+        target.write(sanitized)
+        target.flush()
+
+
+def install_early_hooks(
+    environ: Mapping[str, str] = os.environ,
+    *,
+    stream: TextIO | None = None,
+) -> None:
+    """Alimenta o redator único com ``environ`` e instala ``sys.excepthook`` e ``threading.excepthook`` redigidos."""
+    configure_secrets(collect_secret_values(environ))
+
+    def _sys_excepthook(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        _write_scrubbed_traceback(exc_type, exc_value, exc_tb, stream)
+
+    def _threading_excepthook(args: threading.ExceptHookArgs) -> None:
+        if args.exc_type is None or issubclass(args.exc_type, SystemExit):
+            return
+        thread_name = getattr(args.thread, "name", None) or "Thread"
+        header = f"Exception in thread {thread_name}:\n"
+        _write_scrubbed_traceback(args.exc_type, args.exc_value, args.exc_traceback, stream, header=header)
+
+    sys.excepthook = _sys_excepthook
+    threading.excepthook = _threading_excepthook
