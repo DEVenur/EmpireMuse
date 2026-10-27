@@ -41,7 +41,9 @@ from empiremuse.health import (
     is_healthy,
     write_heartbeat,
 )
-from empiremuse.rules.git_remote import parse_remote_web_url
+from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
+from empiremuse.updater.notice import on_pool_ready
+from empiremuse.updater.state import read_pending
 from empiremuse.utils import branding
 from empiremuse.utils.file_log import build_file_log_handler
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
@@ -70,6 +72,8 @@ from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
 
 logger = logging.getLogger(__name__)
+
+UPDATE_WATCH_INTERVAL = 5  # segundos entre as checagens de saúde do pool enquanto há uma atualização pendente
 
 
 def _playlist_cache_file():
@@ -124,6 +128,9 @@ def load_jishaku_if_enabled(bot) -> bool:
 
 class BotPool:
     killing_state = False
+    # Defaults de classe (como o killing_state): fakes de BotPool criados com __new__ não passam pelo __init__.
+    update_ready_checked = False  # on_pool_ready roda uma vez, na primeira vez em que o pool fica saudável
+    update_watch_task: Optional[asyncio.Task] = None
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
         sync_commands=True,
@@ -185,6 +192,8 @@ class BotPool:
         self.default_idling_skin = self.config.get("DEFAULT_IDLING_SKIN", "default")
         self.cache_updater_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
+        # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
+        self.update_lock = asyncio.Lock()
         self.nodes_expected = False  # vira True quando o pool configura ao menos um nó (local ou da lista)
         self.lyric_data_cache = TTLCache(maxsize=30000, ttl=600 * 10)
         self.ytdl = CustomYTDL(
@@ -246,6 +255,27 @@ class BotPool:
             1 for bot in self.get_all_bots() for node in bot.music.nodes.values() if node.is_available
         )
         return is_healthy([bot.bot_ready for bot in self.bots], self.nodes_expected, nodes_available)
+
+    async def check_pool_ready(self) -> None:
+        """Na primeira vez em que o pool fica saudável chama ``on_pool_ready`` (update: pendente vira ``ready`` e o aviso sai)."""
+        if self.update_ready_checked or self.killing_state is True or not self.pool_is_healthy():
+            return
+        self.update_ready_checked = True
+        try:
+            await on_pool_ready(self)
+        except Exception:
+            logger.warning("Falha ao entregar o aviso de atualização", exc_info=True)
+
+    async def _watch_pool_ready(self) -> None:
+        """Reavalia o pool até ele ficar saudável: os nós conectam depois do ``initial_setup``; o evento é por bot e a disponibilidade pode oscilar, então o polling é mais simples."""
+        while not self.update_ready_checked:
+            await asyncio.sleep(UPDATE_WATCH_INTERVAL)
+            await self.check_pool_ready()
+
+    def start_update_watch(self) -> None:
+        """Só com um pendente de atualização em disco: acompanha o pool até a subida ser dada como boa."""
+        if read_pending(paths.get_runtime_dir(), time.time()) is not None:
+            self.update_watch_task = self.loop.create_task(self._watch_pool_ready())
 
     def start_heartbeat(self) -> None:
         """Com ``EMPIREMUSE_HEALTH_FILE`` definida: apaga o heartbeat herdado (se não conseguir, encerra) e inicia a tarefa que o renova."""
@@ -455,6 +485,7 @@ class BotPool:
                 self.bots.remove(bot)
             except Exception:
                 pass
+            await self.check_pool_ready()  # o pool pode ter ficado saudável sem este bot
 
     async def run_bots(self, bots: List[BotCore]):
         await asyncio.gather(*[self.start_bot(bot) for bot in bots])
@@ -464,6 +495,8 @@ class BotPool:
         self.killing_state = True
         if self.heartbeat_task:  # encerrando: o container não deve mais parecer saudável
             self.heartbeat_task.cancel()
+        if self.update_watch_task:
+            self.update_watch_task.cancel()
         for bot in self.get_all_bots():
             try:
                 if not bot.is_closed():
@@ -876,7 +909,7 @@ class BotPool:
             pass  # sem git ou fora de um repositório: cai na configuração SOURCE_REPO logo abaixo
 
         if not self.remote_git_url:
-            self.remote_git_url = self.config["SOURCE_REPO"].removesuffix(".git")
+            self.remote_git_url = sanitized_repo_url(self.config["SOURCE_REPO"], branding.REPO_URL)
 
         prefix = get_prefix if intents.message_content else commands.when_mentioned
 
@@ -1095,6 +1128,8 @@ class BotPool:
 
                 bot.bot_ready = True
 
+                await self.check_pool_ready()
+
             bot.loop.create_task(initial_setup())
 
             if guild_id:
@@ -1117,6 +1152,7 @@ class BotPool:
         asyncio.set_event_loop(self.loop)
 
         self.start_heartbeat()
+        self.start_update_watch()
 
         for k, v in all_tokens.items():
             load_bot(k, v, load_modules_log=load_modules_log)

@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import time
 from platform import python_version
+from typing import Any
 
 from empiremuse import paths
-from empiremuse.utils.client import BotPool
+from empiremuse.updater import boot_guard
 
 
 ORIGIN_HOME = "EMPIREMUSE_HOME"
@@ -53,10 +55,22 @@ def enter_runtime_dir() -> None:
     _announce_runtime_dir(runtime_dir, ORIGIN_HOME if home_is_set else ORIGIN_DEV_RUNTIME)
 
 
+def __getattr__(name: str) -> Any:
+    """``BotPool`` só é importado quando preciso: o ``boot_guard`` roda antes de o código do bot carregar."""
+    if name == "BotPool":
+        from empiremuse.utils.client import BotPool
+
+        return BotPool
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def main():
     enter_runtime_dir()
+    # Antes de importar o bot: um erro de import no código recém-atualizado não pode impedir a volta ao commit anterior.
+    boot_guard.run(paths.get_runtime_dir(), paths.PROJECT_DIR, time.time())
     print(f"🐍 - Versão do python: {python_version()}")
-    pool = BotPool()
+    pool_class = globals().get("BotPool") or __getattr__("BotPool")
+    pool = pool_class()
     pool.setup()
     sys.exit(pool.exit_code)
 
