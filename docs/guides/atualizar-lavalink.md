@@ -10,7 +10,7 @@ Quando configurado para execução local, o próprio bot gerencia o download de 
 
 ## 1. Stack e Versões Homologadas (Release 0.0.5)
 
-O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins espelhados com hashes fixados. A release **0.0.5** atualiza o plugin Lyrics para a 2.7.1 e tira o `pip` da imagem de runtime; a **0.0.4** manteve o Lavalink 4.2.2 e os plugins da 0.0.3 e acrescentou o plugin **Soundy** (SoundCloud), com um `application.yml` que desliga a fonte nativa do SoundCloud e fixa `logging.request.includePayload: false`. Desde a 0.0.3, o `application.yml` traz suporte ao cliente `TV` (essencial para contornar bloqueios anti-bot), OAuth desativado por padrão e nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN` (evitando vazamento de tokens nos logs):
+O EmpireMuse utiliza uma stack moderna baseada em releases oficiais e plugins espelhados com hashes fixados. A release **0.0.5** atualiza o plugin Lyrics para a 2.7.1; a **0.0.4** manteve o Lavalink 4.2.2 e os plugins da 0.0.3 e acrescentou o plugin **Soundy** (SoundCloud), com um `application.yml` que desliga a fonte nativa do SoundCloud e fixa `logging.request.includePayload: false`. Desde a 0.0.3, o `application.yml` traz suporte ao cliente `TV` (essencial para contornar bloqueios anti-bot), OAuth desativado por padrão e nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN` (evitando vazamento de tokens nos logs):
 
 | Componente | Versão / Tag | Origem e Observações |
 | :--- | :--- | :--- |
