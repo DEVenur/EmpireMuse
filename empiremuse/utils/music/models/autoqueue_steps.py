@@ -8,6 +8,7 @@ import traceback
 from typing import TYPE_CHECKING
 
 import disnake
+from aiohttp import ClientError
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.converters import fix_characters
@@ -17,6 +18,7 @@ from empiremuse.utils.music.errors import (
     log_unexpected_error,
 )
 from empiremuse.utils.music.lastfm_tools import LastFmException
+from empiremuse.utils.safe_error import safe_error
 
 if TYPE_CHECKING:
     pass
@@ -218,8 +220,12 @@ async def _aq_lastfm_tracks(self, req):
                 self.lastfm_artists.insert(0, track_data.author)
             except LastFmException as e:
                 print(f"Last.FM recommendations error: {repr(e)}")
-            except Exception:
-                traceback.print_exc()
+            except Exception as e:
+                if isinstance(e, ClientError):
+                    # O str do erro do aiohttp traz a URL com api_key e sk: só o status vai para o log.
+                    logger.warning("Last.FM recommendations error: %s", safe_error(e))
+                else:
+                    traceback.print_exc()
 
         try:
             author = self.lastfm_artists.pop(0)
