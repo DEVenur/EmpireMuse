@@ -161,7 +161,7 @@ def test_filter_log_lines_stops_at_a_malformed_frame(bruto):
 def test_filter_log_lines_survives_truncated_payloads_and_bad_utf8():
     cortado = struct.pack(">BxxxI", 1, 500) + (proxy.LOG_PREFIX + "ok\n").encode() + b"\xff"
 
-    assert filter_log_lines(cortado, 5) == [proxy.LOG_PREFIX + "ok"] or filter_log_lines(cortado, 5) == []
+    assert filter_log_lines(cortado, 5) == [proxy.LOG_PREFIX + "ok"]
 
 
 def test_inspect_view_sanitizes_every_field():
@@ -484,16 +484,21 @@ def test_an_incomplete_body_is_a_400(proxy_em_processo, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "linha", [b"GET /containers/empiremuse-updater/json HTTP/2.0\r\n\r\n", b"GET / HTTP/1.1 extra\r\n\r\n"]
+    ("linha", "status"),
+    [
+        (b"GET /containers/empiremuse-updater/json HTTP/2.0\r\n\r\n", b"HTTP/1.0 505"),
+        (b"GET / HTTP/1.1 extra\r\n\r\n", b"HTTP/1.0 400"),
+    ],
+    ids=["versao-http-2", "linha-com-quatro-campos"],
 )
-def test_unsupported_request_lines_are_denied(proxy_em_processo, linha):
+def test_unsupported_request_lines_are_denied(proxy_em_processo, linha, status):
     _, servidor = proxy_em_processo
     with socket.socket(socket.AF_UNIX) as cliente_cru:
         cliente_cru.connect(servidor.server_address)
         cliente_cru.sendall(linha)
         resposta = cliente_cru.recv(65536)
 
-    assert resposta.startswith((b"HTTP/1.0 403", b"HTTP/1.0 400", b"HTTP/1.0 505"))
+    assert resposta.startswith(status)
 
 
 def test_the_log_has_one_line_per_decision_and_never_the_body_or_headers(proxy_em_processo, daemon, caplog):

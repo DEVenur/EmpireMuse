@@ -119,7 +119,7 @@ def test_start_reaches_the_daemon(daemon, pedir):
 
     status, _ = pedir("POST", f"/containers/{CONTAINER_API}/start")
 
-    assert status in (200, 204)
+    assert status == 204
     assert len(chegou(daemon, "POST", f"/containers/{CONTAINER_REAL}/start")) == 1
 
 
@@ -138,7 +138,7 @@ def test_delete_reaches_the_daemon_without_query(daemon, pedir):
 
     status, _ = pedir("DELETE", f"/containers/{CONTAINER_API}")
 
-    assert status in (200, 204)
+    assert status == 204
     (remocao,) = chegou(daemon, "DELETE", f"/containers/{CONTAINER_REAL}")
     assert remocao.query == ""
 
@@ -306,10 +306,8 @@ def test_duplicate_keys_never_smuggle_anything_into_the_template(daemon, pedir):
 
     status, _ = pedir("POST", f"/containers/create?name={CONTAINER_API}", [TIPO_JSON], corpo)
 
-    if status == 201:
-        conferir_template(criado_no_daemon(daemon), ALVO)
-    else:
-        assert status == 400 and chegou(daemon, "POST", "/containers/create") == []
+    assert status == 201
+    conferir_template(criado_no_daemon(daemon), ALVO)
 
 
 INVALIDOS = [
