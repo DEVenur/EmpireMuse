@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import shutil
+import stat
 import sys
 import time
 import tomllib
@@ -131,11 +132,26 @@ def git_command(repo_dir: Path | None, allow_protocol: str, *args: str) -> list[
     return command + list(args)
 
 
+REAP_GRACE_SECONDS = 5  # tolerância entre o SIGTERM e o SIGKILL; lida em tempo de chamada (os testes a encurtam)
+
+
 async def _reap(process: asyncio.subprocess.Process) -> None:
-    """Mata o processo, se ainda roda, e espera o término."""
+    """Encerra o processo (SIGTERM, espera ``REAP_GRACE_SECONDS``, só então SIGKILL) e aguarda o término.
+
+    O git que recebe SIGTERM apaga o próprio ``index.lock``; o SIGKILL o deixaria órfão e a árvore pela metade.
+    """
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
-            process.kill()
+            process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), REAP_GRACE_SECONDS)
+        except TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+        except asyncio.CancelledError:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()  # cancelado de novo durante a tolerância: sem tempo para esperar, mas sem filho de pé
+            raise
     await process.wait()
 
 
@@ -392,15 +408,94 @@ async def _smoke_test(runner: Runner, repo_dir: Path, python: str) -> None:
             raise UpdateError("o teste de fumaça do código novo falhou")
 
 
+def _remove_stale_index_lock(repo: Path) -> None:
+    """Apaga o ``.git/index.lock`` órfão (arquivo ou link: só a entrada, nunca o alvo do link).
+
+    Só é seguro porque nenhum git nosso está vivo: o ``run_exec`` sempre espera o filho terminar e o ``boot_guard`` roda
+    antes de qualquer outro git.
+    """
+    lock = repo / ".git" / "index.lock"
+    try:
+        mode = os.lstat(lock).st_mode
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise UpdateError("Não consegui inspecionar o trava do índice do git.") from error
+    if stat.S_ISREG(mode) or stat.S_ISLNK(mode):
+        try:
+            lock.unlink()
+        except OSError as error:
+            raise UpdateError("Não consegui remover a trava órfã do índice do git.") from error
+
+
+def _remove_target_additions(repo: Path, names: list[str]) -> None:
+    """Remove os arquivos que o alvo acrescentou e ainda estão na árvore, e os diretórios que ficaram vazios.
+
+    Cada caminho é removido com ``unlink`` (que não segue link) e só se o diretório pai REAL ficar dentro do clone:
+    um diretório trocado por link para fora não leva o restore a apagar nada de fora. Arquivos não rastreados do dono
+    e ignorados nunca são tocados (nada de ``git clean``).
+    """
+    root = repo.resolve()
+    for name in names:
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise UpdateError("O restore recusou um caminho fora do clone.")
+        path = repo / relative
+        parent = path.parent.resolve()
+        if parent != root and root not in parent.parents:
+            raise UpdateError("O restore recusou um caminho que sai do clone.")
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise UpdateError("Não consegui remover um arquivo que a versão nova acrescentou.") from error
+        for directory in path.parents:
+            if directory == repo:
+                break
+            try:
+                directory.rmdir()
+            except OSError:
+                break
+
+
 async def restore_checkout(
-    repo_dir: Path, sha: str, *, python: str = sys.executable, runner: Runner = run_exec, allow_protocol: str = "https"
+    repo_dir: Path,
+    prev_sha: str,
+    target_commit: str,
+    *,
+    python: str = sys.executable,
+    runner: Runner = run_exec,
+    allow_protocol: str = "https",
 ) -> None:
-    """``checkout --detach`` de ``sha`` (o commit anterior) e reinstalação do lock dele; levanta ``UpdateError`` se falhar."""
-    if not _SHA1.fullmatch(sha):
+    """Volta o clone ao commit anterior de forma que uma troca interrompida no meio não deixe código misturado.
+
+    Ordem: (1) tira o ``index.lock`` órfão; (2) ``checkout --force --detach`` do ``prev_sha`` (seguro: o apply exige a
+    árvore rastreada limpa) restaura modificados e apagados; (3) remove o que o alvo acrescentou
+    (``diff --diff-filter=A prev alvo``), pois um checkout interrompido deixa esses arquivos para trás e o carregador de
+    cogs os carregaria; (4) reinstala o lock anterior. Qualquer falha, inclusive a do ``diff``, levanta ``UpdateError``.
+    """
+    if not (_SHA1.fullmatch(prev_sha) and _SHA1.fullmatch(target_commit)):
         raise UpdateError("O commit anterior é inválido.")
-    git = _Git(Path(repo_dir), allow_protocol, runner)
-    await git("checkout", "--detach", "--end-of-options", sha, error="Não consegui voltar ao commit anterior.")
-    await _install_dependencies(runner, Path(repo_dir), python)
+    repo = Path(repo_dir)
+    _remove_stale_index_lock(repo)
+    git = _Git(repo, allow_protocol, runner)
+    await git(
+        "checkout", "--force", "--detach", "--end-of-options", prev_sha, error="Não consegui voltar ao commit anterior."
+    )
+    added = await git(
+        "diff",
+        "--name-only",
+        "--no-renames",
+        "--diff-filter=A",
+        "-z",
+        prev_sha,
+        target_commit,
+        error="Não consegui listar os arquivos que a versão nova acrescentou.",
+        max_output=MAX_CHANGELOG_BYTES,
+    )
+    _remove_target_additions(repo, [name for name in added.output.split("\0") if name])
+    await _install_dependencies(runner, repo, python)
 
 
 async def apply_git_update(
@@ -435,6 +530,7 @@ async def apply_git_update(
         requested_by=request.requested_by,
         created_at=now(),
         prev_sha=plan.prev_sha,
+        target_commit=plan.target_commit,
         boots=0,
         status="applying",
     )
@@ -485,7 +581,9 @@ async def _revert_or_keep(
     """
     try:
         await asyncio.shield(
-            restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
+            restore_checkout(
+                repo_dir, plan.prev_sha, plan.target_commit, python=python, runner=runner, allow_protocol=allow_protocol
+            )
         )
     except asyncio.CancelledError:
         raise
