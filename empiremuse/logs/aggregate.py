@@ -1,4 +1,4 @@
-"""Agregador de avisos e erros repetidos por template em janelas de 60 s (item 7, 3.7).
+"""Agregador de avisos e erros repetidos por template em janelas de 60 s (item 7, 3.7, K8).
 
 Compartilhado pelos handlers do root: a decisão da 1ª passagem fica gravada em ``record.empiremuse_emit`` para que
 cada registro conte uma única vez (V-L6). Resumos saem fora da trava interna para permitir reentrância nos handlers.
@@ -7,22 +7,55 @@ cada registro conte uma única vez (V-L6). Resumos saem fora da trava interna pa
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import logging
+import re
 import threading
 import time
 from collections.abc import Callable
 
+from empiremuse.rules.error_code import ERROR_CODE_RE
+
 AGGREGATE_WINDOW = 60.0
 MAX_KEYS = 500
 MAX_TEMPLATE_KEY_CHARS = 256
+MAX_CODED_REPEATS = 50
+MAX_EXC_SUMMARY_CHARS = 300
 
-type _AggregateKey = tuple[str, int, str, str | None]
+type _AggregateKey = tuple[str, int, str, str | None, str | None]
+
+_FRAME_LINE_RE = re.compile(r'^  File ".*", line \d+, in .*')
 
 
 def _normalize_template(raw: object) -> str:
     if isinstance(raw, str):
         return raw[:MAX_TEMPLATE_KEY_CHARS]
     return f"<{type(raw).__qualname__}>"
+
+
+def _traceback_fingerprint(exc_text: object) -> str | None:
+    if not isinstance(exc_text, str) or not exc_text:
+        return None
+    frames = [line for line in exc_text.splitlines() if _FRAME_LINE_RE.match(line)]
+    if not frames:
+        return None
+    return hashlib.sha256("\n".join(frames).encode("utf-8", errors="backslashreplace")).hexdigest()
+
+
+def _last_exc_line(exc_text: object) -> str:
+    if not isinstance(exc_text, str) or not exc_text:
+        return ""
+    lines = [line for line in exc_text.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return lines[-1][:MAX_EXC_SUMMARY_CHARS]
+
+
+def _valid_error_code(record: logging.LogRecord) -> str | None:
+    code = getattr(record, "error_code", None)
+    if isinstance(code, str) and ERROR_CODE_RE.fullmatch(code):
+        return code
+    return None
 
 
 @dataclasses.dataclass
@@ -35,11 +68,13 @@ class _Bucket:
     lineno: int
     bot: str | None
     guild: int | None
+    first_code: str | None = None
+    coded_seen: int = 0
     count: int = 0
 
 
 class RepeatAggregator(logging.Filter):
-    """Agrega registros ``WARNING+`` com mesma chave ``(name, levelno, empiremuse_template, empiremuse_exc_type)``."""
+    """Agrega registros ``WARNING+`` com mesma chave ``(name, levelno, empiremuse_template, empiremuse_exc_type, tb_fp)``."""
 
     def __init__(
         self,
@@ -59,7 +94,13 @@ class RepeatAggregator(logging.Filter):
 
     def _make_summary(self, bucket: _Bucket) -> logging.LogRecord:
         window_label = int(self._window) if self._window == int(self._window) else self._window
-        msg = f"↻ {bucket.first_msg} — repetida {bucket.count}× em {window_label} s"
+        if bucket.first_code is not None:
+            msg = (
+                f"↻ {bucket.first_msg} — repetida {bucket.count}× em {window_label} s "
+                f"(códigos omitidos; traceback igual ao de {bucket.first_code})"
+            )
+        else:
+            msg = f"↻ {bucket.first_msg} — repetida {bucket.count}× em {window_label} s"
         summary = logging.LogRecord(
             name=bucket.name,
             level=bucket.levelno,
@@ -88,11 +129,15 @@ class RepeatAggregator(logging.Filter):
             template_key = _normalize_template(raw_template)
             if hasattr(record, "empiremuse_template"):
                 record.empiremuse_template = template_key
+            exc_text = getattr(record, "exc_text", None)
+            tb_fp = _traceback_fingerprint(exc_text)
+            error_code = _valid_error_code(record)
             key: _AggregateKey = (
                 record.name,
                 record.levelno,
                 template_key,
                 getattr(record, "empiremuse_exc_type", None),
+                tb_fp,
             )
             to_emit: list[logging.LogRecord] = []
             with self._lock:
@@ -100,6 +145,25 @@ class RepeatAggregator(logging.Filter):
                 existing = self._buckets.get(key)
                 if existing is not None:
                     if now - existing.started_at < self._window:
+                        if error_code is not None:
+                            if existing.first_code is None:
+                                existing.first_code = error_code
+                            if existing.coded_seen < MAX_CODED_REPEATS:
+                                existing.coded_seen += 1
+                                last_line = _last_exc_line(exc_text)
+                                base_msg = record.getMessage()
+                                if last_line:
+                                    record.msg = (
+                                        f"{base_msg} — {last_line} — traceback igual ao de {existing.first_code}"
+                                    )
+                                else:
+                                    record.msg = f"{base_msg} — traceback igual ao de {existing.first_code}"
+                                record.args = None
+                                record.exc_info = None
+                                record.exc_text = None
+                                record.stack_info = None
+                                record.empiremuse_emit = True
+                                return True
                         existing.count += 1
                         record.empiremuse_emit = False
                         return False
@@ -126,6 +190,8 @@ class RepeatAggregator(logging.Filter):
                     lineno=record.lineno,
                     bot=getattr(record, "bot", None),
                     guild=getattr(record, "guild", None),
+                    first_code=error_code,
+                    coded_seen=1 if error_code is not None else 0,
                 )
                 record.empiremuse_emit = True
             for summary in to_emit:
