@@ -21,7 +21,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Estado dos nós de áudio no log**: as transições de cada nó (conectado, caído) e o caso de todos indisponíveis são registradas.
 
 ### Alterado
+- **Permissões do convite do bot**: o convite passa a pedir Ler o Histórico de Mensagens, Definir o Status do Canal de Voz (necessária ao `/setvoicestatus`) e Fixar Mensagens, e deixa de pedir Usar Comandos de Aplicativo e Pedir para Falar (sem uso). O padrão de `INVITE_PERMISSIONS` passa a `2533601240804560` no `.example.env`, no modelo da Hostinger e no egg do Pterodactyl. Quem já definiu `INVITE_PERMISSIONS` mantém o valor antigo até alterá-lo.
 - **`print` migrado para o log (item 7, fases P2 e P3)**: cerca de 100 `print`, incluindo todo o caminho de subida do bot, passam a sair pelo log, com nível, cor, contexto e redação de segredos.
+
+### Corrigido
+- **Fixar a mensagem do player**: a checagem passa a exigir Fixar Mensagens, em vez de Gerenciar Mensagens.
 
 ### Segurança
 - **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
