@@ -18,6 +18,7 @@ from empiremuse.cogs import legacy_cmds
 from empiremuse.cogs.legacy_cmds import Owner
 from empiremuse.rules.release import Version
 from empiremuse.updater.git_flow import EXIT_RESTART, GitPlan, UpdateError
+from tests.support.alvo_git import alvo_git
 from empiremuse.updater.state import PendingUpdate, UpdateRequest, read_pending, write_pending
 from empiremuse.updater.views import ConfirmView
 from empiremuse.utils import client
@@ -124,6 +125,7 @@ def pendente_em_disco(runtime):
             requested_by=3,
             created_at=time.time(),
             prev_sha=SHA,
+            **alvo_git(),
         ),
     )
 
@@ -169,6 +171,7 @@ async def test_an_applying_mark_refuses_a_second_update_even_after_a_day(cog, am
             created_at=time.time() - 3 * 24 * 3600,
             prev_sha=SHA,
             status="applying",
+            **alvo_git(),
         ),
     )
 

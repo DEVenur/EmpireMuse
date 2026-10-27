@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from empiremuse.rules.release import Version
+from tests.support.alvo_git import alvo_git
 from empiremuse.updater.state import PendingUpdate, parse_pending, pending_path, read_pending, write_pending
 
 pytestmark = pytest.mark.critical
@@ -29,6 +30,7 @@ def pendente(created_at: float) -> PendingUpdate:
         requested_by=3,
         created_at=created_at,
         prev_sha="a" * 40,
+        **alvo_git(),
     )
 
 
@@ -212,14 +214,14 @@ def git_com_tentativas(valor) -> dict:
     return dados
 
 
-@pytest.mark.parametrize("valor", [0, 1, 2, 3])
-def test_restore_attempts_between_zero_and_three_are_valid(valor):
+@pytest.mark.parametrize("valor", [0, 1, 2, 3, 4], ids=lambda v: f"tentativas-{v}")
+def test_restore_attempts_between_zero_and_four_are_valid_four_meaning_gave_up(valor):
     lido = parse_pending(git_com_tentativas(valor))
 
     assert lido is not None and lido.restore_attempts == valor
 
 
-@pytest.mark.parametrize("valor", [4, -1, True, "1", 1.0, None], ids=repr)
+@pytest.mark.parametrize("valor", [5, -1, True, "1", 1.0, None], ids=repr)
 def test_restore_attempts_out_of_range_or_of_another_type_make_the_file_invalid(valor):
     assert parse_pending(git_com_tentativas(valor)) is None
 
@@ -246,3 +248,41 @@ def test_the_docker_flow_accepts_no_attempts():
 
     assert parse_pending(dados) is not None
     assert parse_pending({**dados, "restore_attempts": 1}) is None
+
+
+# ============================================================================ D10: ``target_commit`` do pendente git
+
+
+def com_alvo(valor) -> dict:
+    dados = pendente(AGORA - 60).to_json()
+    dados["target_commit"] = valor
+    return dados
+
+
+def test_a_git_pending_file_carries_its_target_commit_through_write_and_read(tmp_path):
+    original = dataclasses.replace(pendente(AGORA - 60), **{"target_commit": "c" * 40})
+    write_pending(tmp_path, original)
+
+    assert json.loads(pending_path(tmp_path).read_text())["target_commit"] == "c" * 40
+    assert read_pending(tmp_path, AGORA) == original
+
+
+def test_a_git_pending_file_without_the_target_commit_is_invalid():
+    dados = com_alvo("c" * 40)
+    del dados["target_commit"]
+
+    assert parse_pending(dados) is None
+
+
+@pytest.mark.parametrize("valor", ["abc", "G" * 40, "C" * 40, "c" * 39, "c" * 41, 123, None, ""], ids=repr)
+def test_a_git_pending_file_with_a_malformed_target_commit_is_invalid(valor):
+    assert parse_pending(com_alvo(valor)) is None
+
+
+def test_a_docker_pending_file_with_a_target_commit_is_invalid():
+    docker = dataclasses.replace(pendente(AGORA - 60), flow="docker", prev_sha=None, digest="sha256:" + "ab" * 32)
+    dados = docker.to_json()
+    dados.pop("target_commit", None)
+
+    assert parse_pending(dados) is not None
+    assert parse_pending({**dados, "target_commit": "c" * 40}) is None
