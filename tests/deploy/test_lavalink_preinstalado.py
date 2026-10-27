@@ -89,6 +89,7 @@ def runtime(monkeypatch, tmp_path):
 @pytest.fixture
 def popen(monkeypatch):
     registros = []
+    monkeypatch.setattr(ll, "java_major_version", lambda cmd, debug=False: 25)
 
     class FakePopen:
         def __init__(self, args, **kwargs):

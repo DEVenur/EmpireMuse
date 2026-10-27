@@ -227,6 +227,7 @@ def jdk(monkeypatch, tmp_path):
         ll, "validate_java", lambda cmd, debug=False: cmd if cmd != "java" and os.path.isfile(cmd) else None
     )
 
+    monkeypatch.setattr(ll, "java_major_version", lambda cmd, debug=False: 25)
     real_popen = ll.subprocess.Popen
     started, extractions = [], []
 
@@ -434,6 +435,7 @@ def lavalink_start(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ll.requests, "get", no_network)
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
+    monkeypatch.setattr(ll, "java_major_version", lambda cmd, debug=False: 25)
     monkeypatch.setattr(ll.platform, "architecture", lambda *a, **k: ("64bit", "ELF"))
     for name, value in SECRET_SENTINELS.items():
         monkeypatch.setenv(name, value)
