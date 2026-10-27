@@ -17,6 +17,7 @@ import pytest
 from empiremuse.rules.release import Version
 from empiremuse.updater import boot_guard
 from empiremuse.updater.git_flow import EXIT_RESTART, ExecResult, UpdateError, restore_checkout, run_exec
+from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, pending_path, write_pending
 from tests.updater.test_git_flow import commit, git
 
@@ -56,7 +57,7 @@ def mundo(tmp_path, monkeypatch):
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     anterior = commit(repo, {"app.txt": "antigo\n"}, "antigo")
-    commit(repo, {"app.txt": "novo\n"}, "novo")
+    ALVO_DO_CENARIO["sha"] = commit(repo, {"app.txt": "novo\n"}, "novo")
     git(repo, "checkout", "-q", "--detach", "HEAD")
     python = tmp_path / "python-falso"
     python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -65,6 +66,11 @@ def mundo(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     return repo, runtime, anterior, str(python)
+
+
+ALVO_DO_CENARIO: dict[
+    str, str
+] = {}  # o ``mundo`` põe aqui o commit 'novo' real: o restore faz ``diff`` entre o anterior e ele
 
 
 def pendente(anterior: str, *, flow="git", boots=0, status="pending", criado=AGORA - 60) -> PendingUpdate:
@@ -80,6 +86,7 @@ def pendente(anterior: str, *, flow="git", boots=0, status="pending", criado=AGO
         digest=DIGEST if flow == "docker" else None,
         boots=boots,
         status=status,
+        target_commit=ALVO_DO_CENARIO.get("sha", ALVO_GIT) if flow == "git" else None,
     )
 
 
@@ -153,7 +160,9 @@ def test_restore_checkout_treats_a_non_zero_reinstall_as_an_update_error(mundo):
     repo, _, anterior, python = mundo
 
     with pytest.raises(UpdateError):
-        asyncio.run(restore_checkout(repo, anterior, python=python, runner=Gravador(instalacao_falha)))
+        asyncio.run(
+            restore_checkout(repo, anterior, ALVO_DO_CENARIO["sha"], python=python, runner=Gravador(instalacao_falha))
+        )
 
     assert git(repo, "rev-parse", "HEAD") == anterior
 
@@ -336,21 +345,83 @@ def test_a_failed_restore_at_the_third_boot_keeps_the_pending_state(mundo):
     assert gravado["status"] == "pending" and gravado["boots"] == 3 and gravado["restore_attempts"] == 1
 
 
-def test_a_failing_write_of_the_counter_does_not_stop_the_restore(mundo, monkeypatch):
+def sempre_sem_espaco(monkeypatch):
+    def falha(*args, **kwargs):
+        raise OSError(28, "sem espaço no dispositivo")
+
+    monkeypatch.setattr(boot_guard, "write_pending", falha)
+
+
+@pytest.mark.parametrize(
+    "preparar",
+    [
+        lambda runtime, anterior: write_pending(runtime, pendente(anterior, boots=0, status="applying")),
+        lambda runtime, anterior: write_pending(runtime, pendente(anterior, boots=2)),
+    ],
+    ids=["applying", "pending-no-3o-boot"],
+)
+def test_an_unwritable_counter_means_no_restore_no_exit_75_and_the_boot_goes_on(mundo, monkeypatch, caplog, preparar):
+    """D11: sem como gravar o contador não dá para limitar as tentativas; restaurar sem teto seria um laço. A subida segue como está."""
     repo, runtime, anterior, _ = mundo
-    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
-    real = boot_guard.write_pending
-    chamadas = []
+    preparar(runtime, anterior)
+    sempre_sem_espaco(monkeypatch)
+    gravador = Gravador()
+    head = git(repo, "rev-parse", "HEAD")
 
-    def instavel(*args, **kwargs):
-        chamadas.append(args)
-        if len(chamadas) == 1:
-            raise OSError(28, "sem espaço")
-        return real(*args, **kwargs)
+    with caplog.at_level(logging.ERROR):
+        for _ in range(8):  # oito subidas seguidas: nenhuma restaura nem sai com 75
+            guardar(mundo, gravador)  # não levanta SystemExit
 
-    monkeypatch.setattr(boot_guard, "write_pending", instavel)
+    assert gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head
+    assert "não consegui gravar o estado da atualização" in caplog.text and "confira o servidor" in caplog.text
+
+
+def test_giving_up_marks_rolled_back_with_four_attempts_and_says_so(mundo, caplog):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, dataclasses.replace(pendente(anterior, boots=0, status="applying"), restore_attempts=3))
     gravador = Gravador()
 
-    assert subir(mundo, gravador) == EXIT_RESTART
+    with caplog.at_level(logging.ERROR):
+        assert subir(mundo, gravador) == EXIT_RESTART
 
-    assert gravador.chamadas and git(repo, "rev-parse", "HEAD") == anterior
+    gravado = em_disco(runtime)
+    assert gravador.chamadas == [] and gravado["status"] == "rolled_back" and gravado["restore_attempts"] == 4
+    assert "desisti" in caplog.text and "3 tentativas" in caplog.text and "confira o servidor" in caplog.text
+
+
+def test_the_restore_gets_the_target_commit_so_it_can_remove_what_the_target_added(mundo):
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+    gravador = Gravador()
+
+    subir(mundo, gravador)
+
+    argvs = [[str(a) for a in args] for args in gravador.chamadas]
+    assert any("diff" in a and "--diff-filter=A" in a and anterior in a and ALVO_DO_CENARIO["sha"] in a for a in argvs)
+
+
+@pytest.mark.parametrize("status_e_boots", [("applying", 0), ("pending", 2)], ids=["applying", "pending-no-3o-boot"])
+def test_a_giving_up_that_cannot_be_recorded_does_not_exit_75_in_a_loop(mundo, monkeypatch, caplog, status_e_boots):
+    """D11: com o ``RUNTIME_DIR`` sem escrita cada boot releria ``restore_attempts=3``, falharia ao gravar a desistência e sairia com 75 de novo."""
+    status, boots = status_e_boots
+    repo, runtime, anterior, _ = mundo
+    write_pending(runtime, dataclasses.replace(pendente(anterior, boots=boots, status=status), restore_attempts=3))
+    sempre_sem_espaco(monkeypatch)
+    gravador = Gravador()
+    head = git(repo, "rev-parse", "HEAD")
+
+    with caplog.at_level(logging.ERROR):
+        for _ in range(8):
+            guardar(mundo, gravador)  # nenhuma subida sai com 75
+
+    assert gravador.chamadas == [] and git(repo, "rev-parse", "HEAD") == head
+    assert "confira o servidor" in caplog.text
+
+
+def test_with_a_working_disk_giving_up_still_records_rolled_back_with_four_attempts_and_exits_75(mundo):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, dataclasses.replace(pendente(anterior, boots=0, status="applying"), restore_attempts=3))
+
+    assert subir(mundo, Gravador()) == EXIT_RESTART
+
+    assert em_disco(runtime)["status"] == "rolled_back" and em_disco(runtime)["restore_attempts"] == 4

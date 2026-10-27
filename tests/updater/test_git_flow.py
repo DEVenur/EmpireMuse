@@ -468,6 +468,7 @@ def test_the_pending_file_is_written_with_the_contract_fields_and_mode_0600(mund
         "boots": 0,
         "status": "pending",
         "restore_attempts": 0,
+        "target_commit": plano.target_commit,
     }
 
 
@@ -798,3 +799,521 @@ def test_a_failed_restore_logs_only_the_type_of_an_unexpected_original_failure(m
 
     assert any("RuntimeError" in r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR)
     assert "boom-secreto" not in caplog.text  # nem na mensagem, nem no traceback encadeado
+
+
+# ============================================================================ A12c (D10): restore robusto, em repositórios git reais
+
+ARQUIVOS_DO_ALVO = [
+    "novo/sub/n.txt",
+    "r_novo.txt",
+    "com espaço.txt",
+    "linha\nquebrada.txt",
+    "bin/tool.sh",
+    "ligacao",
+    "script.bat",
+]
+
+
+class CenarioRestore:
+    """``prev`` e ``alvo`` reais; ``interromper()`` deixa HEAD e índice no ``prev`` com os arquivos do ``alvo`` na árvore (checkout interrompido)."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.repo = tmp_path / "clone"
+        self.repo.mkdir()
+        git(self.repo, "init", "-q", "-b", "main")
+        (self.repo / "dir_antigo").mkdir()
+        self.prev = commit(
+            self.repo,
+            {
+                "a.txt": "a1\n",
+                "b.txt": "b1\n",
+                "r_antigo.txt": "conteúdo que será renomeado\n",
+                "dir_antigo/d.txt": "d\n",
+                ".gitignore": "ignorado.log\n",
+                ".gitattributes": "*.bat eol=crlf\n",
+            },
+            "prev",
+        )
+        (self.repo / "a.txt").write_text("a2\n", encoding="utf-8")
+        (self.repo / "b.txt").unlink()
+        (self.repo / "r_antigo.txt").unlink()
+        (self.repo / "novo" / "sub").mkdir(parents=True)
+        for nome in ARQUIVOS_DO_ALVO[:4]:
+            (self.repo / nome).write_text("do alvo\n", encoding="utf-8")
+        (self.repo / "r_novo.txt").write_text("conteúdo que será renomeado\n", encoding="utf-8")
+        (self.repo / "bin").mkdir()
+        (self.repo / "bin" / "tool.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (self.repo / "bin" / "tool.sh").chmod(0o755)  # modo 100755 no alvo
+        (self.repo / "ligacao").symlink_to("a.txt")  # modo 120000 no alvo
+        (self.repo / "script.bat").write_bytes(b"linha1\nlinha2\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "alvo")
+        self.alvo = git(self.repo, "rev-parse", "HEAD")
+        (self.repo / "script.bat").write_bytes(b"linha1\r\nlinha2\r\n")  # como o checkout do alvo grava (eol=crlf)
+        self.python = tmp_path / "python-falso"
+        self.python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        self.python.chmod(0o755)
+
+    def interromper(self) -> None:
+        git(self.repo, "reset", "-q", self.prev)  # HEAD e índice no prev; a árvore continua com os arquivos do alvo
+
+    def restaurar(self, runner=run_exec):
+        return asyncio.run(
+            git_flow.restore_checkout(self.repo, self.prev, self.alvo, python=str(self.python), runner=runner)
+        )
+
+    def sujo(self) -> str:
+        return git(self.repo, "status", "--porcelain", "--untracked-files=no")
+
+
+@pytest.fixture
+def restore(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)
+    cenario = CenarioRestore(tmp_path)
+    git(cenario.repo, "checkout", "-q", "--detach", cenario.alvo)
+    cenario.interromper()
+    return cenario
+
+
+def test_after_an_interrupted_checkout_the_tree_is_exactly_the_previous_commit(restore):
+    dono = restore.repo / "meu.txt"
+    dono.write_text("do dono\n", encoding="utf-8")
+    ignorado = restore.repo / "ignorado.log"
+    ignorado.write_text("lixo ignorado\n", encoding="utf-8")
+    assert restore.sujo()  # o cenário está mesmo meio aplicado (modificado e apagados)
+
+    restore.restaurar()
+
+    assert restore.sujo() == "" and git(restore.repo, "rev-parse", "HEAD") == restore.prev
+    for nome in ARQUIVOS_DO_ALVO:
+        assert not os.path.lexists(restore.repo / nome), nome
+    assert not (restore.repo / "novo").exists() and not (restore.repo / "bin").exists()  # diretórios novos vazios somem
+    assert (restore.repo / "dir_antigo" / "d.txt").exists() and (restore.repo / "a.txt").read_text() == "a1\n"
+    assert dono.read_text() == "do dono\n" and ignorado.read_text() == "lixo ignorado\n"  # nunca git clean
+
+
+def test_an_orphan_index_lock_file_is_removed_and_the_restore_passes(restore):
+    (restore.repo / ".git" / "index.lock").write_text("", encoding="utf-8")
+
+    restore.restaurar()
+
+    assert not (restore.repo / ".git" / "index.lock").exists() and restore.sujo() == ""
+
+
+def test_an_orphan_index_lock_symlink_loses_only_the_link_not_its_target(restore, tmp_path):
+    alvo = tmp_path / "fora.txt"
+    alvo.write_text("não mexa\n", encoding="utf-8")
+    (restore.repo / ".git" / "index.lock").symlink_to(alvo)
+
+    restore.restaurar()
+
+    assert not os.path.lexists(restore.repo / ".git" / "index.lock")
+    assert alvo.read_text() == "não mexa\n" and restore.sujo() == ""
+
+
+def test_a_directory_swapped_for_a_symlink_out_of_the_repo_is_skipped_with_a_warning_and_the_restore_passes(
+    restore, tmp_path, caplog
+):
+    fora = tmp_path / "fora"
+    (fora / "sub").mkdir(parents=True)
+    (fora / "sub" / "n.txt").write_text("de fora\n", encoding="utf-8")
+    shutil.rmtree(restore.repo / "novo")
+    (restore.repo / "novo").symlink_to(fora)  # o caminho novo/sub/n.txt do diff passa a resolver para fora do repo
+
+    with caplog.at_level(logging.WARNING):
+        restore.restaurar()  # não levanta: o que está fora do clone não é problema do restore
+
+    assert (fora / "sub" / "n.txt").read_text() == "de fora\n"  # nunca seguiu o link
+    assert "novo/sub/n.txt" in caplog.text and restore.sujo() == ""
+
+
+def test_a_failing_diff_makes_the_restore_fail(restore):
+    async def runner(*args, **kwargs):
+        if "diff" in [str(a) for a in args]:
+            return git_flow.ExecResult(1, "falhou")
+        return await run_exec(*args, **kwargs)
+
+    with pytest.raises(UpdateError):
+        restore.restaurar(runner)
+
+
+def test_the_restore_asks_git_for_the_files_the_target_added_without_following_renames(restore):
+    chamadas: list[list[str]] = []
+
+    async def runner(*args, **kwargs):
+        chamadas.append([str(a) for a in args])
+        return await run_exec(*args, **kwargs)
+
+    restore.restaurar(runner)
+
+    (diff,) = [c for c in chamadas if "diff" in c]
+    assert {"--name-only", "--no-renames", "--diff-filter=A", "-z"} <= set(diff)
+    assert diff[-2:] == [restore.prev, restore.alvo]
+    forcado = [c for c in chamadas if "checkout" in c]
+    assert forcado and "--force" in forcado[0] and "--detach" in forcado[0] and restore.prev in forcado[0]
+    assert not any("clean" in c for c in chamadas)  # nunca git clean
+
+
+def test_the_apply_restore_also_receives_the_target_commit(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    chamadas: list[list[str]] = []
+    base = roteiro(plano, smoke=git_flow.ExecResult(1, "falhou"))
+
+    async def runner(*args, **kwargs):
+        chamadas.append([str(a) for a in args])
+        return await base(*args, **kwargs)
+
+    with pytest.raises(UpdateError):
+        aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert any("diff" in c and plano.prev_sha in c and plano.target_commit in c for c in chamadas)
+
+
+def test_the_applying_and_pending_marks_carry_the_target_commit(mundo, python_falso, tmp_path):
+    remoto, local = mundo
+    plano = planejar(remoto, local)
+    runner = roteiro(plano)
+
+    aplicar(plano, local, python_falso, tmp_path, runner)
+
+    assert runner.estado["pendente_no_1o_checkout"]["target_commit"] == plano.target_commit
+    assert pendente_em_disco(tmp_path)["target_commit"] == plano.target_commit
+
+
+# ---------------------------------------------------------------------------- _reap: SIGTERM, 5 s, SIGKILL
+
+
+async def lancar_e_cancelar(codigo_do_filho: str, *argumentos: str, antes_de_cancelar=None):
+    """Roda ``run_exec`` com um filho real, espera o processo existir, cancela e devolve o ``Process`` já reapado."""
+    capturado: list[asyncio.subprocess.Process] = []
+    criado = asyncio.Event()
+    original = asyncio.create_subprocess_exec
+
+    async def espiao(*args, **kwargs):
+        processo = await original(*args, **kwargs)
+        capturado.append(processo)
+        criado.set()
+        return processo
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(asyncio, "create_subprocess_exec", espiao)
+        tarefa = asyncio.create_task(
+            run_exec(sys.executable, "-c", codigo_do_filho, *argumentos, cwd=None, env=os.environ, timeout=600)
+        )
+        await asyncio.wait_for(criado.wait(), 30)
+        if antes_de_cancelar:
+            await antes_de_cancelar()
+        tarefa.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await tarefa
+    processo = capturado[0]
+    if processo.returncode is None:  # não deixa o filho de pé se a correção faltar
+        processo.kill()
+        await processo.wait()
+    return processo
+
+
+def test_the_reap_grace_period_is_five_seconds():
+    assert git_flow.REAP_GRACE_SECONDS == 5
+
+
+def test_a_child_that_exits_on_sigterm_is_never_sent_sigkill():
+    async def principal():
+        vivo_ao_cancelar = []
+        processo = await lancar_e_cancelar("import time; time.sleep(60)")
+        vivo_ao_cancelar.append(processo.returncode)
+        return processo
+
+    processo = asyncio.run(principal())
+
+    assert processo.returncode == -15  # SIGTERM; com SIGKILL seria -9
+
+
+def test_a_child_that_ignores_sigterm_gets_sigkill_after_the_grace_period(tmp_path, monkeypatch):
+    monkeypatch.setattr(git_flow, "REAP_GRACE_SECONDS", 0.3)  # a constante é lida em tempo de chamada
+    marca = tmp_path / "pronto"
+    codigo = "import signal, sys, time, pathlib; signal.signal(signal.SIGTERM, signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text('x'); time.sleep(60)"
+
+    async def pronto():
+        while not marca.exists():  # o filho só avisa depois de instalar o handler: sem isso o SIGTERM o mataria
+            await asyncio.sleep(0)
+
+    async def principal():
+        return await lancar_e_cancelar(codigo, str(marca), antes_de_cancelar=lambda: asyncio.wait_for(pronto(), 30))
+
+    processo = asyncio.run(principal())
+
+    assert processo.returncode == -9  # SIGKILL, depois da tolerância
+
+
+def test_a_timeout_also_reaps_with_sigterm_first_and_still_returns_124():
+    capturado: list[asyncio.subprocess.Process] = []
+    original = asyncio.create_subprocess_exec
+
+    async def espiao(*args, **kwargs):
+        processo = await original(*args, **kwargs)
+        capturado.append(processo)
+        return processo
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(asyncio, "create_subprocess_exec", espiao)
+        resultado = asyncio.run(
+            run_exec(sys.executable, "-c", "import time; time.sleep(60)", cwd=None, env=os.environ, timeout=0.2)
+        )
+
+    assert resultado.returncode == 124 and capturado[0].returncode == -15
+
+
+# ---------------------------------------------------------------------------- Médio do Vigil: arquivo do dono num caminho que o alvo acrescenta
+
+
+def trocar_alvo(remoto: Path, arquivos: dict[str, str]) -> None:
+    """Refaz a tag ``v2.1.0`` com um commit que também ACRESCENTA ``arquivos``."""
+    git(remoto, "tag", "-d", "v2.1.0")
+    for nome in arquivos:
+        (remoto / nome).parent.mkdir(parents=True, exist_ok=True)
+    commit(remoto, arquivos, "v2.1.0 com arquivos novos")
+    git(remoto, "tag", "-a", "v2.1.0", "-m", "2.1.0")
+
+
+def plano_recusado(mundo, arquivos: dict[str, str], preparar) -> str:
+    remoto, local = mundo
+    trocar_alvo(remoto, arquivos)
+    preparar(local)
+    antes = head(local)
+
+    with pytest.raises(UpdateError) as erro:
+        planejar(remoto, local)
+
+    assert head(local) == antes
+    assert not (local.parent / "runtime" / "update-pending.json").exists()
+    return str(erro.value)
+
+
+FRASE = "A versão 2.1.0 acrescenta {caminho}, que já existe no seu clone sem estar versionado; mova-o e tente de novo"
+
+
+def test_the_plan_refuses_when_an_untracked_owner_file_sits_on_a_path_the_target_adds(mundo):
+    def preparar(local: Path) -> None:
+        (local / "empiremuse_cogs").mkdir()
+        (local / "empiremuse_cogs" / "nova.py").write_text("do dono\n", encoding="utf-8")
+
+    mensagem = plano_recusado(mundo, {"empiremuse_cogs/nova.py": "do alvo\n"}, preparar)
+
+    assert FRASE.format(caminho="empiremuse_cogs/nova.py") in mensagem
+
+
+def test_the_plan_refuses_when_an_ignored_owner_file_sits_on_a_path_the_target_adds(mundo):
+    def preparar(local: Path) -> None:
+        (local / ".git" / "info" / "exclude").write_text("ignorado.txt\n", encoding="utf-8")
+        (local / "ignorado.txt").write_text("do dono\n", encoding="utf-8")
+        assert git(local, "status", "--porcelain") == ""  # de fato ignorado: o git não o vê
+
+    mensagem = plano_recusado(mundo, {"ignorado.txt": "do alvo\n"}, preparar)
+
+    assert FRASE.format(caminho="ignorado.txt") in mensagem
+
+
+def test_the_plan_refuses_when_a_symlink_sits_on_a_path_the_target_adds(mundo):
+    def preparar(local: Path) -> None:
+        (local / "ligacao.txt").symlink_to("/caminho/que/nao/existe")  # mesmo pendurado, o caminho está ocupado
+
+    mensagem = plano_recusado(mundo, {"ligacao.txt": "do alvo\n"}, preparar)
+
+    assert FRASE.format(caminho="ligacao.txt") in mensagem
+
+
+def test_the_plan_names_at_most_five_conflicting_paths_and_counts_the_rest(mundo):
+    nomes = [f"conflito_{n}.txt" for n in range(7)]
+
+    def preparar(local: Path) -> None:
+        for nome in nomes:
+            (local / nome).write_text("do dono\n", encoding="utf-8")
+
+    mensagem = plano_recusado(mundo, {nome: "do alvo\n" for nome in nomes}, preparar)
+
+    assert sum(nome in mensagem for nome in nomes) == 5 and "mais 2" in mensagem
+    assert FRASE.format(caminho="conflito_0.txt") in mensagem  # o primeiro conflitante
+
+
+def test_a_conflicting_path_with_a_line_break_is_sanitized_in_the_message(mundo):
+    def preparar(local: Path) -> None:
+        (local / "linha\nquebrada.txt").write_text("do dono\n", encoding="utf-8")
+
+    mensagem = plano_recusado(mundo, {"linha\nquebrada.txt": "do alvo\n"}, preparar)
+
+    assert "linha\nquebrada" not in mensagem and "quebrada.txt" in mensagem
+
+
+def test_the_plan_refuses_when_a_parent_directory_of_an_added_path_is_an_untracked_symlink_out_of_the_clone(
+    mundo, tmp_path
+):
+    fora = tmp_path / "fora_do_clone"
+    fora.mkdir()
+
+    def preparar(local: Path) -> None:
+        (local / "empiremuse_cogs").symlink_to(
+            fora
+        )  # cogs/ vira link NÃO rastreado para fora; o arquivo em si não existe
+
+    mensagem = plano_recusado(mundo, {"empiremuse_cogs/nova.py": "do alvo\n"}, preparar)
+
+    assert FRASE.format(caminho="empiremuse_cogs/nova.py") in mensagem
+    assert list(fora.iterdir()) == []  # nada foi escrito lá
+
+
+def test_the_plan_refuses_when_a_parent_of_an_added_path_is_a_regular_file(mundo):
+    def preparar(local: Path) -> None:
+        (local / "pai").write_text("sou um arquivo, não um diretório\n", encoding="utf-8")
+
+    mensagem = plano_recusado(mundo, {"pai/filho.txt": "do alvo\n"}, preparar)
+
+    assert FRASE.format(caminho="pai/filho.txt") in mensagem
+
+
+def test_without_a_conflict_the_plan_goes_on_even_if_the_target_adds_files(mundo):
+    remoto, local = mundo
+    trocar_alvo(remoto, {"sub/novo.txt": "do alvo\n"})
+    (local / "outro_do_dono.txt").write_text("não conflita\n", encoding="utf-8")
+
+    assert planejar(remoto, local).target == Version(2, 1, 0)
+
+
+# ---------------------------------------------------------------------------- restore: só apaga o que é EXATAMENTE o do alvo
+
+
+def owner_file(restore, nome: str, conteudo: str = "do dono\n") -> Path:
+    caminho = restore.repo / nome
+    caminho.write_text(conteudo, encoding="utf-8")
+    return caminho
+
+
+def test_an_owner_file_with_other_content_on_an_added_path_is_kept_and_logged(restore, caplog):
+    dono = owner_file(restore, "com espaço.txt")  # o alvo acrescentou o MESMO caminho, com outro conteúdo
+
+    with caplog.at_level(logging.WARNING):
+        restore.restaurar()  # o restore passa
+
+    assert dono.read_text() == "do dono\n"  # intacto
+    assert "com espaço.txt" in caplog.text
+    for nome in (
+        "novo/sub/n.txt",
+        "r_novo.txt",
+        "bin/tool.sh",
+        "ligacao",
+    ):  # os idênticos ao alvo continuam sendo removidos
+        assert not os.path.lexists(restore.repo / nome), nome
+    assert restore.sujo() == "" and git(restore.repo, "rev-parse", "HEAD") == restore.prev
+
+
+def test_an_executable_target_file_that_lost_its_execute_bit_is_treated_as_the_owners(restore, caplog):
+    ferramenta = restore.repo / "bin" / "tool.sh"
+    ferramenta.chmod(0o644)  # mesmo conteúdo do alvo, mas o modo difere do 100755
+
+    with caplog.at_level(logging.WARNING):
+        restore.restaurar()
+
+    assert ferramenta.exists() and "bin/tool.sh" in caplog.text
+
+
+def test_a_regular_file_where_the_target_has_a_symlink_is_kept(restore, caplog):
+    (restore.repo / "ligacao").unlink()
+    dono = owner_file(restore, "ligacao", "arquivo do dono\n")
+
+    with caplog.at_level(logging.WARNING):
+        restore.restaurar()
+
+    assert dono.read_text() == "arquivo do dono\n" and "ligacao" in caplog.text
+
+
+def test_a_symlink_pointing_somewhere_else_than_the_target_symlink_is_kept(restore, caplog):
+    (restore.repo / "ligacao").unlink()
+    (restore.repo / "ligacao").symlink_to("b.txt")  # o alvo aponta para a.txt
+
+    with caplog.at_level(logging.WARNING):
+        restore.restaurar()
+
+    assert os.readlink(restore.repo / "ligacao") == "b.txt" and "ligacao" in caplog.text
+
+
+def test_files_identical_to_the_target_blob_are_still_removed(restore):
+    restore.restaurar()
+
+    for nome in ARQUIVOS_DO_ALVO:
+        assert not os.path.lexists(restore.repo / nome), nome
+
+
+def test_a_bat_file_written_with_crlf_by_the_checkout_is_still_recognized_as_the_targets_and_removed(restore):
+    """O .gitattributes tem ``*.bat eol=crlf``: o arquivo na árvore tem CRLF e o hash cru dos bytes nunca bateria com o blob (LF)."""
+    assert (restore.repo / "script.bat").read_bytes() == b"linha1\r\nlinha2\r\n"
+
+    restore.restaurar()
+
+    assert not os.path.lexists(restore.repo / "script.bat")
+
+
+def test_an_owner_bat_file_with_other_content_on_the_same_path_is_kept(restore, caplog):
+    (restore.repo / "script.bat").write_bytes(b"echo do dono\r\n")
+
+    with caplog.at_level(logging.WARNING):
+        restore.restaurar()
+
+    assert (restore.repo / "script.bat").read_bytes() == b"echo do dono\r\n" and "script.bat" in caplog.text
+
+
+# ---------------------------------------------------------------------------- restore: o .gitattributes é do PRÓPRIO alvo (a regra some depois do checkout do prev)
+
+
+class CenarioGitattributesDoAlvo:
+    """prev com ``.gitattributes`` sem regra; o alvo o ALTERA para ``*.bat eol=crlf`` e acrescenta ``script.bat``.
+    A interrupção deixa HEAD/índice no prev, o ``.gitattributes`` do alvo e o ``script.bat`` com CRLF (como o checkout do alvo gravou) na árvore."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.repo = tmp_path / "clone_attr"
+        self.repo.mkdir()
+        git(self.repo, "init", "-q", "-b", "main")
+        self.prev = commit(self.repo, {"a.txt": "a1\n", ".gitattributes": "# sem regras\n"}, "prev")
+        self.alvo = commit(self.repo, {".gitattributes": "*.bat eol=crlf\n", "script.bat": "linha1\nlinha2\n"}, "alvo")
+        git(self.repo, "reset", "-q", self.prev)  # HEAD/índice no prev; a árvore segue com os arquivos do alvo
+        (self.repo / "script.bat").write_bytes(b"linha1\r\nlinha2\r\n")
+        self.python = tmp_path / "python-falso-attr"
+        self.python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        self.python.chmod(0o755)
+
+    def restaurar(self):
+        return asyncio.run(
+            git_flow.restore_checkout(self.repo, self.prev, self.alvo, python=str(self.python), runner=run_exec)
+        )
+
+
+@pytest.fixture
+def attr_do_alvo(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda *args, **kwargs: None)
+    return CenarioGitattributesDoAlvo(tmp_path)
+
+
+def test_a_crlf_file_written_under_the_targets_own_gitattributes_is_still_the_targets_and_is_removed(attr_do_alvo):
+    """Depois do ``checkout --force prev`` a regra ``eol=crlf`` já não vale: o hash com filtros dos bytes CRLF não bate com o blob (LF)."""
+    attr_do_alvo.restaurar()
+
+    assert not os.path.lexists(attr_do_alvo.repo / "script.bat")
+    assert (attr_do_alvo.repo / ".gitattributes").read_text() == "# sem regras\n"  # o do prev voltou
+    assert git(attr_do_alvo.repo, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+def test_an_owner_file_with_other_content_on_the_same_path_is_kept_in_that_scenario_too(attr_do_alvo, caplog):
+    (attr_do_alvo.repo / "script.bat").write_bytes(b"echo do dono\r\n")
+
+    with caplog.at_level(logging.WARNING):
+        attr_do_alvo.restaurar()
+
+    assert (attr_do_alvo.repo / "script.bat").read_bytes() == b"echo do dono\r\n" and "script.bat" in caplog.text
+
+
+def test_an_lf_file_identical_to_the_targets_blob_is_removed_in_that_scenario_as_well(attr_do_alvo):
+    (attr_do_alvo.repo / "script.bat").write_bytes(b"linha1\nlinha2\n")  # bytes exatamente iguais ao blob
+
+    attr_do_alvo.restaurar()
+
+    assert not os.path.lexists(attr_do_alvo.repo / "script.bat")

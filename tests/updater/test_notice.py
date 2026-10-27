@@ -17,6 +17,7 @@ import json
 
 from empiremuse.updater import boot_guard
 from empiremuse.updater.notice import deliver_update_notice, on_pool_ready
+from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, pending_path, write_pending
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -39,6 +40,7 @@ def pendente(**campos) -> PendingUpdate:
         "created_at": AGORA - 120,
         "prev_sha": SHA,
         "boots": 1,
+        "target_commit": ALVO_GIT,
     }
     return PendingUpdate(**{**base, **campos})
 
@@ -354,3 +356,30 @@ async def test_on_pool_ready_neither_marks_ready_nor_sends_nor_deletes_an_applyi
 
     bot.canal.send.assert_not_awaited()
     assert pending_path(runtime).read_bytes() == antes
+
+
+# ============================================================================ D11: aviso próprio de desistência
+
+
+@pytest.mark.parametrize("versao", [DE, PARA, None], ids=["head-no-anterior", "head-no-alvo", "versao-ilegivel"])
+async def test_a_given_up_restore_has_its_own_notice_whatever_the_head_is(runtime, versao):
+    """``rolled_back`` com 4 tentativas = o ``boot_guard`` desistiu: o aviso diz isso, mesmo que o HEAD esteja na versão anterior."""
+    bot = bot_falso()
+    write_pending(runtime, pendente(status="rolled_back", restore_attempts=4))
+
+    await entregar(pool_com(bot), runtime, versao)
+
+    descricao = bot.canal.send.await_args.kwargs["embed"].description
+    assert "desisti" in descricao and "3 tentativas" in descricao and "Confira o servidor" in descricao
+    assert "2.0.0" in descricao and "2.1.0" in descricao
+    assert "voltou para a versão" not in descricao  # nada do texto de rollback bem-sucedido
+    assert not pending_path(runtime).exists()
+
+
+async def test_a_rolled_back_pending_update_with_few_attempts_keeps_the_regular_notices(runtime):
+    bot = bot_falso()
+    write_pending(runtime, pendente(status="rolled_back", restore_attempts=1))
+
+    await entregar(pool_com(bot), runtime, DE)
+
+    assert "desisti" not in bot.canal.send.await_args.kwargs["embed"].description

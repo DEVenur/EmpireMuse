@@ -31,7 +31,14 @@ from empiremuse.updater.docker_flow import (
 )
 from empiremuse.updater.git_flow import UpdateError, installed_version
 from empiremuse.updater.proxy_client import HelperState, ProxyClient
-from empiremuse.updater.state import PendingUpdate, clear_pending, read_pending, write_pending
+from empiremuse.updater.state import (
+    GAVE_UP_ATTEMPTS,
+    MAX_RESTORE_ATTEMPTS,
+    PendingUpdate,
+    clear_pending,
+    read_pending,
+    write_pending,
+)
 from empiremuse.utils import branding
 from empiremuse.version import image_version
 
@@ -67,6 +74,14 @@ def build_notice(pending: PendingUpdate, running: Version | None, changelog: str
     (inclusive ``rolled_back`` cuja reversão não se confirmou) → resultado incerto.
     """
     link = f"{branding.REPO_URL}/blob/v{pending.to_version}/CHANGELOG.md"
+    if pending.status == "rolled_back" and pending.restore_attempts >= GAVE_UP_ATTEMPTS:
+        # O boot_guard desistiu depois de várias tentativas: o HEAD pode até estar na versão anterior com a árvore mista.
+        text = (
+            f"⚠️ **A atualização para {pending.to_version} falhou e eu desisti de voltar para a versão "
+            f"{pending.from_version} depois de {MAX_RESTORE_ATTEMPTS} tentativas.**\n"
+            "Confira o servidor: o código instalado pode estar incompleto."
+        )
+        return disnake.Embed(description=text, colour=COLOR_FAIL)
     if running == pending.from_version:
         text = (
             f"⚠️ **A atualização para {pending.to_version} falhou e o bot voltou para a versão {pending.from_version}.**"

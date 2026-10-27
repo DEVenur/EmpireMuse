@@ -13,10 +13,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import hashlib
 import logging
 import os
 import re
 import shutil
+import stat
 import sys
 import time
 import tomllib
@@ -60,6 +62,7 @@ INSTALL_TIMEOUT = 600
 SMOKE_TIMEOUT = 120
 MAX_OUTPUT_CHARS = 4000
 MAX_LISTED_FILES = 10
+MAX_LISTED_CONFLICTS = 5
 
 _SHA1 = re.compile(r"[0-9a-f]{40}")
 _UNFINISHED_OPERATIONS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply")
@@ -131,11 +134,26 @@ def git_command(repo_dir: Path | None, allow_protocol: str, *args: str) -> list[
     return command + list(args)
 
 
+REAP_GRACE_SECONDS = 5  # tolerância entre o SIGTERM e o SIGKILL; lida em tempo de chamada (os testes a encurtam)
+
+
 async def _reap(process: asyncio.subprocess.Process) -> None:
-    """Mata o processo, se ainda roda, e espera o término."""
+    """Encerra o processo (SIGTERM, espera ``REAP_GRACE_SECONDS``, só então SIGKILL) e aguarda o término.
+
+    O git que recebe SIGTERM apaga o próprio ``index.lock``; o SIGKILL o deixaria órfão e a árvore pela metade.
+    """
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
-            process.kill()
+            process.terminate()
+        try:
+            await asyncio.wait_for(process.wait(), REAP_GRACE_SECONDS)
+        except TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+        except asyncio.CancelledError:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()  # cancelado de novo durante a tolerância: sem tempo para esperar, mas sem filho de pé
+            raise
     await process.wait()
 
 
@@ -291,6 +309,55 @@ async def _require_clean_tree(git: _Git, repo_dir: Path) -> None:
         )
 
 
+async def _added_paths(git: _Git, base: str, target_commit: str) -> list[str]:
+    """Caminhos que ``target_commit`` acrescenta em relação a ``base`` (``diff --diff-filter=A -z``, sem seguir renomeios)."""
+    result = await git(
+        "diff",
+        "--name-only",
+        "--no-renames",
+        "--diff-filter=A",
+        "-z",
+        base,
+        target_commit,
+        error="Não consegui listar os arquivos que a versão nova acrescenta.",
+        max_output=MAX_CHANGELOG_BYTES,
+    )
+    return [name for name in result.output.split("\0") if name]
+
+
+def _blocks(path: Path, repo_dir: Path) -> bool:
+    """Já há algo no caminho (inclusive link pendurado) ou um diretório pai do caminho, no clone, que não é um diretório real."""
+    if os.path.lexists(path):
+        return True
+    for parent in path.parents:
+        if parent == repo_dir:
+            break
+        if os.path.lexists(parent) and (os.path.islink(parent) or not os.path.isdir(parent)):
+            return True
+    return False
+
+
+async def _require_no_conflicting_paths(git: _Git, repo_dir: Path, prev_sha: str, target_commit: str, target) -> None:
+    """Recusa o update se a versão nova acrescenta um caminho em que o dono já tem algo (não rastreado, ignorado ou link).
+
+    O checkout abortaria (ou, num arquivo ignorado, o sobrescreveria) e o restore poderia levar embora o que é do dono.
+    """
+    repo = Path(repo_dir)
+    conflicts = [name for name in await _added_paths(git, prev_sha, target_commit) if _blocks(repo / name, repo)]
+    if not conflicts:
+        return
+    shown = [_printable(name) for name in conflicts[:MAX_LISTED_CONFLICTS]]
+    message = (
+        f"A versão {target} acrescenta {shown[0]}, que já existe no seu clone sem estar versionado; "
+        "mova-o e tente de novo."
+    )
+    if len(conflicts) > 1:
+        others = ", ".join(shown[1:])
+        more = f" …e mais {len(conflicts) - MAX_LISTED_CONFLICTS}" if len(conflicts) > MAX_LISTED_CONFLICTS else ""
+        message += f" Outros caminhos no mesmo caso: {others}{more}."
+    raise UpdateError(message)
+
+
 async def plan_git_update(
     repo_dir: Path,
     repo_url: str = branding.SOURCE_REPO_GIT,
@@ -369,6 +436,7 @@ async def plan_git_update(
     log = await git("show", "--end-of-options", f"{target_commit}:{CHANGELOG_FILE}", max_output=MAX_CHANGELOG_BYTES)
     changelog = changelog_sections(log.output, current, target, CHANGELOG_MAX_CHARS) if log.returncode == 0 else ""
     prev_sha = await git.sha("HEAD", error="Não consegui ler o commit atual do clone.")
+    await _require_no_conflicting_paths(git, repo_dir, prev_sha, target_commit, target)
     return GitPlan(current, target, tag_object_sha, target_commit, prev_sha, changelog)
 
 
@@ -392,15 +460,151 @@ async def _smoke_test(runner: Runner, repo_dir: Path, python: str) -> None:
             raise UpdateError("o teste de fumaça do código novo falhou")
 
 
+def _remove_stale_index_lock(repo: Path) -> None:
+    """Apaga o ``.git/index.lock`` órfão (arquivo ou link: só a entrada, nunca o alvo do link).
+
+    Só é seguro porque nenhum git nosso está vivo: o ``run_exec`` sempre espera o filho terminar e o ``boot_guard`` roda
+    antes de qualquer outro git.
+    """
+    lock = repo / ".git" / "index.lock"
+    try:
+        mode = os.lstat(lock).st_mode
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise UpdateError("Não consegui inspecionar o trava do índice do git.") from error
+    if stat.S_ISREG(mode) or stat.S_ISLNK(mode):
+        try:
+            lock.unlink()
+        except OSError as error:
+            raise UpdateError("Não consegui remover a trava órfã do índice do git.") from error
+
+
+async def _target_tree(git: _Git, target_commit: str) -> dict[str, tuple[str, str]]:
+    """Caminho → ``(modo, sha do blob)`` de todos os arquivos do alvo (``ls-tree -r -z``)."""
+    result = await git(
+        "ls-tree",
+        "-r",
+        "-z",
+        "--end-of-options",
+        target_commit,
+        error="Não consegui ler a árvore da versão nova.",
+        max_output=MAX_CHANGELOG_BYTES,
+    )
+    entries: dict[str, tuple[str, str]] = {}
+    for entry in result.output.split("\0"):
+        meta, _, name = entry.partition("\t")
+        fields = meta.split()
+        if name and len(fields) == 3:
+            entries[name] = (fields[0], fields[2])
+    return entries
+
+
+async def _is_target_file(git: _Git, repo: Path, name: str, entry: tuple[str, str] | None) -> bool:
+    """O que há no caminho é exatamente o arquivo (ou link) que o alvo acrescentou? Só assim o restore o apaga.
+
+    Arquivo comum: o ``git hash-object`` (que aplica os filtros do caminho, como o ``eol=crlf`` do ``.gitattributes``) tem
+    de dar o sha do blob do alvo e o bit de execução tem de bater com o modo. Link: o destino tem de ser o conteúdo do
+    blob. Qualquer outra coisa (conteúdo do dono, tipo diferente, submódulo) fica onde está.
+    """
+    if entry is None:
+        return False
+    mode, sha = entry
+    path = repo / name
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    if stat.S_ISLNK(info.st_mode):
+        if mode != "120000":
+            return False
+        raw = os.fsencode(os.readlink(path))
+        return hashlib.sha1(b"blob %d\0" % len(raw) + raw).hexdigest() == sha  # noqa: S324 - é o hash de objeto do git
+    if not stat.S_ISREG(info.st_mode) or mode not in ("100644", "100755"):
+        return False
+    if (mode == "100755") != bool(info.st_mode & stat.S_IXUSR):
+        return False
+    # Com os filtros do caminho (o ``eol=crlf`` do ``.gitattributes``) e sem eles: o restore roda DEPOIS do checkout do
+    # commit anterior, e se o próprio alvo trouxe a regra ela já não vale mais na árvore.
+    for flags in ((), ("--no-filters",)):
+        result = await git("hash-object", *flags, "--end-of-options", name)
+        if result.returncode == 0 and result.output.strip() == sha:
+            return True
+    try:
+        content = path.read_bytes()
+    except OSError:
+        return False
+    normalized = content.replace(b"\r\n", b"\n")  # o checkout do alvo gravou CRLF onde o blob tem LF
+    return hashlib.sha1(b"blob %d\0" % len(normalized) + normalized).hexdigest() == sha  # noqa: S324 - hash de objeto do git
+
+
+async def _remove_target_additions(git: _Git, repo: Path, names: list[str], target_commit: str) -> None:
+    """Remove os arquivos que o alvo acrescentou e ainda estão na árvore, e os diretórios que ficaram vazios.
+
+    Só apaga o que for idêntico ao alvo (``_is_target_file``); o que for do dono fica, com um aviso no log. Cada caminho é
+    removido com ``unlink`` (que não segue link) e só se o diretório pai REAL ficar dentro do clone: um diretório trocado
+    por link para fora é pulado, com aviso, e nada de fora é tocado. Caminho absoluto ou com ``..`` é recusado. Arquivos
+    não rastreados e ignorados nunca são apagados por engano (nada de ``git clean``).
+    """
+    root = repo.resolve()
+    tree: dict[str, tuple[str, str]] | None = None
+    for name in names:
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise UpdateError("O restore recusou um caminho fora do clone.")
+        path = repo / relative
+        parent = path.parent.resolve()
+        if parent != root and root not in parent.parents:
+            logger.warning("update: o restore pulou %s: o diretório dele sai do clone.", _printable(name))
+            continue
+        if not os.path.lexists(path):
+            continue
+        if tree is None:
+            tree = await _target_tree(git, target_commit)
+        if not await _is_target_file(git, repo, name, tree.get(name)):
+            logger.warning("update: o restore deixou %s: não é o arquivo da versão nova.", _printable(name))
+            continue
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise UpdateError("Não consegui remover um arquivo que a versão nova acrescentou.") from error
+        for directory in path.parents:
+            if directory == repo:
+                break
+            try:
+                directory.rmdir()
+            except OSError:
+                break
+
+
 async def restore_checkout(
-    repo_dir: Path, sha: str, *, python: str = sys.executable, runner: Runner = run_exec, allow_protocol: str = "https"
+    repo_dir: Path,
+    prev_sha: str,
+    target_commit: str,
+    *,
+    python: str = sys.executable,
+    runner: Runner = run_exec,
+    allow_protocol: str = "https",
 ) -> None:
-    """``checkout --detach`` de ``sha`` (o commit anterior) e reinstalação do lock dele; levanta ``UpdateError`` se falhar."""
-    if not _SHA1.fullmatch(sha):
+    """Volta o clone ao commit anterior de forma que uma troca interrompida no meio não deixe código misturado.
+
+    Ordem: (1) tira o ``index.lock`` órfão; (2) ``checkout --force --detach`` do ``prev_sha`` (seguro: o apply exige a
+    árvore rastreada limpa) restaura modificados e apagados; (3) remove o que o alvo acrescentou
+    (``diff --diff-filter=A prev alvo``), pois um checkout interrompido deixa esses arquivos para trás e o carregador de
+    cogs os carregaria; (4) reinstala o lock anterior. Qualquer falha, inclusive a do ``diff``, levanta ``UpdateError``.
+    """
+    if not (_SHA1.fullmatch(prev_sha) and _SHA1.fullmatch(target_commit)):
         raise UpdateError("O commit anterior é inválido.")
-    git = _Git(Path(repo_dir), allow_protocol, runner)
-    await git("checkout", "--detach", "--end-of-options", sha, error="Não consegui voltar ao commit anterior.")
-    await _install_dependencies(runner, Path(repo_dir), python)
+    repo = Path(repo_dir)
+    _remove_stale_index_lock(repo)
+    git = _Git(repo, allow_protocol, runner)
+    await git(
+        "checkout", "--force", "--detach", "--end-of-options", prev_sha, error="Não consegui voltar ao commit anterior."
+    )
+    await _remove_target_additions(git, repo, await _added_paths(git, prev_sha, target_commit), target_commit)
+    await _install_dependencies(runner, repo, python)
 
 
 async def apply_git_update(
@@ -435,6 +639,7 @@ async def apply_git_update(
         requested_by=request.requested_by,
         created_at=now(),
         prev_sha=plan.prev_sha,
+        target_commit=plan.target_commit,
         boots=0,
         status="applying",
     )
@@ -485,7 +690,9 @@ async def _revert_or_keep(
     """
     try:
         await asyncio.shield(
-            restore_checkout(repo_dir, plan.prev_sha, python=python, runner=runner, allow_protocol=allow_protocol)
+            restore_checkout(
+                repo_dir, plan.prev_sha, plan.target_commit, python=python, runner=runner, allow_protocol=allow_protocol
+            )
         )
     except asyncio.CancelledError:
         raise

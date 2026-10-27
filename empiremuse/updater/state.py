@@ -31,6 +31,7 @@ MAX_TIMESTAMP = 2**40  # ano ~36812; o que passa disso não é um instante, é a
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
 MAX_RESTORE_ATTEMPTS = 3  # tentativas de reversão do boot_guard antes de desistir (D11)
+GAVE_UP_ATTEMPTS = MAX_RESTORE_ATTEMPTS + 1  # 4 = o boot_guard desistiu (grava rolled_back com este valor)
 FLOWS = ("git", "docker")
 STATUSES = ("applying", "pending", "ready", "rolled_back")
 
@@ -39,7 +40,7 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _COMMON_KEYS = frozenset(
     {"v", "flow", "from_version", "to_version", "bot_id", "channel_id", "requested_by", "created_at", "boots", "status"}
 )
-_KEYS_BY_FLOW = {"git": _COMMON_KEYS | {"prev_sha"}, "docker": _COMMON_KEYS | {"digest"}}
+_KEYS_BY_FLOW = {"git": _COMMON_KEYS | {"prev_sha", "target_commit"}, "docker": _COMMON_KEYS | {"digest"}}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -68,6 +69,7 @@ class PendingUpdate:
     requested_by: int
     created_at: float
     prev_sha: str | None = None
+    target_commit: str | None = None
     digest: str | None = None
     boots: int = 0
     status: str = "pending"
@@ -89,6 +91,7 @@ class PendingUpdate:
         }
         if self.flow == "git":
             data["prev_sha"] = self.prev_sha
+            data["target_commit"] = self.target_commit
             data["restore_attempts"] = self.restore_attempts
         else:
             data["digest"] = self.digest
@@ -133,13 +136,16 @@ def parse_pending(data: object) -> PendingUpdate | None:
         and (data["status"] != "applying" or (flow == "git" and boots == 0))
         and isinstance(attempts, int)
         and not isinstance(attempts, bool)
-        and 0 <= attempts <= (MAX_RESTORE_ATTEMPTS if flow == "git" else 0)
+        and 0 <= attempts <= (GAVE_UP_ATTEMPTS if flow == "git" else 0)
     )
     if not valid:
         return None
     prev_sha = data.get("prev_sha")
+    target_commit = data.get("target_commit")
     digest = data.get("digest")
     if flow == "git" and not (isinstance(prev_sha, str) and _SHA1.fullmatch(prev_sha)):
+        return None
+    if flow == "git" and not (isinstance(target_commit, str) and _SHA1.fullmatch(target_commit)):
         return None
     if flow == "docker" and not (isinstance(digest, str) and _DIGEST.fullmatch(digest)):
         return None
@@ -153,6 +159,7 @@ def parse_pending(data: object) -> PendingUpdate | None:
         requested_by=data["requested_by"],
         created_at=float(created_at),
         prev_sha=prev_sha if flow == "git" else None,
+        target_commit=target_commit if flow == "git" else None,
         digest=digest if flow == "docker" else None,
         boots=boots,
         status=data["status"],
