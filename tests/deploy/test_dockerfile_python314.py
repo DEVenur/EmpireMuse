@@ -4,7 +4,7 @@ Só lê o ``Dockerfile``: sem Docker, sem rede. A parte dinâmica do A21a (``pyt
 subconjunto de raízes emSign dentro da imagem construída) é o smoke Docker do gate G1.
 
 Valores do contrato (feature-spec, S2.1): índice 3.14.10 ``c2aca820…6d71d`` (amd64 + arm64); uv 0.13.5 com o digest de índice
-``32a7bb39…deca6ff`` (a nota fixa só o começo e o fim, então o resto é conferido pelo formato de 64 hex); no estágio runtime, as
+``32a7bb39…deca6ff`` (conferido inteiro, igual ao do Dockerfile do HEAD); no estágio runtime, as
 raízes ``emSign_Root_CA_-_C1`` e ``emSign_ECC_Root_CA_-_C3`` com prefixo ``!`` em ``/etc/ca-certificates.conf`` e, depois delas,
 ``update-ca-certificates --fresh``, com o comentário do contrato.
 """
@@ -16,10 +16,10 @@ import pytest
 from tests.support.raiz import RAIZ
 
 DOCKERFILE = RAIZ / "Dockerfile"
+INDICE_UV_0_13_5 = "32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff"
 INDICE_PYTHON_314 = "c2aca8207dfb68e7d20fecb7fad7e145c5d79d2ff36712d416c144130606d71d"
 RAIZES_EMSIGN_DESATIVADAS = ("emSign_Root_CA_-_C1.crt", "emSign_ECC_Root_CA_-_C3.crt")
 COMENTARIO_DO_CONTRATO = "remover quando o ca-certificates do Debian desconfiar delas"
-SHA256 = r"[0-9a-f]{64}"
 
 
 def _sem_continuacoes(texto: str) -> str:
@@ -60,12 +60,7 @@ class TestImagensFixadasPorDigest:
     def test_uv_image_e_a_0_13_5_com_digest_de_indice(self, instrucoes):
         valor = _valor_do_arg(instrucoes, "UV_IMAGE")
 
-        achado = re.fullmatch(rf"ghcr\.io/astral-sh/uv:0\.13\.5@sha256:(?P<digest>{SHA256})", valor)
-        assert achado, f"UV_IMAGE fora do formato esperado: {valor}"
-        digest = achado["digest"]
-        assert digest.startswith("32a7bb39") and digest.endswith("deca6ff"), (
-            f"digest do uv diferente do contrato: {digest}"
-        )
+        assert valor == f"ghcr.io/astral-sh/uv:0.13.5@sha256:{INDICE_UV_0_13_5}"
 
     def test_nenhuma_referencia_a_python_3_13_sobra_no_dockerfile(self, texto):
         assert "3.13" not in texto
