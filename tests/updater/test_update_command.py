@@ -382,6 +382,17 @@ async def test_the_panel_mode_still_points_to_the_host_panel_when_the_version_lo
     assert not cog.bot.pool.update_lock.locked()
 
 
+async def test_the_manual_mode_still_points_to_the_redeploy_when_the_version_lookup_fails(cog, ambiente, monkeypatch):
+    """Contrato 3.8: sem a versão, o modo manual não manda 'tente mais tarde': diz o que fazer (reimplantar) e onde ver as versões."""
+    monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=None))
+
+    texto = await Owner.update.callback(cog, ctx_painel())
+
+    assert "Reimplante" in texto
+    assert "mais tarde" not in texto and "Tente de novo" not in texto
+    assert not cog.bot.pool.update_lock.locked()
+
+
 async def test_when_the_official_version_cannot_be_read_it_says_so(cog, ambiente, monkeypatch):
     monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=None))
 
