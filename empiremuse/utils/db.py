@@ -3,18 +3,18 @@ from __future__ import annotations
 
 import collections.abc
 import json
+import logging
 import os
 import shutil
 import traceback
 from copy import deepcopy
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional, Union
-from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 
 import disnake
 from cachetools import TTLCache
 from disnake.ext import commands
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 from tinydb_serialization import Serializer, SerializationMiddleware
 from tinymongo import TinyMongoClient
 from tinymongo.serializers import DateTimeSerializer
@@ -23,6 +23,16 @@ from empiremuse import paths
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
+
+logger = logging.getLogger(__name__)
+
+# Só estes valores de MONGO_SSL_FIX (sem diferenciar maiúsculas) desligam a validação do certificado TLS (CWE-295).
+MONGO_SSL_FIX_TRUE_VALUES = frozenset({"true", "1", "yes", "on"})
+
+
+def mongo_ssl_fix_enabled() -> bool:
+    """Parse booleano estrito: ausente, vazio, ``false``, ``0`` ou qualquer outro valor mantém a validação ligada."""
+    return os.environ.get("MONGO_SSL_FIX", "").lower() in MONGO_SSL_FIX_TRUE_VALUES
 
 
 class DBModel:
@@ -233,17 +243,16 @@ class MongoDatabase(BaseDB):
     def __init__(self, token: str, timeout=30, cache_maxsize=1000, cache_ttl=300):
         super().__init__(cache_maxsize=cache_maxsize, cache_ttl=cache_ttl)
 
-        fix_ssl = os.environ.get("MONGO_SSL_FIX")
+        tls_options = {}
 
-        if fix_ssl:
-            parse_result = urlparse(token)
-            parameters = parse_qs(parse_result.query)
+        if mongo_ssl_fix_enabled():
+            # Sem a URI na mensagem: ela carrega a senha.
+            logger.warning(
+                "MONGO_SSL_FIX ativo: a validação do certificado TLS do MongoDB está DESLIGADA (só para depuração)."
+            )
+            tls_options = {"tls": True, "tlsAllowInvalidCertificates": True}
 
-            parameters.update({"ssl": ["true"], "tlsAllowInvalidCertificates": ["true"]})
-
-            token = urlunparse(parse_result._replace(query=urlencode(parameters, doseq=True)))
-
-        self._connect = AsyncIOMotorClient(token.strip("<>"), connectTimeoutMS=timeout * 1000)
+        self._connect = AsyncMongoClient(token.strip("<>"), connectTimeoutMS=timeout * 1000, **tls_options)
 
     async def push_data(self, data, *, db_name: Union[DBModel.guilds, DBModel.users], collection: str):
         await self._connect[collection][db_name].insert_one(data)
@@ -324,7 +333,7 @@ class MongoDatabase(BaseDB):
         return [d async for d in cursor]
 
     async def iter_data(self, db_name: str, collection: str, filter: dict = None):
-        """O cursor do motor entregue um documento por vez: nada da coleção é guardado na memória."""
+        """O cursor do PyMongo Async entregue um documento por vez: nada da coleção é guardado na memória."""
         async for document in self._connect[collection][db_name].find(filter or {}):
             yield document
 
