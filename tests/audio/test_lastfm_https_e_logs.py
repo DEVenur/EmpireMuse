@@ -4,7 +4,10 @@ Sessão, bot, player e provedores são fakes; nada sai da máquina.
 """
 
 import contextlib
+import logging
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
+from typing import Any, Self
 from unittest.mock import AsyncMock, Mock
 
 import aiohttp
@@ -14,6 +17,7 @@ from empiremuse.cogs.lastfm import LastFMView, LastFmCog
 from empiremuse.music_cog.tracks import TracksMixin
 from empiremuse.utils.music import lastfm_tools
 from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.music.models import autoqueue_steps
 from tests.support.erros_http import erro_response
@@ -37,36 +41,36 @@ def sem_segredo(texto: str) -> None:
 
 
 class RespostaJson:
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> bool:
         return False
 
-    async def json(self):
+    async def json(self) -> dict[str, int]:
         return {"ok": 1}
 
 
 class SessaoQueCaptura:
     chamadas: list = []
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> bool:
         return False
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, **kwargs: Any) -> RespostaJson:
         self.chamadas.append(("GET", url, kwargs))
         return RespostaJson()
 
-    def post(self, url, **kwargs):
+    def post(self, url: str, **kwargs: Any) -> RespostaJson:
         self.chamadas.append(("POST", url, kwargs))
         return RespostaJson()
 
 
 @pytest.fixture
-def lastfm(monkeypatch):
+def lastfm(monkeypatch: pytest.MonkeyPatch) -> LastFM:
     SessaoQueCaptura.chamadas = []
     monkeypatch.setattr(lastfm_tools, "ClientSession", SessaoQueCaptura)
     api = LastFM.__new__(LastFM)
@@ -77,7 +81,7 @@ def lastfm(monkeypatch):
 PARAMS = {"method": "track.scrobble", "api_key": "AK", "sk": SEGREDO, "api_sig": "SIG"}
 
 
-async def test_the_get_request_uses_https_and_keeps_the_query_params(lastfm):
+async def test_the_get_request_uses_https_and_keeps_the_query_params(lastfm: LastFM) -> None:
     await lastfm.request_lastfm({"method": "artist.getSimilar", "api_key": "AK", "artist": "Artista"})
 
     ((metodo, url, kwargs),) = SessaoQueCaptura.chamadas
@@ -85,7 +89,7 @@ async def test_the_get_request_uses_https_and_keeps_the_query_params(lastfm):
     assert kwargs["params"]["artist"] == "Artista" and kwargs["params"]["api_key"] == "AK"
 
 
-async def test_the_post_request_uses_https_and_sends_the_credentials_in_the_body(lastfm):
+async def test_the_post_request_uses_https_and_sends_the_credentials_in_the_body(lastfm: LastFM) -> None:
     await lastfm.post_lastfm(dict(PARAMS))
 
     ((metodo, url, kwargs),) = SessaoQueCaptura.chamadas
@@ -97,7 +101,7 @@ async def test_the_post_request_uses_https_and_sends_the_credentials_in_the_body
 # ============================================================================ (2) link de autorização do usuário
 
 
-async def test_the_auth_link_sent_to_the_user_is_https():
+async def test_the_auth_link_sent_to_the_user_is_https() -> None:
     visao = LastFMView.__new__(LastFMView)
     visao.auth_url, visao.last_timestamp, visao.check_session_loop = None, None, Mock()
     bot = SimpleNamespace(
@@ -115,7 +119,9 @@ async def test_the_auth_link_sent_to_the_user_is_https():
 # ============================================================================ (3) logs sem a URL com as credenciais
 
 
-async def test_a_scrobble_http_failure_logs_the_status_without_url_or_traceback(capsys):
+async def test_a_scrobble_http_failure_logs_the_status_without_url_or_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     cog = LastFmCog.__new__(LastFmCog)
     cog.bot = SimpleNamespace(
         pool=SimpleNamespace(lastfm_sessions={7: {"scrobble": True, "sessionkey": "sk"}}),
@@ -134,16 +140,17 @@ async def test_a_scrobble_http_failure_logs_the_status_without_url_or_traceback(
         requester=7,
     )
 
-    await cog.startscrooble(player, track, update_np=True, users=[SimpleNamespace(id=7, bot=False)])
+    with caplog.at_level(logging.WARNING):
+        await cog.startscrooble(player, track, update_np=True, users=[SimpleNamespace(id=7, bot=False)])
 
-    saida = capsys.readouterr()
-    visivel = saida.out + saida.err
-    sem_segredo(visivel)
-    assert "last.fm request failed! user: 7" in visivel and "HTTP 200" in visivel
-    assert "Traceback" not in visivel
+    sem_segredo(caplog.text)
+    assert "last.fm request failed! user: 7 - HTTP 200" in caplog.text
+    assert all(registro.exc_info is None for registro in caplog.records)
 
 
-async def test_the_autoqueue_recommendation_http_failure_logs_the_status_without_url_or_traceback(capsys):
+async def test_the_autoqueue_recommendation_http_failure_logs_the_status_without_url_or_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     contexto = SimpleNamespace(
         bot=SimpleNamespace(last_fm=SimpleNamespace(get_similar_artists=AsyncMock(side_effect=erro_com_url_secreta()))),
         lastfm_artists=[],
@@ -155,19 +162,18 @@ async def test_the_autoqueue_recommendation_http_failure_logs_the_status_without
         exception=None, t=None, track_data=track_data, tracks=[], tracks_search=[], tracks_ytsearch=[]
     )
 
-    with contextlib.suppress(Exception):  # o resto do passo (busca nos provedores) não é o assunto aqui
+    with caplog.at_level(logging.WARNING), contextlib.suppress(Exception):  # o resto do passo não é o assunto aqui
         await autoqueue_steps._aq_lastfm_tracks(contexto, req)
 
-    saida = capsys.readouterr()
-    visivel = saida.out + saida.err
-    sem_segredo(visivel)
-    assert "Last.FM recommendations error: HTTP 200" in visivel and "Traceback" not in visivel
+    sem_segredo(caplog.text)
+    assert "Last.FM recommendations error: HTTP 200" in caplog.text
+    assert all(registro.exc_info is None for registro in caplog.records)
 
 
 # ============================================================================ (4) mix: o erro mostrado ao usuário
 
 
-async def test_the_mix_error_shown_to_the_user_has_no_secret():
+async def test_the_mix_error_shown_to_the_user_has_no_secret() -> None:
     falha = AsyncMock(side_effect=erro_com_url_secreta())
     cog = TracksMixin()
     cog.bot = SimpleNamespace(
@@ -193,43 +199,43 @@ class Pedidos:
     chamadas: list = []
     quebrar = False
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> bool:
         return False
 
-    def _resposta(self, metodo, url, kwargs):
+    def _resposta(self, metodo: str, url: str, kwargs: dict[str, Any]) -> "RespostaCom":
         self.chamadas.append((metodo, url, kwargs))
         consulta = "&".join(f"{k}={v}" for k, v in (kwargs.get("params") or {}).items())
         erro = erro_response(200, aiohttp.ContentTypeError, url=f"{url}?{consulta}") if self.quebrar else None
         return RespostaCom(erro)
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, **kwargs: Any) -> "RespostaCom":
         return self._resposta("GET", url, kwargs)
 
-    def post(self, url, **kwargs):
+    def post(self, url: str, **kwargs: Any) -> "RespostaCom":
         return self._resposta("POST", url, kwargs)
 
 
 class RespostaCom:
-    def __init__(self, erro):
+    def __init__(self, erro: Exception | None) -> None:
         self.erro = erro
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *args: object) -> bool:
         return False
 
-    async def json(self):
+    async def json(self) -> dict[str, Any]:
         if self.erro:
             raise self.erro
         return CORPO
 
 
 @pytest.fixture
-def pedidos(monkeypatch):
+def pedidos(monkeypatch: pytest.MonkeyPatch) -> LastFM:
     Pedidos.chamadas, Pedidos.quebrar = [], False
     monkeypatch.setattr(lastfm_tools, "ClientSession", Pedidos)
     api = LastFM.__new__(LastFM)
@@ -242,7 +248,9 @@ def pedidos(monkeypatch):
     [lambda api: api.user_info(SK), lambda api: api.get_session_key(TOKEN)],
     ids=["user_info", "get_session_key"],
 )
-async def test_calls_with_session_secrets_go_by_post_with_the_secrets_only_in_the_body(pedidos, chamar):
+async def test_calls_with_session_secrets_go_by_post_with_the_secrets_only_in_the_body(
+    pedidos: LastFM, chamar: Callable[[LastFM], Awaitable[Any]]
+) -> None:
     await chamar(pedidos)
 
     ((metodo, url, kwargs),) = Pedidos.chamadas
@@ -257,7 +265,9 @@ async def test_calls_with_session_secrets_go_by_post_with_the_secrets_only_in_th
     [lambda api: api.get_token(), lambda api: api.get_similar_artists("Artista")],
     ids=["get_token", "get_similar_artists"],
 )
-async def test_reads_with_only_the_api_key_stay_as_get_with_query_params(pedidos, chamar):
+async def test_reads_with_only_the_api_key_stay_as_get_with_query_params(
+    pedidos: LastFM, chamar: Callable[[LastFM], Awaitable[Any]]
+) -> None:
     await chamar(pedidos)
 
     ((metodo, url, kwargs),) = Pedidos.chamadas
@@ -270,7 +280,9 @@ async def test_reads_with_only_the_api_key_stay_as_get_with_query_params(pedidos
     [lambda api: api.user_info(SK), lambda api: api.get_session_key(TOKEN)],
     ids=["user_info", "get_session_key"],
 )
-async def test_the_error_of_a_call_with_session_secrets_does_not_carry_them(pedidos, chamar):
+async def test_the_error_of_a_call_with_session_secrets_does_not_carry_them(
+    pedidos: LastFM, chamar: Callable[[LastFM], Awaitable[Any]]
+) -> None:
     Pedidos.quebrar = True
 
     with pytest.raises(aiohttp.ContentTypeError) as erro:
@@ -278,3 +290,83 @@ async def test_the_error_of_a_call_with_session_secrets_does_not_carry_them(pedi
 
     texto = str(erro.value) + repr(erro.value)
     assert SK not in texto and TOKEN not in texto and "api_sig" not in texto
+
+
+# ============================================================================ redirecionamento: o corpo com as credenciais não vai para outro lugar
+
+
+class RespostaDeRedirecionamento:
+    def __init__(self, status: int, local: str | None = None) -> None:
+        self.status = status
+        self.headers = {"Location": local} if local else {}
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *args: object) -> bool:
+        return False
+
+    async def json(self) -> dict[str, int]:
+        return {"ok": 1}
+
+
+class SessaoQueRedireciona:
+    """Responde ao 1º POST com ``status`` e ``Location``; como o aiohttp, segue o redirecionamento reenviando o corpo, a menos que ``allow_redirects=False``."""
+
+    status = 307
+    posts: list[tuple[str, dict[str, Any]]] = []
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *args: object) -> bool:
+        return False
+
+    def post(self, url: str, **kwargs: Any) -> RespostaDeRedirecionamento:
+        self.posts.append((url, kwargs))
+        if len(self.posts) == 1:
+            if kwargs.get("allow_redirects", True):
+                self.posts.append(("https://outro.exemplo/destino", kwargs))
+                return RespostaDeRedirecionamento(200)
+            return RespostaDeRedirecionamento(self.status, "https://outro.exemplo/destino")
+        return RespostaDeRedirecionamento(200)
+
+
+@pytest.fixture
+def com_redirecionamento(monkeypatch: pytest.MonkeyPatch) -> LastFM:
+    SessaoQueRedireciona.posts = []
+    monkeypatch.setattr(lastfm_tools, "ClientSession", SessaoQueRedireciona)
+    api = LastFM.__new__(LastFM)
+    api.api_key, api.api_secret = "AK", "SECRET"
+    return api
+
+
+@pytest.mark.parametrize("status", [307, 308])
+@pytest.mark.parametrize("via", ["post_lastfm", "request_lastfm"])
+async def test_a_redirect_of_the_post_with_credentials_is_an_error_and_the_body_is_not_resent(
+    com_redirecionamento: LastFM, status: int, via: str
+) -> None:
+    SessaoQueRedireciona.status = status
+    chamar = getattr(com_redirecionamento, via)
+
+    with pytest.raises(HTTPStatusError) as erro:
+        await chamar({"method": "track.scrobble", "api_key": "AK", "sk": SEGREDO, "api_sig": "SIG"})
+
+    assert safe_error(erro.value) == f"HTTP {status}"
+    ((url, kwargs),) = SessaoQueRedireciona.posts  # um único POST, e nenhum para o destino do redirecionamento
+    assert url == "https://ws.audioscrobbler.com/2.0/" and kwargs["allow_redirects"] is False
+
+
+async def test_a_normal_post_response_still_works_with_redirects_disabled(
+    com_redirecionamento: LastFM, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class SessaoNormal(SessaoQueRedireciona):
+        def post(self, url: str, **kwargs: Any) -> RespostaDeRedirecionamento:
+            self.posts.append((url, kwargs))
+            return RespostaDeRedirecionamento(200)
+
+    monkeypatch.setattr(lastfm_tools, "ClientSession", SessaoNormal)
+    SessaoNormal.posts = []
+
+    assert await com_redirecionamento.post_lastfm({"method": "track.scrobble", "api_key": "AK"}) == {"ok": 1}
+    assert SessaoNormal.posts[0][1]["allow_redirects"] is False
