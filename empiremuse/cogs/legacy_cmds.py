@@ -1044,10 +1044,8 @@ class Owner(commands.Cog):
                 pass
 
             if (filesize := (os.path.getsize(str(source_zip))) / 1024) > 25600:
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(str(source_zip))
-                except Exception:
-                    pass
                 raise GenericError(
                     f"**O tamanho do arquivo ultrapassou do limite de 25MB (tamanho atual: {humanize.naturalsize(filesize)})**"
                 )
@@ -1066,10 +1064,14 @@ class Owner(commands.Cog):
                     delete_after=120,
                 )
 
-                os.remove(str(source_zip))
+                with contextlib.suppress(
+                    OSError
+                ):  # já foi enviado: falhar em apagar o zip não derruba o aviso de sucesso
+                    os.remove(str(source_zip))
 
             except disnake.Forbidden:
-                os.remove(str(source_zip))
+                with contextlib.suppress(OSError):
+                    os.remove(str(source_zip))
                 raise GenericError("Seu DM está desativado!")
 
             if isinstance(ctx, CustomContext):
@@ -1107,13 +1109,25 @@ class Owner(commands.Cog):
                     continue
                 try:
                     if Path(f).resolve() == env_temp.resolve():
-                        if not env_written:  # o único .env do zip é o mascarado, uma vez só
-                            zipf.write(str(env_temp), ".env")
-                            env_written = True
-                    elif not is_export_refused(f):
-                        zipf.write(f)
+                        if env_written:  # o único .env do zip é o mascarado, uma vez só
+                            continue
+                        source, arcname = str(env_temp), ".env"
+                    elif is_export_refused(f):
+                        continue
+                    else:
+                        source, arcname = f, None
+                    with open(source, "rb"):  # origem que sumiu ou virou laço depois da checagem: pula
+                        pass
                 except OSError, ValueError, RuntimeError:
                     continue
+                # Daqui em diante um OSError é de ESCRITA no zip (ENOSPC, EIO, EDQUOT): propaga, e o exportsource apaga o
+                # source.zip parcial em vez de mandá-lo ao dono.
+                try:
+                    zipf.write(source, arcname)
+                except FileNotFoundError, ValueError, RuntimeError:
+                    continue
+                if arcname == ".env":
+                    env_written = True
 
     @commands.is_owner()
     @commands.command(hidden=True)
