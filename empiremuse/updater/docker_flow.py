@@ -189,12 +189,12 @@ async def watch_helper(
     code = state.exit_code
     await report.channel(describe_exit(code))
     if code != 0:
-        await _send_log(client, report, pending, secrets)
+        await send_helper_log(client, report, pending, secrets)
     await _finish(client, runtime_dir)
     return code
 
 
-async def _send_log(client: ProxyClient, report: Report, pending: PendingUpdate, secrets: frozenset[str]) -> None:
+async def send_helper_log(client: ProxyClient, report: Report, pending: PendingUpdate, secrets: frozenset[str]) -> None:
     """DM a quem pediu com as últimas linhas do log do auxiliar, já mascaradas (a etapa exata só aparece aqui)."""
     try:
         lines = await client.helper_logs(DM_LOG_LINES)

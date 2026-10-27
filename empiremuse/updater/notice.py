@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import os
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -20,7 +21,14 @@ import disnake
 
 from empiremuse import paths
 from empiremuse.rules.release import Version, changelog_sections
-from empiremuse.updater.docker_flow import UNKNOWN_EXIT, WATCH_INTERVAL, WATCH_TIMEOUT, describe_exit
+from empiremuse.rules.owner_shell import collect_secret_values
+from empiremuse.updater.docker_flow import (
+    UNKNOWN_EXIT,
+    WATCH_INTERVAL,
+    WATCH_TIMEOUT,
+    describe_exit,
+    send_helper_log,
+)
 from empiremuse.updater.git_flow import UpdateError, installed_version
 from empiremuse.updater.proxy_client import HelperState, ProxyClient
 from empiremuse.updater.state import PendingUpdate, clear_pending, read_pending, write_pending
@@ -178,7 +186,7 @@ def build_docker_notice(
 
 async def deliver_docker_notice(
     pool: Any,
-    client: ProxyClient,
+    client: ProxyClient | None,
     *,
     runtime_dir: Path | None = None,
     now: Callable[[], float] = time.time,
@@ -189,7 +197,10 @@ async def deliver_docker_notice(
 ) -> None:
     """Aviso pós-boot do fluxo Docker: lê o estado do auxiliar (espera se ainda roda), confere a versão e avisa uma vez.
 
-    O auxiliar é removido no fim (erro ignorado) e o pendente é apagado ANTES do envio. Sem bot pronto não faz nada.
+    Com saída ≠ 0 o log do auxiliar (mascarado) vai por DM a quem pediu ANTES de o auxiliar ser removido: nos casos 70 e
+    71 o processo que acompanhava morreu na troca do container, e este aviso é a única chance de o dono ver o detalhe.
+    Sem ``client`` (proxy não configurado) o estado do auxiliar é desconhecido. O auxiliar é removido no fim (erro
+    ignorado) e o pendente é apagado ANTES do envio. Sem bot pronto não faz nada.
     """
     runtime_dir = runtime_dir or paths.get_runtime_dir()
     pending = read_pending(runtime_dir, now())
@@ -198,11 +209,15 @@ async def deliver_docker_notice(
     bot = _sender(pool, pending)
     if bot is None:
         return
-    state = await _wait_for_helper(client, sleep, timeout, interval)
-    try:
-        await client.remove_helper()
-    except UpdateError:
-        logger.warning("update: não consegui remover o auxiliar depois do aviso pós-boot.")
+    state = await _wait_for_helper(client, sleep, timeout, interval) if client is not None else None
+    if client is not None:
+        if state is not None and state.exit_code != 0:
+            secrets = collect_secret_values(getattr(pool, "config", {}), os.environ)
+            await send_helper_log(client, DiscordReport(bot, pending), pending, secrets)
+        try:
+            await client.remove_helper()
+        except UpdateError:
+            logger.warning("update: não consegui remover o auxiliar depois do aviso pós-boot.")
     clear_pending(runtime_dir)  # uma única entrega, mesmo que o envio falhe
     running = image_version_fn()
     changelog = ""
@@ -256,8 +271,8 @@ async def on_pool_ready(
     if pending.flow == "docker":
         socket = pool.config.get("UPDATE_PROXY_SOCKET")
         if not socket:
-            logger.warning("update: pendente do fluxo Docker sem UPDATE_PROXY_SOCKET configurado; o aviso não sai.")
-            return
-        await deliver_docker_notice(pool, ProxyClient(socket), runtime_dir=runtime_dir, now=now)
+            logger.warning("update: pendente do fluxo Docker sem UPDATE_PROXY_SOCKET; o aviso sai como desconhecido.")
+        client = ProxyClient(socket) if socket else None
+        await deliver_docker_notice(pool, client, runtime_dir=runtime_dir, now=now)
         return
     await deliver_update_notice(pool, runtime_dir=runtime_dir, now=now, detect_version=detect_version)

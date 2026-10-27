@@ -87,6 +87,20 @@ async def _get_limited(session: aiohttp.ClientSession, url: str, limit: int) -> 
         return response.status, await _read_limited(response, limit), location
 
 
+def _is_digest_url(url: str, tag: str) -> bool:
+    """O ``image-digest.txt`` da PRÓPRIA tag deste repositório, no host permitido: caminho exato, sem usuário, porta,
+    query nem fragmento. Qualquer outro endereço (outro repositório, outra tag, outro arquivo) não torna a release elegível."""
+    parts = urllib.parse.urlsplit(url)
+    expected = f"/{branding.GITHUB_REPO}/releases/download/{tag}/{DIGEST_ASSET}"
+    return (
+        _url_allowed(url)
+        and parts.netloc.lower() == parts.hostname
+        and parts.path == expected
+        and not parts.query
+        and not parts.fragment
+    )
+
+
 def _eligible(item: object) -> Release | None:
     if not isinstance(item, dict):
         return None
@@ -99,7 +113,7 @@ def _eligible(item: object) -> Release | None:
     for asset in item.get("assets") or []:
         if isinstance(asset, dict) and asset.get("name") == DIGEST_ASSET:
             url = asset.get("browser_download_url")
-            if isinstance(url, str) and url:
+            if isinstance(url, str) and _is_digest_url(url, tag):
                 return Release(version, tag, url)
     return None
 
