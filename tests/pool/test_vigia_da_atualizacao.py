@@ -88,13 +88,22 @@ async def test_the_watch_does_not_call_on_pool_ready_while_the_pool_is_unhealthy
     pendente, ao_ficar_pronto, monkeypatch
 ):
     monkeypatch.setattr(client, "UPDATE_WATCH_INTERVAL", 0)
-    checagens: list = []
-    pool = pool_que_fica_saudavel_na_checagem(10**6, checagens)
+    cinco_checagens = asyncio.Event()
+
+    class Checagens(list):
+        def append(self, item):
+            super().append(item)
+            if len(self) >= 5:
+                cinco_checagens.set()
+
+    pool = pool_que_fica_saudavel_na_checagem(10**6, Checagens())
 
     pool.start_update_watch()
-    while len(checagens) < 5:
-        await asyncio.sleep(0)
-    pool.update_watch_task.cancel()
+    try:
+        await asyncio.wait_for(cinco_checagens.wait(), timeout=5)
+    finally:
+        pool.update_watch_task.cancel()
+        await asyncio.gather(pool.update_watch_task, return_exceptions=True)
 
     ao_ficar_pronto.assert_not_awaited()
     assert not pool.update_ready_checked

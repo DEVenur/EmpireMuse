@@ -165,21 +165,23 @@ async def test_a_held_lock_refuses_a_second_update_and_is_not_released_by_the_re
 
 
 async def test_two_updates_at_the_same_time_only_one_proceeds(cog, ambiente, monkeypatch):
-    liberar = asyncio.Event()
+    liberar, planejando = asyncio.Event(), asyncio.Event()
 
     async def planejar_devagar(*args, **kwargs):
+        planejando.set()
         await liberar.wait()
         return None
 
     (ambiente.projeto / ".git").mkdir()
     monkeypatch.setattr(legacy_cmds, "plan_git_update", planejar_devagar)
     primeiro = asyncio.create_task(Owner.update.callback(cog, ctx_prefixo()))
-    await asyncio.sleep(0)  # o 1º já tem a trava e espera o plano
-
-    with pytest.raises(GenericError):
-        await Owner.update.callback(cog, ctx_prefixo())
-    liberar.set()
-    await primeiro
+    try:
+        await asyncio.wait_for(planejando.wait(), timeout=5)  # o 1º já tem a trava e espera o plano
+        with pytest.raises(GenericError):
+            await Owner.update.callback(cog, ctx_prefixo())
+    finally:
+        liberar.set()
+        await asyncio.wait_for(primeiro, timeout=5)
 
     assert not cog.bot.pool.update_lock.locked()
 
