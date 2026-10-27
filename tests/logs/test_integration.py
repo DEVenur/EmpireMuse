@@ -441,3 +441,131 @@ class TestCodigoDeErroPonteAPonta:
 
         for texto in destinos.ambos():
             assert "ERR-FORJADO" not in texto and len(cabecalhos(texto)) == 2
+
+
+# ============================================================================ V-K8-1 — a impressão digital vem do traceback ESTRUTURADO
+
+
+def mensagem_forjada(n: int) -> str:
+    """Mensagem de exceção com uma linha que PARECE um quadro do traceback, diferente a cada erro."""
+    return f'falha {n}\n  File "x{n}.py", line {n}, in f{n}'
+
+
+def falha_sem_codigo(mensagem: str) -> None:
+    try:
+        _levanta(mensagem)
+    except ValueError:
+        logging.getLogger("empiremuse.errors").error("Erro inesperado em cmd", exc_info=True)
+
+
+class TestImpressaoDigitalEstruturada:
+    def test_a_hundred_errors_of_one_path_with_forged_frame_lines_in_the_message_still_aggregate(self, montar, relogio):
+        destinos = montar()
+
+        for n in range(100):
+            falha_sem_codigo(mensagem_forjada(n))
+        relogio.avancar(61)
+        tick_logging()
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 1
+            assert texto.count("repetida 99× em 60 s") == 1 and texto.count("↻") == 1
+            assert len(cabecalhos(texto)) == 2
+            assert "x57.py" not in texto, "um erro suprimido não pode aparecer no log"
+
+    def test_the_same_with_a_valid_error_code_gives_one_full_forty_nine_lines_and_the_summary(self, montar, relogio):
+        destinos = montar()
+
+        for n in range(100):
+            falha_com_codigo(f"ERR-{n:06X}", mensagem_forjada(n))
+        relogio.avancar(61)
+        tick_logging()
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 1
+            assert texto.count("repetida 50× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)") == 1
+            assert texto.count("traceback igual ao de ERR-000000") == 49 + 1
+            assert all(f"ERR-{n:06X}" in texto for n in range(50))
+
+    def test_one_forged_frame_line_in_the_message_does_not_split_the_key_of_two_equal_errors(self, montar):
+        destinos = montar()
+
+        falha_sem_codigo("igual")
+        falha_sem_codigo(mensagem_forjada(1))
+        flush_logging()
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 1 and "repetida 1×" in texto
+
+    def test_two_genuinely_different_call_paths_are_still_different_keys_even_with_equal_messages(self, montar):
+        destinos = montar()
+        log = logging.getLogger("empiremuse.errors")
+
+        for ponto in (ponto_a, ponto_b):
+            try:
+                ponto()
+            except ValueError:
+                log.error("Erro inesperado em cmd", exc_info=True)
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
+
+    def test_a_message_that_copies_the_frame_lines_of_another_path_does_not_merge_with_it(self, montar):
+        destinos = montar()
+        log = logging.getLogger("empiremuse.errors")
+        try:
+            ponto_a()
+        except ValueError:
+            log.error("Erro inesperado em cmd", exc_info=True)
+        try:
+            _levanta('x\n  File "' + __file__ + '", line 1, in ponto_a')
+        except ValueError:
+            log.error("Erro inesperado em cmd", exc_info=True)
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
+
+
+def duas_causas(qual: int) -> None:
+    """Mesmo arquivo e mesma função, mas o ``raise`` está em linhas diferentes: são pontos de chamada diferentes."""
+    if qual == 1:
+        raise ValueError("a")
+    raise ValueError("b")
+
+
+class TestPontosDeChamadaDiferentes:
+    def test_the_same_function_raising_on_two_different_lines_gives_two_full_tracebacks(self, montar):
+        destinos = montar()
+        log = logging.getLogger("empiremuse.errors")
+
+        for qual in (1, 2):
+            try:
+                duas_causas(qual)
+            except ValueError:
+                log.error("Erro inesperado em cmd", exc_info=True)
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
+
+    def test_two_coded_errors_from_two_call_sites_are_both_full_without_a_pointer(self, montar):
+        destinos = montar()
+        log = logging.getLogger("empiremuse.errors")
+
+        for ponto, codigo in ((ponto_a, "ERR-AAAAAA"), (ponto_b, "ERR-BBBBBB")):
+            try:
+                ponto()
+            except ValueError:
+                log.error("Erro inesperado em cmd [%s]", codigo, exc_info=True, extra={"error_code": codigo})
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 2 and "traceback igual" not in texto
+
+    def test_the_source_lines_and_the_final_message_do_not_split_the_key(self, montar):
+        destinos = montar()
+
+        falha_sem_codigo("primeira")
+        falha_sem_codigo("segunda, com outro texto")
+        flush_logging()
+
+        for texto in destinos.ambos():
+            assert texto.count("Traceback (most recent call last)") == 1 and "repetida 1×" in texto

@@ -365,6 +365,7 @@ def com_codigo(codigo="ERR-AAAAAA", *, caminho="A", mensagem="boom", fonte="cham
     return record
 
 
+# A impressão digital do traceback (K8b/V-K8-1) vem do traceback ESTRUTURADO, que só existe no pipeline real: ver test_integration.py.
 class TestCodigoDeErro:
     def test_the_second_coded_error_of_the_same_path_is_one_line_with_its_code_and_a_pointer_to_the_first(
         self, agg, emitidos
@@ -413,28 +414,6 @@ class TestCodigoDeErro:
         assert agg.filter(segunda) is True
 
         assert segunda.getMessage() == primeira_leitura and segunda.getMessage().count("traceback igual ao de") == 1
-
-    def test_without_a_traceback_difference_a_different_call_site_is_a_different_key(self, agg, emitidos):
-        a = com_codigo("ERR-AAAAAA", caminho="A")
-        b = com_codigo("ERR-BBBBBB", caminho="B")
-
-        assert agg.filter(a) is True and agg.filter(b) is True
-
-        assert a.exc_text and b.exc_text
-        assert "traceback igual" not in a.getMessage() and "traceback igual" not in b.getMessage()
-
-    def test_k8b_without_codes_two_call_sites_with_the_same_template_and_type_are_both_full(self, agg):
-        a, b = com_codigo(None, caminho="A"), com_codigo(None, caminho="B")
-
-        assert agg.filter(a) is True and agg.filter(b) is True
-
-        assert a.exc_text and b.exc_text
-
-    def test_k8b_a_different_line_in_the_same_file_is_a_different_call_site(self, agg):
-        a, b = com_codigo(None), com_codigo(None)
-        b.exc_text = b.exc_text.replace("line 20", "line 21")
-
-        assert agg.filter(a) is True and agg.filter(b) is True
 
     def test_k8c_same_path_with_different_exception_messages_is_the_same_key(self, agg, relogio, emitidos):
         assert agg.filter(com_codigo(None, mensagem="boom 1")) is True
