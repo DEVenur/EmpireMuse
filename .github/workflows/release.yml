@@ -168,10 +168,25 @@ jobs:
           DIGEST: ${{ steps.digest.outputs.value }}
           IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
         run: |
-          cosign verify \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --certificate-identity "$IDENTITY" \
-            "or4cu1o/empiremuse@${DIGEST}" > /dev/null
+          # O índice de referrers do Docker Hub é eventualmente consistente: logo depois do sign a assinatura pode ainda
+          # não aparecer. Repete com espera; a identidade e o emissor continuam exatos e, esgotadas as tentativas, falha.
+          attempts=6
+          for attempt in $(seq 1 "$attempts"); do
+            echo "Verificação da assinatura: tentativa ${attempt}/${attempts}"
+            if cosign verify \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-identity "$IDENTITY" \
+              "or4cu1o/empiremuse@${DIGEST}" > /dev/null; then
+              echo "Assinatura verificada na tentativa ${attempt}."
+              exit 0
+            fi
+            if [ "$attempt" -lt "$attempts" ]; then
+              echo "Assinatura ainda não encontrada; nova tentativa em 10 s."
+              sleep 10
+            fi
+          done
+          echo "::error::A assinatura de ${DIGEST} não foi verificada em ${attempts} tentativas; a versão não será anunciada."
+          exit 1
 
   github-release:
     name: Criar a GitHub Release com o digest
