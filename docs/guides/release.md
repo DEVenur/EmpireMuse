@@ -200,3 +200,10 @@ Se for detectado qualquer defeito de código, falha de empacotamento ou inconsis
 2. Após o merge na `main`, incremente o número da versão conforme as regras do SemVer:
    - Se o erro ocorreu em uma versão estável (ex.: `v2.0.2`), publique a versão corretiva de patch seguinte (`v2.0.3`);
 3. Crie e envie a nova tag Git no commit atualizado da `main`.
+
+### 6.1 Falha do workflow depois do push da imagem
+A imagem é enviada ao Docker Hub **antes** da assinatura e da GitHub Release. Se `cosign sign`, `cosign verify` ou a criação da Release falharem:
+- A versão **não** é anunciada ao bot (sem Release com `image-digest.txt`), mas a imagem já publicada continua no Hub;
+- **Não reexecute o job `docker`**: ele recusa a tag (a imagem já existe), de propósito. Reconstruir trocaria o digest, e assinar uma imagem já existente sem prova de que veio desta tag deixaria um push indevido (por exemplo, com um token vazado do Hub) ganhar assinatura;
+- Se só o job `github-release` falhou, reexecute **apenas esse job** (o `docker` já terminou e o digest é o mesmo);
+- Nos demais casos, trate como defeito: publique a próxima versão de patch, como acima.

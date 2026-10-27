@@ -18,6 +18,13 @@ jobs:
     name: Verificar se tag pertence a origin/main
     runs-on: ubuntu-latest
     steps:
+      - name: Validar o formato da tag
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Tag fora do formato vX.Y.Z[-rc.N]; nada é publicado."
+            exit 1
+          fi
+
       - name: Checkout do repositório
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
