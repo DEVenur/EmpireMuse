@@ -9,7 +9,7 @@ Guia prático para execução do **EmpireMuse** em contêineres Docker utilizand
 A imagem Docker do EmpireMuse foi projetada para oferecer uma implantação simples, segura e auto-contida em uma única instância:
 
 - **Bot e Lavalink no mesmo contêiner**: O bot em Python 3.14 e o servidor de áudio Lavalink 4.2.2 rodam coordenados no mesmo contêiner, eliminando a complexidade de orquestrar múltiplos serviços.
-- **Runtime Java 21**: Inclui o JRE oficial do **Eclipse Temurin 21**, atendendo aos requisitos do Lavalink e seus plugins.
+- **Runtime Java 25**: Inclui o JRE oficial do **Eclipse Temurin 25**, atendendo aos requisitos do Lavalink e seus plugins.
 - **Isolamento de rede local**: O Lavalink é vinculado estritamente ao endereço de loopback (`127.0.0.1` via `SERVER_ADDRESS`), comunicando-se exclusivamente com o bot via socket interno e nunca expondo portas de áudio para fora do contêiner.
 - **Segurança e privilégios mínimos**:
   - Usuário não-root dedicado com UID/GID fixo `10001:10001` (`empiremuse`) e shell restrito (`/usr/sbin/nologin`).
@@ -203,7 +203,7 @@ A imagem Docker já traz pré-configuradas as seguintes variáveis de ambiente o
 | `RUN_LOCAL_LAVALINK` | `true` | Ativa a inicialização automática do Lavalink no contêiner. |
 | `LAVALINK_OFFLINE` | `true` | Modo offline: impede downloads de binários e valida os arquivos existentes por SHA-256. |
 | `LAVALINK_HOME` | `/opt/lavalink` | Diretório dos binários validados do Lavalink (`Lavalink.jar`, `application.yml`, `plugins/`). |
-| `LAVALINK_JAVA_PATH` | `/opt/java/openjdk/bin/java` | Caminho do executável do runtime Java 21 JRE pré-instalado. |
+| `LAVALINK_JAVA_PATH` | `/opt/java/openjdk/bin/java` | Caminho do executável do runtime Java 25 JRE pré-instalado. |
 | `PORT` | `6000` | Porta do servidor HTTP Tornado (status, RPC e painel). |
 
 > [!IMPORTANT]
