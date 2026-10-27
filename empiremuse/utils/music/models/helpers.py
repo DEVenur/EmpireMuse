@@ -54,6 +54,8 @@ def log_lavalink_failure(what: str, *, message, cause, severity, node) -> str:
         severity,
         plain_snippet(message, LAVALINK_LOG_LIMIT),
         plain_snippet(cause, LAVALINK_LOG_LIMIT),
+        # O agregador usa o código para apontar o traceback já impresso (K8/K15).
+        extra={"error_code": code} if code else None,
     )
     return code
 

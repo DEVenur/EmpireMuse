@@ -106,6 +106,26 @@ def _node_sample(identifier: str, node) -> NodeSample:
     )
 
 
+def _read_process_stats(process_stats, java_pid):
+    """Lê o ``psutil`` (bloqueia): ``(figuras do Python, figuras do Java ou None)``; roda numa thread."""
+    return process_stats(), (process_stats(java_pid) if java_pid else None)
+
+
+def _with_java_figures(nodes: list[NodeSample], java_cpu, java_rss) -> list[NodeSample]:
+    """Completa o nó ``LOCAL`` com CPU e memória do processo Java onde o ``stats`` do nó não trouxe."""
+    return [
+        NodeSample(
+            node.identifier,
+            node.players,
+            node.cpu_percent if node.cpu_percent is not None else java_cpu,
+            node.memory_mib if node.memory_mib is not None else java_rss,
+        )
+        if node.identifier == "LOCAL"
+        else node
+        for node in nodes
+    ]
+
+
 def parse_owner_ids(raw: Optional[str]) -> list[int]:
     """IDs numéricos de ``OWNER_IDS`` (separados por ``||``); vazios são ignorados e inválidos, descartados com aviso."""
     ids = []
@@ -343,7 +363,14 @@ class BotPool:
                 if interval > 0 and now - last_summary >= interval:
                     last_summary = now
                     snapshot = self.metrics.snapshot_and_reset(now)
-                    inputs = await asyncio.to_thread(self._collect_summary_inputs, process_stats)
+                    # As amostras dos bots, players e nós são montadas AQUI, na thread do loop (que é quem os muda); só a
+                    # leitura do psutil, que bloqueia, vai para uma thread.
+                    inputs = self._collect_summary_inputs()
+                    java_pid = inputs.pop("java_pid")
+                    process, java = await asyncio.to_thread(_read_process_stats, process_stats, java_pid)
+                    inputs["cpu_percent"], inputs["rss_mib"] = process
+                    if java is not None:
+                        inputs["nodes"] = _with_java_figures(inputs["nodes"], *java)
                     for line in format_summary(snapshot, **inputs):
                         # O 📊 é do formatter do console (emoji da categoria empiremuse.metrics); o arquivo não leva emoji.
                         summary_logger.info("%s", line.removeprefix(SUMMARY_PREFIX))
@@ -355,8 +382,11 @@ class BotPool:
     def _count_active_players(self) -> int:
         return sum(len(bot.music.players) for bot in self.get_all_bots() if getattr(bot, "music", None))
 
-    def _collect_summary_inputs(self, process_stats) -> dict:
-        """Amostras do resumo, só do que já está em memória (``bot.latency``, ``player.ping``, ``node.stats``, ``psutil``)."""
+    def _collect_summary_inputs(self) -> dict:
+        """Amostras do resumo, só do que já está em memória (``bot.latency``, ``player.ping``, ``node.stats``).
+
+        Roda na thread do loop. O ``cpu_percent`` e o ``rss_mib`` do processo vêm depois, do ``psutil`` (``java_pid`` é o do Lavalink local).
+        """
         bots = [bot for bot in self.get_all_bots() if getattr(bot, "music", None)]
         gateway_ms, voice_ms, players_active = [], [], 0
         nodes: dict[str, NodeSample] = {}
@@ -371,24 +401,15 @@ class BotPool:
             for identifier, node in bot.music.nodes.items():
                 if identifier not in nodes:
                     nodes[identifier] = _node_sample(identifier, node)
-        cpu_percent, rss_mib = process_stats()
         java_pid = getattr(getattr(self, "lavalink_instance", None), "pid", None)
-        if java_pid and "LOCAL" in nodes:
-            java_cpu, java_rss = process_stats(java_pid)
-            local = nodes["LOCAL"]
-            nodes["LOCAL"] = NodeSample(
-                local.identifier,
-                local.players,
-                local.cpu_percent if local.cpu_percent is not None else java_cpu,
-                local.memory_mib if local.memory_mib is not None else java_rss,
-            )
         return {
+            "java_pid": java_pid if java_pid and "LOCAL" in nodes else None,
             "guilds": len({getattr(guild, "id", guild) for bot in bots for guild in bot.guilds}),
             "players_active": players_active,
             "gateway_ms": gateway_ms,
             "voice_ms": voice_ms,
-            "cpu_percent": cpu_percent,
-            "rss_mib": rss_mib,
+            "cpu_percent": None,
+            "rss_mib": None,
             "nodes": list(nodes.values()),
         }
 

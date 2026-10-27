@@ -241,6 +241,8 @@ def _he_log_exception(self, event, track) -> str:
         event.severity,
         plain_snippet(event.message, LAVALINK_LOG_LIMIT),
         plain_snippet(cause, LAVALINK_LOG_LIMIT),
+        # O agregador usa o código para apontar o traceback já impresso (K8/K15).
+        extra={"error_code": code} if code else None,
     )
     return code
 
