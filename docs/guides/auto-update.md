@@ -43,6 +43,8 @@ Pré-requisito: o repositório com **Releases imutáveis** ligadas e uma release
    gh release download vX.Y.Z --repo EmpireCommunity/EmpireMuse -p image-digest.txt -O -
    ```
 
+   Na primeira vez, confira a assinatura desse digest com o `cosign verify` da seção 5.3 do [`release.md`](release.md) antes de fixá-lo.
+
    Mantenha a linha do bot na forma exata, com 4 espaços (`    image: or4cu1o/empiremuse:X.Y.Z@sha256:…`): é a que o auxiliar edita. O proxy usa o nome completo (`docker.io/…`) para nunca casar com essa linha.
 2. **`DOCKER_GID` no `.env`.** Descubra o grupo dono do socket e preencha a variável (obrigatória enquanto o `updater-proxy` existir; só o proxy recebe esse grupo):
 
@@ -55,12 +57,16 @@ Pré-requisito: o repositório com **Releases imutáveis** ligadas e uma release
 
    ```bash
    chown root:root <pasta> <pasta>/docker-compose.yml <pasta>/.env
-   chmod go-w <pasta> <pasta>/docker-compose.yml <pasta>/.env
+   chmod go-w <pasta> <pasta>/docker-compose.yml
+   chmod 600 <pasta>/.env
    ```
 
+   O `chmod 600` no `.env` também impede que outros usuários do host leiam os segredos (a checagem do auxiliar só barra escrita).
+
    Vale o mesmo, por boa prática, para as pastas-pai e para arquivos que o compose cita (como `env_file`). Quem consegue gravar o compose ou o `.env` decide o que o auxiliar sobe como root.
-5. **Validar e implantar.** `docker compose -f docker-compose.yml config -q` com o `.env` preenchido; depois reimplante o projeto pelo painel.
-6. **Sem o auto-update**, apague o serviço `updater-proxy`, o volume `updater-sock` e, no bot, `UPDATE_PROXY_SOCKET` e o volume.
+5. **Conferir antes.** `docker compose -f docker-compose.yml config -q` com o `.env` preenchido, e o `docker inspect empiremuse` (container do bot) em um projeto já implantado: o label `com.docker.compose.project` tem de ser `empiremuse` e o `com.docker.compose.project.working_dir` tem de ser igual ao `UPDATER_PROJECT_DIR`. Se diferir, o auxiliar não enxerga o mesmo projeto.
+6. **Implantar e conferir depois.** Reimplante o projeto pelo painel. No container do proxy, `/run/empiremuse-updater` deve ser `10002:10001` modo `0750` e o `updater.sock` modo `0660`. Se um volume `updater-sock` antigo subiu com dono `root`, remova esse volume e reimplante.
+7. **Sem o auto-update**, apague o serviço `updater-proxy`, o volume `updater-sock` e, no bot, `UPDATE_PROXY_SOCKET` e o volume.
 
 ### 2.2 Códigos de saída do auxiliar
 
