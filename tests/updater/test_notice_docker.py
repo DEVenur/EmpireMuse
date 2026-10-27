@@ -54,6 +54,9 @@ class ClienteFalso:
         self.sequencia = sequencia
         self.runtime = runtime
         self.remocoes = 0
+        self.eventos: list[str] = []
+        self.linhas: list[str] = []
+        self.falha_nos_logs: Exception | None = None
         self.falha_na_remocao: Exception | None = None
         self.status_no_primeiro_estado: str | None = None
 
@@ -65,11 +68,15 @@ class ClienteFalso:
 
     async def remove_helper(self):
         self.remocoes += 1
+        self.eventos.append("remove")
         if self.falha_na_remocao:
             raise self.falha_na_remocao
 
     async def helper_logs(self, tail: int = 20):
-        return []
+        self.eventos.append("logs")
+        if self.falha_nos_logs:
+            raise self.falha_nos_logs
+        return list(self.linhas)
 
 
 class Pausas:
@@ -254,14 +261,31 @@ async def test_on_pool_ready_marks_ready_then_runs_the_docker_branch_with_the_co
     assert not pending_path(runtime).exists()
 
 
-async def test_on_pool_ready_without_a_proxy_socket_keeps_the_pending_update_and_sends_nothing(runtime, caplog):
+async def test_on_pool_ready_without_a_proxy_socket_sends_the_unknown_notice_and_clears_the_pending_update(
+    runtime, monkeypatch
+):
+    """Sem socket não há cliente: o aviso sai como "resultado desconhecido" e o pendente não bloqueia o /update por 24 h."""
     bot = bot_falso()
+
+    def nunca(caminho):
+        raise AssertionError("sem socket configurado nenhum ProxyClient pode ser criado")
+
+    monkeypatch.setattr(notice, "ProxyClient", nunca)
+    estados: list[bool] = []
+    original = bot.canal.send
+
+    async def enviar(*args, **kwargs):
+        estados.append(pending_path(runtime).exists())
+        return await original(*args, **kwargs)
+
+    bot.canal.send = enviar
     write_pending(runtime, pendente_docker(status="pending"))
 
     await notice.on_pool_ready(pool_saudavel(bot, socket=""), runtime_dir=runtime, now=lambda: AGORA)
 
-    bot.canal.send.assert_not_awaited()
-    assert json.loads(pending_path(runtime).read_text())["flow"] == "docker" and pending_path(runtime).exists()
+    embed = original.await_args.kwargs["embed"]
+    assert embed.colour.value == notice.COLOR_UNKNOWN and DESCONHECIDO in embed.description
+    assert estados == [False] and not pending_path(runtime).exists()  # apagado ANTES do envio
 
 
 async def test_on_pool_ready_with_an_unhealthy_pool_leaves_a_docker_pending_update_alone(runtime, monkeypatch):
@@ -274,3 +298,54 @@ async def test_on_pool_ready_with_an_unhealthy_pool_leaves_a_docker_pending_upda
     await notice.on_pool_ready(pool, runtime_dir=runtime, now=lambda: AGORA)
 
     assert pending_path(runtime).read_bytes() == antes
+
+
+# ============================================================================ log do auxiliar por DM também no aviso pós-boot (70/71 não passam pelo watch_helper)
+
+
+def pool_com_config(*bots, **config):
+    pool = pool_com(*bots)
+    pool.config = config
+    return pool
+
+
+@pytest.mark.parametrize("versao", [DE, None], ids=["voltou-para-a-anterior", "versao-ilegivel"])
+async def test_a_failed_helper_sends_the_masked_log_by_dm_before_the_helper_is_removed(runtime, versao):
+    bot = bot_falso()
+    cliente = ClienteFalso([estado(rodando=False, codigo=70)])
+    cliente.linhas = ["empiremuse-updater: up 70", "empiremuse-updater: token TOKEN-SECRETO-123 vazou"]
+    write_pending(runtime, pendente_docker())
+
+    await entregar_docker(pool_com_config(bot, TOKEN="TOKEN-SECRETO-123"), cliente, runtime, versao)
+
+    bot.usuario.send.assert_awaited_once()
+    chamada = bot.usuario.send.await_args
+    texto = (chamada.args[0] if chamada.args else chamada.kwargs.get("content") or "") + (
+        chamada.kwargs["embed"].description if chamada.kwargs.get("embed") else ""
+    )
+    assert "empiremuse-updater: up 70" in texto and "TOKEN-SECRETO-123" not in texto
+    assert cliente.eventos == ["logs", "remove"]  # o log é lido ANTES de o auxiliar ser apagado
+
+
+async def test_a_successful_helper_sends_no_dm_and_reads_no_log(runtime):
+    bot = bot_falso()
+    cliente = ClienteFalso([estado(rodando=False, codigo=0)])
+    write_pending(runtime, pendente_docker())
+
+    await entregar_docker(pool_com_config(bot), cliente, runtime, PARA)
+
+    bot.usuario.send.assert_not_awaited()
+    assert cliente.eventos == ["remove"]
+
+
+async def test_a_failing_log_read_does_not_stop_the_notice_or_the_removal(runtime):
+    bot = bot_falso()
+    cliente = ClienteFalso([estado(rodando=False, codigo=71)])
+    cliente.falha_nos_logs = UpdateError("proxy de atualização inacessível")
+    write_pending(runtime, pendente_docker())
+
+    await entregar_docker(pool_com_config(bot), cliente, runtime, DE)
+
+    bot.canal.send.assert_awaited_once()
+    bot.usuario.send.assert_not_awaited()
+    assert cliente.eventos == ["logs", "remove"] and not pending_path(runtime).exists()

@@ -74,7 +74,7 @@ async def sessao():
 def release_json(
     tag: str, *, draft=False, prerelease=False, immutable=True, asset="image-digest.txt", url=None
 ) -> dict:
-    assets = [{"name": asset, "browser_download_url": url or f"https://github.com/x/y/releases/download/{tag}/{asset}"}]
+    assets = [{"name": asset, "browser_download_url": url or f"{BASE_ASSET}/{tag}/{asset}"}]
     return {
         "tag_name": tag,
         "draft": draft,
@@ -89,13 +89,21 @@ def responder_json(corpo) -> web.Response:
 
 
 API = "/repos/EmpireCommunity/EmpireMuse/releases"
+BASE_ASSET = "https://github.com/EmpireCommunity/EmpireMuse/releases/download"
 
 
 # ============================================================================ list_releases
 
 
+@pytest.fixture
+def hosts_do_github(releases, monkeypatch):
+    """Para os testes de elegibilidade o asset vive no host de verdade (``github.com``, https); só a API fica no servidor local."""
+    monkeypatch.setattr(releases, "ALLOWED_REDIRECT_HOSTS", ("github.com",))
+    monkeypatch.setattr(releases, "ALLOWED_REDIRECT_SCHEMES", ("https",))
+
+
 async def test_only_published_immutable_releases_with_the_digest_asset_are_eligible_newest_first(
-    releases, github, sessao
+    releases, github, sessao, hosts_do_github
 ):
     github.rotas[API] = responder_json(
         [
@@ -117,7 +125,49 @@ async def test_only_published_immutable_releases_with_the_digest_asset_are_eligi
         (Version(2, 2, 0), "v2.2.0"),
         (Version(2, 1, 0), "v2.1.0"),
     ]
-    assert lista[0].digest_url == "https://github.com/x/y/releases/download/v2.3.0/image-digest.txt"
+    assert lista[0].digest_url == f"{BASE_ASSET}/v2.3.0/image-digest.txt"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/outro/repo/releases/download/v2.1.0/image-digest.txt",
+        f"{BASE_ASSET}/v9.9.9/image-digest.txt",
+        f"{BASE_ASSET}/v2.1.0/outro.txt",
+        f"{BASE_ASSET}/v2.1.0/image-digest.txt?x=1",
+        f"{BASE_ASSET}/v2.1.0/image-digest.txt#x",
+        f"{BASE_ASSET}/v2.1.0/../v2.1.0/image-digest.txt",
+        f"{BASE_ASSET}/v2.1.0/image-digest.txt/",
+        "https://evil.example/EmpireCommunity/EmpireMuse/releases/download/v2.1.0/image-digest.txt",
+        "http://github.com/EmpireCommunity/EmpireMuse/releases/download/v2.1.0/image-digest.txt",
+    ],
+    ids=[
+        "outro-repo",
+        "outra-tag",
+        "outro-arquivo",
+        "query",
+        "fragmento",
+        "ponto-ponto",
+        "barra-final",
+        "host-fora-da-lista",
+        "http",
+    ],
+)
+async def test_a_release_whose_asset_url_is_not_exactly_the_published_digest_file_is_not_eligible(
+    releases, github, sessao, hosts_do_github, url
+):
+    github.rotas[API] = responder_json([release_json("v2.2.0"), release_json("v2.1.0", url=url)])
+
+    lista = await releases.list_releases(sessao)
+
+    assert [r.tag for r in lista] == ["v2.2.0"]
+
+
+async def test_a_release_asset_without_a_download_url_is_not_eligible(releases, github, sessao, hosts_do_github):
+    sem_url = {**release_json("v2.1.0"), "assets": [{"name": "image-digest.txt"}]}
+    github.rotas[API] = responder_json([release_json("v2.2.0"), sem_url])
+
+    assert [r.tag for r in await releases.list_releases(sessao)] == ["v2.2.0"]
 
 
 async def test_the_listing_asks_for_30_releases_without_any_token(releases, github, sessao):
