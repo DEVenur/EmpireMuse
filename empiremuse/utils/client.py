@@ -869,9 +869,8 @@ class BotPool:
                     value["search_providers"] = value.get("search_providers", "").strip().split()
                     LAVALINK_SERVERS[key] = value
 
-        for (
-            node
-        ) in LAVALINK_SERVERS.values():  # as 3 fontes (JSON do ambiente, lavalink.ini e lista baixada) já estão aqui
+        # As 3 fontes (JSON do ambiente, lavalink.ini e lista baixada) já estão em LAVALINK_SERVERS neste ponto.
+        for node in LAVALINK_SERVERS.values():
             if isinstance(node, dict) and isinstance(node.get("password"), str):
                 register_secret(node["password"])
 
