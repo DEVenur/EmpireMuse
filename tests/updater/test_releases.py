@@ -11,6 +11,7 @@ from collections import Counter
 
 import aiohttp
 import pytest
+import pytest_asyncio
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 
@@ -48,7 +49,7 @@ class GitHubFalso:
         return await handler(request) if callable(handler) else handler
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def github(releases, monkeypatch):
     falso = GitHubFalso()
     app = web.Application()
@@ -64,7 +65,7 @@ async def github(releases, monkeypatch):
     await servidor.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sessao():
     async with aiohttp.ClientSession() as sessao:
         yield sessao
