@@ -87,7 +87,7 @@ class TestMdLink:
         assert md_link("T", url) == f"[`T`](<{esperada}>)"
 
     def test_nothing_else_in_the_url_changes(self):
-        url = "https://usuario@a.exemplo:8080/p%20q/ç?q=[1]&r={2}#f|g"
+        url = "https://a.exemplo:8080/p%20q/ç?q=[1]&r={2}#f|g"
 
         assert md_url(url) == url
 
@@ -130,8 +130,8 @@ class TestMdLink:
 
     @pytest.mark.parametrize(
         ("rotulo", "restante"),
-        [("a~b|c", "abc"), ("> citacao", " citacao"), ("l1\n> l2", "l1\n l2")],
-        ids=["til-e-barra", "citacao", "citacao-na-2a-linha"],
+        [("a~b|c", "abc"), ("> citacao", " citacao")],
+        ids=["til-e-barra", "citacao"],
     )
     def test_without_code_the_label_is_outside_backticks_and_markdown_is_escaped(self, rotulo, restante):
         saida = md_link(rotulo, URL, code=False)
@@ -148,6 +148,45 @@ class TestMdLink:
 
     def test_the_output_is_a_single_line_for_a_label_without_line_breaks(self):
         assert "\n" not in md_link("Nome", URL_COM_CONTROLE)
+
+
+USUARIO_E_SENHA = "".join(["usuario", ":", "credencial-qualquer"])
+URLS_COM_CREDENCIAL = [
+    f"https://{USUARIO_E_SENHA}@a.exemplo/x",
+    "https://usuario@a.exemplo/x",
+    f"http://{USUARIO_E_SENHA}@a.exemplo:8080/",
+    "https://a.exemplo@alheio.exemplo/x",
+]
+QUEBRAS = ["\n", "\r\n", "\r", "\u2028", "\u2029"]
+
+
+class TestUrlComCredencial:
+    @pytest.mark.parametrize("url", URLS_COM_CREDENCIAL, ids=lambda u: u.split("@")[0][-12:])
+    def test_a_url_with_userinfo_is_refused_and_only_the_label_remains(self, url):
+        assert md_url(url) is None
+        assert md_link("Nome", url) == "`Nome`" and md_link("Nome", url, code=False) == "Nome"
+
+    def test_an_at_sign_after_the_host_is_not_userinfo(self):
+        assert md_url("https://a.exemplo/x@y?e=a@b") is not None
+
+
+class TestRotuloEmUmaLinha:
+    @pytest.mark.parametrize("quebra", QUEBRAS, ids=lambda q: repr(q))
+    @pytest.mark.parametrize("code", [True, False], ids=["code", "texto"])
+    def test_a_line_break_in_the_label_cannot_split_the_masked_link(self, quebra, code):
+        saida = md_link(f"antes{quebra}depois", URL, code=code)
+
+        assert not any(c in saida for c in QUEBRAS)
+        assert destinos(saida) == [URL] and marcas_soltas(saida) == 0 and "antes" in saida and "depois" in saida
+
+    @pytest.mark.parametrize("quebra", QUEBRAS, ids=lambda q: repr(q))
+    def test_a_line_break_in_a_code_span_label_stays_on_one_line(self, quebra):
+        assert not any(c in md_code(f"antes{quebra}depois") for c in QUEBRAS)
+
+    def test_a_label_made_only_of_line_breaks_still_gives_a_single_line_link(self):
+        saida = md_link("\n\n", URL)
+
+        assert destinos(saida) == [URL] and "\n" not in saida
 
 
 class TestMdUrl:
