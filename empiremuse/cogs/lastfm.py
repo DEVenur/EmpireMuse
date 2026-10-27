@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import logging
 import traceback
 from typing import TYPE_CHECKING, Optional, List
 
@@ -23,6 +24,8 @@ from empiremuse.utils.others import CustomContext
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
 
+
+logger = logging.getLogger(__name__)
 
 SCROBBLE_TITLE_THRESHOLD = 70  # limiar do texto completo no casamento do scrobble (o mesmo 70 de antes)
 
@@ -705,7 +708,7 @@ class LastFmCog(commands.Cog):
                         continue
                 if isinstance(e, ClientError):
                     # O str do erro do aiohttp traz a URL com api_key, sk e api_sig: só o status vai para o log.
-                    print(f"last.fm request failed! user: {fminfo['user_id']} - {safe_error(e)}")
+                    logger.warning("last.fm request failed! user: %s - %s", fminfo["user_id"], safe_error(e))
                 else:
                     traceback.print_exc()
                 continue

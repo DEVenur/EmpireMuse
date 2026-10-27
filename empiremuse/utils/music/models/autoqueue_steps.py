@@ -223,7 +223,7 @@ async def _aq_lastfm_tracks(self, req):
             except Exception as e:
                 if isinstance(e, ClientError):
                     # O str do erro do aiohttp traz a URL com api_key e sk: só o status vai para o log.
-                    print(f"Last.FM recommendations error: {safe_error(e)}")
+                    logger.warning("Last.FM recommendations error: %s", safe_error(e))
                 else:
                     traceback.print_exc()
 

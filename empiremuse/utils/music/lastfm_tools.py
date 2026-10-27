@@ -9,6 +9,7 @@ from cachetools import TTLCache
 
 from empiremuse import paths
 from empiremuse.serialization.cache import LASTFM_MAX_BYTES
+from empiremuse.utils.safe_error import HTTPStatusError
 from empiremuse.utils.music.json_cache import load_json_cache, save_json_cache
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,12 @@ class LastFM:
         params["format"] = "json"
         async with ClientSession() as session:
             # As credenciais (api_key, api_sig, sk) vão no corpo do POST, não na URL.
-            async with session.post("https://ws.audioscrobbler.com/2.0/", data=params) as response:
+            # Sem seguir redirecionamento: um 307/308 reenviaria o corpo (com as credenciais) para outro endereço.
+            async with session.post(
+                "https://ws.audioscrobbler.com/2.0/", data=params, allow_redirects=False
+            ) as response:
+                if 300 <= response.status < 400:
+                    raise HTTPStatusError(response.status)
                 if (data := await response.json()).get("error"):
                     raise LastFmException(data)
                 return data
