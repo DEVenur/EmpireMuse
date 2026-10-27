@@ -14,8 +14,15 @@ from collections.abc import Callable
 
 AGGREGATE_WINDOW = 60.0
 MAX_KEYS = 500
+MAX_TEMPLATE_KEY_CHARS = 256
 
-type _AggregateKey = tuple[str, int, object, str | None]
+type _AggregateKey = tuple[str, int, str, str | None]
+
+
+def _normalize_template(raw: object) -> str:
+    if isinstance(raw, str):
+        return raw[:MAX_TEMPLATE_KEY_CHARS]
+    return f"<{type(raw).__qualname__}>"
 
 
 @dataclasses.dataclass
@@ -64,7 +71,7 @@ class RepeatAggregator(logging.Filter):
         )
         summary.bot = bucket.bot
         summary.guild = bucket.guild
-        summary.empiremuse_template = msg
+        summary.empiremuse_template = msg[:MAX_TEMPLATE_KEY_CHARS]
         summary.empiremuse_exc_type = None
         summary.empiremuse_redacted = True
         summary.empiremuse_emit = True
@@ -77,10 +84,14 @@ class RepeatAggregator(logging.Filter):
             if record.levelno < logging.WARNING:
                 record.empiremuse_emit = True
                 return True
+            raw_template = getattr(record, "empiremuse_template", record.msg)
+            template_key = _normalize_template(raw_template)
+            if hasattr(record, "empiremuse_template"):
+                record.empiremuse_template = template_key
             key: _AggregateKey = (
                 record.name,
                 record.levelno,
-                getattr(record, "empiremuse_template", record.msg),
+                template_key,
                 getattr(record, "empiremuse_exc_type", None),
             )
             to_emit: list[logging.LogRecord] = []
@@ -96,10 +107,16 @@ class RepeatAggregator(logging.Filter):
                     if existing.count > 0:
                         to_emit.append(self._make_summary(existing))
                 elif len(self._buckets) >= self._max_keys:
-                    oldest_key = next(iter(self._buckets))
-                    oldest = self._buckets.pop(oldest_key)
-                    if oldest.count > 0:
-                        to_emit.append(self._make_summary(oldest))
+                    expired = [k for k, b in self._buckets.items() if now - b.started_at >= self._window]
+                    for k in expired:
+                        b = self._buckets.pop(k)
+                        if b.count > 0:
+                            to_emit.append(self._make_summary(b))
+                    if len(self._buckets) >= self._max_keys:
+                        oldest_key = next(iter(self._buckets))
+                        oldest = self._buckets.pop(oldest_key)
+                        if oldest.count > 0:
+                            to_emit.append(self._make_summary(oldest))
                 self._buckets[key] = _Bucket(
                     started_at=now,
                     first_msg=record.getMessage(),

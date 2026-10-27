@@ -18,6 +18,8 @@ from typing import TextIO
 from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, configure_secrets, scrub
 from empiremuse.rules.owner_shell import collect_secret_values
 
+_FRAME = "  │ "
+
 
 def _write_scrubbed_traceback(
     exc_type: type[BaseException],
@@ -26,16 +28,16 @@ def _write_scrubbed_traceback(
     stream: TextIO | None,
     *,
     header: str = "",
+    chain: bool = True,
 ) -> None:
     with suppress(Exception):
-        formatted = header + "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        formatted = header + "".join(traceback.format_exception(exc_type, exc_value, exc_tb, chain=chain))
         sanitized = scrub(formatted, MAX_TRACEBACK_CHARS)
         target = stream if stream is not None else sys.stderr
         if target is None:
             return
-        if not sanitized.endswith("\n"):
-            sanitized += "\n"
-        target.write(sanitized)
+        framed = "\n".join(f"{_FRAME}{line}" for line in sanitized.splitlines()) + "\n"
+        target.write(framed)
         target.flush()
 
 
@@ -45,7 +47,6 @@ def install_early_hooks(
     stream: TextIO | None = None,
 ) -> None:
     """Alimenta o redator único com ``environ`` e instala ``sys.excepthook`` e ``threading.excepthook`` redigidos."""
-    configure_secrets(collect_secret_values(environ))
 
     def _sys_excepthook(
         exc_type: type[BaseException],
@@ -53,7 +54,7 @@ def install_early_hooks(
         exc_tb: TracebackType | None,
     ) -> None:
         if issubclass(exc_type, KeyboardInterrupt):
-            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            _write_scrubbed_traceback(exc_type, exc_value, exc_tb, stream, chain=False)
             return
         _write_scrubbed_traceback(exc_type, exc_value, exc_tb, stream)
 
@@ -66,3 +67,5 @@ def install_early_hooks(
 
     sys.excepthook = _sys_excepthook
     threading.excepthook = _threading_excepthook
+    with suppress(Exception):
+        configure_secrets(collect_secret_values(environ))
