@@ -4,6 +4,7 @@ Sessão, bot, player e provedores são fakes; nada sai da máquina.
 """
 
 import contextlib
+import hashlib
 import logging
 from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
@@ -121,13 +122,18 @@ async def test_the_auth_link_sent_to_the_user_is_https() -> None:
 # ============================================================================ (3) logs sem a URL com as credenciais
 
 
+@pytest.mark.parametrize(
+    ("erro", "resumo"),
+    [(erro_com_url_secreta(), "HTTP 200"), (HTTPStatusError(307), "HTTP 307")],
+    ids=["client-error", "redirecionamento-3xx"],
+)
 async def test_a_scrobble_http_failure_logs_the_status_without_url_or_traceback(
-    caplog: pytest.LogCaptureFixture,
+    caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str], erro: Exception, resumo: str
 ) -> None:
     cog = LastFmCog.__new__(LastFmCog)
     cog.bot = SimpleNamespace(
         pool=SimpleNamespace(lastfm_sessions={7: {"scrobble": True, "sessionkey": "sk"}}),
-        last_fm=SimpleNamespace(update_nowplaying=AsyncMock(side_effect=erro_com_url_secreta())),
+        last_fm=SimpleNamespace(update_nowplaying=AsyncMock(side_effect=erro)),
     )
     player = SimpleNamespace(guild=SimpleNamespace(me=SimpleNamespace(voice=True)), lastfm_users={})
     track = SimpleNamespace(
@@ -146,8 +152,9 @@ async def test_a_scrobble_http_failure_logs_the_status_without_url_or_traceback(
         await cog.startscrooble(player, track, update_np=True, users=[SimpleNamespace(id=7, bot=False)])
 
     sem_segredo(caplog.text)
-    assert "last.fm request failed! user: 7 - HTTP 200" in caplog.text
+    assert f"last.fm request failed! user: 7 - {resumo}" in caplog.text
     assert all(registro.exc_info is None for registro in caplog.records)
+    assert "Traceback" not in capsys.readouterr().err
 
 
 async def test_the_autoqueue_recommendation_http_failure_logs_the_status_without_url_or_traceback(
@@ -374,3 +381,35 @@ async def test_a_normal_post_response_still_works_with_redirects_disabled(
 
     assert await com_redirecionamento.post_lastfm({"method": "track.scrobble", "api_key": "AK"}) == {"ok": 1}
     assert SessaoNormal.posts[0][1]["allow_redirects"] is False
+
+
+# ============================================================================ assinatura (api_sig) de toda chamada autenticada
+
+
+def assinatura_esperada(corpo: dict[str, Any], segredo: str) -> str:
+    """Como a API do Last.fm confere: ``md5`` de ``chave+valor`` em ordem alfabética, sem ``api_sig`` nem ``format``, mais o segredo."""
+    parametros = {k: v for k, v in corpo.items() if k not in ("api_sig", "format")}
+    return hashlib.md5(("".join(f"{k}{parametros[k]}" for k in sorted(parametros)) + segredo).encode()).hexdigest()
+
+
+@pytest.mark.parametrize(
+    "chamar",
+    [
+        lambda api: api.user_info(SK),
+        lambda api: api.track_scrobble("Artista", "Musica", "Album", 200, SK),
+        lambda api: api.update_nowplaying("Artista", "Musica", "Album", 200, SK),
+        lambda api: api.track_love("Musica", "Artista", SK),
+        lambda api: api.track_unlove("Musica", "Artista", SK),
+        lambda api: api.get_session_key(TOKEN),
+    ],
+    ids=["user_info", "track_scrobble", "update_nowplaying", "track_love", "track_unlove", "get_session_key"],
+)
+async def test_every_post_with_sk_or_token_carries_a_correct_api_sig(
+    pedidos: LastFM, chamar: Callable[[LastFM], Awaitable[Any]]
+) -> None:
+    await chamar(pedidos)
+
+    ((metodo, _, kwargs),) = Pedidos.chamadas
+    corpo = kwargs["data"]
+    assert metodo == "POST" and ("sk" in corpo or "token" in corpo)
+    assert corpo.get("api_sig") == assinatura_esperada(corpo, pedidos.api_secret)
