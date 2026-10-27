@@ -42,11 +42,13 @@ from empiremuse.health import (
     write_heartbeat,
 )
 from empiremuse.logs import configure_logging, flush_logging, parse_log_settings, register_secret
+from empiremuse.logs.boot import BootReport, check_new_version
 from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
 from empiremuse.rules.owner_shell import collect_secret_values
 from empiremuse.updater.notice import on_pool_ready
 from empiremuse.updater.state import read_pending
 from empiremuse.utils import branding
+from empiremuse.version import image_version
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
@@ -73,6 +75,8 @@ from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
 
 logger = logging.getLogger(__name__)
+node_logger = logging.getLogger("empiremuse.wavelink")
+commands_logger = logging.getLogger("empiremuse.commands")
 
 UPDATE_WATCH_INTERVAL = 5  # segundos entre as checagens de saúde do pool enquanto há uma atualização pendente
 
@@ -89,8 +93,18 @@ def read_guild_bots() -> Dict[str, List[str]]:
     except FileNotFoundError:
         return {}
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha ao ler o guild_bots.json")
         return {}
+
+
+class ModuleLoadError(Exception):
+    """Um módulo (cog) falhou na subida: o aviso (módulo + tipo) e o traceback em DEBUG já foram logados quando isto é levantado."""
+
+
+def _report_module_failure(bot_name, filename: str, error: BaseException) -> None:
+    """Falha de cog: módulo e tipo da exceção em WARNING (sem traceback); o traceback só em DEBUG."""
+    BootReport().step(f"Cog {filename}.py de {bot_name}", "warn", f"falhou ao carregar ({type(error).__name__})")
+    logger.debug("Detalhe da falha do módulo %s", filename, exc_info=(type(error), error, error.__traceback__))
 
 
 def parse_owner_ids(raw: Optional[str]) -> list[int]:
@@ -132,6 +146,7 @@ class BotPool:
     # Defaults de classe (como o killing_state): fakes de BotPool criados com __new__ não passam pelo __init__.
     update_ready_checked = False  # on_pool_ready roda uma vez, na primeira vez em que o pool fica saudável
     update_watch_task: Optional[asyncio.Task] = None
+    version_check_task: Optional[asyncio.Task] = None
     helper_watch_tasks: tuple[asyncio.Task, ...] | set[asyncio.Task] = ()
     command_sync_config = commands.CommandSyncFlags(
         allow_command_deletion=True,
@@ -396,10 +411,11 @@ class BotPool:
                     lavalink_java_path=self.config["LAVALINK_JAVA_PATH"],
                     lavalink_home=self.config["LAVALINK_HOME"],
                     lavalink_offline=self.config["LAVALINK_OFFLINE"],
+                    report=BootReport(),
                 ),
             )
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao iniciar o Lavalink local")
             return
 
         if self.killing_state:  # o bot começou a encerrar enquanto o Java subia: não deixa o processo órfão
@@ -421,14 +437,14 @@ class BotPool:
                         return
 
                     self.killing_state = "ratelimit"
-                    print("Aplicação com ratelimit do discord!")
+                    logger.warning("Aplicação com ratelimit do discord!")
                     await asyncio.sleep(10)
                     raise error
 
                 if self.killing_state is True:
                     return
 
-                print("Aplicação com ratelimit do discord!\nFinalizando o processo em 5 segundos...")
+                logger.warning("Aplicação com ratelimit do discord! Finalizando o processo em 5 segundos...")
 
                 self.killing_state = True
 
@@ -455,13 +471,7 @@ class BotPool:
                     "Após corrigir, reinicie a aplicação."
                 )
 
-                print(
-                    ("=" * 30)
-                    + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n"
-                    + e.replace("<br>", "\n")
-                    + "\n"
-                    + ("=" * 30)
-                )
+                logger.error("Falha ao iniciar o bot configurado no %s:\n%s", bot.identifier, e.replace("<br>", "\n"))
 
             elif isinstance(e, disnake.LoginFailure) and "Improper token" in str(e):
                 e = (
@@ -472,13 +482,7 @@ class BotPool:
                     "Após corrigir, reinicie a aplicação."
                 )
 
-                print(
-                    ("=" * 30)
-                    + f"\nFalha ao iniciar o bot configurado no: {bot.identifier}\n"
-                    + e.replace("<br>", "\n")
-                    + "\n"
-                    + ("=" * 30)
-                )
+                logger.error("Falha ao iniciar o bot configurado no %s:\n%s", bot.identifier, e.replace("<br>", "\n"))
 
             else:
                 code = log_unexpected_error(logger, e, f"inicialização do bot {bot.identifier}")
@@ -500,6 +504,8 @@ class BotPool:
             self.heartbeat_task.cancel()
         if self.update_watch_task:
             self.update_watch_task.cancel()
+        if self.version_check_task:
+            self.version_check_task.cancel()
         for task in list(self.helper_watch_tasks):
             task.cancel()
         for bot in self.get_all_bots():
@@ -548,12 +554,14 @@ class BotPool:
         retries = 0
         exception = None
 
-        print(f"📶 - Verificando se o servidor de música [{data['identifier']}] está disponível.")
+        node_logger.info("Verificando se o servidor de música [%s] está disponível.", data["identifier"])
 
         while True:
             if retries >= max_retries:
-                print(
-                    f"❌ - Todas as tentativas de verificar o servidor [{data['identifier']}] falharam. Causa: {safe_error(exception) if exception else 'desconhecida'}"
+                node_logger.error(
+                    "Todas as tentativas de verificar o servidor [%s] falharam. Causa: %s",
+                    data["identifier"],
+                    safe_error(exception) if exception else "desconhecida",
                 )
                 return
             else:
@@ -565,7 +573,7 @@ class BotPool:
                                 data["info"] = await r.json()
                                 data["info"]["check_version"] = 4
                             elif r.status == 403:
-                                print(f"❌ - Lavalink Server [{data['identifier']}] - Senha incorreta!")
+                                node_logger.error("Lavalink Server [%s] - Senha incorreta!", data["identifier"])
                                 return
                             elif r.status != 404:
                                 raise HTTPStatusError(r.status)
@@ -575,9 +583,12 @@ class BotPool:
                 except Exception as e:
                     exception = e
                     if data["identifier"] != "LOCAL":
-                        print(
-                            f"⚠️ - Falha ao verificar o servidor [{data['identifier']}], "
-                            f"nova tentativa [{retries}/{max_retries}] em {backoff} segundos."
+                        node_logger.warning(
+                            "Falha ao verificar o servidor [%s], nova tentativa [%s/%s] em %s segundos.",
+                            data["identifier"],
+                            retries,
+                            max_retries,
+                            backoff,
                         )
                     backoff += 2
                     retries += 1
@@ -593,7 +604,7 @@ class BotPool:
                     await self.mongo_database._connect["global"]["global"].find_one({"_id": "youtube_data"}) or {}
                 )
             except Exception:
-                traceback.print_exc()
+                node_logger.warning("Falha ao ler os refresh tokens do Youtube no banco de dados.", exc_info=True)
             else:
                 if tokens := mongo_data.get("refresh_tokens"):
                     for v in tokens.values():
@@ -607,12 +618,16 @@ class BotPool:
                                 if resp.status != 204:
                                     resp.raise_for_status()
                         except Exception as e:
-                            print(
-                                f"🌋 - Falha ao aplicar o Youtube refreshToken no servidor lavalink: {data['identifier']} - {safe_error(e)}"
+                            node_logger.warning(
+                                "Falha ao aplicar o Youtube refreshToken no servidor lavalink: %s - %s",
+                                data["identifier"],
+                                safe_error(e),
                             )
                             break
                         else:
-                            print(f"🌋 - Youtube refreshToken aplicado no servidor lavalink: {data['identifier']}")
+                            node_logger.info(
+                                "Youtube refreshToken aplicado no servidor lavalink: %s", data["identifier"]
+                            )
                             break
 
         for bot in self.get_all_bots():
@@ -704,7 +719,7 @@ class BotPool:
         except FileNotFoundError:
             pass
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao ler o emojis.json")
 
         if not config["DEFAULT_PREFIX"]:
             config["DEFAULT_PREFIX"] = "!!"
@@ -720,17 +735,18 @@ class BotPool:
             skin = skin[:-3]
 
             if skin in self.config["IGNORE_SKINS"].split() and skin != "default":
-                print(f"Skin {skin}.py ignorada")
+                logger.info("Skin %s.py ignorada", skin)
                 continue
 
             try:
                 skin_file = import_module(f"empiremuse.utils.music.skins.normal_player.{skin}")
                 if not hasattr(skin_file, "load"):
-                    print(f"Skin ignorada: {skin}.py | Função load() não configurada/encontrada...")
+                    logger.warning("Skin ignorada: %s.py | Função load() não configurada/encontrada...", skin)
                     continue
                 self.player_skins[skin] = skin_file.load()
-            except Exception:
-                print(f"Falha ao carregar skin [normal_player]: {traceback.format_exc()}")
+            except Exception as e:
+                logger.warning("Falha ao carregar skin [normal_player] %s (%s)", skin, type(e).__name__)
+                logger.debug("Detalhe da falha da skin %s", skin, exc_info=True)
 
         if self.default_skin not in self.player_skins:
             self.default_skin = "default"
@@ -742,17 +758,18 @@ class BotPool:
             skin = skin[:-3]
 
             if skin in self.config["IGNORE_STATIC_SKINS"].split() and skin != "default":
-                print(f"Skin {skin}.py ignorada")
+                logger.info("Skin %s.py ignorada", skin)
                 continue
 
             try:
                 skin_file = import_module(f"empiremuse.utils.music.skins.static_player.{skin}")
                 if not hasattr(skin_file, "load"):
-                    print(f"Skin ignorada: {skin}.py | Função load() não configurada/encontrada...")
+                    logger.warning("Skin ignorada: %s.py | Função load() não configurada/encontrada...", skin)
                     continue
                 self.player_static_skins[skin] = skin_file.load()
-            except Exception:
-                print(f"Falha ao carregar skin [static_player]: {traceback.format_exc()}")
+            except Exception as e:
+                logger.warning("Falha ao carregar skin [static_player] %s (%s)", skin, type(e).__name__)
+                logger.debug("Detalhe da falha da skin %s", skin, exc_info=True)
         if self.default_static_skin not in self.player_static_skins:
             self.default_static_skin = "default"
 
@@ -797,15 +814,21 @@ class BotPool:
         except ImportError:
             pass
         except Exception:
-            print(traceback.format_exc())
+            logger.exception("Falha ao executar o pool de desenvolvimento")
 
     def setup(self):
-        self.load_skins()
+        # As etapas que aconteceram antes do log (pasta de execução, Python) vêm do __main__ e saem logo depois do configure_logging.
+        boot = getattr(self, "boot_report", None) or BootReport()
 
         log_settings, log_warnings = parse_log_settings(self.config, os.environ)
         configure_logging(log_settings, collect_secret_values(self.config, os.environ))
+        boot.flush_deferred()
+        installed_version = image_version()
+        boot.step("Versão do bot", "ok", str(installed_version) if installed_version else "fora da imagem Docker")
         for log_warning in log_warnings:  # logados só agora, já com o log configurado
-            logger.warning("%s", log_warning)
+            boot.step("Configuração do log", "warn", log_warning)
+
+        self.load_skins()
         # O collect_secret_values só vê o valor INTEIRO de variáveis com nome de segredo: os tokens dos bots de servidor
         # (guild_bots.json) são registrados à parte, e as senhas dos nós mais abaixo, depois de montada a lista.
         for guild_bot_tokens in read_guild_bots().values():
@@ -821,18 +844,21 @@ class BotPool:
                 LAVALINK_SERVERS = get_lavalink_servers()
                 ini_file = None
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao obter a lista de servidores lavalink")
                 ini_file = str(paths.RUNTIME_DIR / "auto_lavalink.ini")
-                print(f"Baixando lista de servidores lavalink (arquivo: {ini_file})")
+                logger.info("Baixando lista de servidores lavalink (arquivo: %s)", ini_file)
                 try:
                     r = requests.get(self.config["LAVALINK_SERVER_LIST"], allow_redirects=False, timeout=30)
                     server_list = validated_server_list(r.status_code, r.content)
                     if server_list is not r.content:
-                        print("Lista de servidores lavalink baixada é inválida, usando o arquivo local do repositório.")
+                        logger.warning(
+                            "Lista de servidores lavalink baixada é inválida, usando o arquivo local do repositório."
+                        )
                     r.close()
                 except Exception:
-                    traceback.print_exc()
-                    print("Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório.")
+                    logger.exception(
+                        "Falha ao baixar a lista de servidores lavalink, usando o arquivo local do repositório."
+                    )
                     server_list = validated_server_list(None, None)
                 with open(paths.RUNTIME_DIR / "auto_lavalink.ini", "wb") as f:
                     f.write(server_list)
@@ -844,7 +870,7 @@ class BotPool:
                 try:
                     LAVALINK_SERVERS[key] = json.loads(value)
                 except Exception as e:
-                    print(f"Falha ao adicionar node: {key}, erro: {repr(e)}")
+                    logger.warning("Falha ao adicionar o nó %s (%s)", key, type(e).__name__)
 
         if ini_file:
             config = ConfigParser()
@@ -853,7 +879,7 @@ class BotPool:
             except FileNotFoundError:
                 pass
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao ler o arquivo de servidores lavalink")
             else:
                 for key, value in {section: dict(config.items(section)) for section in config.sections()}.items():
                     value["identifier"] = key
@@ -894,11 +920,9 @@ class BotPool:
                 cache_maxsize=self.config["DBCACHE_SIZE"],
                 cache_ttl=self.config["DBCACHE_TTL"],
             )
-            print("🍃 - Database em uso: MongoDB")
+            boot.step("Banco de dados", "ok", "MongoDB")
         else:
-            print(
-                "🎲 - Database em uso: TinyMongo | Nota: Os arquivos da database serão salvos localmente na pasta: local_database"
-            )
+            boot.step("Banco de dados", "ok", "TinyMongo (os arquivos da database ficam na pasta local_database)")
 
         self.local_database = LocalDatabase(
             cache_maxsize=self.config["DBCACHE_SIZE"], cache_ttl=self.config["DBCACHE_TTL"]
@@ -915,7 +939,7 @@ class BotPool:
         # stderr descartado: fora de um repositório (ex.: modo .runtime) o git imprimiria "fatal: not a git repository".
         try:
             self.commit = check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode("ascii").strip()
-            print(f"📥 - Commit ver: {self.commit}")
+            boot.step("Commit", "ok", self.commit)
         except OSError, subprocess.CalledProcessError, UnicodeDecodeError:
             self.commit = None
 
@@ -939,7 +963,7 @@ class BotPool:
                 playlist_extra_page_limit=self.config["SPOTIFY_PLAYLIST_EXTRA_PAGE_LIMIT"],
             )
         except Exception as e:
-            print(f"⚠️ - Suporte interno ao spotify desativado: {repr(e)}")
+            boot.step("Spotify interno", "warn", f"desativado ({type(e).__name__})")
             spotify_client = None
 
         self.spotify = spotify_client
@@ -975,7 +999,7 @@ class BotPool:
                 pass
 
             if not token:
-                print(f"{bot_name} Ignorado (token não informado)...")
+                boot.step(f"Bot {bot_name}", "warn", "ignorado (token não informado)")
                 return
 
             try:
@@ -1052,13 +1076,17 @@ class BotPool:
 
                 if self.config["COMMAND_LOG"] and inter.guild and not (await inter.bot.is_owner(inter.author)):
                     try:
-                        print(
-                            f"cmd log: [user: {inter.author} - {inter.author.id}] - [guild: {inter.guild.name} - {inter.guild.id}]"
-                            f" - [cmd: {inter.data.name}] {datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y - %H:%M:%S')} (UTC) - {inter.filled_options}\n"
-                            + ("-" * 15)
+                        commands_logger.info(
+                            "cmd log: [user: %s - %s] - [guild: %s - %s] - [cmd: %s] - %s",
+                            inter.author,
+                            inter.author.id,
+                            inter.guild.name,
+                            inter.guild.id,
+                            inter.data.name,
+                            inter.filled_options,
                         )
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha ao registrar o log do comando")
 
                 if not inter.guild_id:
                     if allow_private:
@@ -1106,15 +1134,18 @@ class BotPool:
                     if await bot.is_owner(ctx.author):
                         return
 
-                    print(
-                        f"cmd (prefix) log: [user: {ctx.author} - {ctx.author.id}] - [guild: {ctx.guild.name} - {ctx.guild.id}]"
-                        f" - [cmd: {ctx.message.content}] {datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y - %H:%M:%S')} (UTC)\n"
-                        + ("-" * 15)
+                    commands_logger.info(
+                        "cmd (prefix) log: [user: %s - %s] - [guild: %s - %s] - [cmd: %s]",
+                        ctx.author,
+                        ctx.author.id,
+                        ctx.guild.name,
+                        ctx.guild.id,
+                        ctx.message.content,
                     )
 
             @bot.event
             async def on_ready():
-                print(f"🟢 - {bot.user} - [{bot.user.id}] Online.")
+                boot.step("Bot online", "ok", f"{bot.user} [{bot.user.id}]")
 
             async def initial_setup():
                 await bot.wait_until_ready()
@@ -1138,8 +1169,13 @@ class BotPool:
 
                     self.bot_mentions.update((f"<@!{bot.user.id}>", f"<@{bot.user.id}>"))
 
+                except ModuleLoadError:
+                    # O módulo e o tipo da falha já saíram em WARNING e o traceback em DEBUG: sem outro traceback em ERROR.
+                    logger.warning(
+                        "Configuração inicial do bot %s interrompida pela falha de um módulo.", bot.identifier
+                    )
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha na configuração inicial do bot %s", bot.identifier)
 
                 await bot.update_appinfo()
 
@@ -1183,13 +1219,15 @@ class BotPool:
         message = ""
 
         self.loop.create_task(self.setup_pool_extras())
+        # Em tarefa de fundo (nunca atrasa a subida) e guardada no pool para o shutdown cancelar como as outras.
+        self.version_check_task = self.loop.create_task(check_new_version())
 
         if not self.bots:
             message = (
                 "O token do bot não foi configurado devidamente! Confira se o token foi configurado na "
                 "ENV/ENVIRONMENT ou no arquivo .env"
             )
-            print(f"⚠️ - {message}")
+            boot.step("Bots", "fail", message)
             message = f"\n\n{message}"
 
         else:
@@ -1330,7 +1368,7 @@ class BotCore(commands.AutoShardedBot):
 
         if current_cmds == synced_cmds:
             if current_cmds:
-                print(f"⚠️ - {self.user} - Os comandos já estão sincronizados.")
+                logger.debug("%s - Os comandos já estão sincronizados.", self.user)
             return
 
         self._command_sync_flags = self.pool.command_sync_config
@@ -1348,7 +1386,7 @@ class BotCore(commands.AutoShardedBot):
                 await self.loop.run_in_executor(None, lambda: json.dump(synced_cmds, f, indent=4))
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao gravar os dados da sincronização dos comandos")
 
     def sync_command_cooldowns(self, force=False):
         for b in self.pool.get_all_bots():
@@ -1611,7 +1649,7 @@ class BotCore(commands.AutoShardedBot):
                 if (gcount := len(guilds)) > 10:
                     warn_msg += f"\ne em mais {gcount - 10} servidor(es)."
 
-                print(("=" * 50) + f"\n{warn_msg}\n" + ("=" * 50))
+                logger.warning("%s", warn_msg)
 
     async def on_application_command_autocomplete(self, inter: disnake.ApplicationCommandInteraction):
         if not self.bot_ready or not self.is_ready():
@@ -1663,26 +1701,31 @@ class BotCore(commands.AutoShardedBot):
                         self.unload_extension(module_filename)
                         self.load_extension(module_filename)
                         if not self.bot_ready and load_modules_log:
-                            print(f"🟦 - {bot_name} - {filename}.py Recarregado.")
+                            logger.debug("%s - %s.py recarregado.", bot_name, filename)
                         load_status["reloaded"].append(f"{filename}.py")
                     except commands.ExtensionAlreadyLoaded, commands.ExtensionNotLoaded:
                         try:
                             self.load_extension(module_filename)
                             if not self.bot_ready and load_modules_log:
-                                print(f"🟩 - {bot_name} - {filename}.py Carregado.")
+                                logger.debug("%s - %s.py carregado.", bot_name, filename)
                             load_status["loaded"].append(f"{filename}.py")
                         except Exception as e:
-                            print(f"❌- {bot_name} - Falha ao carregar/recarregar o módulo: {filename}")
+                            _report_module_failure(bot_name, filename, e)
                             if not self.bot_ready:
-                                raise e
+                                raise ModuleLoadError(f"{filename}.py") from e
                             load_status["failed"].append(f"{filename}.py")
-                            traceback.print_exc()
                     except Exception as e:
-                        print(f"❌ - {bot_name} - Falha ao carregar/recarregar o módulo: {filename}")
+                        _report_module_failure(bot_name, filename, e)
                         if not self.bot_ready:
-                            raise e
+                            raise ModuleLoadError(f"{filename}.py") from e
                         load_status["failed"].append(f"{filename}.py")
-                        traceback.print_exc()
+
+        if load_modules_log and not self.bot_ready:
+            BootReport().step(
+                f"Cogs de {bot_name}",
+                "warn" if load_status["failed"] else "ok",
+                f"{len(load_status['loaded']) + len(load_status['reloaded'])} carregadas, {len(load_status['failed'])} falharam",
+            )
 
         if not self.config["ENABLE_DISCORD_URLS_PLAYBACK"]:
             self.remove_slash_command("play_music_file")

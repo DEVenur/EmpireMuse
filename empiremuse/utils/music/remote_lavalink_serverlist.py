@@ -1,11 +1,13 @@
 # pip install requests ou adicione requests no requirements.txt (caso não tenha, crie esse arquivo com o nome requests nele).
+import logging
 import re
-import traceback
 from configparser import ConfigParser
 
 import requests
 
 from empiremuse import paths
+
+logger = logging.getLogger(__name__)
 
 lavalink_urls = {
     "ssl": "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/SSL/lavalink-with-ssl.md",
@@ -45,9 +47,9 @@ def get_lavalink_servers():
 
     lavalink_nodes = {}
 
-    print(
-        f"Baixando lista de servidores lavalink da fonte: https://lavalink-list.darrennathanael.com/\n"
-        "Nota: Devido a esses servidores lavalink serem públicos, os mesmos podem apresentar instabilidade."
+    logger.info(
+        "Baixando lista de servidores lavalink da fonte: https://lavalink-list.darrennathanael.com/ "
+        "(nota: devido a esses servidores lavalink serem públicos, os mesmos podem apresentar instabilidade)."
     )
 
     for url_type, url in lavalink_urls.items():
@@ -73,7 +75,7 @@ def get_lavalink_servers():
         with open(paths.RUNTIME_DIR / "auto_lavalink.ini", "w", encoding="utf-8") as f:
             config.write(f)
     except Exception:
-        traceback.print_exc()
+        logger.exception("Falha ao gravar o auto_lavalink.ini")
 
     return lavalink_nodes
 
