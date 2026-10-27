@@ -7,6 +7,10 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-27
+
+Atualização da stack (Python 3.14, Java 25, PyMongo Async), atualização automática do bot no Docker pelo comando `update` e correções de segurança.
+
 ### Adicionado
 - **Log centralizado com a biblioteca padrão (item 7, fase P1)**: o pacote `empiremuse/logs/` configura o `logging` do processo num ponto só. Console com cor por severidade (nunca no arquivo), contexto de bot e servidor em cada linha e arquivo de log opcional. Chaves novas no `.example.env`:
   - `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING` ou `ERROR`; padrão `INFO`).
@@ -539,7 +543,8 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/EmpireCommunity/EmpireMuse/releases/tag/v2.0.0
