@@ -82,7 +82,7 @@ O parâmetro `LAVALINK_FILE_URL` define a origem do binário `Lavalink.jar`:
 
 ### 3.2. Bloqueio Anti-bot e Autenticação OAuth Opcional
 Desde agosto de 2026, o YouTube intensificou restrições automáticas contra clientes externos e scrapers ("Sign in to confirm you're not a bot", "This video requires login"):
-1. **Padrão Seguro**: O `application.yml` oficial da release 0.0.4 mantém `plugins.youtube.oauth.enabled: false` e o nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN`. Isso previne que tokens ou credenciais sejam impressos nos arquivos de log e evita ciclos contínuos de erro HTTP 400 quando não há conta vinculada.
+1. **Padrão Seguro**: O `application.yml` oficial da release 0.0.5 mantém `plugins.youtube.oauth.enabled: false` e o nível de log de `dev.lavalink.youtube.http.YoutubeOauth2Handler` fixado em `WARN`. Isso previne que tokens ou credenciais sejam impressos nos arquivos de log e evita ciclos contínuos de erro HTTP 400 quando não há conta vinculada.
 2. **OAuth com Conta Descartável**: Caso seu servidor sofra bloqueios de IP na reprodução do YouTube, é possível ativar a autenticação OAuth vinculando uma **conta Google descartável** através da variável `YOUTUBE_OAUTH_REFRESH_TOKEN` no `.env`.
    - Consulte o guia completo e passo a passo em: [Guia de Configuração do YouTube OAuth](youtube-oauth.md).
 
