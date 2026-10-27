@@ -6,7 +6,7 @@ import traceback
 from typing import TYPE_CHECKING, Optional, List
 
 import disnake
-from aiohttp import ClientSession
+from aiohttp import ClientError, ClientSession
 from disnake.ext import commands
 from rapidfuzz import fuzz
 
@@ -14,6 +14,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse.rules.title_match import title_matches
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, scrobble_model
+from empiremuse.utils.safe_error import safe_error
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.lastfm_tools import LastFmException
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack, exclude_tags
@@ -124,7 +125,7 @@ class LastFMView(disnake.ui.View):
 
         if not self.auth_url:
             self.token = await self.ctx.bot.last_fm.get_token()
-            self.auth_url = f"http://www.last.fm/api/auth/?api_key={self.ctx.bot.last_fm.api_key}&token={self.token}"
+            self.auth_url = f"https://www.last.fm/api/auth/?api_key={self.ctx.bot.last_fm.api_key}&token={self.token}"
             self.last_timestamp = int((disnake.utils.utcnow() + datetime.timedelta(minutes=5)).timestamp())
 
         await interaction.send(
@@ -702,7 +703,11 @@ class LastFmCog(commands.Cog):
                         except KeyError:
                             pass
                         continue
-                traceback.print_exc()
+                if isinstance(e, ClientError):
+                    # O str do erro do aiohttp traz a URL com api_key, sk e api_sig: só o status vai para o log.
+                    print(f"last.fm request failed! user: {fminfo['user_id']} - {safe_error(e)}")
+                else:
+                    traceback.print_exc()
                 continue
 
             player.lastfm_users[fminfo["user_id"]] = {

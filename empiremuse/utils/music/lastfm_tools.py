@@ -54,7 +54,7 @@ class LastFM:
     async def request_lastfm(self, params: dict):
         params["format"] = "json"
         async with ClientSession() as session:
-            async with session.get("http://ws.audioscrobbler.com/2.0/", params=params) as response:
+            async with session.get("https://ws.audioscrobbler.com/2.0/", params=params) as response:
                 if (data := await response.json()).get("error"):
                     raise LastFmException(data)
                 return data
@@ -62,7 +62,8 @@ class LastFM:
     async def post_lastfm(self, params: dict):
         params["format"] = "json"
         async with ClientSession() as session:
-            async with session.post("http://ws.audioscrobbler.com/2.0/", params=params) as response:
+            # As credenciais (api_key, api_sig, sk) vão no corpo do POST, não na URL.
+            async with session.post("https://ws.audioscrobbler.com/2.0/", data=params) as response:
                 if (data := await response.json()).get("error"):
                     raise LastFmException(data)
                 return data

@@ -223,18 +223,18 @@ class TracksMixin:
             try:
                 info = await self.bot.pool.last_fm.get_similar_tracks(track=track, artist=artist)
             except Exception as e:
-                exceptions.add(e)
+                exceptions.add(safe_error(e))
                 info = []
 
             if not info:
                 try:
                     info = await self.bot.pool.last_fm.get_artist_toptracks(artist)
                 except Exception as e:
-                    exceptions.add(e)
+                    exceptions.add(safe_error(e))
 
                 if not info:
                     txt = f"**Não houve resultados de mixes para sua busca: {artist} - {track}**"
-                    raise GenericError(txt, error="\n".join(repr(e) for e in exceptions) or None)
+                    raise GenericError(txt, error="\n".join(exceptions) or None)
 
                 track_url = f"https://www.last.fm/music/{quote(artist)}"
                 playlist_name = f"TopTracks: {artist}"
