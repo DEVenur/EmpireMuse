@@ -25,7 +25,7 @@ from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, db_models
 from empiremuse.utils.music.checks import check_requester_channel
-from empiremuse.utils.music.converters import time_format, URL_REG, md_bracketed, md_link
+from empiremuse.utils.music.converters import time_format, URL_REG, md_bracketed, md_link, fix_characters
 from empiremuse.utils.others import select_bot_pool, CustomContext, paginator
 
 if TYPE_CHECKING:
@@ -1018,7 +1018,7 @@ class GuildLog(commands.Cog):
 
         embed = disnake.Embed(
             description=f"__**{title}:**__\n"
-            f"```{guild.name}```\n"
+            f"```{fix_characters(guild.name)}```\n"
             f"**ID:** `{guild.id}`\n"
             f"**Dono:** `{guild.owner} [{guild.owner.id}]`\n"
             f"**Criado em:** <t:{created_at}:f> - <t:{created_at}:R>\n"

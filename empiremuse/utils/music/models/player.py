@@ -12,7 +12,7 @@ from typing import Optional, Union, TYPE_CHECKING
 import disnake
 
 import empiremuse.wavelink as wavelink
-from empiremuse.utils.music.converters import time_format, md_link
+from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.others import string_to_file
 
@@ -258,7 +258,7 @@ class LavalinkPlayer(
 
         if cog and cog.error_report_queue:
             embed.description += (
-                f"\n**Fonte:** `{track.info['sourceName']}`"
+                f"\n**Fonte:** {md_code(track.info['sourceName'])}"
                 f"\n**Servidor:** `{disnake.utils.escape_markdown(self.guild.name)} [{self.guild.id}]`"
             )
 

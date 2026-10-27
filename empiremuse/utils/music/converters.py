@@ -70,7 +70,7 @@ def fix_characters(text: str, limit: int = 0):
     return text
 
 
-_URL_ENCODE_RE = re.compile(r"[()<>`\x00-\x20\x7f]")
+_URL_ENCODE_RE = re.compile(r"[()<>`\\\x00-\x20\x7f]")
 _URL_SCHEMES = {"http", "https"}
 
 

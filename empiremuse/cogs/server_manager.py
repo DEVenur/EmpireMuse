@@ -6,6 +6,7 @@ from typing import Union, TYPE_CHECKING, Optional
 import disnake
 from disnake.ext import commands
 
+from empiremuse.utils.music.converters import fix_characters
 from empiremuse.utils.others import CustomContext
 
 if TYPE_CHECKING:
@@ -77,7 +78,7 @@ class ServerManagerView(disnake.ui.View):
 
         embed = disnake.Embed(
             color=color,
-            description=f"```{self.current_guild.name}```\n"
+            description=f"```{fix_characters(self.current_guild.name)}```\n"
             f"**ID:** `{self.current_guild.id}`\n"
             f"**Dono:** `{self.current_guild.owner} [{self.current_guild.owner.id}]`\n"
             f"**Criado em:** <t:{created_at}:f> - <t:{created_at}:R>\n"

@@ -25,7 +25,7 @@ from empiremuse.rules.settings import add_dj_role as add_role, allowed_names
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import time_format, md_link, md_bracketed
+from empiremuse.utils.music.converters import time_format, md_link, md_bracketed, md_code
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -1411,7 +1411,7 @@ class MusicSettings(commands.Cog):
                 except KeyError:
                     current_player = None
 
-                txt = f"Região: `{node.region.title()}`\n"
+                txt = f"Região: {md_code(node.region.title())}\n"
 
                 used = humanize.naturalsize(node.stats.memory_used)
                 total = humanize.naturalsize(node.stats.memory_allocated)
