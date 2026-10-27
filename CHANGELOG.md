@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Segurança
+- **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
+
 ## [2.1.0] - 2026-10-27
 
 Atualização da stack (Python 3.14, Java 25, PyMongo Async), atualização automática do bot no Docker pelo comando `update` e correções de segurança.
@@ -52,7 +55,6 @@ Atualização da stack (Python 3.14, Java 25, PyMongo Async), atualização auto
 - **`docs/known-issues.md` enxuto**: só itens abertos (nenhum) e aceitos por desenho (KI-35); o histórico dos KI-01 a KI-58 fica no CHANGELOG e no git.
 
 ### Segurança
-- **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
 - **Last.FM sobre HTTPS (S-30)**: as chamadas à API e o link de autorização passam a usar HTTPS, as credenciais vão no corpo do POST (que não segue redirecionamentos) e os erros de rede do Last.FM são registrados sem a URL.
 - **Update git endurecido (item 18, fase P2)**: tag leve, tag fora da `main`, tag que mudou de SHA, árvore suja e `requires-python` incompatível são recusados antes do checkout; `SOURCE_REPO`/`origin` hostis são ignorados; nenhum subprocesso do update vê `TOKEN`, `MONGO` nem variáveis `GIT_*`.
 - **Logs sem cabeçalhos de requisição (S-28)**: erros de conexão e de busca no Lavalink, Spotify e Deezer passam a registrar só o status HTTP ou o tipo do erro, sem os cabeçalhos da requisição (que incluíam a senha do Lavalink).
