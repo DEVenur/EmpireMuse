@@ -10,6 +10,17 @@ from empiremuse.utils.music.models.event_steps import _he_dispatch
 
 logger = logging.getLogger("empiremuse.player")
 
+# Faixa dos códigos de fechamento do websocket de voz do Discord (4xxx) e genéricos; o code vem do JSON do nó (de terceiros).
+VOICE_CLOSE_CODES = range(1000, 5000)
+
+
+def _voice_close_key(code: object) -> str:
+    """Chave de agregação do erro de voz: o próprio código se for um inteiro da faixa conhecida, senão ``other``.
+
+    O código vem do Lavalink; um nó hostil que o variasse faria cada evento virar uma chave própria.
+    """
+    return str(code) if isinstance(code, int) and not isinstance(code, bool) and code in VOICE_CLOSE_CODES else "other"
+
 
 class PlayerEventsMixin:
     async def hook(self, event) -> None:
@@ -52,7 +63,7 @@ class PlayerEventsMixin:
                     self.node.identifier,
                     event.code,
                     event.reason,
-                    extra={"aggregate_key": str(event.code), **guild_extra(self.guild_id)},
+                    extra={"aggregate_key": _voice_close_key(event.code), **guild_extra(self.guild_id)},
                 )
 
             if self.is_closing:

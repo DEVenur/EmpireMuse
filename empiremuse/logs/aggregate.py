@@ -12,7 +12,7 @@ import threading
 import time
 from collections.abc import Callable
 
-from empiremuse.logs.redact import sanitize_value
+from empiremuse.logs.redact import redact, sanitize_value
 from empiremuse.rules.error_code import ERROR_CODE_RE
 
 AGGREGATE_WINDOW = 60.0
@@ -20,6 +20,7 @@ MAX_KEYS = 500
 MAX_TEMPLATE_KEY_CHARS = 256
 MAX_CODED_REPEATS = 50
 MAX_AGGREGATE_KEY_CHARS = 64
+MAX_AGGREGATE_KEY_INPUT_CHARS = 1024  # só limita o custo de redigir; a chave guardada tem MAX_AGGREGATE_KEY_CHARS
 MAX_EXC_SUMMARY_CHARS = 300
 
 type _AggregateKey = tuple[str, int, str, str | None, str | None, str | None, str | None]
@@ -34,11 +35,12 @@ def _normalize_template(raw: object) -> str:
 def _normalize_aggregate_key(raw: object) -> str | None:
     """Chave opcional que o produtor passa em ``extra={"aggregate_key": ...}`` para separar problemas de mesmo template.
 
-    Só ``str`` não vazia (cortada e saneada); outro tipo vale como ausente. Só dado de baixa cardinalidade (identificador de nó, código),
-    nunca ID de servidor, canal ou usuário. Nunca é emitida.
+    Só ``str`` não vazia (saneada, redigida e só então cortada); outro tipo vale como ausente. Como a chave de um registro nunca pode
+    guardar segredo cru, a redação vem ANTES do corte (um segredo que atravessa o limite não deixa fragmento). Só dado de baixa
+    cardinalidade (identificador de nó, código), nunca ID de servidor, canal ou usuário. Nunca é emitida.
     """
     if isinstance(raw, str) and raw:
-        return sanitize_value(raw[:MAX_AGGREGATE_KEY_CHARS])
+        return redact(sanitize_value(raw[:MAX_AGGREGATE_KEY_INPUT_CHARS]))[:MAX_AGGREGATE_KEY_CHARS]
     return None
 
 
