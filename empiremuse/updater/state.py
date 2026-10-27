@@ -29,7 +29,7 @@ PENDING_MAX_AGE_SECONDS = 24 * 3600
 MAX_FILE_BYTES = 64 * 1024
 MAX_BOOTS = 1000
 FLOWS = ("git", "docker")
-STATUSES = ("pending", "rolled_back")
+STATUSES = ("pending", "ready", "rolled_back")
 
 _SHA1 = re.compile(r"[0-9a-f]{40}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -50,7 +50,11 @@ class UpdateRequest:
 
 @dataclasses.dataclass(frozen=True)
 class PendingUpdate:
-    """Atualização em andamento; ``prev_sha`` vale no fluxo git e ``digest`` no fluxo Docker (o outro fica ``None``)."""
+    """Atualização em andamento; ``prev_sha`` vale no fluxo git e ``digest`` no fluxo Docker (o outro fica ``None``).
+
+    ``status``: ``pending`` (subindo; o ``boot_guard`` conta), ``ready`` (o pool ficou saudável; o aviso ainda não saiu) ou
+    ``rolled_back`` (o ``boot_guard`` reverteu o código).
+    """
 
     flow: str
     from_version: Version
