@@ -202,7 +202,7 @@ class TestRemocaoQueFalha:
 
         resultado = await Owner.exportsource.callback(cog, ctx(enviar=AsyncMock(return_value=mensagem)))
 
-        assert resultado == f"Arquivo [source.zip]({mensagem.jump_url}) foi enviado com sucesso no seu DM."
+        assert resultado == f"Arquivo [source.zip](<{mensagem.jump_url}>) foi enviado com sucesso no seu DM."
         assert ".env-temp" not in restos(ambiente)
 
     @pytest.mark.asyncio

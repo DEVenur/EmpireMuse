@@ -6,9 +6,17 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import (
+    fix_characters,
+    time_format,
+    get_button_style,
+    music_source_image,
+    md_link,
+    md_bracketed,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class DefaultStaticSkin:
@@ -51,14 +59,14 @@ class DefaultStaticSkin:
             f"> -# 🔴 **⠂Transmitindo:** <t:{int(current_time.timestamp())}:R>\n"
             if player.current.is_stream
             else (
-                f"> -# ⏰ **⠂Duração:** `{time_format(player.current.duration)} [`<t:{int(current_time.timestamp())}:R>`]`\n"
+                f"> -# ⏰ **⠂Duração:** {md_bracketed(f'<t:{int(current_time.timestamp())}:R>', prefix=f'{time_format(player.current.duration)} ')}\n"
                 if not player.paused
                 else ""
             )
         )
 
         txt = (
-            f"-# [`{player.current.single_title}`]({player.current.uri or player.current.search_uri})\n\n"
+            f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri)}\n\n"
             f"{duration}"
             f"> -# 💠 **⠂Por:** {player.current.authors_md}"
         )
@@ -67,7 +75,7 @@ class DefaultStaticSkin:
             txt += f"\n> -# ✋ **⠂Pedido por:** <@{player.current.requester}>"
         else:
             try:
-                mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendação', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendação`"
             txt += f"\n> -# 👍 **⠂Adicionado via:** {mode}"
@@ -90,10 +98,10 @@ class DefaultStaticSkin:
             txt += f"\n> -# {e} **⠂Modo de repetição:** `{m}`"
 
         if player.current.album_name:
-            txt += f"\n> -# 💽 **⠂Álbum:** [`{fix_characters(player.current.album_name, limit=20)}`]({player.current.album_url})"
+            txt += f"\n> -# 💽 **⠂Álbum:** {md_link(player.current.album_name, player.current.album_url, limit=20)}"
 
         if player.current.playlist_name:
-            txt += f"\n> -# 📑 **⠂Playlist:** [`{fix_characters(player.current.playlist_name, limit=20)}`]({player.current.playlist_url})"
+            txt += f"\n> -# 📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}"
 
         if player.keep_connected:
             txt += "\n> -# ♾️ **⠂Modo 24/7:** `Ativado`"
@@ -128,7 +136,7 @@ class DefaultStaticSkin:
                     duration = time_format(t.duration) if not t.is_stream else "🔴 Ao vivo"
 
                     queue_txt += (
-                        f"-# `┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"-# `┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"-# `└ ⏲️ {duration}`"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `✋` <@{t.requester}>\n"
@@ -140,7 +148,7 @@ class DefaultStaticSkin:
                     )
 
                     queue_txt += (
-                        f"-# `┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"-# `┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"-# `└ ⏲️` {duration}"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `✋` <@{t.requester}>\n"
@@ -188,7 +196,7 @@ class DefaultStaticSkin:
                     duration = time_format(t.duration) if not t.is_stream else "🔴 Ao vivo"
 
                     queue_txt += (
-                        f"-# `┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"-# `┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"-# `└ ⏲️ {duration}`"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `👍⠂Recomendada`\n"
@@ -200,7 +208,7 @@ class DefaultStaticSkin:
                     )
 
                     queue_txt += (
-                        f"-# `┌ {n + 1})` [`{fix_characters(t.title, limit=34)}`]({t.uri})\n"
+                        f"-# `┌ {n + 1})` {md_link(t.title, t.uri, limit=34)}\n"
                         f"-# `└ ⏲️` {duration}"
                         + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                         + f" **|** `👍⠂Recomendada`\n"
@@ -221,12 +229,18 @@ class DefaultStaticSkin:
         data["embeds"] = [embed_queue, embed] if embed_queue else [embed]
 
         data["components"] = [
-            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
             disnake.ui.Button(
-                emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)
+                emoji=app_emoji(player.bot, "playpause"),
+                custom_id=PlayerControls.pause_resume,
+                style=get_button_style(player.paused),
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "music_queue"),
+                custom_id=PlayerControls.queue,
+                disabled=not (player.queue or player.queue_autoplay),
             ),
             disnake.ui.Select(
                 placeholder="Mais opções:",
@@ -237,7 +251,7 @@ class DefaultStaticSkin:
                 options=[
                     disnake.SelectOption(
                         label="Adicionar música",
-                        emoji="➕",
+                        emoji=app_emoji(player.bot, "add_music"),
                         value=PlayerControls.add_song,
                         description="Adicionar uma música/playlist na fila.",
                     ),

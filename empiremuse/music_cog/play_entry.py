@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import asyncio
 from typing import Union
 
@@ -16,10 +17,7 @@ from empiremuse.utils.music.checks import (
     check_deafen,
     check_pool_bots,
 )
-from empiremuse.utils.music.converters import (
-    URL_REG,
-    google_search,
-)
+from empiremuse.utils.music.converters import URL_REG, google_search, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
     MissingVoicePerms,
@@ -42,6 +40,8 @@ from empiremuse.music_cog.shared import (
     playlist_opts,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class PlayEntryMixin:
     @check_voice()
@@ -52,7 +52,7 @@ class PlayEntryMixin:
     async def message_play(self, inter: disnake.MessageCommandInteraction):
         if not inter.target.content:
             emb = disnake.Embed(
-                description=f"Não há texto na [mensagem]({inter.target.jump_url}) selecionada...",
+                description=f"Não há texto na {md_link('mensagem', inter.target.jump_url, code=False)} selecionada...",
                 color=disnake.Colour.red(),
             )
             await inter.send(embed=emb, ephemeral=True)
@@ -208,7 +208,7 @@ class PlayEntryMixin:
         try:
             player = bot.music.players[guild_id]
         except KeyError:
-            print(f"Player debug test 20: {bot.user} | {self.bot.user}")
+            logger.debug("Player debug test 20: %s | %s", bot.user, self.bot.user)
             raise GenericError(
                 f"**O player do bot {bot.user.mention} foi finalizado antes de conectar no canal de voz "
                 f"(ou o player não foi inicializado)...\nPor via das dúvidas tente novamente.**"
@@ -284,9 +284,7 @@ class PlayEntryMixin:
             else:
                 embed = disnake.Embed(color=self.bot.get_color(me))
 
-                embed.description = (
-                    f"**Preciso que algum staff me convide para falar no palco: [{channel.name}]({channel.jump_url}).**"
-                )
+                embed.description = f"**Preciso que algum staff me convide para falar no palco: {md_link(channel.name, channel.jump_url, code=False)}.**"
 
                 embed.set_footer(
                     text="💡 Dica: para me permitir falar no palco automaticamente será necessário me conceder "

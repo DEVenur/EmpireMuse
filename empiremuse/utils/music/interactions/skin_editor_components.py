@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import disnake
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 # Limite de fields por embed e de embeds por mensagem aceitos pelo Discord.
 MAX_EMBED_FIELDS = 25
@@ -151,7 +152,9 @@ class SkinEditorComponentsMixin:
         add_embed_btn.callback = self.add_embed
         self.add_item(add_embed_btn)
 
-        setup_queue_btn = disnake.ui.Button(label="Configurar placeholder da fila", emoji="📑")
+        setup_queue_btn = disnake.ui.Button(
+            label="Configurar placeholder da fila", emoji=app_emoji(self.bot, "music_queue")
+        )
         setup_queue_btn.callback = self.setup_queue
         self.add_item(setup_queue_btn)
 
@@ -170,12 +173,14 @@ class SkinEditorComponentsMixin:
             delete_skin_btn.callback = self.delete_skin
             self.add_item(delete_skin_btn)
 
-        back_btn = disnake.ui.Button(label="Voltar ao menu anterior", emoji="⬅️")
+        back_btn = disnake.ui.Button(label="Voltar ao menu anterior", emoji=app_emoji(self.bot, "arrow_left"))
         back_btn.callback = self.back
         self.add_item(back_btn)
 
         self.add_item(
-            disnake.ui.Button(label="Lista de placeholders", emoji="❓", custom_id="skin_editor_placeholders")
+            disnake.ui.Button(
+                label="Lista de placeholders", emoji=app_emoji(self.bot, "help"), custom_id="skin_editor_placeholders"
+            )
         )
 
         save_btn = disnake.ui.Button(label="Salvar Skin", emoji="💾", disabled=save_disabled)

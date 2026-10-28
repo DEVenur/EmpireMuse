@@ -43,6 +43,10 @@ select = [
     "E9",
     "F",
     "E722",
+    "T201",  # print: a saída vai pelo pacote empiremuse.logs
+    "T203",  # pprint
+    "G004",  # f-string no logger (a redação e a agregação usam o modelo da mensagem)
+    "LOG015",  # chamada ao logger raiz (use um logger nomeado)
 ]
 # Violações legadas pré-existentes ignoradas temporariamente para permitir
 # adoção gradual sem risco de quebra de comportamento em produção
@@ -59,6 +63,14 @@ ignore = [
     "F541",  # f-string without any placeholders
     "F841",  # local variable is assigned to but never used
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Script isolado: roda com `python -I -S` em outro processo, sem o pacote empiremuse.logs
+# (nem o resto do projeto), então o `print` para o stdout/stderr do processo pai é o único canal.
+"empiremuse/updater/proxy.py" = ["T201"]
+# Testes de redação: o segredo vai embutido na mensagem por f-string de propósito, para provar que
+# o redator e a chave do agregador o limpam mesmo quando o código chamador não usa argumentos do logger.
+"tests/logs/test_integration.py" = ["G004"]
 
 [tool.mypy]
 python_version = "3.14"

@@ -8,11 +8,21 @@ from typing import Optional, TYPE_CHECKING, Union
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format
+from empiremuse.utils.music.converters import fix_characters, md_url, time_format
 
 if TYPE_CHECKING:
     from empiremuse.utils.others import CustomContext
     from empiremuse.utils.music.models import LavalinkPlayer
+
+
+def _text(value: object) -> str:
+    """Placeholder de texto de template de skin: o texto vem de terceiros ou do usuário e não pode abrir markdown."""
+    return fix_characters(str(value))
+
+
+def _url(value: object) -> str:
+    """Placeholder de URL de template de skin: só http/https com host; recusada vira vazio (some o link, não o template)."""
+    return md_url(value) or ""
 
 
 def track_title_format(
@@ -27,9 +37,9 @@ def track_title_format(
         data.replace("{track.title_25}", fix_characters(track_title, 25))
         .replace("{track.title_42}", fix_characters(track_title, 42))
         .replace("{track.title_58}", fix_characters(track_title, 58))
-        .replace("{track.title}", track_title)
-        .replace("{track.url}", track_url)
-        .replace("{track.author}", track_author)
+        .replace("{track.title}", _text(track_title))
+        .replace("{track.url}", _url(track_url))
+        .replace("{track.author}", _text(track_author))
         .replace("{track.duration}", time_format(track_duration) if track_duration else "🔴 Ao vivo")
         .replace("{track.number}", str(track_number))
     )
@@ -71,9 +81,9 @@ def replaces(
                 track_duration=player.current.duration if not player.current.is_stream else 0,
                 data=txt,
             )
-            .replace("{track.thumb}", player.current.thumb)
-            .replace("{playlist.name}", player.current.playlist_name or "Sem playlist")
-            .replace("{playlist.url}", player.current.playlist_url or player.controller_link)
+            .replace("{track.thumb}", _url(player.current.thumb))
+            .replace("{playlist.name}", _text(player.current.playlist_name or "Sem playlist"))
+            .replace("{playlist.url}", _url(player.current.playlist_url or player.controller_link))
             .replace(
                 "{player.loop.mode}",
                 "Desativado" if not player.loop else "Música atual" if player.loop == "current" else "Fila",
@@ -85,13 +95,13 @@ def replaces(
             .replace("{player.hint}", player.current_hint)
             .replace("{player.log.text}", player.command_log or "Sem registro.")
             .replace("{player.log.emoji}", player.command_log_emoji or "")
-            .replace("{requester.global_name}", requester_global_name)
-            .replace("{requester.display_name}", requester_display_name)
+            .replace("{requester.global_name}", _text(requester_global_name))
+            .replace("{requester.display_name}", _text(requester_display_name))
             .replace("{requester.mention}", requester_mention)
-            .replace("{requester.avatar}", requester_avatar)
+            .replace("{requester.avatar}", _url(requester_avatar))
             .replace("{guild.color}", hex(guild.me.color.value)[2:])
-            .replace("{guild.icon}", guild.icon.with_static_format("png").url if guild.icon else "")
-            .replace("{guild.name}", guild.name)
+            .replace("{guild.icon}", _url(guild.icon.with_static_format("png").url if guild.icon else ""))
+            .replace("{guild.name}", _text(guild.name))
             .replace("{guild.id}", str(guild.id))
             .replace("{queue_format}", queue_text or "Fila vazia...")
         )
@@ -114,7 +124,7 @@ def replaces(
                 track_duration=track["duration"],
                 data=txt,
             )
-            .replace("{track.thumb}", asset_url("skin_preview_placeholder_yt.jpg"))
+            .replace("{track.thumb}", _url(asset_url("skin_preview_placeholder_yt.jpg")))
             .replace("{playlist.name}", "🎵 DV 🎶")
             .replace("{playlist.url}", "https://www.youtube.com/playlist?list=PLKlXSJdWVVAD3iztmL2vFVrwA81sRkV7n")
             .replace("{player.loop.mode}", "Música Atual")
@@ -124,13 +134,13 @@ def replaces(
             .replace("{player.nightcore}", "Ativado")
             .replace("{player.log.emoji}", "⏭️")
             .replace("{player.log.text}", f"{ctx.author} pulou a música.")
-            .replace("{requester.global_name}", ctx.author.global_name)
-            .replace("{requester.display_name}", ctx.author.display_name)
+            .replace("{requester.global_name}", _text(ctx.author.global_name))
+            .replace("{requester.display_name}", _text(ctx.author.display_name))
             .replace("{requester.mention}", ctx.author.mention)
-            .replace("{requester.avatar}", ctx.author.display_avatar.with_static_format("png").url)
+            .replace("{requester.avatar}", _url(ctx.author.display_avatar.with_static_format("png").url))
             .replace("{guild.color}", hex(color)[2:])
-            .replace("{guild.icon}", guild.icon.with_static_format("png").url if guild.icon else "")
-            .replace("{guild.name}", guild.name)
+            .replace("{guild.icon}", _url(guild.icon.with_static_format("png").url if guild.icon else ""))
+            .replace("{guild.name}", _text(guild.name))
             .replace("{guild.id}", str(guild.id))
             .replace("{queue_format}", queue_text or "(Sem músicas).")
         )

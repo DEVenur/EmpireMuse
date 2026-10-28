@@ -14,6 +14,9 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.music.app_emojis import APP_EMOJIS
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import GenericError, ArgumentParsingError
 
 if TYPE_CHECKING:
@@ -183,6 +186,11 @@ class EmbedPaginator(disnake.ui.View):
         self, ctx: Union[CustomContext, disnake.MessageInteraction], embeds: list[disnake.Embed], *, timeout=180
     ):
         super().__init__(timeout=timeout)
+        bot = getattr(ctx, "bot", None)
+        # o Unicode dos decoradores é a reserva; o emoji do bot que envia vale quando existe
+        self.back.emoji = app_emoji(bot, "arrow_left")
+        self.next.emoji = app_emoji(bot, "arrow_right")
+        self.close.emoji = app_emoji(bot, "stop")
         self.ctx = ctx
         self.embeds = embeds
         self.current = 0
@@ -403,8 +411,8 @@ async def send_idle_embed(
         + ("no post" if is_forum else "no canal ou na conversa abaixo")
         + f" (ou clique no botão abaixo ou use o comando {cmd} aqui ou em algum outro canal)**\n\n"
         "**Você pode usar um nome ou um link de site compatível:**\n"
-        "[`Youtube`](<https://www.youtube.com/>), [`Soundcloud`](<https://soundcloud.com/>), "
-        "[`Spotify`](<https://open.spotify.com/>), [`Twitch`](<https://www.twitch.tv/>)",
+        f"{md_link('Youtube', 'https://www.youtube.com/')}, {md_link('Soundcloud', 'https://soundcloud.com/')}, "
+        f"{md_link('Spotify', 'https://open.spotify.com/')}, {md_link('Twitch', 'https://www.twitch.tv/')}",
         color=bot.get_color(target.guild.me),
     )
 
@@ -417,7 +425,7 @@ async def send_idle_embed(
 
     opts = [
         disnake.SelectOption(
-            label=k, value=k, emoji=music_source_emoji_url(v["url"])[0], description=v.get("description")
+            label=k, value=k, emoji=music_source_emoji_url(v["url"], bot)[0], description=v.get("description")
         )
         for k, v in guild_data["player_controller"]["fav_links"].items()
     ]
@@ -509,7 +517,7 @@ async def send_idle_embed(
         isinstance(message.channel, (disnake.Thread, disnake.TextChannel))
         and not message.pinned
         and not is_forum
-        and target.guild.me.guild_permissions.manage_messages
+        and message.channel.permissions_for(target.guild.me).pin_messages
     ):
         await message.pin(reason="Player controller")
 
@@ -581,23 +589,26 @@ am_url_regex = re.compile(
 )
 js_url_regex = re.compile(r"(https?://)(www\.)?jiosaavn\.com/(song|album|featured|artist)/([a-zA-Z0-9-_]+)")
 
-music_source_emoji_data = {
-    "youtube": "📺",
-    "soundcloud": "☁️",
-    "spotify": "🟢",
-    "deezer": "🟣",
-    "applemusic": "🍎",
-    "twitch": "🎮",
-    "jiosaavn": "📻",
-    "tidal": "🌊",
-    "youtubemusic": "🎶",
-    "last.fm": "🎧",
-    "bandcamp": "💿",
+# nome da fonte (como o resto do código a chama) -> nome do emoji em ``APP_EMOJIS``
+_SOURCE_EMOJI_NAMES = {
+    "youtube": "youtube",
+    "soundcloud": "soundcloud",
+    "spotify": "spotify",
+    "deezer": "deezer",
+    "applemusic": "applemusic",
+    "twitch": "twitch",
+    "jiosaavn": "jiosaavn",
+    "tidal": "tidal",
+    "youtubemusic": "youtube_music",
+    "last.fm": "lastfm",
+    "bandcamp": "bandcamp",
 }
+music_source_emoji_data = {source: APP_EMOJIS[name] for source, name in _SOURCE_EMOJI_NAMES.items()}
 
 
-def music_source_emoji(name: str):
-    return music_source_emoji_data.get(name, "▶️")
+def music_source_emoji(name: str, bot: BotCore | None = None):
+    """Emoji da fonte: ``emojis.json`` do dono, emoji de aplicação de ``bot`` ou Unicode (sem ``bot``, só a reserva)."""
+    return app_emoji(bot, _SOURCE_EMOJI_NAMES.get(name, "play_source"))
 
 
 def get_source_emoji_cfg(bot: BotCore, url: str):
@@ -623,50 +634,55 @@ def get_source_emoji_cfg(bot: BotCore, url: str):
     try:
         return bot.pool.emoji_data["music_sources"][source]
     except Exception:
-        return None
+        pass
+
+    name = _SOURCE_EMOJI_NAMES[source]
+    value = app_emoji(bot, name)
+
+    return value if value != APP_EMOJIS[name] else None
 
 
-def music_source_emoji_url(url: str):
+def music_source_emoji_url(url: str, bot: BotCore | None = None):
     if yt_url_regex.match(url):
-        return music_source_emoji_data["youtube"], "youtube"
+        return app_emoji(bot, "youtube"), "youtube"
 
     if sc_url_regex.match(url):
-        return music_source_emoji_data["soundcloud"], "soundcloud"
+        return app_emoji(bot, "soundcloud"), "soundcloud"
 
     if dz_url_regex.match(url):
-        return music_source_emoji_data["deezer"], "deezer"
+        return app_emoji(bot, "deezer"), "deezer"
 
     if sp_url_regex.match(url):
-        return music_source_emoji_data["spotify"], "spotify"
+        return app_emoji(bot, "spotify"), "spotify"
 
     if tw_url_regex.match(url):
-        return music_source_emoji_data["twitch"], "twitch"
+        return app_emoji(bot, "twitch"), "twitch"
 
     if am_url_regex.match(url):
-        return music_source_emoji_data["applemusic"], "applemusic"
+        return app_emoji(bot, "applemusic"), "applemusic"
 
     if url == ">> saved_queue <<":
         return "💾", ""
 
-    return "▶️", "Plat. Desconhecida"
+    return app_emoji(bot, "play_source"), "Plat. Desconhecida"
 
 
-def music_source_emoji_id(id_: str):
+def music_source_emoji_id(id_: str, bot: BotCore | None = None):
     id_ = id_.replace("> itg: ", "").replace("> fav: ", "").replace("> svq: ", "").split()[0]
 
     if id_ == "【YT】:":
-        return music_source_emoji_data["youtube"]
+        return app_emoji(bot, "youtube")
 
     if id_ == "【SC】:":
-        return music_source_emoji_data["soundcloud"]
+        return app_emoji(bot, "soundcloud")
 
     if id_ == "【SP】:":
-        return music_source_emoji_data["spotify"]
+        return app_emoji(bot, "spotify")
 
     if id_ == "【DZ】:":
-        return music_source_emoji_data["deezer"]
+        return app_emoji(bot, "deezer")
 
-    return "▶️"
+    return app_emoji(bot, "play_source")
 
 
 async def select_bot_pool(

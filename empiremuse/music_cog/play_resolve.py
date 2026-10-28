@@ -2,8 +2,7 @@
 """Resolução da busca do `/play`: perfis, links e serviço de busca."""
 
 import datetime
-import pprint
-import traceback
+import logging
 from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse, parse_qs
 
@@ -13,10 +12,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.audio_sources.deezer import deezer_regex
 from empiremuse.utils.music.audio_sources.spotify import spotify_regex_w_user
-from empiremuse.utils.music.converters import (
-    YOUTUBE_VIDEO_REG,
-    music_source_image,
-)
+from empiremuse.utils.music.converters import YOUTUBE_VIDEO_REG, music_source_image, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -37,6 +33,8 @@ from empiremuse.music_cog.shared import (
     sc_profile_regex,
     is_discord_attachment_url,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.music_cog.play_state import PlayState
@@ -174,7 +172,7 @@ class PlayResolveMixin:
 
                 try:
                     if not info["entries"]:
-                        pprint.pprint(info)
+                        logger.debug("Info da busca: %s", info)
                         raise GenericError(f"**Conteúdo indisponível (ou privado):**\n{query}")
                 except KeyError:
                     raise GenericError("**Ocorreu um erro ao tentar obter resultados para a opção selecionada...**")
@@ -222,7 +220,7 @@ class PlayResolveMixin:
                 query = info["entries"][0]["url"]
 
             else:
-                emoji, platform = music_source_emoji_url(query)
+                emoji, platform = music_source_emoji_url(query, self.bot)
 
                 view = SelectInteraction(
                     user=inter.author,
@@ -247,7 +245,7 @@ class PlayResolveMixin:
                 for page_index, page in enumerate(disnake.utils.as_chunks(info["entries"], 15)):
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"-# ` {(15 * page_index) + n + 1}. `[`{i['title']}`]({i['url']})"
+                            f"-# ` {(15 * page_index) + n + 1}. `{md_link(i['title'], i['url'])}"
                             for n, i in enumerate(page)
                         )
                         + "\n\n**Selecione uma playlist abaixo:**\n"
@@ -306,7 +304,7 @@ class PlayResolveMixin:
                     try:
                         await func(embed=embed, components=song_request_buttons)
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha ao atualizar a mensagem de pedido de música")
                     return True
 
                 query = info["entries"][int(view.selected[14:])]["url"]
@@ -402,7 +400,7 @@ class PlayResolveMixin:
                 try:
                     await func(embed=embed, components=song_request_buttons)
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha ao atualizar a mensagem de pedido de música")
                 return True
 
             if view.selected == "music":
@@ -450,7 +448,7 @@ class PlayResolveMixin:
             user=inter.author,
             timeout=45,
             buttons=[
-                disnake.ui.Button(label=ms.title(), custom_id=ms, emoji=music_source_emoji(ms))
+                disnake.ui.Button(label=ms.title(), custom_id=ms, emoji=music_source_emoji(ms, self.bot))
                 for ms in sorted(music_sources)
             ],
         )

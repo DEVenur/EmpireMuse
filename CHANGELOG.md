@@ -8,6 +8,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Emojis de aplicação (ícones originais de volta em botões e menus)**: cada bot principal envia, ao ficar pronto, os emojis de `assets/emojis/` para a própria aplicação no Discord (só os que faltam; nunca apaga nem altera os existentes), e botões, menus e mensagens passam a usá-los. Sem o emoji, vale a reserva em Unicode; o `emojis.json` do dono continua tendo precedência. Chave nova `APP_EMOJIS_GUILD_BOTS` (padrão `false`): com `true`, os bots de servidor do `guild_bots.json` também enviam os emojis. Guia em `docs/guides/emojis.md`.
 - **Log centralizado com a biblioteca padrão (item 7, fase P1)**: o pacote `empiremuse/logs/` configura o `logging` do processo num ponto só. Console com cor por severidade (nunca no arquivo), contexto de bot e servidor em cada linha e arquivo de log opcional. Chaves novas no `.example.env`:
   - `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING` ou `ERROR`; padrão `INFO`).
   - `LOG_COLOR` (`on` ou `off`; padrão `on`, só no console).
@@ -24,10 +25,24 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Guia de logs**: novo `docs/guides/logs.md` (chaves, nível por servidor, arquivo e rotação, o que nunca é gravado, como investigar um `ERR-XXXXXX`) e o [ADR-0005](docs/adr/0005-logs-stdlib.md).
 
 ### Alterado
+- **Permissões do convite do bot**: o convite passa a pedir Ler o Histórico de Mensagens, Definir o Status do Canal de Voz (necessária ao `/setvoicestatus`) e Fixar Mensagens, e deixa de pedir Usar Comandos de Aplicativo e Pedir para Falar (sem uso). O padrão de `INVITE_PERMISSIONS` passa a `2533601240804560` no `.example.env`, no modelo da Hostinger e no egg do Pterodactyl. Quem já definiu `INVITE_PERMISSIONS` mantém o valor antigo até alterá-lo.
+- **`print` migrado para o log (item 7, fases P2 e P3)**: cerca de 100 `print`, incluindo todo o caminho de subida do bot, passam a sair pelo log, com nível, cor, contexto e redação de segredos.
+- **Sem `print` no caminho de subida (item 7, fase P2)**: a subida do bot deixa de usar `print`; tudo sai pelo log, com nível, cor e contexto.
 - **`print` e `traceback.print_exc()` migrados para o log (item 7, fases P2 a P4)**: os `print` (incluindo todo o caminho de subida do bot) e os `traceback.print_exc()` do código do bot passam a sair pelo log, com nível, cor, contexto e redação de segredos.
 - **`COMMAND_LOG` só com IDs (item 7, fase P4)**: o registro de comandos deixa de gravar nome de usuário, apelido, nome do servidor, conteúdo da mensagem e URL de anexo; grava `user_id`, `guild_id`, o comando e as opções resumidas por tipo, no console e no arquivo. Continua opt-in.
 
+### Corrigido
+- **Autoplay a partir de uma faixa do Spotify**: deixa de falhar com `TypeError` e de esperar 15 s toda vez que a fila acaba.
+- **Recomendações do Spotify por artista**: voltam a funcionar (a busca pede até 10 resultados, o máximo da API). Só erros transitórios são repetidos (falhas de conexão, timeouts e HTTP 5xx); 4xx, 429 e erros de código falham uma vez, sem espera. "Sem resultados" de um provedor deixa de imprimir um traceback.
+- **Fixar a mensagem do player**: a checagem passa a exigir Fixar Mensagens, em vez de Gerenciar Mensagens.
+- **Lista de artistas das faixas do Spotify**: os três montadores da lista de artistas com link passam a montar o link com escape, então um nome com caracteres especiais deixa de quebrar a exibição.
+
+### Corrigido
+- **Ícone do Apple Music**: o arquivo `assets/provider_applemusic_icon.png` estava truncado e aparecia quebrado onde o bot o exibe; foi substituído pela imagem completa (500×500).
+
 ### Segurança
+- **Nomes externos com escape de markdown (S-31)**: nomes vindos de fontes externas (artistas, títulos, playlists, álbuns, Last.fm) e de skins personalizadas passam por escape de markdown antes de aparecer em embeds e mensagens; links montados pelo bot só aceitam `http` e `https`.
+- **`ytoauth` só por mensagem direta (S-32)**: o comando envia a confirmação da conta do Google e o token só por mensagem direta ao dono, que se apaga em 10 minutos; o canal recebe só um aviso. Quem já teve um token exibido num canal deve revogá-lo e gerar outro (`docs/guides/youtube-oauth.md`).
 - **Webhook de erro com redação (item 7, fase P4)**: o traceback enviado ao webhook de erros passa pelo mesmo saneamento e redator do log, em vez de mascarar só o token do próprio bot.
 - **Menções do bot sem `@everyone` nem cargos**: o `allowed_mentions` padrão do bot deixa de permitir `@everyone` e menções a cargos; menções a usuários seguem funcionando.
 - **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.

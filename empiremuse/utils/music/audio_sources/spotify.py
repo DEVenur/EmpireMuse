@@ -20,7 +20,7 @@ from rapidfuzz import fuzz
 from empiremuse import paths
 from empiremuse.rules.ratelimit import retry_after_seconds
 from empiremuse.rules.title_match import title_matches
-from empiremuse.utils.music.converters import fix_characters, URL_REG
+from empiremuse.utils.music.converters import fix_characters, URL_REG, md_link
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, LavalinkPlaylist
 from empiremuse.utils.music.track_encoder import encode_track
@@ -288,8 +288,9 @@ class SpotifyClient:
 
         return await self.request(path="recommendations", params={"seed_tracks": track_ids, "limit": limit})
 
-    async def track_search(self, query: str):
-        return await self.request(path="search", params={"q": query, "type": "track", "limit": 10})
+    async def track_search(self, query: str, limit: int = 10):
+        clamped_limit = max(1, min(10, int(limit)))
+        return await self.request(path="search", params={"q": query, "type": "track", "limit": clamped_limit})
 
     async def get_access_token(self):
         if self.token_refresh:
@@ -327,7 +328,7 @@ class SpotifyClient:
 
                 self.spotify_cache["expires_at"] = time.time() + self.spotify_cache["expires_in"]
 
-                print("🎶 - Access token do spotify obtido com sucesso via API Oficial.")
+                logger.info("Access token do spotify obtido com sucesso via API Oficial.")
 
         finally:
             self.token_refresh = False
@@ -413,7 +414,7 @@ class SpotifyClient:
                         pass
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                        md_link(a["name"], a["external_urls"]["spotify"]) for a in result["artists"]
                     )
 
                     try:
@@ -468,7 +469,7 @@ class SpotifyClient:
             ]
 
             t.info["extra"]["authors_md"] = ", ".join(
-                f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                md_link(a["name"], a["external_urls"]["spotify"]) for a in result["artists"]
             )
 
             try:
@@ -535,7 +536,7 @@ class SpotifyClient:
                 ]
 
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in track["artists"]
+                    md_link(a["name"], a["external_urls"]["spotify"]) for a in track["artists"]
                 )
 
                 try:
@@ -645,11 +646,12 @@ class SpotifyClient:
                     if f"feat. {i['name'].lower()}" not in t["name"].lower()
                 ]
                 track.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{fix_characters(a['name'])}`](<"
-                    + a["external_urls"].get(
-                        "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
+                    md_link(
+                        a["name"],
+                        a["external_urls"].get(
+                            "spotify", f"https://www.youtube.com/results?search_query={quote(t['name'])}"
+                        ),
                     )
-                    + ">)"
                     for a in t["artists"]
                 )
             else:

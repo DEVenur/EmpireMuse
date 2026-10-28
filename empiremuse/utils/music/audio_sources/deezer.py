@@ -10,7 +10,7 @@ from cachetools import TTLCache
 from rapidfuzz import fuzz
 
 from empiremuse.rules.title_match import title_matches
-from empiremuse.utils.music.converters import fix_characters, URL_REG
+from empiremuse.utils.music.converters import URL_REG, md_link
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkTrack, LavalinkPlaylist
 from empiremuse.utils.music.track_encoder import encode_track
@@ -103,7 +103,7 @@ class DeezerClient:
                         continue
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})" for a in artists
+                        md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
                     )
                     t.info["extra"]["artist_id"] = result["artist"]["id"]
 
@@ -148,7 +148,7 @@ class DeezerClient:
 
             t.info["extra"]["authors"] = [a["name"] for a in artists]
             t.info["extra"]["authors_md"] = ", ".join(
-                f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})" for a in artists
+                md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
             )
             t.info["extra"]["artist_id"] = result["artist"]["id"]
 
@@ -201,7 +201,7 @@ class DeezerClient:
 
                 t.info["extra"]["authors"] = [a["name"] for a in artists]
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})" for a in artists
+                    md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
                 )
                 t.info["extra"]["artist_id"] = result["artist"]["id"]
 
@@ -286,7 +286,7 @@ class DeezerClient:
 
             track.info["extra"]["authors"] = [a["name"] for a in artists]
             track.info["extra"]["authors_md"] = ", ".join(
-                f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})" for a in artists
+                md_link(a["name"], f"https://www.deezer.com/artist/{a['id']}") for a in artists
             )
             track.info["extra"]["artist_id"] = t["artist"]["id"]
 
