@@ -29,6 +29,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Recomendações do Spotify por artista**: voltam a funcionar (a busca pede até 10 resultados, o máximo da API). Só erros transitórios são repetidos (falhas de conexão, timeouts e HTTP 5xx); 4xx, 429 e erros de código falham uma vez, sem espera. "Sem resultados" de um provedor deixa de imprimir um traceback.
 - **Fixar a mensagem do player**: a checagem passa a exigir Fixar Mensagens, em vez de Gerenciar Mensagens.
 
+### Corrigido
+- **Ícone do Apple Music**: o arquivo `assets/provider_applemusic_icon.png` estava truncado e aparecia quebrado onde o bot o exibe; foi substituído pela imagem completa (500×500).
+
 ### Segurança
 - **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
