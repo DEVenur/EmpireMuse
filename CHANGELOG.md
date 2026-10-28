@@ -8,6 +8,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Corrigido
+- **ID do OAuth do painel no log**: o `PANEL_OAUTH_CLIENT_ID` (ID público do bot 1, um número de 17 a 20 dígitos) deixa de ser mascarado no log, nos relatórios de erro e no shell do dono. Nenhum segredo muda: `PANEL_OAUTH_CLIENT_SECRET`, os demais `*_CLIENT_ID` (como `SPOTIFY_CLIENT_ID`) e as chaves do Last.fm continuam mascarados.
 - **Aviso de PyNaCl e dave.py no console**: o console deixa de mostrar, a cada subida, o aviso da biblioteca de que o suporte a voz não está instalado (`... not installed, voice will NOT be supported`). Os demais avisos da biblioteca continuam aparecendo.
 
 ### Removido

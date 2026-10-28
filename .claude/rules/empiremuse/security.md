@@ -19,6 +19,8 @@ paths:
 - São segredos: `TOKEN`, `TOKEN_BOT_*`, `MONGO`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
   `LASTFM_KEY`, `LASTFM_SECRET`, senhas de nós Lavalink, URLs de webhook (`*_WEBHOOK`) e
   tokens OAuth (por exemplo, o `refreshToken` do YouTube).
+- Exceção única: `PANEL_OAUTH_CLIENT_ID` é público (vai em toda URL de autorização) e fica fora da
+  máscara só com valor snowflake (17 a 20 dígitos ASCII); com qualquer outro formato continua segredo.
 - Nunca coloque segredos em código, logs (`print`/`logging`), embeds, mensagens, anexos,
   relatórios de erro por webhook nem em mensagens de exceção. Para diagnóstico, registre só se o
   valor está presente (`configurado`/`ausente`). Se registrar URLs de conexão, mascare as
