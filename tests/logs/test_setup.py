@@ -20,7 +20,7 @@ pytestmark = pytest.mark.critical
 
 POSIX = pytest.mark.skipif(sys.platform == "win32", reason="modos de arquivo POSIX")
 A, B = 111111111111111111, 222222222222222222
-CADEIA = ["ContextFilter", "LevelGate", "SanitizeAndRedact", "RepeatAggregator"]
+CADEIA = ["ContextFilter", "VoiceDependencyNoiseFilter", "LevelGate", "SanitizeAndRedact", "RepeatAggregator"]
 
 
 def ajustes(*, nivel=logging.INFO, cor=False, arquivo=False, guildas=()):
@@ -91,12 +91,7 @@ class TestHandlers:
         consoles, arquivos = instalar(ajustes(arquivo=com_arquivo))
 
         for handler in consoles + arquivos:
-            cadeia = nomes(handler.filters)
-            assert [n for n in cadeia if n in CADEIA] == CADEIA
-            extras = [n for n in cadeia if n not in CADEIA]
-            assert len(extras) == 1 and cadeia.index(extras[0]) < cadeia.index(
-                "LevelGate"
-            )  # o filtro do aviso de voz (2.1.2)
+            assert nomes(handler.filters) == CADEIA
 
     def test_the_redactor_and_the_aggregator_are_shared_between_the_two_handlers(self, instalar):
         (console,), (arquivo,) = instalar(ajustes(arquivo=True))
