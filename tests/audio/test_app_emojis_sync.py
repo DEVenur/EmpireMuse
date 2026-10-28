@@ -41,7 +41,10 @@ def pasta(tmp_path) -> pathlib.Path:
 
 
 async def sincronizar(cliente, pasta, *, sono=None, com_somas=True, **kwargs):
-    """Falha fechada (TM-E3): o sync exige ``assets/SHA256SUMS``; por padrão o teste o escreve com o que há na pasta (se ainda não existir)."""
+    """Falha fechada (TM-E3): o sync exige ``assets/SHA256SUMS``; em pasta temporária o teste o escreve com o que há nela (se ainda não existir).
+
+    Nos arquivos reais do repositório use ``com_somas=False``: o teste nunca escreve na árvore e a falta do manifesto reprova.
+    """
     if com_somas and pasta.is_dir() and not pasta.is_symlink() and not (pasta.parent / "SHA256SUMS").exists():
         escrever_somas(pasta)
     return await sync_app_emojis(cliente, emojis_dir=pasta, sleep=sono or SonoFalso(), **kwargs)
@@ -509,17 +512,19 @@ class TestGifAnimado:
     async def test_the_real_headset_comes_out_animated_and_the_other_files_as_static(self):
         real = RAIZ / "assets" / "emojis"
         assert (real / "headset.gif").is_file(), "assets/emojis/headset.gif ainda não chegou (§12 do contrato)"
+        assert (RAIZ / "assets" / "SHA256SUMS").is_file(), "assets/SHA256SUMS ausente: o sync falha fechado"
         cliente = ClienteFalso()
 
-        mapa = await sincronizar(cliente, real)
+        mapa = await sincronizar(cliente, real, com_somas=False)
 
         assert mapa["headset"].startswith("<a:headset:")
         assert all(valor.startswith("<:") for nome, valor in mapa.items() if nome != "headset")
 
     async def test_all_37_real_files_are_uploaded_when_the_app_has_none(self):
+        assert (RAIZ / "assets" / "SHA256SUMS").is_file(), "assets/SHA256SUMS ausente: o sync falha fechado"
         cliente = ClienteFalso()
 
-        mapa = await sincronizar(cliente, RAIZ / "assets" / "emojis")
+        mapa = await sincronizar(cliente, RAIZ / "assets" / "emojis", com_somas=False)
 
         assert sorted(mapa) == sorted(NOMES)
 
