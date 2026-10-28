@@ -297,6 +297,7 @@ async def retomar_com(
     *,
     portao: asyncio.Event | None = None,
     leitura: asyncio.Event | None = None,
+    canais: dict[int, Any] | None = None,
 ) -> SimpleNamespace:
     """Retoma a sessão com o ``resume_player`` REAL; com ``portao``, o apply de cada player fica preso nele até o teste soltar.
 
@@ -316,9 +317,11 @@ async def retomar_com(
     monkeypatch.setattr(JogadorRetomado, "apply_permanent_voice_status", apply, raising=False)
     monkeypatch.setattr(player_resume, "can_send_message", lambda *a, **k: None)
     monkeypatch.setattr(player_resume, "can_connect", lambda *a, **k: None)
-    cog, _no, criados = montar(4)
+    cog, _no, criados = montar(4, canais=canais)
+    leituras: list[None] = []  # cada leitura do global do servidor
 
     async def get_global_data(*_a: Any, **_k: Any) -> dict[str, Any]:
+        leituras.append(None)
         if leitura is not None:
             await leitura.wait()
         if isinstance(doc, Exception):
@@ -329,7 +332,11 @@ async def retomar_com(
     resumo = asyncio.ensure_future(cog.resume_player(saida, hints=[]))
     await assentar()  # o apply é uma tarefa por player: deixa-a rodar (ou ficar presa no portão)
     return SimpleNamespace(
-        jogador=criados[0] if criados else None, chamadas=chamadas, terminou=resumo.done(), tarefa=resumo
+        jogador=criados[0] if criados else None,
+        chamadas=chamadas,
+        terminou=resumo.done(),
+        tarefa=resumo,
+        leituras=leituras,
     )
 
 
