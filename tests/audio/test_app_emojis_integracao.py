@@ -293,3 +293,110 @@ class TestIntegridadeDosArquivos:
         assert tipo_e_lado(b"\x89PNG\r\n\x1a\n" + bytes(8) + struct.pack(">II", 128, 128)) == ("png", 128, 128)
         assert tipo_e_lado(b"GIF89a" + struct.pack("<HH", 128, 128)) == ("gif", 128, 128)
         assert tipo_e_lado(b"nada") is None
+
+
+# ============================================================================ views com botões de navegação (§10)
+
+CONTROLES_INEQUIVOCOS = {"⬅️", "➡️", "⏹️", "⏯️", "⏭️", "⏮️", "➕", "↩️", "❓", "🛠️", "⬅", "➡"}
+PARAMETROS_COM_BOT = {"bot", "ctx", "inter", "interaction", "player"}
+
+# View cujo construtor NÃO recebe bot nem contexto: não há de onde tirar o mapa do bot que envia, então os botões ficam com o Unicode.
+VIEWS_SEM_BOT = {
+    "empiremuse/utils/music/interactions/player_views.py::EmbedPaginatorInteraction": "construtor só recebe o autor e a lista de embeds",
+    "empiremuse/utils/music/interactions/player_views.py::SelectInteraction": "construtor só recebe o autor e as opções",
+}
+
+
+def _e_view(classe: ast.ClassDef) -> bool:
+    return any(
+        (isinstance(b, ast.Attribute) and b.attr == "View") or (isinstance(b, ast.Name) and b.id.endswith("View"))
+        for b in classe.bases
+    )
+
+
+def views_com_controles_literais() -> dict[str, bool]:
+    """``{"arquivo::Classe": construtor_tem_bot}`` das views com botão de emoji literal entre os controles inequívocos.
+
+    O literal do decorador vale como padrão: uma view COM bot no construtor só fica fora do resultado se o ``__init__`` troca o emoji por
+    ``emoji(bot, nome)`` logo depois do ``super().__init__`` (chama ``emoji(...)``).
+    """
+    achados = {}
+    for caminho in sorted(PACOTE.rglob("*.py")):
+        arvore = ast.parse(caminho.read_text(encoding="utf-8"))
+        for classe in [n for n in ast.walk(arvore) if isinstance(n, ast.ClassDef) and _e_view(n)]:
+            init = next((n for n in classe.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"), None)
+            parametros = {a.arg for a in [*init.args.args, *init.args.kwonlyargs]} if init else set()
+            literais = [
+                k.value.value
+                for n in ast.walk(classe)
+                if isinstance(n, ast.Call)
+                for k in n.keywords
+                if k.arg == "emoji" and isinstance(k.value, ast.Constant) and k.value.value in CONTROLES_INEQUIVOCOS
+            ]
+            troca_no_init = init is not None and any(
+                isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in ("emoji", "app_emoji")
+                for n in ast.walk(init)
+            )
+            if literais and not (parametros & PARAMETROS_COM_BOT and troca_no_init):
+                achados[f"{caminho.relative_to(RAIZ).as_posix()}::{classe.name}"] = bool(
+                    parametros & PARAMETROS_COM_BOT
+                )
+    return achados
+
+
+class TestViewsDeNavegacao:
+    @pytest.mark.asyncio
+    async def test_the_embed_paginator_buttons_use_the_emojis_of_the_bot_that_sends(self):
+        from empiremuse.utils.others import EmbedPaginator
+
+        mapa = mapa_do_bot(ID_A)
+        ctx = SimpleNamespace(
+            bot=SimpleNamespace(app_emojis=mapa, pool=SimpleNamespace(emoji_data={})), author=SimpleNamespace(id=1)
+        )
+
+        view = EmbedPaginator(ctx, [disnake.Embed(description="a"), disnake.Embed(description="b")])
+
+        emojis = {str(item.emoji) for item in view.children if getattr(item, "emoji", None) is not None}
+        assert {mapa["arrow_left"], mapa["arrow_right"], mapa["stop"]} <= emojis
+
+    @pytest.mark.asyncio
+    async def test_two_paginators_of_two_bots_never_share_emojis(self):
+        from empiremuse.utils.others import EmbedPaginator
+
+        def paginador(base):
+            bot = SimpleNamespace(app_emojis=mapa_do_bot(base), pool=SimpleNamespace(emoji_data={}))
+            view = EmbedPaginator(
+                SimpleNamespace(bot=bot, author=SimpleNamespace(id=1)), [disnake.Embed(description="a")]
+            )
+            return " ".join(str(i.emoji) for i in view.children if getattr(i, "emoji", None) is not None)
+
+        do_a, do_b = paginador(ID_A), paginador(ID_B)
+
+        assert not any(i in do_a for i in ids_do_bot(ID_B)) and not any(i in do_b for i in ids_do_bot(ID_A))
+
+    @pytest.mark.asyncio
+    async def test_without_app_emojis_the_paginator_keeps_the_unicode_fallback(self):
+        from empiremuse.utils.music.app_emojis import APP_EMOJIS
+        from empiremuse.utils.others import EmbedPaginator
+
+        ctx = SimpleNamespace(
+            bot=SimpleNamespace(app_emojis={}, pool=SimpleNamespace(emoji_data={})), author=SimpleNamespace(id=1)
+        )
+
+        view = EmbedPaginator(ctx, [disnake.Embed(description="a")])
+
+        emojis = {str(item.emoji) for item in view.children if getattr(item, "emoji", None) is not None}
+        assert {APP_EMOJIS["arrow_left"], APP_EMOJIS["arrow_right"], APP_EMOJIS["stop"]} <= emojis
+
+    def test_a_view_whose_constructor_has_a_bot_swaps_its_literal_navigation_emoji_in_init(self):
+        com_literal = [nome for nome, tem_bot in views_com_controles_literais().items() if tem_bot]
+
+        assert com_literal == []
+
+    def test_a_view_without_a_bot_in_the_constructor_is_listed_with_its_reason(self):
+        sem_bot = sorted(nome for nome, tem_bot in views_com_controles_literais().items() if not tem_bot)
+
+        assert sem_bot == sorted(VIEWS_SEM_BOT)
+
+    def test_every_listed_view_has_a_written_reason(self):
+        assert all(len(motivo) > 15 for motivo in VIEWS_SEM_BOT.values())

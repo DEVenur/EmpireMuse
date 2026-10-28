@@ -170,34 +170,36 @@ class TestNuncaMexeNoQueNaoE:
 
 
 class TestTaxaDeRequisicoes:
-    async def test_429_twice_then_ok_waits_the_retry_after_each_time(self, pasta):
+    """§10 do contrato: um 429 espera ``min(retry_after, 60)`` UMA vez e tenta de novo; o segundo 429 encerra o sync daquele bot."""
+
+    async def test_one_429_waits_the_retry_after_once_and_then_creates(self, pasta):
         escrever_emojis(pasta, ["stop"])
-        cliente = ClienteFalso(falhas={"stop": [erro_http(429, retry_after=2.5), erro_http(429, retry_after=4.0)]})
+        cliente = ClienteFalso(falhas={"stop": [erro_http(429, retry_after=2.5)]})
         sono = SonoFalso()
 
         mapa = await sincronizar(cliente, pasta, sono=sono)
 
-        assert "stop" in mapa and sono.duracoes == [2.5, 4.0] and cliente.tentativas["stop"] == 3
+        assert "stop" in mapa and sono.duracoes == [2.5] and cliente.tentativas["stop"] == 2
 
-    async def test_a_429_without_retry_after_waits_five_seconds(self, pasta):
+    async def test_a_429_without_retry_after_waits_five_seconds_once(self, pasta):
         escrever_emojis(pasta, ["stop"])
         cliente = ClienteFalso(falhas={"stop": [erro_http(429)]})
         sono = SonoFalso()
 
-        await sincronizar(cliente, pasta, sono=sono)
+        mapa = await sincronizar(cliente, pasta, sono=sono)
 
-        assert sono.duracoes == [5]
+        assert sono.duracoes == [5] and "stop" in mapa
 
-    async def test_the_retry_after_is_capped_at_60_seconds(self, pasta):
+    async def test_a_retry_after_of_300_seconds_waits_60(self, pasta):
         escrever_emojis(pasta, ["stop"])
-        cliente = ClienteFalso(falhas={"stop": [erro_http(429, retry_after=3600.0)]})
+        cliente = ClienteFalso(falhas={"stop": [erro_http(429, retry_after=300.0)]})
         sono = SonoFalso()
 
-        await sincronizar(cliente, pasta, sono=sono)
+        mapa = await sincronizar(cliente, pasta, sono=sono)
 
-        assert sono.duracoes and max(sono.duracoes) <= 60
+        assert sono.duracoes == [60] and "stop" in mapa
 
-    async def test_a_negative_or_zero_retry_after_never_gives_a_negative_sleep(self, pasta):
+    async def test_a_negative_retry_after_never_gives_a_negative_sleep(self, pasta):
         escrever_emojis(pasta, ["stop"])
         cliente = ClienteFalso(falhas={"stop": [erro_http(429, retry_after=-5.0)]})
         sono = SonoFalso()
@@ -206,23 +208,36 @@ class TestTaxaDeRequisicoes:
 
         assert all(d >= 0 for d in sono.duracoes)
 
-    async def test_a_global_429_stops_the_sync(self, pasta):
+    async def test_two_429s_stop_the_sync_for_that_bot(self, pasta, caplog):
+        escrever_emojis(pasta)
+        cliente = ClienteFalso(falhas={nome: [erro_http(429, retry_after=1.0)] * 5 for nome in NOMES})
+        sono = SonoFalso()
+
+        with caplog.at_level(logging.DEBUG, logger="empiremuse"):
+            mapa = await sincronizar(cliente, pasta, sono=sono)
+
+        assert sum(cliente.tentativas.values()) == 2 and sono.duracoes == [1.0] and mapa == {}
+        assert len(avisos(caplog)) == 1
+
+    async def test_the_names_created_before_the_second_429_stay_in_the_map(self, pasta):
+        escrever_emojis(pasta, ["stop", "skip"])
+        cliente = ClienteFalso(
+            falhas={"skip": [erro_http(429, retry_after=1.0)] * 5, "stop": [erro_http(429, retry_after=1.0)] * 5}
+        )
+        cliente.existentes.append(emoji_da_app("play", 990000000000000001))
+
+        mapa = await sincronizar(cliente, pasta)
+
+        assert mapa == {"play": "<:play:990000000000000001>"}
+
+    async def test_a_global_429_stops_without_waiting(self, pasta):
         escrever_emojis(pasta)
         cliente = ClienteFalso(falhas={nome: [erro_http(429, retry_after=1.0, global_=True)] for nome in NOMES})
         sono = SonoFalso()
 
         mapa = await sincronizar(cliente, pasta, sono=sono)
 
-        assert sum(cliente.tentativas.values()) == 1 and mapa == {}
-
-    async def test_429_past_the_limit_leaves_the_name_out_with_one_warning(self, pasta, caplog):
-        escrever_emojis(pasta, ["stop"])
-        cliente = ClienteFalso(falhas={"stop": [erro_http(429, retry_after=1.0)] * 10})
-
-        with caplog.at_level(logging.DEBUG, logger="empiremuse"):
-            mapa = await sincronizar(cliente, pasta, max_retries=3)
-
-        assert "stop" not in mapa and cliente.tentativas["stop"] <= 4 and len(avisos(caplog)) == 1
+        assert sum(cliente.tentativas.values()) == 1 and sono.duracoes == [] and mapa == {}
 
 
 class TestFalhasDePermissao:
