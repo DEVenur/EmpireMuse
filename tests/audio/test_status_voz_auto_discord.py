@@ -610,3 +610,96 @@ class TestSessaoManual:
         )
 
         assert "gerenciar servidor" in inter.texto and jogador.stage_title_event is False
+
+
+# ============================================================================ autorização da sessão: o autor tem que estar no canal de um player
+
+
+def pool_com_autor(no_canal_de: int | None) -> tuple[list[BotDoPool], list[SimpleNamespace]]:
+    """Dois bots no servidor; o autor (com manage_guild) está no canal do bot ``no_canal_de`` (0 ou 1) ou em nenhum (``None``)."""
+    bots, jogadores, _ = pool_de(2)
+    membro = SimpleNamespace(id=AUTOR, mention=f"<@{AUTOR}>", guild_permissions=SimpleNamespace(manage_guild=True))
+    for i, (bot, jogador) in enumerate(zip(bots, jogadores, strict=True)):
+        jogador.guild.me.voice.channel.voice_states = {AUTOR: object()} if i == no_canal_de else {}
+        jogador.guild.get_member = bot.guilds[SERVIDOR].get_member = lambda _uid: membro
+        jogador.stage_title_event = True  # sessão ligada com um modelo de antes: nada pode mudar sem autorização
+        jogador.stage_title_template = "modelo de antes {track.title}"
+    return bots, jogadores
+
+
+async def usar_sessao(bot: BotDoPool, modo: str) -> InteracaoEfemera:
+    """``modo``: ``texto`` (modal temporário com texto), ``vazio`` (modal temporário vazio) ou ``botao`` (Usar modelo atual)."""
+    guilda = bot.guilds[SERVIDOR]
+    view = SetStageTitle(ContextoDoStatus(), bot, guilda, {"voice_channel_status": MODELO})
+    if modo == "botao":
+        inter = InteracaoEfemera(guild_id=SERVIDOR, guild=guilda, custom_id="status_voice_channel_temp_current")
+        del inter.text_values  # o clique de botão não tem campos de modal
+        await view.setstatus_callback(inter)
+    else:
+        inter = InteracaoEfemera(guild_id=SERVIDOR, guild=guilda, custom_id="status_voice_channel_temp")
+        inter.text_values = {"status_voice_value": OUTRO_MODELO if modo == "texto" else ""}
+        await view.modal_handler(inter)
+    await assentar()
+    return inter
+
+
+def intacto(jogador: SimpleNamespace) -> bool:
+    return (
+        jogador.stage_title_event is True
+        and jogador.stage_title_template == "modelo de antes {track.title}"
+        and not jogador.update_stage_topic.await_count
+        and not jogador.disable_voice_status.await_count
+        and not jogador.process_save_queue.await_count
+        and not jogador.set_command_log.call_count
+    )
+
+
+MODOS = ["texto", "vazio", "botao"]
+
+
+class TestSessaoSoComOAutorNoCanal:
+    @pytest.mark.parametrize("modo", MODOS)
+    async def test_an_author_in_no_player_channel_is_refused_and_nothing_changes(self, modo: str) -> None:
+        bots, jogadores = pool_com_autor(None)
+
+        inter = await usar_sessao(bots[0], modo)
+
+        assert "Não estou tocando música em um canal de voz/palco" in inter.texto
+        assert "sucesso" not in inter.texto
+        assert all(intacto(j) for j in jogadores)
+        assert bots[0].gravacoes == []
+
+    @pytest.mark.parametrize("modo", MODOS)
+    async def test_an_author_in_the_channel_of_the_second_bot_uses_the_second_player(self, modo: str) -> None:
+        bots, (primeiro, segundo) = pool_com_autor(1)
+
+        await usar_sessao(bots[0], modo)
+
+        assert intacto(primeiro)
+        assert not intacto(segundo)
+
+    @pytest.mark.parametrize("modo", MODOS)
+    async def test_an_author_in_the_channel_of_the_first_bot_uses_the_first_player(self, modo: str) -> None:
+        bots, (primeiro, segundo) = pool_com_autor(0)
+
+        await usar_sessao(bots[0], modo)
+
+        assert not intacto(primeiro)
+        assert intacto(segundo)
+
+    async def test_the_chosen_player_gets_the_text_or_is_turned_off_through_disable(self) -> None:
+        bots, (primeiro, segundo) = pool_com_autor(1)
+        await usar_sessao(bots[0], "texto")
+        assert segundo.stage_title_event is True and segundo.stage_title_template == OUTRO_MODELO
+
+        bots, (primeiro, segundo) = pool_com_autor(1)
+        await usar_sessao(bots[0], "vazio")
+        assert segundo.disable_voice_status.await_count == 1 and primeiro.disable_voice_status.await_count == 0
+
+    async def test_a_player_without_the_author_is_not_picked_even_when_it_comes_last_in_the_pool(self) -> None:
+        bots, (primeiro, segundo) = pool_com_autor(0)
+
+        inter = await usar_sessao(bots[0], "texto")
+
+        assert "Não estou tocando" not in inter.texto
+        assert segundo.stage_title_template == "modelo de antes {track.title}"
