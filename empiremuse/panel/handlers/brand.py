@@ -18,7 +18,7 @@ BRAND_FILES = {
     "favicon.ico": "image/x-icon",
 }
 BRAND_ROUTE = r"/painel/marca/(logo\.svg|avatar\.png|favicon\.ico)"
-BRAND_CACHE_CONTROL = "public, max-age=3600"
+BRAND_CACHE_CONTROL = "public, max-age=86400"
 ETAG_HEX_LENGTH = 32
 
 # a rota é pública e sem limite de taxa: cada arquivo é lido do disco UMA vez e o resto das requisições usa a memória (e o 304 do ETag)
