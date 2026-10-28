@@ -10,12 +10,14 @@ import asyncio
 import logging
 import re
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import disnake
 import pytest
 
 from empiremuse.music_cog.voice_status import VoiceStatusMixin
+from empiremuse.utils.db import DBModel
 from empiremuse.utils.music import checks
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.interactions import SetStageTitle
@@ -99,7 +101,7 @@ def servidor_do_bot(canal, *, id_: int = SERVIDOR, permitido: bool) -> SimpleNam
 
 
 def jogador_falso(guilda) -> SimpleNamespace:
-    return SimpleNamespace(
+    jogador = SimpleNamespace(
         guild=guilda,
         stage_title_event=False,
         stage_title_template="",
@@ -109,6 +111,14 @@ def jogador_falso(guilda) -> SimpleNamespace:
         process_save_queue=AsyncMock(),
         set_command_log=MagicMock(),
     )
+
+    async def aplicar(cfg: Any, *, jitter: bool = False) -> None:
+        """O contrato 2.1.2: o permanente liga o status do player só se o bot pode defini-lo no canal."""
+        jogador.stage_title_template = cfg.template
+        jogador.stage_title_event = bool(cfg.permanent) and checks.voice_status_blocked_channel(guilda) is None
+
+    jogador.apply_permanent_voice_status = aplicar
+    return jogador
 
 
 # ============================================================================ VA2 — comando
@@ -244,6 +254,7 @@ async def salvar_permanente(
     permissoes: list[bool], *, canais: list[int] | None = None, texto: str = MODELO, atual: str = ""
 ):
     bot, jogadores = ambiente_de_bots(permissoes, canais=canais)
+    bot.documento("global", DBModel.guilds, SERVIDOR)["voice_channel_status"] = atual
     view = SetStageTitle(ContextoDoStatus(), bot, bot.guilds[SERVIDOR], {"voice_channel_status": atual})
     inter = InteracaoEfemera(guild_id=SERVIDOR, guild=bot.guilds[SERVIDOR], custom_id="status_voice_channel_perm")
     inter.text_values = {"status_voice_value": texto}
@@ -270,7 +281,6 @@ class TestModalPermanente:
         assert not ligou(r.jogadores[0])
         assert "salvo, mas falta a permissão" in r.inter.texto and NOME_DA_PERMISSAO in r.inter.texto
         assert "<#321>" in r.inter.texto
-        assert all(c.kwargs.get("clear") for c in r.jogadores[0].update_stage_topic.await_args_list)
 
     @pytest.mark.asyncio
     async def test_each_player_is_checked_on_its_own_bot_and_channel(self):
@@ -302,7 +312,8 @@ class TestModalPermanente:
     async def test_clearing_the_template_still_works_without_the_permission(self):
         r = await salvar_permanente([False], texto="", atual=MODELO)
 
-        assert r.bot.ultimo_global["voice_channel_status"] == "" and "desativado" in r.inter.texto
+        assert r.bot.ultimo_global["voice_status_permanent"] is False  # vazio desliga o permanente e MANTÉM o modelo
+        assert r.bot.ultimo_global["voice_channel_status"] == MODELO and "desativado" in r.inter.texto
         assert "falta a permissão" not in r.inter.texto
 
 
@@ -363,6 +374,10 @@ class JogadorDeStatus(PlayerVoiceMixin):
             get_member=lambda _: SimpleNamespace(display_name=SOLICITANTE),
         )
         self.bot = bot
+        self.voice_status_permanent = (
+            True  # estado do contrato 2.1.2, já inicializado como o __init__ do player real faz
+        )
+        self.voice_status_pending = None
         self.stage_title_event = evento
         self.stage_title_template = "{track.title}"
         self.last_stage_title = ultimo

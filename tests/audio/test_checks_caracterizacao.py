@@ -239,7 +239,7 @@ class TestCheckStageTopic:
     def stage_player(self, channel_spec, **kwargs):
         channel = MagicMock(spec=channel_spec)
         me = SimpleNamespace(voice=SimpleNamespace(channel=channel))
-        return make_player(guild=SimpleNamespace(me=me), stage_title_event=True, start_time=started_ago(5), **kwargs)
+        return make_player(guild=SimpleNamespace(me=me), stage_title_event=True, start_time=started_ago(2), **kwargs)
 
     def test_without_player(self):
         with pytest.raises(NoPlayer):

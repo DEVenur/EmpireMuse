@@ -57,6 +57,9 @@ class JogadorRetomado:
         self.conexoes, self.chamadas = [], []
         self.message = None
 
+    async def apply_permanent_voice_status(self, cfg, *, jitter=False):
+        self.chamadas.append(("apply_permanent_voice_status", cfg, jitter))
+
     async def connect(self, channel_id, *args, **kwargs):
         self.conexoes.append(channel_id)
 
@@ -127,7 +130,12 @@ def montar(versao_do_no: int, *, canais=None):
     cog.bot.user = SimpleNamespace(id=1)
     cog.bot.get_channel = canais.get
     cog.bot.get_guild = lambda guild_id: servidor
+
+    async def get_global_data(*args, **kwargs):
+        return {}
+
     cog.bot.get_data = get_data
+    cog.bot.get_global_data = get_global_data
     cog.bot.get_color = lambda *args: 0
     cog.bot.music = SimpleNamespace(players=jogadores, get_best_node=lambda: no, get_player=get_player)
     cog.bot.players_resumed = {}

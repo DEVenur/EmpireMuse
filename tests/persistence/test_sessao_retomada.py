@@ -96,7 +96,12 @@ def montar(*, canais, controller=None, buscaveis=None, servidor_existe=True):
     cog.bot.get_channel = canais.get
     cog.bot.fetch_channel = fetch_channel
     cog.bot.get_guild = lambda guild_id: servidor if servidor_existe else None
+
+    async def get_global_data(*args, **kwargs):
+        return {}
+
     cog.bot.get_data = get_data
+    cog.bot.get_global_data = get_global_data
     cog.bot.get_color = lambda *args: 0
     cog.bot.music = SimpleNamespace(players=jogadores, get_best_node=lambda: no, get_player=get_player)
     cog.bot.players_resumed = {}
