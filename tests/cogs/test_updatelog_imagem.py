@@ -12,7 +12,7 @@ import asyncio
 import copy
 import logging
 import time as tempo_real
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -137,6 +137,51 @@ def rede(monkeypatch: pytest.MonkeyPatch) -> Rede:
 
     monkeypatch.setattr(legacy_cmds, "fetch_changelog", r.fetch)
     monkeypatch.setattr(legacy_cmds, "ClientSession", lambda *a, **k: Sessao())
+    return r
+
+
+class RespostaHttp:
+    """Só o que ``fetch_changelog`` REAL lê da resposta: status, cabeçalhos e o corpo em pedaços."""
+
+    status = 200
+    headers: dict[str, str] = {}
+
+    def __init__(self, corpo: bytes) -> None:
+        self.content = self
+        self._corpo = corpo
+
+    async def __aenter__(self) -> RespostaHttp:
+        return self
+
+    async def __aexit__(self, *args: object) -> bool:
+        return False
+
+    async def iter_chunked(self, tamanho: int) -> AsyncIterator[bytes]:
+        yield self._corpo
+
+
+class RedeHttp:
+    """A camada HTTP dublada (``ClientSession``), com o ``fetch_changelog`` de verdade por cima."""
+
+    def __init__(self) -> None:
+        self.urls: list[str] = []
+        self.texto = CHANGELOG
+
+    def get(self, url: str, **kwargs: object) -> RespostaHttp:
+        self.urls.append(url)
+        return RespostaHttp(self.texto.encode())
+
+    async def __aenter__(self) -> RedeHttp:
+        return self
+
+    async def __aexit__(self, *args: object) -> bool:
+        return False
+
+
+@pytest.fixture
+def rede_http(monkeypatch: pytest.MonkeyPatch) -> RedeHttp:
+    r = RedeHttp()
+    monkeypatch.setattr(legacy_cmds, "ClientSession", lambda *a, **k: r)
     return r
 
 
@@ -284,6 +329,32 @@ class TestImagemRc:
         _, texto = await usar()
 
         assert rede.consultas == ["v2.1.0-rc.1", "v2.1.0-rc.2"] and "Item C da 2.1.0" in texto
+
+
+class TestImagemRcComOFetchReal:
+    """Sem trocar ``fetch_changelog``: a tag rc tem de passar pela validação dele e chegar ao pedido HTTP."""
+
+    async def test_an_rc_image_requests_the_full_rc_tag_and_shows_the_stable_section(
+        self, rede_http: RedeHttp, sem_git: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        com_versao(monkeypatch, "2.1.0-rc.1")
+        rede_http.texto = CHANGELOG_DA_RC
+
+        _, texto = await usar()
+
+        assert rede_http.urls == [f"https://raw.githubusercontent.com/{branding.GITHUB_REPO}/v2.1.0-rc.1/CHANGELOG.md"]
+        assert "Novidades da versão 2.1.0-rc.1" in texto and "Item C da 2.1.0" in texto
+        assert "Item D da 2.0.2" not in texto
+
+    async def test_a_stable_image_requests_its_tag_and_shows_its_section(
+        self, rede_http: RedeHttp, sem_git: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        com_versao(monkeypatch, "2.1.1")
+
+        _, texto = await usar()
+
+        assert rede_http.urls == [f"https://raw.githubusercontent.com/{branding.GITHUB_REPO}/v2.1.1/CHANGELOG.md"]
+        assert "Item A da 2.1.1" in texto and "Item B da 2.1.0" not in texto
 
 
 class TestFalhaDaConsulta:
