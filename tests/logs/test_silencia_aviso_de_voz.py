@@ -127,3 +127,14 @@ class TestRestanteSegueSaindo:
 
         for texto in saidas(console, tmp_path):
             assert "voice connection lost for guild 5" in texto
+
+
+class TestFalhaDoFiltro:
+    def test_a_record_whose_message_cannot_be_formatted_is_let_through(self) -> None:
+        from empiremuse.logs.context import VoiceDependencyNoiseFilter
+
+        registro = logging.getLogger("disnake.client").makeRecord(
+            "disnake.client", logging.WARNING, __file__, 1, "%s %s " + SUFIXO, ("so-um-argumento",), None
+        )
+
+        assert VoiceDependencyNoiseFilter().filter(registro) is True
