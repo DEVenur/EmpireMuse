@@ -8,6 +8,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Adicionado
+- **Emojis de aplicação (ícones originais de volta em botões e menus)**: cada bot principal envia, ao ficar pronto, os emojis de `assets/emojis/` para a própria aplicação no Discord (só os que faltam; nunca apaga nem altera os existentes), e botões, menus e mensagens passam a usá-los. Sem o emoji, vale a reserva em Unicode; o `emojis.json` do dono continua tendo precedência. Chave nova `APP_EMOJIS_GUILD_BOTS` (padrão `false`): com `true`, os bots de servidor do `guild_bots.json` também enviam os emojis. Guia em `docs/guides/emojis.md`.
 - **Log centralizado com a biblioteca padrão (item 7, fase P1)**: o pacote `empiremuse/logs/` configura o `logging` do processo num ponto só. Console com cor por severidade (nunca no arquivo), contexto de bot e servidor em cada linha e arquivo de log opcional. Chaves novas no `.example.env`:
   - `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING` ou `ERROR`; padrão `INFO`).
   - `LOG_COLOR` (`on` ou `off`; padrão `on`, só no console).
