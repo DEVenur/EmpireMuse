@@ -92,7 +92,7 @@ class TestComandos:
         with pytest.raises(GenericError, match="aguardar") as erro:
             comando(jogador(disnake.VoiceChannel, decorrido=decorrido))
 
-        assert "anúncio automático do palco ativo" in erro.value.text
+        assert "status automático do canal ligado" in erro.value.text and "palco" not in erro.value.text
 
     @pytest.mark.parametrize("decorrido", [5, 6, 10, 29, 30, 600])
     def test_a_voice_channel_accepts_from_five_seconds_on(self, decorrido: int) -> None:
@@ -138,6 +138,13 @@ class TestForceplayDoEmbed:
 
     def test_the_owner_is_exempt(self) -> None:
         forceplay(jogador(disnake.VoiceChannel, decorrido=0), dono=True)
+
+    def test_the_embed_refusal_uses_the_same_text_as_the_commands(self) -> None:
+        with pytest.raises(GenericError) as erro:
+            forceplay(jogador(disnake.VoiceChannel, decorrido=2))
+
+        assert "Você terá que aguardar 3 segundos para usar essa função" in erro.value.text
+        assert "status automático do canal ligado" in erro.value.text and "palco" not in erro.value.text
 
     def test_both_entry_points_agree_on_every_second_of_the_window(self) -> None:
         for canal in (disnake.VoiceChannel, disnake.StageChannel):
