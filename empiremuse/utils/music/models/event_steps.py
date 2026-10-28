@@ -144,6 +144,10 @@ async def _he_track_end(self, event) -> None:
 
     self.bot.dispatch("wavelink_track_end", player=self, track=self.last_track, reason=event.reason)
 
+    if event.reason == "FINISHED":
+        # Só o progresso real devolve a nova tentativa: o TrackStart sai antes de o Lavalink abrir o stream.
+        getattr(self, "same_track_retries", set()).clear()
+
     if self.locked:
         return
 
@@ -173,8 +177,6 @@ async def _he_track_start(self, event) -> None:
         return
 
     self.bot.dispatch("wavelink_track_start", player=self)
-    if self.current:
-        getattr(self, "same_track_retries", set()).discard(_he_retry_key(self.current))
 
     if self.text_channel and not _he_can_send_in_text_channel(self):
         self.text_channel = None
@@ -316,7 +318,7 @@ def _he_retry_key(track) -> str:
 
 
 def _he_take_same_track_retry(self, event, track) -> bool:
-    """Concede (uma vez por faixa, até ela voltar a tocar) a nova tentativa da mesma faixa nas falhas de download do YouTube."""
+    """Concede (uma vez por faixa, até alguma faixa terminar de verdade) a nova tentativa da mesma faixa nas falhas de download do YouTube."""
     if not _he_cause_has(event, SAME_TRACK_RETRY_MARKERS):
         return False
     used = getattr(self, "same_track_retries", None)
@@ -344,7 +346,11 @@ def _he_is_youtube_failure(self, event, track) -> bool:
     """
     if track.source_name == "youtube":
         return True
-    return YOUTUBE_PLUGIN_CAUSE_MARKER in str(event.cause or "") and _he_other_youtube_node(self) is not None
+    return _he_is_youtube_plugin_cause(event) and _he_other_youtube_node(self) is not None
+
+
+def _he_is_youtube_plugin_cause(event) -> bool:
+    return YOUTUBE_PLUGIN_CAUSE_MARKER in str(event.cause or "")
 
 
 async def _he_track_exception(self, event) -> None:
@@ -374,14 +380,20 @@ async def _he_track_exception(self, event) -> None:
         self.queue.appendleft(track)
         await asyncio.sleep(SAME_TRACK_RETRY_DELAY)
         self.locked = False
-        await self.process_next()
+        await self.process_next(start_position=get_start_pos(self, track))
+        return
+
+    if _he_is_youtube_plugin_cause(event) and _he_is_youtube_failure(self, event, track):
+        await _he_recover_from_youtube(self, track, send_report)
         return
 
     if ignore_error_log := _he_cause_has(event, RETRYABLE_ERROR_CAUSES):
-        if _he_retry_after_general_error(self, track):
+        outcome = _he_retry_after_general_error(self, track)
+        if outcome == "wait":
             return
 
-        start_position = get_start_pos(self, track)
+        if outcome == "retry":
+            start_position = get_start_pos(self, track)
         cooldown = 4
 
     elif event.cause == "java.lang.InterruptedException":
@@ -415,8 +427,12 @@ async def _he_track_exception(self, event) -> None:
     await self.process_next(start_position=start_position)
 
 
-def _he_retry_after_general_error(self, track) -> bool:
-    """Devolve True quando o player deve esperar um novo nó em vez de tentar a faixa de novo."""
+def _he_retry_after_general_error(self, track) -> str:
+    """Decide o que fazer com a falha de rede: "wait" (esperar um novo nó), "skip" (desistir da faixa) ou "retry" (tentar de novo).
+
+    Esgotadas as tentativas com o nó disponível não há o que esperar (``_wait_for_new_node`` voltaria na hora e o player
+    ficaria travado), então a faixa é descartada e o chamador relata e segue.
+    """
 
     if not hasattr(self, "retries_general_errors"):
         self.retries_general_errors = {
@@ -432,8 +448,12 @@ def _he_retry_after_general_error(self, track) -> bool:
         and self.node.identifier == self.retries_general_errors["last_node"]
         and (disnake.utils.utcnow() - self.retries_general_errors["last_time"]).total_seconds() < 180
     ):
+        if self.node.is_available:
+            self.queue.popleft()
+            self.failed_tracks.append(track)
+            return "skip"
         _he_spawn_new_node_task(self, ignore_node=self.node)
-        return True
+        return "wait"
 
     self.retries_general_errors["last_time"] = disnake.utils.utcnow()
 
@@ -446,7 +466,7 @@ def _he_retry_after_general_error(self, track) -> bool:
             "last_time": disnake.utils.utcnow(),
         }
 
-    return False
+    return "retry"
 
 
 async def _he_recover_from_youtube(self, track, send_report) -> None:

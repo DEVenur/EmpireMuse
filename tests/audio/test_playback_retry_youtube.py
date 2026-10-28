@@ -78,6 +78,8 @@ def make_player(track, nodes=()):
         update_stage_topic=AsyncMock(),
         report_error=AsyncMock(),
         change_node=AsyncMock(),
+        track_end=AsyncMock(),
+        ignore_np_once=False,
     )
 
 
@@ -138,20 +140,78 @@ async def test_a_second_all_clients_failure_reports_and_skips_the_track():
     player.process_next.assert_awaited_once()
 
 
-async def test_a_start_in_between_gives_the_track_a_new_retry():
+async def test_start_fail_start_fail_does_not_loop(sleep):
+    """O TrackStart sai antes de o stream abrir: start -> fail -> retry -> start -> fail precisa relatar e pular."""
+    track = make_track()
+    player = make_player(track)
+    await _he_dispatch(player, start(player))
+    await _he_dispatch(player, fail(player, ALL_CLIENTS))
+    assert list(player.queue) == [track]
+    player.queue.clear()
+    player.current = track
+    await _he_dispatch(player, start(player))
+
+    await _he_dispatch(player, fail(player, ALL_CLIENTS))
+
+    assert list(player.queue) == []
+    assert track in player.failed_tracks
+    player.report_error.assert_awaited_once()
+
+
+async def test_a_finished_track_gives_back_the_retry():
     track = make_track()
     player = make_player(track)
     await _he_dispatch(player, fail(player, ALL_CLIENTS))
     player.queue.clear()
     player.current = track
-    await _he_dispatch(player, start(player))
-    player.process_next.reset_mock()
+    await _he_dispatch(
+        player, wavelink.TrackEnd({"track": track, "player": player, "node": player.node, "reason": "FINISHED"})
+    )
     player.current = track
 
     await _he_dispatch(player, fail(player, ALL_CLIENTS))
 
     assert list(player.queue) == [track]
-    player.report_error.assert_not_awaited()
+
+
+async def test_the_retry_resumes_from_the_current_position(monkeypatch):
+    track = make_track()
+    player = make_player(track)
+    monkeypatch.setattr(event_steps, "get_start_pos", lambda p, t: 61_000)
+
+    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
+
+    player.process_next.assert_awaited_once_with(start_position=61_000)
+
+
+async def test_seven_network_failures_never_freeze_the_player():
+    track = make_track(source="soundcloud")
+    player = make_player(track)
+
+    for _ in range(7):
+        player.queue.clear()
+        player.current = track
+        await _he_dispatch(player, fail(player, "java.io.EOFException"))
+
+    assert player.locked is False
+    assert track in player.failed_tracks
+    assert track not in player.queue
+    assert player.process_next.await_count == 7
+
+
+async def test_a_mirrored_all_clients_timeout_goes_to_the_youtube_branch_before_the_general_retry():
+    track = make_track()
+    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
+    player = make_player(track, nodes=[other])
+    player.bot.music.nodes = {"N1": player.node, "N2": other}
+    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
+    player.queue.clear()
+    player.current = track
+
+    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
+
+    player.change_node.assert_awaited_once_with("N2")
+    assert not hasattr(player, "retries_general_errors")
 
 
 async def test_another_cause_keeps_the_old_behavior(sleep):
