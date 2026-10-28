@@ -456,10 +456,11 @@ class PlayerVoiceMixin:
     async def apply_permanent_voice_status(self, cfg: VoiceStatusConfig, *, jitter: bool = False) -> None:
         """O "voltar ao permanente": a sessão passa a seguir o modelo e o flag do servidor (liga e envia, ou desliga e limpa).
 
-        O palco nunca recebe o permanente: fora de um canal de voz só grava ``voice_status_permanent`` (nem modelo, nem flag, nem
-        tarefas, nem API), para não derrubar uma sessão de palco nem dar o modelo do servidor a um palco sem sessão. Com ``jitter``
-        espera 0 a ``VOICE_STATUS_RESUME_JITTER`` s antes de ligar (retomada de muitas sessões; o canal só é conferido depois da
-        espera, quando o bot já entrou). A permissão é revalidada a cada chamada, porque é por canal.
+        O palco nunca recebe o permanente: no palco só grava ``voice_status_permanent`` (nem modelo, nem flag, nem tarefas, nem
+        API), para não derrubar uma sessão de palco nem dar o modelo do servidor a um palco sem sessão. Sem canal, desliga a sessão
+        (zera o flag e cancela as tarefas, sem API): um flag preso fora do canal faria o próximo entrar pular o permanente. Com
+        ``jitter`` espera 0 a ``VOICE_STATUS_RESUME_JITTER`` s antes de ligar (retomada de muitas sessões; o canal só é conferido
+        depois da espera, quando o bot já entrou). A permissão é revalidada a cada chamada, porque é por canal.
         """
         if self.is_closing:
             return  # o save do permanente durante o destroy não escreve depois da limpeza do cleanup
@@ -468,7 +469,10 @@ class PlayerVoiceMixin:
             await asyncio.sleep(random.uniform(0, VOICE_STATUS_RESUME_JITTER))
             if self.is_closing or not self.voice_status_permanent:
                 return
-        if not isinstance(self._voice_status_channel(), disnake.VoiceChannel):
+        channel = self._voice_status_channel()
+        if not isinstance(channel, disnake.VoiceChannel):
+            if channel is None:
+                await self.disable_voice_status()
             return
         self.stage_title_template = cfg.template
         if not cfg.permanent:
