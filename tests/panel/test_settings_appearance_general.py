@@ -116,20 +116,24 @@ class VoiceStatusTest(HttpBase):
         Each.run(["Tocando agora", "{foo}", "{track.titulo}", "track.title", "{ track.title }", "{TRACK.TITLE}"], check)
         assert self.db.doc("global", 100) == before and self.db.writes == []
 
-    def test_empty_status_turns_the_feature_off(self):
-        external_change(self.db, "global", 100, voice_channel_status="Tocando {track.title}")
+    def test_empty_status_uses_the_default_model_and_does_not_turn_the_feature_off(self):
+        external_change(
+            self.db, "global", 100, voice_channel_status="Tocando {track.title}", voice_status_permanent=True
+        )
         browser = self.logged_in()
         assert self.save(browser, 100, "geral", "voice_channel_status", voice_channel_status="").code == 200
-        assert self.db.doc("global", 100)["voice_channel_status"] == ""
+        doc = self.db.doc("global", 100)
+        assert doc["voice_channel_status"] == "" and doc["voice_status_permanent"] is True
 
 
 class VoiceStatusEffectsTest(HttpBase):
-    def test_empty_template_disables_and_clears_the_status(self):
-        external_change(self.db, "global", 100, voice_channel_status="Tocando {track.title}")
-        self.world.p100.stage_title_event = True
+    def test_empty_template_applies_the_default_model_to_the_player_without_touching_its_flag(self):
+        external_change(
+            self.db, "global", 100, voice_channel_status="Tocando {track.title}", voice_status_permanent=True
+        )
         browser = self.logged_in()
         assert self.save(browser, 100, "geral", "voice_channel_status", voice_channel_status="").code == 200
         player = self.world.p100
-        assert player.stage_title_event is False and player.stage_title_template == ""
-        assert player.called("update_stage_topic") == [{"clear": True}]
-        assert len(player.called("process_save_queue")) == 1
+        (aplicacao,) = player.called("apply_permanent_voice_status")
+        assert aplicacao["cfg"].permanent is True and aplicacao["cfg"].template.startswith("{track.emoji}")
+        assert player.stage_title_event is False and player.called("update_stage_topic") == []

@@ -136,6 +136,9 @@ class FakePlayer:
     async def update_stage_topic(self, reconnect=True, clear=False):
         self._note("update_stage_topic", clear=clear)
 
+    async def apply_permanent_voice_status(self, cfg, *, jitter=False):
+        self._note("apply_permanent_voice_status", cfg=cfg, jitter=jitter)
+
     def setup_features(self):
         self._note("setup_features")
 
