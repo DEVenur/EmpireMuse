@@ -13,7 +13,7 @@ from typing import TextIO
 from empiremuse import paths
 from empiremuse.logs.aggregate import RepeatAggregator
 from empiremuse.logs.console import ConsoleFormatter, FileFormatter, report_emit_failure
-from empiremuse.logs.context import ContextFilter, LevelGate
+from empiremuse.logs.context import ContextFilter, LevelGate, VoiceDependencyNoiseFilter
 from empiremuse.logs.redact import SanitizeAndRedact, configure_secrets, register_secret
 from empiremuse.logs.settings import LogSettings
 
@@ -84,7 +84,7 @@ def configure_logging(
 ) -> None:
     """Instala o console e, com ``settings.file``, o arquivo. Idempotente: a segunda chamada troca o que a primeira instalou.
 
-    Cadeia dos dois handlers, nesta ordem: ``ContextFilter`` → ``LevelGate`` → ``SanitizeAndRedact`` → ``RepeatAggregator`` →
+    Cadeia dos dois handlers, nesta ordem: ``ContextFilter`` → ``VoiceDependencyNoiseFilter`` → ``LevelGate`` → ``SanitizeAndRedact`` → ``RepeatAggregator`` →
     formatter. O redator e o agregador são uma instância só, compartilhada, para o console e o arquivo terem o mesmo conteúdo.
     """
     global _aggregator, _debug_guilds
@@ -113,7 +113,13 @@ def configure_logging(
         root = logging.getLogger()
         for handler in handlers:
             handler.filters.clear()  # o handler do arquivo já nasce com o redator próprio; aqui a cadeia entra uma vez só
-            for filter_ in (ContextFilter(), LevelGate(settings.level, settings.debug_guilds), redactor, aggregator):
+            for filter_ in (
+                ContextFilter(),
+                VoiceDependencyNoiseFilter(),
+                LevelGate(settings.level, settings.debug_guilds),
+                redactor,
+                aggregator,
+            ):
                 handler.addFilter(filter_)
             root.addHandler(handler)
         _installed.extend(handlers)
