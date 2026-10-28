@@ -110,6 +110,26 @@ class TestUmaVezPorBot:
         assert sync.await_count == 2 and [c.args[0] for c in sync.await_args_list] == [a, b]
 
 
+class TestRecargaDaCog:
+    async def test_a_reloaded_cog_does_not_run_a_second_sync_for_the_same_bot(self, sync):
+        bot = novo_bot()
+
+        await disparar_on_ready(cog_do(bot))
+        bot.cogs_adicionadas.clear()  # recarga: a cog nova é outra instância, o bot é o mesmo
+        await disparar_on_ready(cog_do(bot))
+
+        assert sync.await_count == 1
+
+    async def test_the_reload_keeps_the_map_the_first_sync_built(self, sync):
+        bot = novo_bot()
+
+        await disparar_on_ready(cog_do(bot))
+        bot.cogs_adicionadas.clear()
+        await disparar_on_ready(cog_do(bot))
+
+        assert bot.app_emojis == MAPA
+
+
 class TestFalhaNaoDerrubaOBot:
     @pytest.mark.parametrize(
         "erro", [RuntimeError("falha"), OSError("disco"), ValueError("x")], ids=lambda e: type(e).__name__

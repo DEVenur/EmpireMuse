@@ -38,7 +38,10 @@ def pasta(tmp_path) -> pathlib.Path:
     return tmp_path / "assets" / "emojis"
 
 
-async def sincronizar(cliente, pasta, *, sono=None, **kwargs):
+async def sincronizar(cliente, pasta, *, sono=None, com_somas=True, **kwargs):
+    """Falha fechada (TM-E3): o sync exige ``assets/SHA256SUMS``; por padrão o teste o escreve com o que há na pasta (se ainda não existir)."""
+    if com_somas and pasta.is_dir() and not pasta.is_symlink() and not (pasta.parent / "SHA256SUMS").exists():
+        escrever_somas(pasta)
     return await sync_app_emojis(cliente, emojis_dir=pasta, sleep=sono or SonoFalso(), **kwargs)
 
 
@@ -410,6 +413,7 @@ class TestValidacaoDeArquivo:
         pasta.mkdir(parents=True)
         grande = pasta / "stop.png"
         grande.write_bytes(png(extra=MAXIMO_BYTES))
+        escrever_somas(pasta)  # antes dos espiões: o que se vigia é o sync, não o apoio do teste
         lidos: list[str] = []
         abrir, ler_bytes, abrir_path = builtins.open, pathlib.Path.read_bytes, pathlib.Path.open
 
@@ -511,6 +515,78 @@ class TestSomasDeIntegridade:
 
         (aviso,) = avisos(caplog)
         assert "stop" in aviso.getMessage() and "iVBOR" not in aviso.getMessage()
+
+
+class TestFalhaFechadaSemSomas:
+    """TM-E3: sem ``assets/SHA256SUMS`` (ou sem a linha do arquivo) nada é enviado; um WARNING 'SHA256SUMS ausente' por bot."""
+
+    async def test_without_sha256sums_nothing_is_created_and_no_create_call_is_made(self, pasta):
+        escrever_emojis(pasta, ["stop", "skip", "play"])
+        cliente = ClienteFalso()
+
+        mapa = await sincronizar(cliente, pasta, com_somas=False)
+
+        assert cliente.criacoes == [] and sum(cliente.tentativas.values()) == 0 and mapa == {}
+
+    async def test_without_sha256sums_one_warning_says_so(self, pasta, caplog):
+        escrever_emojis(pasta, ["stop", "skip"])
+
+        with caplog.at_level(logging.DEBUG, logger="empiremuse"):
+            await sincronizar(ClienteFalso(), pasta, com_somas=False)
+
+        (aviso,) = avisos(caplog)
+        assert "SHA256SUMS ausente" in aviso.getMessage()
+
+    async def test_without_sha256sums_the_remote_emojis_that_already_exist_stay_in_the_map(self, pasta):
+        escrever_emojis(pasta, ["stop", "skip"])
+        cliente = ClienteFalso([emoji_da_app("skip", 980000000000000001)])
+
+        mapa = await sincronizar(cliente, pasta, com_somas=False)
+
+        assert mapa == {"skip": "<:skip:980000000000000001>"} and cliente.criacoes == []
+
+    async def test_an_empty_sha256sums_creates_nothing(self, pasta):
+        escrever_emojis(pasta, ["stop"])
+        (pasta.parent / "SHA256SUMS").write_text("", encoding="utf-8")
+        cliente = ClienteFalso()
+
+        mapa = await sincronizar(cliente, pasta)
+
+        assert cliente.criacoes == [] and mapa == {}
+
+    async def test_a_file_without_its_line_in_sha256sums_is_not_uploaded_but_the_others_are(self, pasta):
+        escrever_emojis(pasta, ["stop", "skip"])
+        soma = escrever_somas(pasta)
+        soma.write_text(
+            "".join(l for l in soma.read_text().splitlines(keepends=True) if "stop.png" not in l), encoding="utf-8"
+        )
+        cliente = ClienteFalso()
+
+        mapa = await sincronizar(cliente, pasta)
+
+        assert [nome for nome, _ in cliente.criacoes] == ["skip"] and "stop" not in mapa
+
+    async def test_a_sha256sums_with_only_other_paths_creates_nothing(self, pasta):
+        escrever_emojis(pasta, ["stop"])
+        (pasta.parent / "SHA256SUMS").write_text("0" * 64 + "  providers/provider_spotify_icon.png\n", encoding="utf-8")
+        cliente = ClienteFalso()
+
+        assert await sincronizar(cliente, pasta) == {} and cliente.criacoes == []
+
+    async def test_a_sha256sums_that_is_a_directory_creates_nothing_and_never_raises(self, pasta):
+        escrever_emojis(pasta, ["stop"])
+        (pasta.parent / "SHA256SUMS").mkdir()
+        cliente = ClienteFalso()
+
+        assert await sincronizar(cliente, pasta) == {} and cliente.criacoes == []
+
+    async def test_the_warning_for_a_missing_sums_file_never_has_the_image_bytes(self, pasta, caplog):
+        escrever_emojis(pasta, ["stop"])
+
+        with caplog.at_level(logging.DEBUG, logger="empiremuse"):
+            await sincronizar(ClienteFalso(), pasta, com_somas=False)
+
+        assert all("iVBOR" not in r.getMessage() and "\\x89PNG" not in r.getMessage() for r in caplog.records)
 
 
 class TestSemFalhaGeral:
