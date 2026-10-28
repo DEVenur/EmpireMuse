@@ -22,6 +22,7 @@ from empiremuse.utils.others import PlayerControls
 from empiremuse.utils.music.models.helpers import (
     logger,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 async def _np_guards(self, req):
@@ -151,11 +152,19 @@ def _np_buttons_default(self, req):
     data = req.data
 
     data["components"] = [
-        disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(self.paused)),
-        disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-        disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-        disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
-        disnake.ui.Button(emoji="📑", custom_id=PlayerControls.queue, disabled=not (self.queue or self.queue_autoplay)),
+        disnake.ui.Button(
+            emoji=app_emoji(self.bot, "playpause"),
+            custom_id=PlayerControls.pause_resume,
+            style=get_button_style(self.paused),
+        ),
+        disnake.ui.Button(emoji=app_emoji(self.bot, "backward"), custom_id=PlayerControls.back),
+        disnake.ui.Button(emoji=app_emoji(self.bot, "stop"), custom_id=PlayerControls.stop),
+        disnake.ui.Button(emoji=app_emoji(self.bot, "skip"), custom_id=PlayerControls.skip),
+        disnake.ui.Button(
+            emoji=app_emoji(self.bot, "music_queue"),
+            custom_id=PlayerControls.queue,
+            disabled=not (self.queue or self.queue_autoplay),
+        ),
         disnake.ui.Select(
             placeholder="Mais opções:",
             custom_id="musicplayer_dropdown_inter",
@@ -165,7 +174,7 @@ def _np_buttons_default(self, req):
             options=[
                 disnake.SelectOption(
                     label="Adicionar música",
-                    emoji="➕",
+                    emoji=app_emoji(self.bot, "add_music"),
                     value=PlayerControls.add_song,
                     description="Adicionar uma música/playlist na fila.",
                 ),
@@ -275,7 +284,7 @@ def _np_buttons_extra(self, req):
         data["components"][5].options.append(
             disnake.SelectOption(
                 label="Mini-fila do player",
-                emoji="📑",
+                emoji=app_emoji(self.bot, "music_queue"),
                 value=PlayerControls.miniqueue,
                 description="Ativar/Desativar a mini-fila do player.",
             )

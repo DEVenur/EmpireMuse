@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-import traceback
 from typing import TYPE_CHECKING, Optional, List
 
 import disnake
@@ -20,6 +19,7 @@ from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.lastfm_tools import LastFmException
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack, exclude_tags
 from empiremuse.utils.others import CustomContext
+from empiremuse.utils.music.converters import md_link
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -132,7 +132,7 @@ class LastFMView(disnake.ui.View):
             self.last_timestamp = int((disnake.utils.utcnow() + datetime.timedelta(minutes=5)).timestamp())
 
         await interaction.send(
-            f'### [Clique aqui](<{self.auth_url}>) para vincular sua conta do last.fm (na página clique em "allow")\n\n'
+            f'### {md_link("Clique aqui", self.auth_url, code=False)} para vincular sua conta do last.fm (na página clique em "allow")\n\n'
             f"`O link expira em` <t:{self.last_timestamp}:R> `(Caso esteja expirado, clique no botão novamente).`\n\n"
             f'`Atenção: Não mostre o link do "clique aqui" pra ninguem e nem envie em locais '
             f"públicos, pois esse link pode conceder acesso a sua conta do last.fm`\n\n"
@@ -218,7 +218,7 @@ class LastFmCog(commands.Cog):
             name = lastfm_user["realname"] or lastfm_user["name"]
 
             txt = (
-                f"> `👤` **⠂Usuário:** [`{name}`](<{lastfm_user['url']}>)\n"
+                f"> `👤` **⠂Usuário:** {md_link(name, lastfm_user['url'])}\n"
                 f"> `⏰` **⠂Conta criada em:** <t:{lastfm_user['registered']['#text']}:f>\n"
             )
 
@@ -226,10 +226,10 @@ class LastFmCog(commands.Cog):
                 txt += f"> `🌎` **⠂País:** `{lastfm_user['country']}`\n"
 
             if playcount := lastfm_user["playcount"]:
-                txt += f"> `🔊` **⠂Total de músicas reproduzidas:** [`{int(playcount):,}`](<https://www.last.fm/user/{lastfm_user['name']}/library>)\n"
+                txt += f"> `🔊` **⠂Total de músicas reproduzidas:** {md_link(f'{int(playcount):,}', f'https://www.last.fm/user/{lastfm_user["name"]}/library')}\n"
 
             if playlists := lastfm_user["playlists"] != "0":
-                txt += f"> `📄` **⠂Playlists públicas:** [`{int(playlists):,}`](<https://www.last.fm/user/{lastfm_user['name']}/playlists>)\n"
+                txt += f"> `📄` **⠂Playlists públicas:** {md_link(f'{int(playlists):,}', f'https://www.last.fm/user/{lastfm_user["name"]}/playlists')}\n"
 
             try:
                 slashcmd = (
@@ -262,7 +262,7 @@ class LastFmCog(commands.Cog):
                 if top_tracks:
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"> ` {n + 1}º ` [`{t['name']}`]({t['url']}) `De:` [`{t['artist']['name']}`]({t['artist']['url']}) `(x{int(t['playcount']):,})`"
+                            f"> ` {n + 1}º ` {md_link(t['name'], t['url'])} `De:` {md_link(t['artist']['name'], t['artist']['url'])} `(x{int(t['playcount']):,})`"
                             for n, t in enumerate(top_tracks)
                         ),
                         color=embed_color,
@@ -301,7 +301,7 @@ class LastFmCog(commands.Cog):
                 if top_artists:
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"> ` {n + 1}º ` [`{t['name']}`]({t['url']}) `(x{int(t['playcount']):,})`"
+                            f"> ` {n + 1}º ` {md_link(t['name'], t['url'])} `(x{int(t['playcount']):,})`"
                             for n, t in enumerate(top_artists)
                         ),
                         color=embed_color,
@@ -330,7 +330,7 @@ class LastFmCog(commands.Cog):
                 if top_albuns:
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"> ` {n + 1}º ` [`{b['name']}`]({b['url']}) `de:` [`{b['artist']['name']}`]({b['artist']['url']}) `(x{int(b['playcount']):,})`"
+                            f"> ` {n + 1}º ` {md_link(b['name'], b['url'])} `de:` {md_link(b['artist']['name'], b['artist']['url'])} `(x{int(b['playcount']):,})`"
                             for n, b in enumerate(top_albuns)
                         ),
                         color=embed_color,
@@ -356,12 +356,12 @@ class LastFmCog(commands.Cog):
 
                     embeds.append(embed)
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao montar os embeds do last.fm")
 
         else:
             embeds = [
                 disnake.Embed(
-                    description="**Vincule (ou crie) uma conta no [last.fm](<https://www.last.fm/home>) para registrar "
+                    description=f"**Vincule (ou crie) uma conta no {md_link('last.fm', 'https://www.last.fm/home', code=False)} para registrar "
                     "todas as músicas que você ouvir por aqui no seu perfil do last.fm para obter sugestões de "
                     "músicas/artistas/álbuns e ter uma estatística geral das músicas que você ouviu alem de ter "
                     "acesso a uma comunidade incrível da plataforma.**",
@@ -430,7 +430,7 @@ class LastFmCog(commands.Cog):
                 return
 
             embeds[0].description += (
-                f"\n### A conta [{view.username}](<https://www.last.fm/user/{view.username}>) foi "
+                f"\n### A conta {md_link(view.username, f'https://www.last.fm/user/{view.username}', code=False)} foi "
                 "vinculada com sucesso!\n\n`Agora ao ouvir suas músicas no canal de voz elas "
                 "serão registradas automaticamente na sua conta do last.fm`"
             )
@@ -609,7 +609,7 @@ class LastFmCog(commands.Cog):
                             )
                         )
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha inesperada no scrobble do last.fm")
 
                     if not result:
                         try:
@@ -621,7 +621,7 @@ class LastFmCog(commands.Cog):
                                 )
                             )
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha inesperada no scrobble do last.fm")
 
                     if not result:
                         if self.bot.config["USE_YTM_TRACKINFO_SCROBBLE"]:
@@ -631,10 +631,10 @@ class LastFmCog(commands.Cog):
                                 )
                             except Exception as e:
                                 if not isinstance(e, wavelink.TrackNotFound):
-                                    traceback.print_exc()
+                                    logger.exception("Falha inesperada no scrobble do last.fm")
 
                     if not result:
-                        print(f"⚠️ - Last.FM Scrobble - Sem resultados para a música: {track_query}")
+                        logger.debug("Last.FM Scrobble - Sem resultados para a música: %s", track_query)
                         self.bot.last_fm.cache[track_query] = {}
                         await self.bot.last_fm.scrobble_save_cache_async()
                         await self.save_scrobble(query=track_query, track=track, users=users)
@@ -652,7 +652,7 @@ class LastFmCog(commands.Cog):
                     await self.bot.last_fm.scrobble_save_cache_async()
 
                 if not fmdata:
-                    print(f"⚠️ - Last.FM Scrobble - Ignorado: {track_query}")
+                    logger.debug("Last.FM Scrobble - Ignorado: %s", track_query)
                     await self.save_scrobble(query=track_query, track=track, users=users)
                     return
 
@@ -692,7 +692,7 @@ class LastFmCog(commands.Cog):
                     await self.bot.last_fm.track_scrobble(**kwargs)
             except Exception as e:
                 if isinstance(e, LastFmException):
-                    print(f"last.fm failed! user: {fminfo['user_id']} - code: {e.code} - message: {e.message}")
+                    logger.warning("last.fm failed! %s - code: %s", type(e).__name__, e.code)
                     if e.code == 9:
                         user_data = await self.bot.get_global_data(fminfo["user_id"], db_name=DBModel.users)
                         user_data["lastfm"]["sessionkey"] = ""
@@ -710,7 +710,7 @@ class LastFmCog(commands.Cog):
                     # O str do erro do aiohttp traz a URL com api_key, sk e api_sig: só o status vai para o log.
                     logger.warning("last.fm request failed! user: %s - %s", fminfo["user_id"], safe_error(e))
                 else:
-                    traceback.print_exc()
+                    logger.exception("Falha inesperada no scrobble do last.fm")
                 continue
 
             player.lastfm_users[fminfo["user_id"]] = {
@@ -738,9 +738,8 @@ class LastFmCog(commands.Cog):
 
 def setup(bot):
     if not bot.pool.config["LASTFM_KEY"] or not bot.pool.config["LASTFM_SECRET"]:
-        print(
-            ("=" * 48)
-            + "\n⚠️ - Os recursos do Last.FM estarão desativados devido a falta de configuração do LASTFM_KEY e LASTFM_SECRET"
+        logger.warning(
+            "Os recursos do Last.FM estarão desativados devido a falta de configuração do LASTFM_KEY e LASTFM_SECRET"
         )
         return
     bot.add_cog(LastFmCog(bot))

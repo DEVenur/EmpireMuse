@@ -12,7 +12,7 @@ import disnake
 from rapidfuzz import fuzz
 
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.errors import (
     error_code_text,
     log_unexpected_error,
@@ -126,7 +126,7 @@ async def _pn_sources(self, req):
                 try:
                     await self.text_channel.send(
                         embed=disnake.Embed(
-                            description=f"Houve um problema ao tentar processar a música [{track.title}]({track.uri})..."
+                            description=f"Houve um problema ao tentar processar a música {md_link(track.title, track.uri, code=False)}..."
                             f"{error_code_text(error_code)}",
                             color=self.bot.get_color(),
                         )
@@ -144,7 +144,7 @@ async def _pn_sources(self, req):
                 try:
                     await self.text_channel.send(
                         embed=disnake.Embed(
-                            description=f"A música [{track.title}]({track.uri}) não está disponível...\n"
+                            description=f"A música {md_link(track.title, track.uri, code=False)} não está disponível...\n"
                             f"Pulando para a próxima música...",
                             color=self.bot.get_color(),
                         ),
@@ -264,7 +264,7 @@ async def _pn_native(self, req):
                         self.played.append(track)
                         self.set_command_log(
                             emoji="⚠️",
-                            text=f"A música [`{track.title[:15]}`](<{track.uri}>) será pulada devido a falta de resultado "
+                            text=f"A música {md_link(track.title[:15], track.uri)} será pulada devido a falta de resultado "
                             "em outras plataformas de música.",
                             controller=True,
                         )
@@ -280,7 +280,7 @@ async def _pn_native(self, req):
                     self.bot.pool.partial_track_cache[cache_key] = [alt_track]
                     self.set_command_log(
                         emoji="▶️",
-                        text=f"Tocando música obtida via metadados: [`{fix_characters(alt_track.title, 20)}`](<{alt_track.uri}>) `| Por: {fix_characters(alt_track.author, 15)}`",
+                        text=f"Tocando música obtida via metadados: {md_link(alt_track.title, alt_track.uri, limit=20)} `| Por: {fix_characters(alt_track.author, 15)}`",
                         controller=True,
                     )
                     self.native_yt = True
@@ -301,7 +301,7 @@ async def _pn_encoded(self, req):
             try:
                 await self.text_channel.send(
                     embed=disnake.Embed(
-                        description=f"A música [{track.title}]({track.uri}) não está disponível...\n"
+                        description=f"A música {md_link(track.title, track.uri, code=False)} não está disponível...\n"
                         "Pulando para a próxima música...",
                         color=self.bot.get_color(),
                     ),

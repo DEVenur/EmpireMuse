@@ -5,7 +5,7 @@ from itertools import islice
 
 import disnake
 
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import (
     get_source_emoji_cfg,
@@ -24,16 +24,16 @@ def _format_fav(bot, index, data):
     name, url = data
     e = get_source_emoji_cfg(bot, url)
     if e:
-        return f"` {index:02} ` {e} [`{fix_characters(name, 40)}`](<{url}>)"
-    return f"` {index:02} ` [`{fix_characters(name, 40)}`](<{url}>)"
+        return f"` {index:02} ` {e} {md_link(name, url, limit=40)}"
+    return f"` {index:02} ` {md_link(name, url, limit=40)}"
 
 
 def _format_gfav(bot, index, data):
     name, data = data
     e = get_source_emoji_cfg(bot, data["url"])
     if e:
-        return f"` {index:02} ` {e} [`{fix_characters(name, 40)}`](<{data['url']}>)"
-    return f"` {index:02} ` [`{fix_characters(name, 40)}`](<{data['url']}>)"
+        return f"` {index:02} ` {e} {md_link(name, data['url'], limit=40)}"
+    return f"` {index:02} ` {md_link(name, data['url'], limit=40)}"
 
 
 def _format_itg(bot, index, data):
@@ -42,8 +42,8 @@ def _format_itg(bot, index, data):
         url = url["url"]
     e = get_source_emoji_cfg(bot, url)
     if e:
-        return f"` {index:02} ` {e} [`{fix_characters(name[5:], 40)}`](<{url}>)"
-    return f"` {index:02} ` [`{fix_characters(name, 40)}`](<{url}>)"
+        return f"` {index:02} ` {e} {md_link(name[5:], url, limit=40)}"
+    return f"` {index:02} ` {md_link(name, url, limit=40)}"
 
 
 class FavMenuTextMixin:
@@ -87,12 +87,15 @@ class FavMenuTextMixin:
         if self.mode != ViewMode.integrations_manager:
             return []
 
-        supported_platforms = ["[`Youtube`](<https://www.youtube.com/>)", "[`Soundcloud`](<https://soundcloud.com/>)"]
+        supported_platforms = [
+            md_link("Youtube", "https://www.youtube.com/"),
+            md_link("Soundcloud", "https://soundcloud.com/"),
+        ]
 
         if self.bot.spotify:
-            supported_platforms.append("[`Spotify`](<https://open.spotify.com/>)")
+            supported_platforms.append(md_link("Spotify", "https://open.spotify.com/"))
 
-        supported_platforms.append("[`Deezer`](<https://www.deezer.com/>)")
+        supported_platforms.append(md_link("Deezer", "https://www.deezer.com/"))
 
         return supported_platforms
 

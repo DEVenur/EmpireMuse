@@ -28,6 +28,7 @@ from empiremuse.music_cog.shared import (
     queue_manipulation_cd,
     remove_mc,
 )
+from empiremuse.utils.music.converters import md_link
 
 
 class PlayerSessionMixin:
@@ -114,7 +115,7 @@ class PlayerSessionMixin:
 
         txt = [
             "Ativou o sistema de thread/conversa temporária para pedido de música.",
-            f"💬 **⠂{inter.author.mention} criou uma [thread/conversa]({thread.jump_url}) temporária para pedido de música.**",
+            f"💬 **⠂{inter.author.mention} criou uma {md_link('thread/conversa', thread.jump_url, code=False)} temporária para pedido de música.**",
         ]
 
         await self.interaction_message(inter, txt, emoji="💬", defered=True, force=True)

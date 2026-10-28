@@ -93,7 +93,7 @@ class FavMenuComponentsMixin:
         for k, v in list(self.data["fav_links"].items())[
             :MAX_SELECT_OPTIONS
         ]:  # TODO: Lidar depois com os dados existentes que excedem a quantidade permitida
-            emoji, platform = music_source_emoji_url(v)
+            emoji, platform = music_source_emoji_url(v, self.bot)
             opts.append(disnake.SelectOption(label=k, emoji=emoji, description=platform))
         fav_select = disnake.ui.Select(options=opts, min_values=1, max_values=1)
         fav_select.options[0].default = True
@@ -127,7 +127,7 @@ class FavMenuComponentsMixin:
         fav_select = disnake.ui.Select(
             options=[
                 disnake.SelectOption(
-                    label=k, emoji=music_source_emoji_url(v["url"])[0], description=v.get("description")
+                    label=k, emoji=music_source_emoji_url(v["url"], self.bot)[0], description=v.get("description")
                 )
                 for k, v in list(self.guild_data["player_controller"]["fav_links"].items())[
                     :MAX_SELECT_OPTIONS
@@ -151,7 +151,7 @@ class FavMenuComponentsMixin:
         ]:  # TODO: Lidar depois com os dados existentes que excedem a quantidade permitida
             if isinstance(v, dict):
                 v = v["url"]
-            emoji, platform = music_source_emoji_url(v)
+            emoji, platform = music_source_emoji_url(v, self.bot)
             opts.append(disnake.SelectOption(label=k[5:], emoji=emoji, description=platform, value=k))
         integration_select = disnake.ui.Select(options=opts, min_values=1, max_values=1)
         integration_select.options[0].default = True

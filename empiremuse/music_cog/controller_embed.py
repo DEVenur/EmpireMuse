@@ -17,10 +17,7 @@ from empiremuse.utils.music.checks import (
     can_connect,
     check_player_perm,
 )
-from empiremuse.utils.music.converters import (
-    fix_characters,
-    URL_REG,
-)
+from empiremuse.utils.music.converters import URL_REG, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -141,7 +138,7 @@ async def _pc_embed_playlist(self, req):
     result = await self.check_player_queue(interaction.author, bot, interaction.guild_id, tracks=result)
     player.queue.extend(result.tracks)
     await interaction.send(
-        f"{interaction.author.mention}, a playlist [`{result.name}`](<{url}>) foi adicionada com sucesso!{player.controller_link}",
+        f"{interaction.author.mention}, a playlist {md_link(result.name, url)} foi adicionada com sucesso!{player.controller_link}",
         ephemeral=True,
     )
 
@@ -268,13 +265,13 @@ async def _pc_embed_track(self, req):
                 t = track[0]
                 player.queue.append(t)
                 await interaction.send(
-                    f"{author.mention}, a música [`{t.title}`](<{t.uri}>) foi adicionada na fila.{player.controller_link}",
+                    f"{author.mention}, a música {md_link(t.title, t.uri)} foi adicionada na fila.{player.controller_link}",
                     ephemeral=True,
                 )
             else:
                 player.queue.extend(track.tracks)
                 await interaction.send(
-                    f"{author.mention}, a playlist [`{track.name}`](<{track.url}>) foi adicionada na fila.{player.controller_link}",
+                    f"{author.mention}, a playlist {md_link(track.name, track.url)} foi adicionada na fila.{player.controller_link}",
                     ephemeral=True,
                 )
             if not player.is_connected:
@@ -375,7 +372,7 @@ async def _pc_fav_embed_reply(self, req):
 
     await interaction.send(
         embed=disnake.Embed(
-            description=f"[`{fav_name}`](<{embed.author.url}>) **foi adicionado nos seus favoritos!**\n\n"
+            description=f"{md_link(fav_name, embed.author.url)} **foi adicionado nos seus favoritos!**\n\n"
             "**Como usar?**\n"
             f"* Usando o comando {cmd} (selecionando o favorito no preenchimento automático da busca)\n"
             "* Clicando no botão/select de tocar favorito/integração do player.\n"

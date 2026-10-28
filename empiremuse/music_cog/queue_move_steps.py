@@ -15,11 +15,7 @@ from empiremuse.utils.music.checks import (
     check_pool_bots,
     check_queue_loading,
 )
-from empiremuse.utils.music.converters import (
-    time_format,
-    fix_characters,
-    string_to_seconds,
-)
+from empiremuse.utils.music.converters import time_format, string_to_seconds, md_link, md_code
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -43,6 +39,7 @@ from empiremuse.music_cog.shared import (
     remove_mc,
     queue_manipulation_cd,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 def _qm_filters(self, req):
@@ -256,7 +253,7 @@ def _qm_select(self, req):
             if playlist == t.playlist_name.replace("️", "") or (
                 isinstance(inter, CustomContext) and playlist.lower() in t.playlist_name.replace("️", "").lower()
             ):
-                playlist_link = f"[`{fix_characters(t.playlist_name)}`]({t.playlist_url})"
+                playlist_link = md_link(t.playlist_name, t.playlist_url)
                 temp_filter.remove("playlist")
                 final_filters.add("playlist")
 
@@ -289,13 +286,13 @@ def _qm_filter_texts(self, req):
 
     try:
         final_filters.remove("song_name")
-        txt.append(f"**Inclui nome:** `{fix_characters(song_name)}`")
+        txt.append(f"**Inclui nome:** {md_code(song_name)}")
     except Exception:
         pass
 
     try:
         final_filters.remove("song_author")
-        txt.append(f"**Inclui nome no uploader/artista:** `{fix_characters(song_author)}`")
+        txt.append(f"**Inclui nome no uploader/artista:** {md_code(song_author)}")
     except Exception:
         pass
 
@@ -346,15 +343,17 @@ async def _qm_move(self, req):
     txt = req.txt
 
     components = [
-        disnake.ui.Button(emoji="▶️", label="Tocar agora", custom_id=PlayerControls.embed_forceplay),
+        disnake.ui.Button(
+            emoji=app_emoji(inter.bot, "play"), label="Tocar agora", custom_id=PlayerControls.embed_forceplay
+        ),
     ]
 
     if indexes:
         track = tracklist[0]
         txt = [
-            f"moveu a música [`{fix_characters(track.title, limit=25)}`](<{track.uri or track.search_uri}>) para a posição **[{position}]** da fila.",
+            f"moveu a música {md_link(track.title, track.uri or track.search_uri, limit=25)} para a posição **[{position}]** da fila.",
             f"↪️ **⠂{inter.author.mention} moveu uma música para a posição [{position}]:**\n"
-            f"╰[`{fix_characters(track.title, limit=43)}`](<{track.uri or track.search_uri}>)",
+            f"╰{md_link(track.title, track.uri or track.search_uri, limit=43)}",
         ]
 
         await self.interaction_message(inter, txt, emoji="↪️", components=components)
@@ -366,9 +365,7 @@ async def _qm_move(self, req):
 
         msg_txt = (
             f"### ↪️ ⠂{inter.author.mention} moveu {moved_tracks} música{'s'[: moved_tracks ^ 1]} para a posição {moved_tracks_txt} da fila:\n"
-            + "\n".join(
-                f"`{position + n}.` [`{fix_characters(t.title, 45)}`](<{t.uri}>)" for n, t in enumerate(tracklist[:7])
-            )
+            + "\n".join(f"`{position + n}.` {md_link(t.title, t.uri, limit=45)}" for n, t in enumerate(tracklist[:7]))
         )
 
         if (track_extra := (moved_tracks - 7)) > 0:

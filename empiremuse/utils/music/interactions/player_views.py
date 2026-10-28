@@ -6,7 +6,7 @@ from typing import List, Union, Optional, TYPE_CHECKING
 import disnake
 from disnake.ext import commands
 
-from empiremuse.utils.music.converters import time_format, fix_characters
+from empiremuse.utils.music.converters import time_format, fix_characters, md_link
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
 from empiremuse.utils.others import (
     check_cmd,
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
 
 from empiremuse.utils.music.interactions.view_modal import ViewModal
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class VolumeInteraction(disnake.ui.View):
@@ -102,27 +103,29 @@ class QueueInteraction(disnake.ui.View):
 
         self.add_item(track_select)
 
-        first = disnake.ui.Button(emoji="⏮️", style=disnake.ButtonStyle.grey)
+        first = disnake.ui.Button(emoji=app_emoji(self.bot, "backward"), style=disnake.ButtonStyle.grey)
         first.callback = self.first
         self.add_item(first)
 
-        back = disnake.ui.Button(emoji="⬅️", style=disnake.ButtonStyle.grey)
+        back = disnake.ui.Button(emoji=app_emoji(self.bot, "arrow_left"), style=disnake.ButtonStyle.grey)
         back.callback = self.back
         self.add_item(back)
 
-        next = disnake.ui.Button(emoji="➡️", style=disnake.ButtonStyle.grey)
+        next = disnake.ui.Button(emoji=app_emoji(self.bot, "arrow_right"), style=disnake.ButtonStyle.grey)
         next.callback = self.next
         self.add_item(next)
 
-        last = disnake.ui.Button(emoji="⏭️", style=disnake.ButtonStyle.grey)
+        last = disnake.ui.Button(emoji=app_emoji(self.bot, "skip"), style=disnake.ButtonStyle.grey)
         last.callback = self.last
         self.add_item(last)
 
-        stop_interaction = disnake.ui.Button(emoji="⏹️", style=disnake.ButtonStyle.grey)
+        stop_interaction = disnake.ui.Button(emoji=app_emoji(self.bot, "stop"), style=disnake.ButtonStyle.grey)
         stop_interaction.callback = self.stop_interaction
         self.add_item(stop_interaction)
 
-        play = disnake.ui.Button(emoji="▶️", label="Tocar", style=disnake.ButtonStyle.grey, custom_id="queue_skip")
+        play = disnake.ui.Button(
+            emoji=app_emoji(self.bot, "play"), label="Tocar", style=disnake.ButtonStyle.grey, custom_id="queue_skip"
+        )
         play.callback = self.invoke_command
         self.add_item(play)
 
@@ -226,7 +229,7 @@ class QueueInteraction(disnake.ui.View):
 
             if self.current_track == t:
                 txt += (
-                    f"`╔{'=' * 50}`\n`║` **{index}º) [{fix_characters(t.title, limit=37)}]({t.uri})**\n"
+                    f"`╔{'=' * 50}`\n`║` **{index}º) {md_link(t.title, t.uri, code=False, limit=37)}**\n"
                     f"`║ ⏲️`  **{duration}**"
                     + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                     + " **|** "
@@ -235,7 +238,7 @@ class QueueInteraction(disnake.ui.View):
                 )
             else:
                 txt += (
-                    f"`┌ {index})` [`{fix_characters(t.title, limit=45)}`]({t.uri})\n"
+                    f"`┌ {index})` {md_link(t.title, t.uri, limit=45)}\n"
                     f"`└ ⏲️ {duration}`"
                     + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                     + f" **|** "
