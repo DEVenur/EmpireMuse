@@ -479,3 +479,44 @@ class TestEntradaComAplicacaoAgendada:
         await relogio.avancar(60)
 
         assert len(bot.puts) == 1  # o ligado pela criação continua valendo; a tarefa terminada não é "pendente"
+
+
+# ============================================================================ V-145-1 — mover durante o 1º PUT em voo
+
+
+class TestMoverComPutEmVoo:
+    async def test_moving_while_the_first_put_is_in_flight_clears_the_old_channel_and_writes_the_new_one(
+        self, relogio: RelogioFalso
+    ) -> None:
+        bot = BotDeVoz()
+        antigo, novo = canal_de_voz(1001), canal_de_voz(1002)
+        guilda = servidor(antigo)
+        guilda.voice_client = SimpleNamespace(channel=antigo)
+        player = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+        player.last_channel = antigo
+        player.start_members_timeout = lambda **_k: None
+        bot.documentos[SERVIDOR] = {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+        bot.music = SimpleNamespace(players={SERVIDOR: player})
+        bot.reter_canal = antigo.id
+        envio = asyncio.ensure_future(
+            player.apply_permanent_voice_status(regras().VoiceStatusConfig(True, "{track.title}"))
+        )
+        await assentar()
+        assert [p.status for p in bot.puts if p.canal == antigo.id] == ["Musica"] and not envio.done()
+
+        guilda.me.voice.channel = novo  # o Discord já mostra o canal novo quando o evento chega
+        cog = _Lifecycle()
+        cog.bot = bot
+        membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+        await executar(
+            relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=antigo), SimpleNamespace(channel=novo))
+        )
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        assert [p.status for p in bot.puts if p.canal == antigo.id] == ["Musica", None], (
+            "o canal antigo ficou com o status preso"
+        )
+        assert [p.status for p in bot.puts if p.canal == novo.id] == ["Musica"]
+        assert player.last_stage_title == "Musica" and player.stage_title_event is True
