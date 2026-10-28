@@ -292,6 +292,51 @@ class PlayerVoiceMixin:
             self.members_timeout(check=check, force=force, idle_timeout=idle_timeout)
         )
 
+    async def _send_voice_status(self, request) -> bool:
+        """Espera o envio do status/tópico ao Discord; ``True`` se deu certo.
+
+        Falta de permissão (403) desliga o status com um aviso no player; os demais ``HTTPException`` ficam em uma linha por
+        (status, código) e o status continua ligado. O log leva só status, código e IDs (nunca título, nome nem corpo do erro).
+        """
+        channel = self.guild.me.voice.channel
+        try:
+            await request
+        except disnake.Forbidden as e:
+            if not self.stage_title_event:
+                return False  # outro envio simultâneo já desligou e avisou
+            self.stage_title_event = False
+            self.set_command_log(
+                emoji="❌",
+                text="O status automático foi desativado devido a falta de permissão pra alterar status.",
+                controller=True,
+            )
+            self.update = True
+            logger.warning(
+                "Sem permissão para definir o status do canal (status=%s, código=%s, guild=%s, canal=%s)",
+                e.status,
+                e.code,
+                self.guild.id,
+                channel.id,
+            )
+        except disnake.HTTPException as e:
+            logged = getattr(self, "_voice_status_http_errors", None)
+            if logged is None:
+                logged = self._voice_status_http_errors = set()
+            if (e.status, e.code) not in logged:
+                logged.add((e.status, e.code))
+                logger.warning(
+                    "Falha HTTP ao definir o status do canal (status=%s, código=%s, guild=%s, canal=%s)",
+                    e.status,
+                    e.code,
+                    self.guild.id,
+                    channel.id,
+                )
+        except Exception:
+            logger.exception("Falha em update_stage_topic")
+        else:
+            return True
+        return False
+
     async def update_stage_topic(self, reconnect=True, clear=False):
         if not self.guild.me.voice:
             if reconnect:
@@ -303,7 +348,9 @@ class PlayerVoiceMixin:
 
         if clear:
             if isinstance(self.guild.me.voice.channel, disnake.VoiceChannel) and self.last_stage_title:
-                await self.bot.edit_voice_channel_status(status=None, channel_id=self.guild.me.voice.channel.id)
+                await self._send_voice_status(
+                    self.bot.edit_voice_channel_status(status=None, channel_id=self.guild.me.voice.channel.id)
+                )
             return
 
         msg = None
@@ -366,7 +413,8 @@ class PlayerVoiceMixin:
             else:
                 func = self.guild.me.voice.channel.instance.edit
 
-            await func(topic=msg)
+            if not await self._send_voice_status(func(topic=msg)):
+                return
 
         else:  # voicechannel
             if msg is not None:
@@ -378,18 +426,10 @@ class PlayerVoiceMixin:
             if msg == self.last_stage_title:
                 return
 
-            try:
-                await self.bot.edit_voice_channel_status(status=msg, channel_id=self.guild.me.voice.channel.id)
-            except Exception as e:
-                if isinstance(e, disnake.Forbidden):
-                    self.stage_title_event = False
-                    self.set_command_log(
-                        emoji="❌",
-                        text="O status automático foi desativado devido a falta de permissão pra alterar status.",
-                        controller=True,
-                    )
-                    self.update = True
-                logger.exception("Falha em update_stage_topic")
+            if not await self._send_voice_status(
+                self.bot.edit_voice_channel_status(status=msg, channel_id=self.guild.me.voice.channel.id)
+            ):
+                return
 
         self.last_stage_title = msg
 
