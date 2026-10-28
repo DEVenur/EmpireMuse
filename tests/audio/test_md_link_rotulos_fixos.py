@@ -97,10 +97,10 @@ class TestRegiaoDoNo:
         assert linha_com(texto, "CPU Cores:") == "CPU Cores: `2`"
         assert linha_com(texto, "Versão do Lavalink:") == "Versão do Lavalink: `v4`"
 
-    async def test_an_ordinary_region_is_unchanged(self, monkeypatch):
+    async def test_an_ordinary_region_shows_the_owner_text_as_written(self, monkeypatch):
         texto = await self.descricao_do_no(monkeypatch, "frankfurt")
 
-        assert linha_com(texto, "Região:") == "Região: `Frankfurt`"
+        assert linha_com(texto, "Região:") == "Região: `frankfurt`"
 
 
 @pytest.mark.asyncio
