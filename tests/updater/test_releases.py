@@ -112,6 +112,7 @@ async def test_only_published_immutable_releases_with_the_digest_asset_are_eligi
             release_json("v2.3.0"),
             release_json("v2.9.0", draft=True),
             release_json("v2.8.0", prerelease=True),
+            release_json("v2.4.0-rc.1"),  # publicada como estável (prerelease false), mas a tag é rc: nunca é alvo
             release_json("v2.7.0", immutable=False),
             release_json("latest"),
             release_json("v2.6.0", asset="outro.txt"),
