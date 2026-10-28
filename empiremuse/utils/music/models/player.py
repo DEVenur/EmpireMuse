@@ -12,7 +12,7 @@ from typing import Optional, Union, TYPE_CHECKING
 import disnake
 
 import empiremuse.wavelink as wavelink
-from empiremuse.utils.music.converters import time_format
+from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.others import string_to_file
 
@@ -214,10 +214,10 @@ class LavalinkPlayer(
     def controller_link(self):
         if self.controller_mode:
             try:
-                return f" [`🎛️`](<{self.message.jump_url}>)"
+                return f" {md_link('🎛️', self.message.jump_url)}"
             except AttributeError:
                 try:
-                    return f" [`#️⃣`](<{self.text_channel.jump_url}>)"
+                    return f" {md_link('#️⃣', self.text_channel.jump_url)}"
                 except AttributeError:
                     pass
         return ""
@@ -258,12 +258,12 @@ class LavalinkPlayer(
 
         if cog and cog.error_report_queue:
             embed.description += (
-                f"\n**Fonte:** `{track.info['sourceName']}`"
-                f"\n**Servidor:** `{disnake.utils.escape_markdown(self.guild.name)} [{self.guild.id}]`"
+                f"\n**Fonte:** {md_code(track.info['sourceName'])}"
+                f"\n**Servidor:** {md_code(f'{self.guild.name} [{self.guild.id}]')}"
             )
 
             try:
-                embed.description += f"\n**Canal:** `{disnake.utils.escape_markdown(self.guild.me.voice.channel.name)} [{self.guild.me.voice.channel.id}]`\n"
+                embed.description += f"\n**Canal:** {md_code(f'{self.guild.me.voice.channel.name} [{self.guild.me.voice.channel.id}]')}\n"
             except Exception:
                 pass
 

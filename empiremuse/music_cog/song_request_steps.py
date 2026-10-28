@@ -21,6 +21,8 @@ from empiremuse.utils.music.converters import (
     URL_REG,
     YOUTUBE_VIDEO_REG,
     music_source_image,
+    md_link,
+    md_code,
 )
 from empiremuse.utils.music.errors import (
     GenericError,
@@ -49,6 +51,7 @@ from empiremuse.utils.others import (
 from empiremuse.music_cog.shared import (
     logger,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 async def _pr_checks(self, req):
@@ -156,7 +159,9 @@ async def _pr_playlist(self, req):
             [
                 disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
                 disnake.ui.Button(
-                    emoji="➕", label="Adicionar na fila", custom_id=PlayerControls.embed_enqueue_playlist
+                    emoji=app_emoji(self.bot, "add_music"),
+                    label="Adicionar na fila",
+                    custom_id=PlayerControls.embed_enqueue_playlist,
                 ),
             ]
         )
@@ -168,8 +173,8 @@ async def _pr_playlist(self, req):
 
     else:
         player.set_command_log(
-            text=f"{message.author.mention} adicionou a playlist [`{fix_characters(tracks.data['playlistInfo']['name'], 20)}`]"
-            f"(<{tracks.tracks[0].playlist_url}>) `({len(tracks.tracks)})`.",
+            text=f"{message.author.mention} adicionou a playlist {md_link(tracks.data['playlistInfo']['name'], tracks.tracks[0].playlist_url, limit=20)}"
+            f" `({len(tracks.tracks)})`.",
             emoji="🎶",
         )
     if destroy_message:
@@ -203,7 +208,7 @@ async def _pr_single(self, req):
 
     if isinstance(message.channel, disnake.Thread) and not isinstance(message.channel.parent, disnake.ForumChannel):
         embed.description = (
-            f"💠 **⠂ Uploader:** `{track.author}`\n"
+            f"💠 **⠂ Uploader:** {md_code(track.author)}\n"
             f"✋ **⠂ Pedido por:** {message.author.mention}\n"
             f"⏰ **⠂ Duração:** `{time_format(track.duration) if not track.is_stream else '🔴 Livestream'}`"
         )
@@ -222,11 +227,15 @@ async def _pr_single(self, req):
             [
                 disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
                 disnake.ui.Button(
-                    emoji="▶️",
+                    emoji=app_emoji(self.bot, "play"),
                     label="Tocar" + (" agora" if (player.current and player.current.autoplay) else ""),
                     custom_id=PlayerControls.embed_forceplay,
                 ),
-                disnake.ui.Button(emoji="➕", label="Adicionar na fila", custom_id=PlayerControls.embed_enqueue_track),
+                disnake.ui.Button(
+                    emoji=app_emoji(self.bot, "add_music"),
+                    label="Adicionar na fila",
+                    custom_id=PlayerControls.embed_enqueue_track,
+                ),
             ]
         )
 
@@ -244,7 +253,7 @@ async def _pr_single(self, req):
     else:
         duration = time_format(tracks[0].duration) if not tracks[0].is_stream else "🔴 Livestream"
         player.set_command_log(
-            text=f"{message.author.mention} adicionou [`{fix_characters(tracks[0].title, 20)}`](<{tracks[0].uri or tracks[0].search_uri}>) `({duration})`.",
+            text=f"{message.author.mention} adicionou {md_link(tracks[0].title, tracks[0].uri or tracks[0].search_uri, limit=20)} `({duration})`.",
             emoji="🎵",
         )
         if destroy_message:

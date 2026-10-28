@@ -6,7 +6,7 @@ import datetime
 import os
 import random
 import string
-import traceback
+import logging
 from typing import TYPE_CHECKING, Union, Optional
 
 import disnake
@@ -25,7 +25,7 @@ from empiremuse.rules.settings import add_dj_role as add_role, allowed_names
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import time_format
+from empiremuse.utils.music.converters import time_format, md_link, md_bracketed, md_code
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -49,6 +49,9 @@ from empiremuse.utils.music.request_channel import (
     find_request_channel,
     reset_request_channel,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -251,7 +254,7 @@ class PlayerSettings(disnake.ui.View):
             else:
                 await self.ctx.edit_original_message(content="Alterações salvas com sucesso!", view=None, embed=None)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao salvar as alterações do menu de configurações")
         await self.save_data()
         self.stop()
 
@@ -510,7 +513,7 @@ class MusicSettings(commands.Cog):
                     disnake.ui.Button(
                         label="Criar canal de palco",
                         custom_id=f"stage_channel_{id_}",
-                        emoji="🎙️",
+                        emoji=app_emoji(interaction.bot, "stagechannel"),
                         disabled=not guild.me.guild_permissions.manage_channels,
                     ),
                 )
@@ -608,7 +611,7 @@ class MusicSettings(commands.Cog):
                 except disnake.NotFound:
                     pass
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha inesperada no menu de configurações")
 
                 return
 
@@ -1026,10 +1029,10 @@ class MusicSettings(commands.Cog):
 
         embed = disnake.Embed(
             description="```ansi\n[31;1mModo Normal:[0m``` "
-            + ", ".join(f"[`[{s}]`]({bot.player_skins[s].preview})" for s in skin_list)
+            + ", ".join(md_bracketed(md_link(s, bot.player_skins[s].preview)) for s in skin_list)
             + "\n\n"
             "```ansi\n[33;1mModo Fixo (Song-Request):[0m``` "
-            + ", ".join(f"[`[{s}]`]({bot.player_static_skins[s].preview})" for s in static_skin_list)
+            + ", ".join(md_bracketed(md_link(s, bot.player_static_skins[s].preview)) for s in static_skin_list)
             + "\n\n`Nota: No modo global a skin será aplicada globalmente em todos os bots.`",
             colour=bot.get_color(guild.me),
         ).set_image(asset_url("ui_rainbow_bar_2.gif"))
@@ -1097,13 +1100,13 @@ class MusicSettings(commands.Cog):
 
             if global_selected != select_view.skin_selected:
                 try:
-                    changed_skins_txt += f"Global - Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
+                    changed_skins_txt += f"Global - Modo Normal: {md_link(select_view.skin_selected, self.bot.player_skins[select_view.skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += f"Global - Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
             if global_static_selected != select_view.static_skin_selected:
                 try:
-                    changed_skins_txt += f"Global - Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
+                    changed_skins_txt += f"Global - Song Request: {md_link(select_view.static_skin_selected, self.bot.player_static_skins[select_view.static_skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
@@ -1114,7 +1117,7 @@ class MusicSettings(commands.Cog):
 
             if selected != select_view.skin_selected:
                 try:
-                    changed_skins_txt += f"Modo Normal: [`{select_view.skin_selected}`]({self.bot.player_skins[select_view.skin_selected].preview})\n"
+                    changed_skins_txt += f"Modo Normal: {md_link(select_view.skin_selected, self.bot.player_skins[select_view.skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += (
                         f"Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
@@ -1122,7 +1125,7 @@ class MusicSettings(commands.Cog):
 
             if static_selected != select_view.static_skin_selected:
                 try:
-                    changed_skins_txt += f"Song Request: [`{select_view.static_skin_selected}`]({self.bot.player_static_skins[select_view.static_skin_selected].preview})\n"
+                    changed_skins_txt += f"Song Request: {md_link(select_view.static_skin_selected, self.bot.player_static_skins[select_view.static_skin_selected].preview)}\n"
                 except Exception:
                     changed_skins_txt += f"Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
@@ -1174,7 +1177,7 @@ class MusicSettings(commands.Cog):
             try:
                 await player.destroy_message()
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao apagar a mensagem do player")
 
             player.skin = select_view.skin_selected
             player.skin_static = select_view.static_skin_selected
@@ -1191,7 +1194,7 @@ class MusicSettings(commands.Cog):
                 if player.controller_mode and not [m for m in player.guild.me.voice.channel.members if not m.bot]:
                     player.start_auto_skip()
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha ao iniciar o auto-skip")
 
             await player.invoke_np(force=True)
             await asyncio.sleep(1.5)
@@ -1409,7 +1412,7 @@ class MusicSettings(commands.Cog):
                 except KeyError:
                     current_player = None
 
-                txt = f"Região: `{node.region.title()}`\n"
+                txt = f"Região: {md_code(node.region.title())}\n"
 
                 used = humanize.naturalsize(node.stats.memory_used)
                 total = humanize.naturalsize(node.stats.memory_allocated)
@@ -1421,9 +1424,9 @@ class MusicSettings(commands.Cog):
                 txt += (
                     f"RAM: `{used}/{free}`\n"
                     f"RAM Total: `{total}`\n"
-                    f"CPU Cores: `{cpu_cores}`\n"
+                    f"CPU Cores: {md_code(cpu_cores)}\n"
                     f"Uso de CPU: `{cpu_usage}%`\n"
-                    f"Versão do Lavalink: `v{node.version}`\n"
+                    f"Versão do Lavalink: {md_code(f'v{node.version}')}\n"
                     f"Uptime: <t:{int((disnake.utils.utcnow() - datetime.timedelta(milliseconds=node.stats.uptime)).timestamp())}:R>\n"
                 )
 
@@ -1439,7 +1442,7 @@ class MusicSettings(commands.Cog):
                     txt += "\n"
 
                 if node.website:
-                    txt += f"[`Website do server`]({node.website})\n"
+                    txt += f"{md_link('Website do server', node.website)}\n"
 
                 status = "🌟" if current_player else "✅"
 
@@ -1686,7 +1689,7 @@ class RPCCog(commands.Cog):
             color=self.bot.get_color(),
             description="**Mini-guia para usar o app para exibir a música que você está ouvindo via RPC:\n\n"
             "Faça o download do app (musicbot_rpc.zip) "
-            f"[aqui]({branding.RPC_APP_RELEASES_URL}).\n\n"
+            f"{md_link('aqui', branding.RPC_APP_RELEASES_URL, code=False)}.\n\n"
             "Extraia o musicbot_rpc.zip e na pasta abra o musicbot_rpc."
             "Adicione o link do websocket abaixo no app (aba: Socket Settings):** ```ansi\n"
             f"{(self.bot.config['RPC_PUBLIC_URL'] or self.bot.config['RPC_SERVER']).replace('$PORT', os.environ.get('PORT', '80'))}```",

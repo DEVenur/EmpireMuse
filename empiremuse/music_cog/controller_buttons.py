@@ -17,10 +17,7 @@ from empiremuse.utils.music.checks import (
     can_connect,
     check_player_perm,
 )
-from empiremuse.utils.music.converters import (
-    fix_characters,
-    URL_REG,
-)
+from empiremuse.utils.music.converters import fix_characters, URL_REG, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -47,7 +44,7 @@ def _pc_modal_fav_options(self, req):
         fav_opts = []
 
         for k, v in list(user_data["fav_links"].items())[:25]:
-            emoji, platform = music_source_emoji_url(v)
+            emoji, platform = music_source_emoji_url(v, self.bot)
             fav_opts.append(
                 disnake.SelectOption(
                     label=fix_characters(k, 35),
@@ -84,7 +81,7 @@ async def _pc_modal_integration_options(self, req):
                 user_data["integration_links"][k] = v
                 update = True
 
-            emoji, platform = music_source_emoji_url(v["url"])
+            emoji, platform = music_source_emoji_url(v["url"], self.bot)
 
             integration_opts.append(
                 disnake.SelectOption(
@@ -164,7 +161,7 @@ async def _pc_lastfm(self, req):
     await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
     await interaction.edit_original_message(
         embed=disnake.Embed(
-            description=f"**O scrobble/registro de músicas foi {'ativado' if user_data['lastfm']['scrobble'] else 'desativado'} na conta: [{user_data['lastfm']['username']}](<https://www.last.fm/user/{user_data['lastfm']['username']}>).**",
+            description=f"**O scrobble/registro de músicas foi {'ativado' if user_data['lastfm']['scrobble'] else 'desativado'} na conta: {md_link(user_data['lastfm']['username'], f'https://www.last.fm/user/{user_data["lastfm"]["username"]}', code=False)}.**",
             color=self.bot.get_color(),
         )
     )
@@ -241,7 +238,7 @@ async def _pc_favorite_choices(self, req):
 
     if player.current.uri:
         choices["Track"] = {"name": player.current.title, "url": player.current.uri, "emoji": "🎵"}
-        msg += f"**Música:** [`{player.current.title}`]({player.current.uri})\n"
+        msg += f"**Música:** {md_link(player.current.title, player.current.uri)}\n"
 
     if player.current.album_url:
         choices["Album"] = {
@@ -249,7 +246,7 @@ async def _pc_favorite_choices(self, req):
             "url": player.current.album_url,
             "emoji": "💽",
         }
-        msg += f"**Album:** [`{player.current.album_name}`]({player.current.album_url})\n"
+        msg += f"**Album:** {md_link(player.current.album_name, player.current.album_url)}\n"
 
     if player.current.playlist_url:
         choices["Playlist"] = {
@@ -257,7 +254,7 @@ async def _pc_favorite_choices(self, req):
             "url": player.current.playlist_url,
             "emoji": "📑",
         }
-        msg += f"**Playlist:** [`{player.current.playlist_name}`]({player.current.playlist_url})\n"
+        msg += f"**Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url)}\n"
 
     if not choices:
         try:
@@ -360,7 +357,7 @@ async def _pc_favorite_save(self, req):
 
     await self.bot.update_global_data(interaction.author.id, user_data, db_name=DBModel.users)
 
-    self.bot.dispatch("fav_add", interaction.user, user_data, f"[`{info['name']}`]({info['url']})")
+    self.bot.dispatch("fav_add", interaction.user, user_data, md_link(info["name"], info["url"]))
 
     global_data = await self.bot.get_global_data(interaction.author.id, db_name=DBModel.guilds)
 
@@ -377,7 +374,7 @@ async def _pc_favorite_save(self, req):
         embed=disnake.Embed(
             color=self.bot.get_color(interaction.guild.me),
             description="### Item adicionado/editado com sucesso nos seus favoritos:\n\n"
-            f"**{select_type}:** [`{info['name']}`]({info['url']})\n\n"
+            f"**{select_type}:** {md_link(info['name'], info['url'])}\n\n"
             f"### Como usar?\n"
             f"* Usando o comando {slashcmd} (no preenchimento automático da busca)\n"
             f"* Clicando no botão/select de tocar favorito/integração do player.\n"
@@ -456,7 +453,7 @@ async def _pc_lyrics(self, req):
 
     await interaction.edit_original_message(
         embed=disnake.Embed(
-            description=f"### Letras da música: [{player.current.title}](<{player.current.uri}>)\n{lyrics_string}",
+            description=f"### Letras da música: {md_link(player.current.title, player.current.uri, code=False)}\n{lyrics_string}",
             color=self.bot.get_color(player.guild.me),
         )
     )

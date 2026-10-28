@@ -2,7 +2,7 @@
 from os.path import basename
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format
+from empiremuse.utils.music.converters import fix_characters, time_format, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 
 
@@ -25,7 +25,7 @@ class Minimalist:
 
         data = {
             "embeds": [],
-            "content": f"-# ▶️`⠂Tocando:` [`{fix_characters(player.current.title, 42)}`](<{player.current.uri or player.current.search_uri}>) `[{fix_characters(player.current.author, 20)}] {duration}`",
+            "content": f"-# ▶️`⠂Tocando:` {md_link(player.current.title, player.current.uri or player.current.search_uri, limit=42)} `[{fix_characters(player.current.author, 20)}] {duration}`",
         }
 
         if player.current_hint:

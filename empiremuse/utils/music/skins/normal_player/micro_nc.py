@@ -4,7 +4,7 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.models import LavalinkPlayer
 
 
@@ -27,7 +27,7 @@ class MicroNC:
 
         embed = disnake.Embed(
             color=player.bot.get_color(player.guild.me),
-            description=f"-# 🎶 **⠂[{fix_characters(player.current.title, 30)}]({player.current.uri or player.current.search_uri})** `[{fix_characters(player.current.author, 12)}]`",
+            description=f"-# 🎶 **⠂{md_link(player.current.title, player.current.uri or player.current.search_uri, code=False, limit=30)}** `[{fix_characters(player.current.author, 12)}]`",
         )
 
         data["embeds"].append(embed)

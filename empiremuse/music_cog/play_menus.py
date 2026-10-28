@@ -2,15 +2,13 @@
 """Menus de favoritos, integrações, músicas recentes e fila salva do `/play`."""
 
 import datetime
-import traceback
+import logging
 from typing import TYPE_CHECKING
 
 import disnake
 
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.converters import (
-    fix_characters,
-)
+from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
     EmptyFavIntegration,
@@ -24,6 +22,9 @@ from empiremuse.utils.others import (
     song_request_buttons,
     get_source_emoji_cfg,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.music_cog.play_state import PlayState
@@ -86,7 +87,9 @@ class PlayMenusMixin:
             )
             opts.append(
                 disnake.SelectOption(
-                    label="Adicionar música recente", value=">> [📑 Músicas recentes 📑] <<", emoji="📑"
+                    label="Adicionar música recente",
+                    value=">> [📑 Músicas recentes 📑] <<",
+                    emoji=app_emoji(self.bot, "music_queue"),
                 )
             )
 
@@ -163,7 +166,7 @@ class PlayMenusMixin:
             try:
                 await func(embed=embed, components=song_request_buttons)
             except AttributeError:
-                traceback.print_exc()
+                logger.exception("Falha ao atualizar a mensagem de pedido de música")
                 pass
             return True
 
@@ -220,7 +223,7 @@ class PlayMenusMixin:
                 if update:
                     await self.bot.update_global_data(inter.author.id, user_data, db_name=DBModel.users)
 
-                emoji, platform = music_source_emoji_url(v["url"])
+                emoji, platform = music_source_emoji_url(v["url"], self.bot)
 
                 fav_opts.append(
                     {
@@ -238,7 +241,7 @@ class PlayMenusMixin:
             query = ""
             menu = "favs"
             for k, v in user_data["fav_links"].items():
-                emoji, platform = music_source_emoji_url(v)
+                emoji, platform = music_source_emoji_url(v, self.bot)
                 fav_opts.append(
                     {
                         "url": v,
@@ -261,7 +264,7 @@ class PlayMenusMixin:
             query = ""
             menu = "latest"
             for i, d in enumerate(user_data["last_tracks"]):
-                emoji, platform = music_source_emoji_url(d["url"])
+                emoji, platform = music_source_emoji_url(d["url"], self.bot)
                 fav_opts.append(
                     {
                         "url": d["url"],
@@ -291,7 +294,7 @@ class PlayMenusMixin:
                             label=fix_characters(name, 45),
                             value=f"> pin: {name}",
                             description="[📌 Favorito do servidor 📌]",
-                            emoji=music_source_emoji_url(v["url"])[0],
+                            emoji=music_source_emoji_url(v["url"], self.bot)[0],
                         ),
                     }
                 )
@@ -330,7 +333,7 @@ class PlayMenusMixin:
                 embed = disnake.Embed(
                     color=self.bot.get_color(guild.me),
                     description="\n".join(
-                        f"{get_source_emoji_cfg(bot, i['url']) or ''} [`{fix_characters(i['option'].label, 45)}`]({check_url(i['url'])})"
+                        f"{get_source_emoji_cfg(bot, i['url']) or ''} {md_link(i['option'].label, check_url(i['url']), limit=45)}"
                         for i in fav_opts
                     ),
                 )
@@ -420,7 +423,7 @@ class PlayMenusMixin:
                         try:
                             await select_interaction.response.edit_message(embed=embed, components=song_request_buttons)
                         except AttributeError:
-                            traceback.print_exc()
+                            logger.exception("Falha ao atualizar a mensagem de pedido de música")
                     return True
 
                 if select_interaction.data.values[0] == "cancel":

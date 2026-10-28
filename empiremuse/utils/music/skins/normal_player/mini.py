@@ -5,9 +5,17 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import time_format, fix_characters, get_button_style, music_source_image
+from empiremuse.utils.music.converters import (
+    time_format,
+    fix_characters,
+    get_button_style,
+    music_source_image,
+    md_bracketed,
+    md_link,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class MiniSkin:
@@ -34,7 +42,7 @@ class MiniSkin:
 
         embed = disnake.Embed(
             color=embed_color,
-            description=f"-# [`{player.current.single_title}`]({player.current.uri or player.current.search_uri})",
+            description=f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri)}",
         )
         embed_queue = None
         queue_size = len(player.queue)
@@ -58,10 +66,12 @@ class MiniSkin:
                 embed.description += " `[🔁 fila]`"
 
         if not player.current.autoplay:
-            embed.description += f" `[`<@{player.current.requester}>`]`"
+            embed.description += f" {md_bracketed(f'<@{player.current.requester}>')}"
         else:
             try:
-                embed.description += f" [`[Recomendada]`]({player.current.info['extra']['related']['uri']})"
+                embed.description += (
+                    f" {md_bracketed(md_link('Recomendada', player.current.info['extra']['related']['uri']))}"
+                )
             except Exception:
                 embed.description += "` [Recomendada]`"
 
@@ -85,7 +95,7 @@ class MiniSkin:
                 embed_queue = disnake.Embed(
                     color=embed_color,
                     description="\n".join(
-                        f"`{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` [`{fix_characters(t.title, 38)}`]({t.uri})"
+                        f"`{(n + 1):02}) [{time_format(t.duration) if not t.is_stream else '🔴 Livestream'}]` {md_link(t.title, t.uri, limit=38)}"
                         for n, t in (enumerate(itertools.islice(player.queue, 5)))
                     ),
                 )
@@ -100,12 +110,18 @@ class MiniSkin:
         data["embeds"] = [embed_queue, embed] if embed_queue else [embed]
 
         data["components"] = [
-            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
             disnake.ui.Button(
-                emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)
+                emoji=app_emoji(player.bot, "playpause"),
+                custom_id=PlayerControls.pause_resume,
+                style=get_button_style(player.paused),
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "music_queue"),
+                custom_id=PlayerControls.queue,
+                disabled=not (player.queue or player.queue_autoplay),
             ),
             disnake.ui.Select(
                 placeholder="Mais opções:",
@@ -116,7 +132,7 @@ class MiniSkin:
                 options=[
                     disnake.SelectOption(
                         label="Adicionar música",
-                        emoji="➕",
+                        emoji=app_emoji(player.bot, "add_music"),
                         value=PlayerControls.add_song,
                         description="Adicionar uma música/playlist na fila.",
                     ),
@@ -198,7 +214,7 @@ class MiniSkin:
             data["components"][5].options.append(
                 disnake.SelectOption(
                     label="Mini-fila do player",
-                    emoji="📑",
+                    emoji=app_emoji(player.bot, "music_queue"),
                     value=PlayerControls.miniqueue,
                     description="Ativar/Desativar a mini-fila do player.",
                 )

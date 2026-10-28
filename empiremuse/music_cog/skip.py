@@ -13,9 +13,7 @@ from empiremuse.utils.music.checks import (
     check_queue_loading,
     check_yt_cooldown,
 )
-from empiremuse.utils.music.converters import (
-    fix_characters,
-)
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -174,7 +172,7 @@ class SkipMixin:
             embed = disnake.Embed(
                 color=self.bot.get_color(guild.me),
                 description=f"⤵️ **⠂{inter.author.mention} pulou para a música:**\n"
-                f"╰[`{fix_characters(track.title, 43)}`](<{track.uri or track.search_uri}>){player.controller_link}",
+                f"╰{md_link(track.title, track.uri or track.search_uri, limit=43)}{player.controller_link}",
             )
 
             try:
@@ -210,7 +208,7 @@ class SkipMixin:
                 embed = disnake.Embed(
                     color=self.bot.get_color(guild.me),
                     description=f"⏭️ **⠂{inter.author.mention} pulou a música:\n"
-                    f"╰[`{fix_characters(player.current.title, 43)}`](<{player.current.uri or player.current.search_uri}>)**"
+                    f"╰{md_link(player.current.title, player.current.uri or player.current.search_uri, limit=43)}**"
                     f"{player.controller_link}",
                 )
 
@@ -312,7 +310,7 @@ class SkipMixin:
 
             txt = [
                 "voltou para a música atual.",
-                f"⏮️ **⠂{inter.author.mention} voltou para a música:\n╰[`{fix_characters(t.title, 43)}`](<{t.uri or t.search_uri}>)**",
+                f"⏮️ **⠂{inter.author.mention} voltou para a música:\n╰{md_link(t.title, t.uri or t.search_uri, limit=43)}**",
             ]
 
             await self.interaction_message(inter, txt, emoji="⏮️", store_embed=True)

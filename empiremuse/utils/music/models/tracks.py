@@ -8,7 +8,7 @@ from urllib.parse import quote, quote_plus
 
 
 import empiremuse.wavelink as wavelink
-from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.music.converters import fix_characters, md_link, md_code
 
 
 class PartialPlaylist:
@@ -150,7 +150,7 @@ class PartialTrack:
         try:
             return self.info["extra"]["authors_md"]
         except KeyError:
-            return f"`{self.author}`"
+            return md_code(self.author)
 
     @property
     def authors(self) -> List[str]:
@@ -389,10 +389,10 @@ class LavalinkTrack(wavelink.Track):
     def authors_md(self) -> str:
         try:
             if self.info["pluginInfo"]["artistUrl"]:
-                return f"[`{self.author}`](<{self.info['pluginInfo']['artistUrl']}>)"
+                return md_link(self.author, self.info["pluginInfo"]["artistUrl"])
         except KeyError:
             pass
-        return f"`{self.author}`"
+        return md_code(self.author)
 
     @property
     def authors(self) -> List[str]:

@@ -7,7 +7,6 @@ import json
 import os.path
 import platform
 import logging
-import traceback
 from copy import deepcopy
 from itertools import cycle
 from os import getpid
@@ -26,7 +25,7 @@ from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, db_models
 from empiremuse.utils.music.checks import check_requester_channel
-from empiremuse.utils.music.converters import time_format, URL_REG
+from empiremuse.utils.music.converters import time_format, URL_REG, md_bracketed, md_link, fix_characters
 from empiremuse.utils.others import select_bot_pool, CustomContext, paginator
 
 if TYPE_CHECKING:
@@ -164,7 +163,7 @@ class Misc(commands.Cog):
                         name, url = i.split("||")
                         activities.append({"name": name, "url": url.strip(" "), "type": "streaming"})
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha ao processar uma atividade de presença")
 
             if not activities:
                 return
@@ -229,7 +228,7 @@ class Misc(commands.Cog):
                 await asyncio.sleep(self.bot.config["PRESENCE_INTERVAL"])
 
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha no loop de presença do bot")
 
     @commands.Cog.listener("on_guild_join")
     async def guild_add(self, guild: disnake.Guild):
@@ -263,7 +262,7 @@ class Misc(commands.Cog):
             cmd_text = ""
 
         if self.bot.config["SUPPORT_SERVER"]:
-            support_server = f"Caso tenha alguma dúvida ou queira acompanhar as últimas novidades, você pode entrar no meu [`servidor de suporte`]({self.bot.config['SUPPORT_SERVER']})"
+            support_server = f"Caso tenha alguma dúvida ou queira acompanhar as últimas novidades, você pode entrar no meu {md_link('servidor de suporte', self.bot.config['SUPPORT_SERVER'])}"
         else:
             support_server = ""
 
@@ -342,7 +341,7 @@ class Misc(commands.Cog):
                                 "**Caso tenha demanda no seu servidor você também pode adicionar mais bots de músicas extras.\n"
                                 "Todos os bots compartilham o mesmo prefixo e comando de barra o que descarta a necessidade "
                                 f"de ficar decorando prefixos e comandos de barra de cada bot individualmente.\n\n"
-                                f"Confira o [vídeo]({self.bot.config['MULTIVOICE_VIDEO_DEMO_URL']}) demonstrando o uso de multi-bot na prática.**"
+                                f"Confira o {md_link('vídeo', self.bot.config['MULTIVOICE_VIDEO_DEMO_URL'], code=False)} demonstrando o uso de multi-bot na prática.**"
                             )
 
                         if support_server:
@@ -357,7 +356,7 @@ class Misc(commands.Cog):
                         except disnake.Forbidden:
                             pass
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha ao enviar a mensagem de boas-vindas")
                         break
 
         if not channel:
@@ -413,7 +412,7 @@ class Misc(commands.Cog):
                 "**Caso tenha demanda no seu servidor você também pode adicionar mais bots de músicas extras.\n"
                 "Todos os bots compartilham o mesmo prefixo e comando de barra o que descarta a necessidade "
                 f"de ficar decorando prefixos e comandos de barra de cada bot individualmente.\n\n"
-                f"Confira o [vídeo]({self.bot.config['MULTIVOICE_VIDEO_DEMO_URL']}) demonstrando o uso de multi-bot na prática.**"
+                f"Confira o {md_link('vídeo', self.bot.config['MULTIVOICE_VIDEO_DEMO_URL'], code=False)} demonstrando o uso de multi-bot na prática.**"
             )
 
         embeds.append(disnake.Embed(color=color, description=cmd_text).set_image(url=image))
@@ -434,7 +433,7 @@ class Misc(commands.Cog):
                     kwargs["delete_after"] = 600
                 await asyncio.sleep(1)
                 await channel.send(
-                    f"{send_video}\n\nConfira o [**vídeo**]({self.bot.config['MULTIVOICE_VIDEO_DEMO_URL']}) demonstrando essa funcionalidade.",
+                    f"{send_video}\n\nConfira o **{md_link('vídeo', self.bot.config['MULTIVOICE_VIDEO_DEMO_URL'], code=False)}** demonstrando essa funcionalidade.",
                     **kwargs,
                 )
         except disnake.Forbidden:
@@ -585,7 +584,7 @@ class Misc(commands.Cog):
             if data["available"] > 0:
                 if data["website"]:
                     nodes_available.add(
-                        f"> [`✅⠂{identifier}`]({data['website']}) `[{data['available']}/{data['total']}]`"
+                        f"> {md_link(f'✅⠂{identifier}', data['website'])} `[{data['available']}/{data['total']}]`"
                     )
                 else:
                     nodes_available.add(f"> `✅⠂{identifier} [{data['available']}/{data['total']}]`")
@@ -646,7 +645,7 @@ class Misc(commands.Cog):
             embed.description += f"> 🎧 **⠂Ouvinte{'s'[: (lcount := len(listeners)) ^ 1]} atua{'is'[: lcount ^ 1] or 'l'}:** `{lcount:,}`\n"
 
         if bot.pool.commit:
-            embed.description += f"> 📥 **⠂Commit atual:** [`{bot.pool.commit[:7]}`]({bot.pool.remote_git_url}/commit/{bot.pool.commit})\n"
+            embed.description += f"> 📥 **⠂Commit atual:** {md_link(bot.pool.commit[:7], f'{bot.pool.remote_git_url}/commit/{bot.pool.commit}')}\n"
 
         embed.description += (
             f"> 🐍 **⠂Versão do Python:** `{platform.python_version()}`\n"
@@ -671,14 +670,14 @@ class Misc(commands.Cog):
             if user_data["custom_prefix"]:
                 embed.description += f"> ⌨️ **⠂Seu prefixo de usuário:** `{disnake.utils.escape_markdown(user_data['custom_prefix'], as_needed=True)}`\n"
 
-        links = f"[`[Source]`]({branding.REPO_URL})"
+        links = md_bracketed(md_link("Source", branding.REPO_URL))
 
         if bot.config["SUPPORT_SERVER"]:
-            links = f"[`[Suporte]`]({bot.config['SUPPORT_SERVER']})  **|** {links}"
+            links = f"{md_bracketed(md_link('Suporte', bot.config['SUPPORT_SERVER']))}  **|** {links}"
 
         embed.description += f"> 🌐 **⠂**{links}\n"
         embed.description += (
-            f"> 💜 **⠂**Baseado no [{branding.UPSTREAM_NAME}]({branding.UPSTREAM_URL}) "
+            f"> 💜 **⠂**Baseado no {md_link(branding.UPSTREAM_NAME, branding.UPSTREAM_URL, code=False)} "
             f"de {branding.UPSTREAM_AUTHOR} (GPL-2.0)\n"
         )
 
@@ -737,7 +736,15 @@ class Misc(commands.Cog):
 
             kwargs = {}
 
-            invite = f"[`{disnake.utils.escape_markdown(str(bot.user.name))}`]({disnake.utils.oauth_url(bot.user.id, permissions=disnake.Permissions(bot.config['INVITE_PERMISSIONS']), scopes=('bot',), **kwargs)})"
+            invite = md_link(
+                bot.user.name,
+                disnake.utils.oauth_url(
+                    bot.user.id,
+                    permissions=disnake.Permissions(bot.config["INVITE_PERMISSIONS"]),
+                    scopes=("bot",),
+                    **kwargs,
+                ),
+            )
 
             if bot.appinfo.flags.gateway_message_content_limited:
                 invite += f" `[{len(bot.guilds)}/100]`"
@@ -866,27 +873,30 @@ class Misc(commands.Cog):
         if guild_avatar_url:
             embeds.append(
                 disnake.Embed(
-                    description=f"{user.mention} **[avatar (server)]({guild_avatar_url})**", color=color
+                    description=f"{user.mention} **{md_link('avatar (server)', guild_avatar_url, code=False)}**",
+                    color=color,
                 ).set_image(url=guild_avatar_url)
             )
 
         if guild_banner_url:
             embeds.append(
                 disnake.Embed(
-                    description=f"{user.mention} **[banner (server)]({guild_banner_url})**", color=color
+                    description=f"{user.mention} **{md_link('banner (server)', guild_banner_url, code=False)}**",
+                    color=color,
                 ).set_image(url=guild_banner_url)
             )
 
         embeds.append(
-            disnake.Embed(description=f"{user.mention} **[avatar (user)]({user_avatar_url})**", color=color).set_image(
-                url=user_avatar_url
-            )
+            disnake.Embed(
+                description=f"{user.mention} **{md_link('avatar (user)', user_avatar_url, code=False)}**", color=color
+            ).set_image(url=user_avatar_url)
         )
 
         if user_banner_url:
             embeds.append(
                 disnake.Embed(
-                    description=f"{user.mention} **[banner (user)]({user_banner_url})**", color=color
+                    description=f"{user.mention} **{md_link('banner (user)', user_banner_url, code=False)}**",
+                    color=color,
                 ).set_image(url=user_banner_url)
             )
 
@@ -959,18 +969,18 @@ class GuildLog(commands.Cog):
             if URL_REG.match(bot.config["BOT_ADD_REMOVE_LOG"]):
                 self.hook_url = bot.config["BOT_ADD_REMOVE_LOG"]
             else:
-                print("URL do webhook inválido (para envio de logs ao adicionar/remover bot).")
+                logger.warning("URL do webhook inválido (para envio de logs ao adicionar/remover bot).")
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: disnake.Guild):
-        print(f"😭 - Bot {self.bot.user.name} foi removido(a) do servidor: {guild.name} - [{guild.id}]")
+        logger.info("Bot %s foi removido(a) do servidor [%s]", self.bot.user.name, guild.id)
 
         try:
             await self.bot.music.players[guild.id].destroy()
         except KeyError:
             pass
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao tratar a remoção do bot do servidor")
 
         if not self.hook_url:
             return
@@ -978,20 +988,20 @@ class GuildLog(commands.Cog):
         try:
             await self.send_hook(guild, title="Me removeram do servidor", color=disnake.Color.red())
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o aviso de remoção do servidor")
 
         await self.bot.update_appinfo()
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: disnake.Guild):
-        print(f"🎉 - Bot {self.bot.user.name} foi adicionado(a) no servidor: {guild.name} - [{guild.id}]")
+        logger.info("Bot %s foi adicionado(a) no servidor [%s]", self.bot.user.name, guild.id)
 
         try:
             guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)
             guild_data["player_controller"] = deepcopy(db_models[DBModel.guilds]["player_controller"])
             await self.bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao tratar a entrada do bot no servidor")
 
         if not self.hook_url:
             return
@@ -999,7 +1009,7 @@ class GuildLog(commands.Cog):
         try:
             await self.send_hook(guild, title="Me adicionaram em um novo servidor", color=disnake.Color.green())
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o aviso de entrada no servidor")
 
         await self.bot.update_appinfo()
 
@@ -1008,7 +1018,7 @@ class GuildLog(commands.Cog):
 
         embed = disnake.Embed(
             description=f"__**{title}:**__\n"
-            f"```{guild.name}```\n"
+            f"```{fix_characters(guild.name)}```\n"
             f"**ID:** `{guild.id}`\n"
             f"**Dono:** `{guild.owner} [{guild.owner.id}]`\n"
             f"**Criado em:** <t:{created_at}:f> - <t:{created_at}:R>\n"
