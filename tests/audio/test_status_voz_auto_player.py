@@ -953,6 +953,7 @@ class TestModeloQueColaValores:
             ("{track.title}:{track.author}", "x<a", "b:123456789012345678>"),
             ("{track.title}{track.author}", "x<", "@&123456789012345678>"),
             ("{track.title}{track.author}", "x@", "everyone"),
+            ("{track.title}{track.author}", "https:", "//evil.example"),
         ],
     )
     async def test_the_published_status_has_no_token_rebuilt_from_two_values(
@@ -963,7 +964,7 @@ class TestModeloQueColaValores:
         await executar(relogio, player.apply_permanent_voice_status(cfg(modelo=modelo)))
 
         (texto,) = bot.textos
-        assert "<" not in texto and "@" not in texto, texto
+        assert "<" not in texto and "@" not in texto and "//" not in texto, texto
 
 
 # ============================================================================ Info A — a reaplicação não troca o texto novo pelo antigo
@@ -993,3 +994,42 @@ class TestReaplicacaoComPendente:
 
         daquele = [p.status for p in bot.puts if p.canal == player.guild.me.voice.channel.id]
         assert daquele == ["Antiga", "Musica 7"], daquele
+
+
+class TestOClearDoDestroySegueSaindo:
+    """V-145-3: o ``is_closing`` bloqueia texto e reaplicação, mas NUNCA o clear: o destroy precisa limpar o canal."""
+
+    async def test_disable_with_a_closing_player_still_clears_the_channel(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+        player.is_closing = True
+
+        await executar(relogio, player.disable_voice_status())
+
+        assert [p.status for p in bot.puts] == ["Musica", None] and player.last_stage_title == ""
+
+    async def test_the_clear_branch_of_update_stage_topic_still_goes_out_while_closing(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+        player.is_closing = True
+
+        await executar(relogio, player.update_stage_topic(clear=True))
+
+        assert [p.status for p in bot.puts] == ["Musica", None]
+
+    async def test_the_destroy_clears_the_channel_and_nothing_else_is_written_after_it(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+
+        await player.process_destroy()
+        await relogio.avancar(3 * regras().VOICE_STATUS_REAPPLY_INTERVAL)
+
+        assert [p.status for p in bot.puts][-1] is None or bot.textos == ["Musica"]
+        assert bot.textos == ["Musica"]

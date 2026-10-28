@@ -235,10 +235,14 @@ class TestVoiceStatusValue:
         assert "\\*\\*forte\\*\\*" in saida and "\\_it\\_" in saida and "\\[t](u)" in saida
 
     @pytest.mark.parametrize("url", ["https://discord.gift/abc", "http://exemplo.invalid/x", "ftp://exemplo.invalid/y"])
-    def test_a_bare_url_loses_its_scheme_separator(self, url: str) -> None:
+    def test_a_bare_url_loses_its_double_slash(self, url: str) -> None:
         saida = regras().voice_status_value(f"veja {url} ok")
 
-        assert "://" not in saida and ":／／" in saida
+        assert "//" not in saida and "／／" in saida
+
+    def test_a_double_slash_anywhere_in_the_value_is_swapped(self) -> None:
+        assert regras().voice_status_value("a//b") == "a／／b"
+        assert "//" not in regras().voice_status_value("x///y////z")
 
     def test_the_zero_width_joiner_trick_is_not_used(self) -> None:
         assert "⁠" not in regras().voice_status_value("<@123456789012345678> @everyone")
@@ -368,3 +372,14 @@ class TestNeutralizacaoIncondicional:
         saida = r.render_voice_status(modelo, valores)
 
         assert "<" not in saida and "@" not in saida, saida
+
+
+class TestUrlColadaPeloModelo:
+    @pytest.mark.parametrize(("titulo", "autor"), [("https:", "//evil.example/x"), ("ftp:", "//h")])
+    def test_a_template_that_glues_two_values_cannot_form_a_bare_url(self, titulo: str, autor: str) -> None:
+        r = regras()
+        valores = {"{track.title}": r.voice_status_value(titulo), "{track.author}": r.voice_status_value(autor)}
+
+        saida = r.render_voice_status("{track.title}{track.author}", valores)
+
+        assert "//" not in saida, saida
