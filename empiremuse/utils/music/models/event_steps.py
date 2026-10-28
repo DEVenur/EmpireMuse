@@ -40,6 +40,15 @@ RETRYABLE_ERROR_CAUSES = (
     "com.sedmelluq.discord.lavaplayer.tools.io.PersistentHttpStream$PersistentHttpException: Not success status code: 403",
 )
 
+# Marcas de falha de download do YouTube que valem UMA nova tentativa da mesma faixa (o Lavalink manda o `toString()` da exceção,
+# que começa com o nome da classe do plugin, então a busca é por trecho e não por prefixo).
+SAME_TRACK_RETRY_MARKERS = (
+    "All clients failed",
+    "Read timed out",
+)
+SAME_TRACK_RETRY_DELAY = 2
+YOUTUBE_PLUGIN_CAUSE_MARKER = "dev.lavalink.youtube."
+
 # Causas do plugin de espelhamento (lavasrc) quando nenhuma outra plataforma tem a música.
 MIRROR_NOT_FOUND_CAUSES = (
     "com.github.topi314.lavasrc.mirror.TrackNotFoundException: No tracks found in playlist or search result for track",
@@ -164,6 +173,8 @@ async def _he_track_start(self, event) -> None:
         return
 
     self.bot.dispatch("wavelink_track_start", player=self)
+    if self.current:
+        getattr(self, "same_track_retries", set()).discard(_he_retry_key(self.current))
 
     if self.text_channel and not _he_can_send_in_text_channel(self):
         self.text_channel = None
@@ -290,6 +301,52 @@ async def _he_report_exception(self, embed, track, error_format) -> None:
     await self.report_error(embed, track)
 
 
+def _he_cause_text(event) -> str:
+    return "\n".join((str(event.cause or ""), str(event.message or "")))
+
+
+def _he_cause_has(event, markers) -> bool:
+    """True quando alguma marca aparece em qualquer posição da causa ou da mensagem do evento."""
+    text = _he_cause_text(event)
+    return any(marker in text for marker in markers)
+
+
+def _he_retry_key(track) -> str:
+    return str(getattr(track, "uri", None) or getattr(track, "search_uri", None) or id(track))
+
+
+def _he_take_same_track_retry(self, event, track) -> bool:
+    """Concede (uma vez por faixa, até ela voltar a tocar) a nova tentativa da mesma faixa nas falhas de download do YouTube."""
+    if not _he_cause_has(event, SAME_TRACK_RETRY_MARKERS):
+        return False
+    used = getattr(self, "same_track_retries", None)
+    if used is None:
+        used = self.same_track_retries = set()
+    key = _he_retry_key(track)
+    if key in used:
+        return False
+    used.add(key)
+    return True
+
+
+def _he_other_youtube_node(self):
+    """Outro nó disponível com busca do YouTube, ou None."""
+    for n in self.bot.music.nodes.values():
+        if n != self.node and n.is_available and "ytsearch" in n.search_providers:
+            return n
+    return None
+
+
+def _he_is_youtube_failure(self, event, track) -> bool:
+    """Faixa do YouTube, ou de outra origem espelhada no YouTube (causa do plugin do YouTube) quando há outro nó para trocar.
+
+    Sem outro nó a faixa espelhada segue o caminho comum (relata e pula), para não voltar à fila sem fim.
+    """
+    if track.source_name == "youtube":
+        return True
+    return YOUTUBE_PLUGIN_CAUSE_MARKER in str(event.cause or "") and _he_other_youtube_node(self) is not None
+
+
 async def _he_track_exception(self, event) -> None:
     track = self.current or self.last_track
     embed, error_code = _he_exception_embed(self, event, track)
@@ -313,7 +370,14 @@ async def _he_track_exception(self, event) -> None:
     cooldown = 10
     start_position = 0
 
-    if ignore_error_log := event.cause.startswith(RETRYABLE_ERROR_CAUSES):
+    if _he_take_same_track_retry(self, event, track):
+        self.queue.appendleft(track)
+        await asyncio.sleep(SAME_TRACK_RETRY_DELAY)
+        self.locked = False
+        await self.process_next()
+        return
+
+    if ignore_error_log := _he_cause_has(event, RETRYABLE_ERROR_CAUSES):
         if _he_retry_after_general_error(self, track):
             return
 
@@ -326,7 +390,7 @@ async def _he_track_exception(self, event) -> None:
         await send_report()
         return
 
-    elif track.source_name == "youtube":
+    elif _he_is_youtube_failure(self, event, track):
         await _he_recover_from_youtube(self, track, send_report)
         return
 
