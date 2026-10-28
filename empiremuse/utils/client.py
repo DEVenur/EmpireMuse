@@ -44,6 +44,8 @@ from empiremuse.health import (
 from empiremuse.logs import configure_logging, flush_logging, parse_log_settings, register_secret, tick_logging
 from empiremuse.logs.aggregate import AGGREGATE_WINDOW
 from empiremuse.logs.boot import BootReport, check_new_version
+from empiremuse.logs.context import guild_extra
+from empiremuse.logs.errors import command_context, install_exception_handlers
 from empiremuse.logs.metrics import SUMMARY_PREFIX, MetricsCollector, NodeSample, format_summary
 from empiremuse.logs.metrics import process_stats as metrics_process_stats
 from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
@@ -1186,14 +1188,14 @@ class BotPool:
 
                 if self.config["COMMAND_LOG"] and inter.guild and not (await inter.bot.is_owner(inter.author)):
                     try:
+                        # LGPD (B23): só IDs, o comando e as opções resumidas por tipo; nada de nome, conteúdo nem URL de anexo.
+                        info = command_context(inter, level=logging.INFO)
                         commands_logger.info(
-                            "cmd log: [user: %s - %s] - [guild: %s - %s] - [cmd: %s] - %s",
-                            inter.author,
-                            inter.author.id,
-                            inter.guild.name,
-                            inter.guild.id,
-                            inter.data.name,
-                            inter.filled_options,
+                            "cmd log: [user: %s] - [guild: %s] - [cmd: %s] - %s",
+                            info["user_id"],
+                            info["guild_id"],
+                            info["command"],
+                            info["params"],
                         )
                     except Exception:
                         logger.exception("Falha ao registrar o log do comando")
@@ -1244,13 +1246,13 @@ class BotPool:
                     if await bot.is_owner(ctx.author):
                         return
 
+                    info = command_context(ctx, level=logging.INFO)
                     commands_logger.info(
-                        "cmd (prefix) log: [user: %s - %s] - [guild: %s - %s] - [cmd: %s]",
-                        ctx.author,
-                        ctx.author.id,
-                        ctx.guild.name,
-                        ctx.guild.id,
-                        ctx.message.content,
+                        "cmd (prefix) log: [user: %s] - [guild: %s] - [cmd: %s] - %s",
+                        info["user_id"],
+                        info["guild_id"],
+                        info["command"],
+                        info["params"],
                     )
 
             @bot.event
@@ -1313,6 +1315,7 @@ class BotPool:
         else:
             self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
+        install_exception_handlers(self.loop)  # exceção esquecida no laço vai ao log de erros, com o traceback
 
         self.start_heartbeat()
         self.start_logs_task()
@@ -1391,12 +1394,20 @@ class BotCore(commands.AutoShardedBot):
         self.env_owner_ids = set()
         self.dm_cooldown = commands.CooldownMapping.from_cooldown(rate=2, per=30, type=commands.BucketType.member)
         self.number = kwargs.pop("number", 0)
+        # Nome externo com @everyone ou cargo (título, servidor, autor) não pode notificar ninguém; menção a usuário e a resposta valem.
+        kwargs.setdefault(
+            "allowed_mentions", disnake.AllowedMentions(everyone=False, roles=False, users=True, replied_user=True)
+        )
         super().__init__(*args, **kwargs)
         self.music: wavelink.Client = music_mode(self)
         self.interaction_id: Optional[int] = None
         self.wavelink_node_reconnect_tasks = {}
 
         self.env_owner_ids.update(parse_owner_ids(self.config["OWNER_IDS"]))
+
+    async def on_error(self, event_method: str, *args, **kwargs):
+        """Exceção em um tratador de evento: ERROR com o traceback no log de erros (o padrão do disnake imprimiria no stderr)."""
+        logging.getLogger("empiremuse.errors").error("Exceção não tratada no evento %s", event_method, exc_info=True)
 
     async def edit_voice_channel_status(self, status: Optional[str], *, channel_id: int, reason: Optional[str] = None):
         # Obtido do discord.py: https://github.com/Rapptz/discord.py/blob/9ce733321b445db245924bfd21fedf20a01a570b/discord/http.py#L1166
@@ -1557,7 +1568,11 @@ class BotCore(commands.AutoShardedBot):
             perm_check = message.channel.permissions_for(message.guild.me).send_messages
 
         if not perm_check:
-            print(f"Can't send message in: {message.channel.name} [{message.channel.id}] (Missing permissions)")
+            logger.debug(
+                "Sem permissão para enviar mensagem no canal %s",
+                message.channel.id,
+                extra=guild_extra(message.guild.id),
+            )
             return
 
         return True

@@ -16,7 +16,6 @@ os pontos em que a UI se mistura à lógica entram como callbacks:
 from __future__ import annotations
 
 import logging
-import traceback
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple, Optional, Union
 
 import disnake
@@ -157,7 +156,7 @@ async def _archive_previous_message(original_message, target, actor, embed_archi
         except AttributeError:
             pass
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em _archive_previous_message")
             return
 
         try:
@@ -324,7 +323,7 @@ async def apply_request_channel(
         try:
             await target.edit(**channel_kwargs)
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em apply_request_channel")
 
     channel = target
 

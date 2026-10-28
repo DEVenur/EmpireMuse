@@ -7,6 +7,7 @@
 * `get_default`, `get_prefix` e `DatetimeSerializer`.
 """
 
+import logging
 import asyncio
 import json
 from copy import deepcopy
@@ -208,15 +209,20 @@ class TestUpdateFromJson:
         assert (pasta / "backups" / "g.json").is_file() and not (pasta / "g.json").exists()
         assert (pasta / "ignorar.txt").exists()
 
-    def test_move_failure_is_reported_but_not_raised(self, mongo, home, monkeypatch, capsys):
+    def test_move_failure_is_reported_but_not_raised(self, mongo, home, monkeypatch, caplog):
         self.write(home, "g.json", {"guilds": {"1": {"autoplay": True}}})
 
         def falha(*a, **k):
             raise OSError("sem permissão")
 
         monkeypatch.setattr(db.shutil, "move", falha)
-        run(mongo.update_from_json())
-        assert "sem permissão" in capsys.readouterr().err
+        with caplog.at_level(logging.ERROR, logger="empiremuse"):
+            run(mongo.update_from_json())
+        registros = [
+            r for r in caplog.records if r.name.startswith("empiremuse.utils.db") and r.levelno >= logging.ERROR
+        ]
+        assert registros, "a falha precisa ser registrada no logger do módulo"
+        assert any("sem permissão" in (str(r.exc_info[1]) if r.exc_info else "") + r.getMessage() for r in registros)
 
 
 # ============================================================================ utilitários

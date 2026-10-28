@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import traceback
+import logging
 from random import shuffle
 from typing import Union, Optional
 
@@ -44,6 +44,8 @@ from empiremuse.music_cog.shared import (
 from empiremuse.music_cog.queue_clear_steps import _qc_filters, _qc_range, _qc_remove, _qc_report
 from empiremuse.music_cog.queue_move_steps import _qm_filter_texts, _qm_filters, _qm_move, _qm_range, _qm_select
 from empiremuse.music_cog.queue_state import ClearState, MoveState
+
+logger = logging.getLogger(__name__)
 
 
 class QueueGroupMixin:
@@ -603,7 +605,7 @@ class QueueGroupMixin:
             await check_pool_bots(inter, only_voiced=True)
             bot = inter.music_bot
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em queue_playlist")
             return
 
         try:

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+import logging
 import asyncio
-import traceback
 from typing import Union, Optional
 
 import disnake
@@ -22,6 +22,10 @@ from empiremuse.utils.others import (
     send_idle_embed,
     CustomContext,
 )
+
+from empiremuse.logs.context import guild_extra
+
+logger = logging.getLogger(__name__)
 
 
 class ControllerDispatchMixin:
@@ -69,22 +73,23 @@ class ControllerDispatchMixin:
                     pass
 
                 if not vc:
-                    print(
-                        f"{self.bot.user} - {player.guild.name} [{guild_id}] - Player finalizado por falta de canal de voz"
+                    logger.debug(
+                        "Player finalizado por falta de canal de voz",
+                        extra=guild_extra(getattr(player.guild, "id", None)),
                     )
                     try:
                         await player.destroy()
                     except Exception:
-                        traceback.print_exc()
+                        logger.exception("Falha em resume_players_ready")
                     continue
 
                 await player.connect(vc.id)
 
                 if not player.is_paused and not player.is_playing:
                     await player.process_next()
-                print(f"{self.bot.user} - {player.guild.name} [{guild_id}] - Player Reconectado no canal de voz")
+                logger.debug("Player reconectado no canal de voz", extra=guild_extra(getattr(player.guild, "id", None)))
             except Exception:
-                traceback.print_exc()
+                logger.exception("Falha em resume_players_ready")
 
     async def is_request_channel(
         self,

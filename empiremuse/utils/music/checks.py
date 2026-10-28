@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import asyncio
 import contextlib
-import traceback
 from typing import Union, Optional, TYPE_CHECKING
 
 import disnake
@@ -28,6 +28,8 @@ from empiremuse.utils.others import CustomContext
 if TYPE_CHECKING:
     from empiremuse.utils.music.models import LavalinkPlayer
     from empiremuse.utils.client import BotCore, BotPool
+
+logger = logging.getLogger(__name__)
 
 
 def can_send_message(
@@ -810,4 +812,4 @@ async def check_deafen(me: disnake.Member = None):
             await me.edit(deafen=True)
             return True
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha em check_deafen")

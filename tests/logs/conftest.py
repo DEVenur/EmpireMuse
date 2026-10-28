@@ -15,10 +15,13 @@ BIBLIOTECAS = ("disnake", "aiohttp", "asyncio", "tornado", "urllib3", "pymongo",
 
 @pytest.fixture(autouse=True)
 def isolar_logging():
+    from empiremuse.logs import setup as _setup
+
     raiz = logging.getLogger()
     handlers, nivel = list(raiz.handlers), raiz.level
     niveis = {nome: logging.getLogger(nome).level for nome in BIBLIOTECAS}
     ganchos = (sys.excepthook, threading.excepthook)
+    guildas = _setup._debug_guilds
     try:
         from empiremuse.logs.redact import configure_secrets
 
@@ -34,3 +37,4 @@ def isolar_logging():
     for nome, valor in niveis.items():
         logging.getLogger(nome).setLevel(valor)
     sys.excepthook, threading.excepthook = ganchos
+    _setup._debug_guilds = guildas

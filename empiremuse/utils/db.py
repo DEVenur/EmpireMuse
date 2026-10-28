@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import shutil
-import traceback
 from copy import deepcopy
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional, Union
@@ -281,7 +280,7 @@ class MongoDatabase(BaseDB):
                 try:
                     shutil.move(str(dbs_dir / f), str(backups_dir / f))
                 except Exception:
-                    traceback.print_exc()
+                    logger.exception("Falha em update_from_json")
 
     async def get_data(
         self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users], collection: str, default_model: dict = None

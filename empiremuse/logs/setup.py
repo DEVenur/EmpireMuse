@@ -28,10 +28,26 @@ logger = logging.getLogger(__name__)
 _lock = threading.RLock()
 _installed: list[logging.Handler] = []
 _aggregator: RepeatAggregator | None = None
+_debug_guilds: frozenset[int] = frozenset()
+
+
+_console_state = threading.local()
+
+
+def take_console_failure() -> bool:
+    """Se o console falhou ao emitir nesta thread desde a última chamada; limpa a marca.
+
+    O ``emit`` é síncrono, então o gancho de exceções lê a marca logo depois do ``log_unhandled``
+    e, se o console perdeu o traceback, escreve o seu próprio. O logger comum não levanta nem muda.
+    """
+    failed = getattr(_console_state, "failed", False)
+    _console_state.failed = False
+    return failed
 
 
 class _ConsoleHandler(logging.StreamHandler):
     def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802 (nome da API do logging)
+        _console_state.failed = True
         report_emit_failure()
 
 
@@ -71,7 +87,7 @@ def configure_logging(
     Cadeia dos dois handlers, nesta ordem: ``ContextFilter`` → ``LevelGate`` → ``SanitizeAndRedact`` → ``RepeatAggregator`` →
     formatter. O redator e o agregador são uma instância só, compartilhada, para o console e o arquivo terem o mesmo conteúdo.
     """
-    global _aggregator
+    global _aggregator, _debug_guilds
     with _lock:
         _uninstall()
         configure_secrets(secrets)
@@ -103,11 +119,23 @@ def configure_logging(
         _installed.extend(handlers)
         _aggregator = aggregator
 
+        _debug_guilds = settings.debug_guilds
         root.setLevel(logging.DEBUG if settings.debug_guilds else settings.level)
         for name in LIBRARY_LOGGERS:
             logging.getLogger(name).setLevel(logging.WARNING)
         if file_error is not None:  # depois do addHandler: o aviso sai pelo console já configurado
             logger.warning("Não foi possível abrir o arquivo de log (%s); seguindo só no console.", file_error)
+
+
+def is_configured() -> bool:
+    """Se os handlers do ``configure_logging`` estão no root agora (antes disso valem só os ganchos iniciais)."""
+    root_handlers = logging.getLogger().handlers
+    return any(handler in root_handlers for handler in _installed)
+
+
+def configured_debug_guilds() -> frozenset[int]:
+    """Servidores em ``LOG_DEBUG_GUILDS`` do último ``configure_logging`` (vazio antes dele)."""
+    return _debug_guilds
 
 
 def flush_logging() -> None:

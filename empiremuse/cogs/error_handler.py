@@ -3,15 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import traceback
 from typing import TYPE_CHECKING, Optional, Union
 
 import disnake
 from aiohttp import ClientSession
 from disnake.ext import commands
 
+from empiremuse.logs.errors import command_context
+from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, sanitize_value, scrub
 from empiremuse.rules.error_code import safe_error_code
-from empiremuse.utils.music.converters import URL_REG
+from empiremuse.utils.music.converters import URL_REG, fix_characters
 from empiremuse.utils.music.errors import parse_error, PoolException, error_code_text
 from empiremuse.utils.others import send_message, CustomContext, string_to_file, paginator, check_cmd
 
@@ -23,6 +24,21 @@ logger = logging.getLogger(__name__)
 # Erro inesperado: o usuário nunca vê repr, traceback, caminho de arquivo nem configuração interna; o detalhe completo
 # vai para o log do servidor e para o webhook de erro.
 UNEXPECTED_ERROR_TEXT = "Ocorreu um erro inesperado ao executar o comando. Tente novamente em instantes."
+
+
+# Limites do Discord: nome de servidor, canal e usuário até 100; descrição do embed até 4096 (sobra para as crases e o título).
+NAME_LIMIT = 100
+DESCRIPTION_TEXT_LIMIT = 4000
+
+
+def _safe_text(text: object) -> str:
+    """Nome de servidor, canal ou autor para o embed do relatório.
+
+    O saneamento e o redator vêm antes de ``fix_characters`` (que troca ``_``, ``*`` e ``[`` e esconderia um segredo
+    registrado do redator) e de novo depois dele, para conferir o nome na forma final; as quebras de linha viram ``⏎``
+    para o nome não forjar uma linha ``ID:`` no bloco de código.
+    """
+    return scrub(fix_characters(scrub(sanitize_value(str(text)), NAME_LIMIT)), NAME_LIMIT)[:NAME_LIMIT]
 
 
 class ErrorHandler(commands.Cog):
@@ -55,17 +71,27 @@ class ErrorHandler(commands.Cog):
         token = self.bot.http.token
         return text.replace(token, "mytoken") if token else text
 
-    def log_unexpected_error(self, error: BaseException, origin: str) -> str:
+    def clean_for_webhook(self, text: str) -> str:
+        """Texto do relatório do webhook: o token deste bot mascarado e, em seguida, o saneamento e o redator único do log.
+
+        Assim o traceback mandado ao webhook não leva a senha de um nó, a URI do Mongo nem o token de outro bot, e o ESC é saneado.
+        """
+        return scrub(self.mask_token(text), MAX_TRACEBACK_CHARS)
+
+    def log_unexpected_error(self, error: BaseException, origin: str, ctx: object = None) -> str:
         """Registra o erro inesperado com o traceback completo (só no log do servidor) e devolve o código dele.
 
         O código (``ERR-…``) vai na mensagem do log, para o usuário e para o webhook; ``""`` se não foi possível gerar.
         """
         code = safe_error_code()
         error = getattr(error, "original", error)
+        # Só IDs e um resumo por tipo dos parâmetros (V-L4): nunca nome, conteúdo nem URL de anexo.
+        context = f" {command_context(ctx, level=logging.ERROR)}" if ctx is not None else ""
         logger.error(
-            "Erro inesperado no comando (%s)%s",
+            "Erro inesperado no comando (%s)%s%s",
             origin,
             f" [{code}]" if code else "",
+            context,
             exc_info=(type(error), error, error.__traceback__),
             # O agregador usa o código para apontar o traceback já impresso.
             extra={"error_code": code} if code else None,
@@ -148,7 +174,7 @@ class ErrorHandler(commands.Cog):
             components = self.components
 
             if not no_log:
-                code = self.log_unexpected_error(error, f"interação /{getattr(inter.data, 'name', '?')}")
+                code = self.log_unexpected_error(error, f"interação /{getattr(inter.data, 'name', '?')}", inter)
 
             kwargs["embed"] = disnake.Embed(
                 color=color, title="Ocorreu um erro no comando:", description=UNEXPECTED_ERROR_TEXT
@@ -161,6 +187,7 @@ class ErrorHandler(commands.Cog):
             kwargs["embed"].description += error_code_text(code)
 
         else:
+            logger.debug("Erro esperado no comando: %s", type(error).__name__)
             kwargs["embeds"] = []
 
             for p in paginator(error_msg):
@@ -170,8 +197,7 @@ class ErrorHandler(commands.Cog):
             try:
                 await send_message(inter, components=components, **kwargs)
             except Exception:
-                print(("-" * 50) + f"\n{error_msg}\n" + ("-" * 50))
-                traceback.print_exc()
+                logger.exception("Falha ao responder o erro ao usuário")
         else:
             send_webhook = True
 
@@ -182,20 +208,26 @@ class ErrorHandler(commands.Cog):
         if not send_webhook or not full_error_msg:
             return
 
+        acquired = False
         try:
             await self.webhook_max_concurrency.acquire(inter)
+            acquired = True
 
             await self.send_webhook(
                 embed=self.report_embed_with_code(inter, code),
-                file=string_to_file(self.mask_token(full_error_msg), self.traceback_filename("interaction", code)),
+                file=string_to_file(
+                    self.clean_for_webhook(full_error_msg), self.traceback_filename("interaction", code)
+                ),
             )
 
             await asyncio.sleep(20)
 
-            await self.webhook_max_concurrency.release(inter)
-
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o relatório de erro ao webhook")
+        finally:
+            # Uma falha do webhook não pode deixar o servidor adquirido para sempre.
+            if acquired:
+                await self.webhook_max_concurrency.release(inter)
 
     async def do_playcmd(self, ctx: CustomContext):
         if not self.bot.pool.config["ENABLE_SONGREQUEST_MENTION"]:
@@ -247,7 +279,7 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, commands.NotOwner):
-            print(f"{ctx.author} [{ctx.author.id}] não é dono do bot para usar o comando: {ctx.command.name}")
+            logger.debug("Usuário %s não é dono do bot para usar o comando: %s", ctx.author.id, ctx.command.name)
             return
 
         try:
@@ -288,7 +320,7 @@ class ErrorHandler(commands.Cog):
         if not error_msg:
             components = self.components
 
-            code = self.log_unexpected_error(error, f"prefixo {getattr(ctx.command, 'name', '?')}")
+            code = self.log_unexpected_error(error, f"prefixo {getattr(ctx.command, 'name', '?')}", ctx)
 
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(
@@ -306,6 +338,7 @@ class ErrorHandler(commands.Cog):
                 )
 
         else:
+            logger.debug("Erro esperado no comando: %s", type(error).__name__)
             if ctx.channel.permissions_for(ctx.guild.me).embed_links:
                 kwargs["embed"] = disnake.Embed(color=disnake.Colour.red(), description=error_msg)
             else:
@@ -347,20 +380,24 @@ class ErrorHandler(commands.Cog):
         if not send_webhook or not full_error_msg:
             return
 
+        acquired = False
         try:
             await self.webhook_max_concurrency.acquire(ctx)
+            acquired = True
 
             await self.send_webhook(
                 embed=self.report_embed_with_code(ctx, code),
-                file=string_to_file(self.mask_token(full_error_msg), self.traceback_filename("prefixed", code)),
+                file=string_to_file(self.clean_for_webhook(full_error_msg), self.traceback_filename("prefixed", code)),
             )
 
             await asyncio.sleep(20)
 
-            await self.webhook_max_concurrency.release(ctx)
-
         except Exception:
-            traceback.print_exc()
+            logger.exception("Falha ao enviar o relatório de erro ao webhook")
+        finally:
+            # Uma falha do webhook não pode deixar o servidor adquirido para sempre.
+            if acquired:
+                await self.webhook_max_concurrency.release(ctx)
 
     @commands.Cog.listener("on_button_click")
     async def on_error_report(self, inter: disnake.MessageInteraction):
@@ -462,20 +499,20 @@ class ErrorHandler(commands.Cog):
             embed.add_field(
                 name="Servidor:",
                 inline=False,
-                value=f"```\n{disnake.utils.escape_markdown(ctx.guild.name)}\nID: {ctx.guild.id}```",
+                value=f"```\n{_safe_text(ctx.guild.name)}\nID: {ctx.guild.id}```",
             )
 
             embed.add_field(
                 name="Canal de texto:",
                 inline=False,
-                value=f"```\n{disnake.utils.escape_markdown(ctx.channel.name)}\nID: {ctx.channel.id}```",
+                value=f"```\n{_safe_text(ctx.channel.name)}\nID: {ctx.channel.id}```",
             )
 
             if vc := ctx.author.voice:
                 embed.add_field(
                     name="Canal de voz (user):",
                     inline=False,
-                    value=f"```\n{disnake.utils.escape_markdown(vc.channel.name)}"
+                    value=f"```\n{_safe_text(vc.channel.name)}"
                     + (f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})" if vc.channel.user_limit else "")
                     + f"\nID: {vc.channel.id}```",
                 )
@@ -485,7 +522,7 @@ class ErrorHandler(commands.Cog):
                     embed.add_field(
                         name="Canal de voz (bot):",
                         inline=False,
-                        value=f"```\n{disnake.utils.escape_markdown(vcbot.channel.name)}"
+                        value=f"```\n{_safe_text(vcbot.channel.name)}"
                         + (
                             f" ({len(vcbot.channel.voice_states)}/{vcbot.channel.user_limit})"
                             if vcbot.channel.user_limit
@@ -505,20 +542,19 @@ class ErrorHandler(commands.Cog):
             embed.add_field(name="Servidor [ID]:", inline=False, value=f"```\n{guild_id}```")
 
         embed.set_footer(
-            text=f"{ctx.author} [{ctx.author.id}]", icon_url=ctx.author.display_avatar.with_static_format("png").url
+            text=f"{_safe_text(ctx.author)} [{ctx.author.id}]",
+            icon_url=ctx.author.display_avatar.with_static_format("png").url,
         )
 
         try:
             embed.description = f"**Slash Command:**```\n{ctx.data.name}``` "
 
             if ctx.filled_options:
-                embed.description += (
-                    "**Options**```\n"
-                    + "\n".join(
-                        f"{k} -> {disnake.utils.escape_markdown(str(v))}" for k, v in ctx.filled_options.items()
-                    )
-                    + "```"
-                )
+                # Resumo por tipo (V-L4): str(Attachment) é a URL assinada da CDN, str(Member) é o nome e o texto livre pode ter segredo.
+                params = command_context(ctx, level=logging.ERROR)["params"]
+                # As crases do texto não fecham o bloco de código.
+                options = "\n".join(f"{k} -> {v}" for k, v in params.items())[:DESCRIPTION_TEXT_LIMIT].replace("`", "'")
+                embed.description += "**Options**```\n" + options + "```"
 
         except AttributeError:
             if self.bot.intents.message_content and not ctx.author.bot:
@@ -529,7 +565,9 @@ class ErrorHandler(commands.Cog):
                     message = ctx
                     type_ = "Mensagem"
 
-                embed.description = f"**{type_}:**```\n{message.content}```"
+                # O texto do usuário passa pelo saneamento e pelo redator único; as crases não fecham o bloco de código.
+                content = scrub(str(message.content), DESCRIPTION_TEXT_LIMIT).replace("`", "'")
+                embed.description = f"**{type_}:**```\n{content}```"
 
         return embed
 
@@ -542,6 +580,7 @@ class ErrorHandler(commands.Cog):
         kwargs = {
             "username": self.bot.user.name,
             "avatar_url": self.bot.user.display_avatar.replace(static_format="png").url,
+            "allowed_mentions": disnake.AllowedMentions.none(),
         }
 
         if content:

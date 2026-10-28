@@ -15,7 +15,7 @@ from contextlib import suppress
 from types import TracebackType
 from typing import TextIO
 
-from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, configure_secrets, scrub
+from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, configure_secrets, sanitize_value, scrub
 from empiremuse.rules.owner_shell import collect_secret_values
 
 _FRAME = "  │ "
@@ -41,6 +41,33 @@ def _write_scrubbed_traceback(
         target.flush()
 
 
+def _log_if_configured(
+    exc_type: type[BaseException],
+    exc_value: BaseException | None,
+    exc_tb: TracebackType | None,
+    what: str,
+    *,
+    chain: bool,
+) -> bool:
+    """Depois do ``configure_logging`` a exceção vai ao logger ``empiremuse.errors`` (redator, agregador e arquivo); antes, não.
+
+    Import tardio: ``logs.errors`` depende do ``logs.setup``, que não pode depender deste módulo.
+    """
+    with suppress(Exception):
+        from empiremuse.logs.errors import log_unhandled
+        from empiremuse.logs.setup import is_configured, take_console_failure
+
+        if not is_configured():
+            return False
+        if not chain and exc_value is not None:
+            exc_value.__context__ = exc_value.__cause__ = None
+        take_console_failure()
+        log_unhandled(exc_type, exc_value, exc_tb, what)
+        # Console com o fluxo quebrado: o traceback não saiu, então o gancho escreve o seu.
+        return not take_console_failure()
+    return False
+
+
 def install_early_hooks(
     environ: Mapping[str, str] = os.environ,
     *,
@@ -53,15 +80,18 @@ def install_early_hooks(
         exc_value: BaseException,
         exc_tb: TracebackType | None,
     ) -> None:
-        if issubclass(exc_type, KeyboardInterrupt):
-            _write_scrubbed_traceback(exc_type, exc_value, exc_tb, stream, chain=False)
+        chain = not issubclass(exc_type, KeyboardInterrupt)
+        if _log_if_configured(exc_type, exc_value, exc_tb, "Exceção não tratada", chain=chain):
             return
-        _write_scrubbed_traceback(exc_type, exc_value, exc_tb, stream)
+        _write_scrubbed_traceback(exc_type, exc_value, exc_tb, stream, chain=chain)
 
     def _threading_excepthook(args: threading.ExceptHookArgs) -> None:
         if args.exc_type is None or issubclass(args.exc_type, SystemExit):
             return
         thread_name = getattr(args.thread, "name", None) or "Thread"
+        what = f"Exceção não tratada na thread {sanitize_value(str(thread_name))}"
+        if _log_if_configured(args.exc_type, args.exc_value, args.exc_traceback, what, chain=True):
+            return
         header = f"Exception in thread {thread_name}:\n"
         _write_scrubbed_traceback(args.exc_type, args.exc_value, args.exc_traceback, stream, header=header)
 

@@ -14,6 +14,7 @@ Documentação técnica e tutoriais de configuração para administradores e des
 | **[Chaves de API do Spotify](spotify-keys.md)** | Obtenção de `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` no Spotify for Developers para resolução de metadados de faixas e playlists. |
 | **[Implantação com Docker](docker.md)** | Implantação e execução com a imagem oficial multi-stage, variáveis operacionais, volumes persistentes e supervisão de processos. |
 | **[Atualização Automática](auto-update.md)** | Comando `update`: modos `docker`, `panel`, `git` e `manual`, implantação do proxy no compose da Hostinger, códigos de saída do auxiliar e limitações. |
+| **[Logs e Telemetria Local](logs.md)** | Níveis, cores, arquivo rotativo, `LOG_DEBUG_GUILDS`, resumo periódico de métricas, `COMMAND_LOG` só com IDs, redação de segredos e como investigar um `ERR-XXXXXX`. |
 | **[Emojis do Bot](emojis.md)** | Emojis de aplicação enviados à própria aplicação do bot, reserva em Unicode, troca de ícones por `emojis.json` e `APP_EMOJIS_GUILD_BOTS`. |
 | **[Guia de Release e Publicação](release.md)** | Versionamento SemVer, publicação de tags no Git, esteira automatizada multi-arquitetura no Docker Hub com SBOM, provenance, assinatura cosign e GitHub Release com o digest. |
 | **[Implantação no Pterodactyl](pterodactyl.md)** | Instalação via egg oficial no painel Pterodactyl, imagens `0.1` e `latest`, alocação de porta, persistência e recursos. |

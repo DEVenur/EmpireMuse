@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import re
 import traceback
 from typing import Union
@@ -27,6 +28,8 @@ from empiremuse.utils.others import (
 from empiremuse.music_cog.shared import (
     sc_recommended,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TracksMixin:
@@ -176,7 +179,9 @@ class TracksMixin:
                     exceptions.add(safe_error(e))
 
                     if not isinstance(e, wavelink.TrackNotFound):
-                        print(f"Falha ao processar busca...\n{query}\n{traceback.format_exc()}")
+                        # A consulta é texto do usuário: só em DEBUG (V-L10); o traceback fica no log do servidor.
+                        logger.warning("Falha ao processar busca...", exc_info=True)
+                        logger.debug("Consulta da busca que falhou: %s", query)
                         node_retry = True
                     elif not isinstance(e, GenericError):
                         self.bot.dispatch("custom_error", ctx=ctx, error=e)

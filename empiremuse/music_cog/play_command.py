@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+import logging
 import asyncio
-import traceback
 from typing import Union, Optional
 
 import disnake
@@ -47,6 +47,8 @@ from empiremuse.music_cog.play_enqueue import PlayEnqueueMixin
 from empiremuse.music_cog.play_menus import PlayMenusMixin
 from empiremuse.music_cog.play_resolve import PlayResolveMixin
 from empiremuse.music_cog.play_state import PlayState
+
+logger = logging.getLogger(__name__)
 
 
 class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
@@ -331,7 +333,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
                                 view=None,
                             )
                         except Exception:
-                            traceback.print_exc()
+                            logger.exception("Falha em _play_select_bot")
                         return True
 
                     if v.status is False:
