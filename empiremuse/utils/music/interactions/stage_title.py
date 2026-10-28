@@ -284,14 +284,14 @@ class SetStageTitle(disnake.ui.View):
 
         for bot in self.bot.pool.get_guild_bots(inter.guild_id):
             try:
-                player = bot.music.players[inter.guild_id]
+                candidate = bot.music.players[inter.guild_id]
             except KeyError:
                 continue
 
-            if inter.author.id not in player.guild.me.voice.channel.voice_states:
-                continue
-
-            break
+            # Só vale o player em cujo canal o autor está: sem isso o último do laço ficava como achado.
+            if inter.author.id in candidate.guild.me.voice.channel.voice_states:
+                player = candidate
+                break
 
         if not player:
             await inter.send("**Não estou tocando música em um canal de voz/palco...**", ephemeral=True)
