@@ -9,6 +9,8 @@ import asyncio
 import importlib
 from types import ModuleType
 
+import pytest
+
 from tests.panel.helpers_settings import assentar
 from tests.panel.test_settings_http import HttpBase, external_change
 
@@ -21,6 +23,9 @@ INTACTOS = ("prefix", "custom_skins", "custom_skins_static", "listen_along_invit
 
 def regras() -> ModuleType:
     return importlib.import_module("empiremuse.rules.voice_status")
+
+
+pytestmark = pytest.mark.critical
 
 
 class FormularioDoStatusTest(HttpBase):

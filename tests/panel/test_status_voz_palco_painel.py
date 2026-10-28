@@ -5,6 +5,8 @@ O ``effects`` do #146 agenda ``schedule_permanent_voice_status`` no player; aqui
 
 from typing import Any
 
+import pytest
+
 from tests.audio.test_status_voz_palco import MODELO_DA_SESSAO, SessaoDePalco, canal_de_palco
 from tests.panel.helpers_settings import assentar
 from tests.panel.test_settings_http import HttpBase
@@ -13,6 +15,8 @@ from tests.support.voz_auto import BotDeVoz, JogadorDeVoz, faixa, servidor
 CAMPO_PERMANENTE = "voice_status_permanent"
 CAMPO_MODELO = "voice_channel_status"
 MODELO = "permanente {track.author}"
+
+pytestmark = pytest.mark.critical
 
 
 class SessaoDePalcoPeloPainelTest(HttpBase):
