@@ -10,6 +10,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Corrigido
 - **Falha de reprodução do YouTube**: quando o YouTube falha ao carregar a faixa ("All clients failed" ou "Read timed out"), o bot tenta a mesma faixa mais uma vez, após 2 s e a partir da posição inicial pedida, antes de reportar o erro e pular; a nova tentativa e a troca de nó do YouTube acontecem uma só vez por faixa, e as tentativas gerais têm limite (6); esgotadas, o player reporta e pula a faixa em vez de ficar travado ou repetir sem fim. A recuperação pelo YouTube também vale para faixas espelhadas, mas só quando há outro nó com busca no YouTube; sem ele, o erro é reportado e a faixa é pulada.
 
+### Removido
+- **Aviso periódico de servidores sem o dono ou a equipe**: o bot deixa de registrar, a cada atualização das informações da aplicação, o aviso de servidores onde o dono ou a equipe não está presente ou não tem a permissão Gerenciar Servidor (o bloco só calculava e registrava, sem sair do servidor nem avisar ninguém). A chave `SILENT_PUBLICBOT_WARNING` deixa de existir; se ainda estiver no seu `.env`, pode apagá-la.
+
 ## [2.1.1] - 2026-10-28
 
 Log centralizado com redação de segredos, `assets/` em subpastas e arte nova da marca, emojis de aplicação, novas permissões do convite e correções do teste em produção.
