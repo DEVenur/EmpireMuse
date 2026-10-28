@@ -12,6 +12,7 @@ from typing import Optional, Union, TYPE_CHECKING
 import disnake
 
 import empiremuse.wavelink as wavelink
+from empiremuse.rules.voice_status import DEFAULT_VOICE_TEMPLATE
 from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.others import string_to_file
@@ -114,10 +115,10 @@ class LavalinkPlayer(
         self.track_load_task: Optional[asyncio.Task] = None
         self.native_yt: bool = True
         self.stage_title_event = False
-        self.stage_title_template: str = (
-            kwargs.pop("stage_title_template", None) or "Tocando: {track.title} | {track.author}"
-        )
+        self.stage_title_template: str = kwargs.pop("stage_title_template", None) or DEFAULT_VOICE_TEMPLATE
         self.last_stage_title = ""
+        self.voice_status_permanent = True  # cópia do permanente do servidor; o ``apply_permanent_voice_status`` a atualiza
+        self.voice_status_pending: asyncio.Task | None = None  # o envio guardado do throttle (ver ``player_voice``)
 
         self.channel_purged = False
 

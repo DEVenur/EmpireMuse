@@ -9,6 +9,7 @@ from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
 from empiremuse.logs.context import guild_extra
+from empiremuse.rules.voice_status import resolve_voice_status
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -109,6 +110,7 @@ class PlayerLifecycleMixin:
             node = await self.get_best_node(bot)
 
         global_data = await bot.get_global_data(guild.id, db_name=DBModel.guilds)
+        voice_status = resolve_voice_status(global_data)
 
         try:
             vc = inter.author.voice.channel
@@ -232,8 +234,14 @@ class PlayerLifecycleMixin:
             listen_along_invite=invite,
             autoplay=guild_data["autoplay"],
             prefix=global_data["prefix"] or bot.default_prefix,
-            stage_title_template=global_data["voice_channel_status"],
+            stage_title_template=voice_status.template,
         )
+
+        # O status do canal vale por padrão em todo servidor (2.1.2): com o bot já no canal, aplica o permanente uma vez, antes
+        # do 1º ``update_stage_topic`` do ``_he_track_start``; fora do canal quem aplica é o ``player_vc_disconnect`` ao entrar.
+        player.voice_status_saved_default = global_data.get("voice_status_permanent") is None
+        if guild.me and guild.me.voice:
+            await player.apply_permanent_voice_status(voice_status)
 
         if (vol := int(guild_data["default_player_volume"])) != 100:
             await player.set_volume(vol)
@@ -270,6 +278,25 @@ class PlayerLifecycleMixin:
 
         return player
 
+    async def _voice_status_follow_move(
+        self, player: LavalinkPlayer, before: disnake.VoiceState, after: disnake.VoiceState
+    ) -> None:
+        """O próprio bot saiu, entrou ou mudou de canal: limpa o canal antigo e a sessão volta ao permanente (2.1.2).
+
+        Relê o documento global do servidor (ele pode ter mudado desde a criação, inclusive pelo painel ou por outro bot do pool).
+        Entrar em canal com o status já ligado pela criação ou pela retomada não reaplica.
+        """
+        if player.is_closing:
+            return
+        try:
+            if before.channel and before.channel != after.channel:
+                await player.disable_voice_status(channel=before.channel)
+            if after.channel and not (before.channel is None and player.stage_title_event):
+                global_data = await player.bot.get_global_data(player.guild.id, db_name=DBModel.guilds)
+                await player.apply_permanent_voice_status(resolve_voice_status(global_data))
+        except Exception:
+            logger.exception("Falha em player_vc_disconnect", extra=guild_extra(getattr(player, "guild_id", None)))
+
     @commands.Cog.listener("on_voice_state_update")
     async def player_vc_disconnect(self, member: disnake.Member, before: disnake.VoiceState, after: disnake.VoiceState):
         try:
@@ -287,6 +314,9 @@ class PlayerLifecycleMixin:
 
         if member.bot:
             # ignorar outros bots
+            if player.bot.user.id == member.id:
+                await self._voice_status_follow_move(player, before, after)
+
             if player.bot.user.id == member.id and not after.channel:
                 await asyncio.sleep(3)
 
@@ -384,11 +414,7 @@ class PlayerLifecycleMixin:
 
                 else:
                     if isinstance(before.channel, disnake.VoiceChannel) and member not in before.channel.members:
-                        player.stage_title_event = False
-                        if player.last_stage_title:
-                            self.bot.loop.create_task(
-                                player.bot.edit_voice_channel_status(status=None, channel_id=before.channel.id)
-                            )
+                        await player.disable_voice_status(channel=before.channel)
             except Exception:
                 logger.exception("Falha em player_vc_disconnect")
 

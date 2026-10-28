@@ -9,6 +9,7 @@ from typing import Union
 import disnake
 from disnake.ext import commands
 
+from empiremuse.rules.voice_status import resolve_voice_status
 from empiremuse.serialization.schema import SchemaError
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
@@ -17,6 +18,7 @@ from empiremuse.utils.music.errors import PoolException
 from empiremuse.utils.music.filters import AudioFilter
 from empiremuse.utils.music import session_store
 from empiremuse.utils.music.models import LavalinkPlayer
+from empiremuse.utils.music.models.player_voice import schedule_permanent_voice_status
 from empiremuse.utils.others import send_idle_embed, CustomContext
 
 from empiremuse.logs.context import guild_extra
@@ -608,7 +610,15 @@ class PlayerSession(commands.Cog):
                 player.live_lyrics_enabled = data.get("live_lyrics_status", False)
                 player.mini_queue_enabled = data.get("mini_queue_enabled")
                 player.lastfm_artists = data.get("lastfm_artists")
-                player.stage_title_event = data.get("stage_title_event", False)
+                # O reinício é uma saída do canal: a sessão volta ao permanente do servidor (o flag e o modelo salvos não valem).
+                # Agendado como tarefa do player, com jitter, para a retomada de muitas sessões não estourar o limite do bot.
+                try:
+                    global_data = await self.bot.get_global_data(guild.id, db_name=DBModel.guilds)
+                except Exception:
+                    logger.exception("Falha ao ler o status permanente do canal", extra=guild_extra(guild.id))
+                    global_data = {}
+                player.voice_status_saved_default = global_data.get("voice_status_permanent") is None
+                schedule_permanent_voice_status(player, resolve_voice_status(global_data), jitter=True)
                 player.listen_along_invite = data.pop("listen_along_invite", "")
                 player.command_log_list.extend(data.pop("command_log_list", []))
 
