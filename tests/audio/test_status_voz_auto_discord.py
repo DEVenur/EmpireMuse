@@ -540,3 +540,73 @@ class TestApplyEmTarefaPorPlayer:
         finally:
             portao.set()
             await assentar()
+
+
+# ============================================================================ gate #145 — "Usar modelo atual" e as recusas do modal de sessão
+
+
+async def enviar_sessao(
+    bot: BotDeComandos, *, custom_id: str, texto: str, aberto_com: dict[str, Any], autor_pode: bool = True
+) -> InteracaoEfemera:
+    """O modal/botão de SESSÃO do ``SetStageTitle`` REAL (``status_voice_channel_temp*``)."""
+    guilda = bot.guilds[SERVIDOR]
+    membro = SimpleNamespace(
+        id=AUTOR, mention=f"<@{AUTOR}>", guild_permissions=SimpleNamespace(manage_guild=autor_pode)
+    )
+    guilda.get_member = lambda _uid: membro
+    for jogador in bot.music.players.values():
+        jogador.guild.get_member = lambda _uid: membro
+    view = SetStageTitle(ContextoDoStatus(), bot, guilda, copy.deepcopy(aberto_com))
+    inter = InteracaoEfemera(guild_id=SERVIDOR, guild=guilda, custom_id=custom_id)
+    inter.text_values = {"status_voice_value": texto}
+    await view.modal_handler(inter)
+    await assentar()
+    return inter
+
+
+class TestSessaoManual:
+    async def test_the_use_current_model_button_turns_the_session_on_with_the_saved_permanent_model(self) -> None:
+        (bot,), (jogador,), _ = pool_de(1)
+        jogador.guild.me.voice.channel.voice_states = {AUTOR: object()}
+        view = SetStageTitle(
+            ContextoDoStatus(),
+            bot,
+            bot.guilds[SERVIDOR],
+            {"voice_channel_status": MODELO, "voice_status_permanent": False},
+        )
+        membro = SimpleNamespace(id=AUTOR, mention="<@900>", guild_permissions=SimpleNamespace(manage_guild=True))
+        jogador.guild.get_member = bot.guilds[SERVIDOR].get_member = lambda _uid: membro
+        inter = InteracaoEfemera(
+            guild_id=SERVIDOR, guild=bot.guilds[SERVIDOR], custom_id="status_voice_channel_temp_current"
+        )
+
+        del inter.text_values  # o clique de botão não tem campos de modal: o valor vem do callback
+        await view.setstatus_callback(inter)
+
+        assert jogador.stage_title_event is True and jogador.stage_title_template == MODELO
+        assert bot.gravacoes == []  # só esta sessão: o permanente não é gravado
+
+    async def test_the_use_current_model_button_falls_back_to_the_default_model(self) -> None:
+        (bot,), (jogador,), _ = pool_de(1)
+        jogador.guild.me.voice.channel.voice_states = {AUTOR: object()}
+        view = SetStageTitle(ContextoDoStatus(), bot, bot.guilds[SERVIDOR], {"voice_channel_status": ""})
+        membro = SimpleNamespace(id=AUTOR, mention="<@900>", guild_permissions=SimpleNamespace(manage_guild=True))
+        jogador.guild.get_member = bot.guilds[SERVIDOR].get_member = lambda _uid: membro
+        inter = InteracaoEfemera(
+            guild_id=SERVIDOR, guild=bot.guilds[SERVIDOR], custom_id="status_voice_channel_temp_current"
+        )
+
+        del inter.text_values  # o clique de botão não tem campos de modal: o valor vem do callback
+        await view.setstatus_callback(inter)
+
+        assert jogador.stage_title_template == regras().DEFAULT_VOICE_TEMPLATE
+
+    async def test_the_session_modal_refuses_a_member_without_manage_guild(self) -> None:
+        (bot,), (jogador,), _ = pool_de(1)
+        jogador.guild.me.voice.channel.voice_states = {AUTOR: object()}
+
+        inter = await enviar_sessao(
+            bot, custom_id="status_voice_channel_temp", texto=MODELO, aberto_com={}, autor_pode=False
+        )
+
+        assert "gerenciar servidor" in inter.texto and jogador.stage_title_event is False

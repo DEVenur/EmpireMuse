@@ -5,32 +5,33 @@ Os métodos de voz do ``PlayerVoiceMixin`` e o ``process_destroy`` são os de pr
 """
 
 import asyncio
+import datetime
 import importlib
 import logging
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import disnake
-from unittest.mock import AsyncMock
 import pytest
 
-from empiremuse.utils.music.checks import VOICE_STATUS_PERMISSION
 from empiremuse.utils.music.app_emojis import APP_EMOJIS
+from empiremuse.utils.music.checks import VOICE_STATUS_PERMISSION
 from tests.support.voz_auto import (
     ID_DO_CANAL,
     ID_DO_EMOJI,
     REQUISITANTE,
     BotDeVoz,
-    RelogioFalso,
     JogadorDeVoz,
+    RelogioFalso,
+    assentar,
     canal_de_voz,
+    executar,
     faixa,
+    instalar_relogio,
     jogador,
     palco,
-    executar,
-    instalar_relogio,
     servidor,
-    assentar,
 )
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -713,3 +714,123 @@ class TestSemEsperaComOBaldeEsgotado:
         assert len(quando) == 10
         for i, inicio in enumerate(quando):
             assert len([t for t in quando[i:] if t < inicio + 1.0]) <= regras().VOICE_STATUS_BOT_RATE
+
+
+# ============================================================================ gate #145 — placeholders de ponta a ponta, destroy durante o jitter, palco em sessão
+
+AGORA_FIXO = datetime.datetime(2026, 11, 2, 12, 0, 0, tzinfo=datetime.timezone.utc)
+
+
+class TestPlaceholdersNoPlayer:
+    async def test_every_placeholder_is_filled_from_the_track(
+        self, relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(disnake.utils, "utcnow", lambda: AGORA_FIXO)
+        player, bot = jogador(atual=faixa(titulo="Faixa", autor="Banda", playlist_name="Minha Lista"))
+        player.position = 20_000
+        bot.app_emojis = {"spotify": EMOJI_DO_APP}
+        modelo = "{track.emoji}|{track.title}|{track.author}|{track.duration}|{track.source}|{track.playlist}|{requester.name}|{requester.id}|{track.timestamp}"
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo=modelo)))
+
+        fim = int((AGORA_FIXO + datetime.timedelta(milliseconds=180_000)).timestamp())
+        assert bot.textos == [f"{EMOJI_DO_APP}|Faixa|Banda|03:20|spotify|Minha Lista|Fulano|{REQUISITANTE}|<t:{fim}:R>"]
+
+    async def test_a_track_without_a_playlist_says_so(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.playlist}")))
+
+        assert bot.textos == ["Sem playlist"]
+
+    async def test_a_paused_track_shows_paused_instead_of_a_countdown(
+        self, relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(disnake.utils, "utcnow", lambda: AGORA_FIXO)
+        player, bot = jogador()
+        player.auto_pause = player.paused = True
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.timestamp}")))
+
+        assert bot.textos == [f"pausado <t:{int(AGORA_FIXO.timestamp())}:R>"]
+
+    async def test_a_livestream_has_no_countdown_and_says_livestream_as_duration(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador(atual=faixa(is_stream=True))
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.duration}|{track.timestamp}")))
+
+        assert bot.textos == ["Livestream|"]
+
+    async def test_an_unknown_requester_is_a_neutral_name(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        player.guild.get_member = lambda _uid: None
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{requester.name}")))
+
+        assert bot.textos == ["Membro desconhecido"]
+
+
+class TestDestroyDuranteOJitter:
+    async def test_a_player_closed_while_waiting_the_jitter_sends_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        tarefa = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}"), jitter=True))
+        await assentar()
+
+        player.is_closing = True
+        await relogio.avancar(regras().VOICE_STATUS_RESUME_JITTER + 1)
+        await tarefa
+
+        assert bot.puts == []
+
+    async def test_a_permanent_turned_off_while_waiting_the_jitter_sends_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        tarefa = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}"), jitter=True))
+        await assentar()
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(permanente=False)))
+        await relogio.avancar(regras().VOICE_STATUS_RESUME_JITTER + 1)
+        await tarefa
+
+        assert bot.textos == [] and player.stage_title_event is False
+
+
+class TestPalcoEmSessao:
+    """No palco só vale o modo de sessão, como hoje; o ``render_voice_status`` (V-S1) vale lá também."""
+
+    async def test_the_session_creates_the_instance_with_a_neutralised_text_within_110_chars(
+        self, relogio: RelogioFalso
+    ) -> None:
+        canal = palco()
+        player, bot = jogador(canal=canal, atual=faixa(titulo="{requester.id} <@&1> @everyone " + "x" * 200))
+        player.stage_title_event = True
+        player.stage_title_template = "{track.emoji} {track.title}"
+
+        await executar(relogio, player.update_stage_topic())
+
+        canal.create_instance.assert_awaited_once()
+        topico = canal.create_instance.await_args.kwargs["topic"]
+        assert (
+            len(topico) <= 110 and str(REQUISITANTE) not in topico and "<@" not in topico and "@everyone" not in topico
+        )
+        assert bot.puts == []  # nada vai ao endpoint de status de voz
+
+    async def test_with_an_instance_it_edits_it_and_not_twice_for_the_same_text(self, relogio: RelogioFalso) -> None:
+        canal = palco()
+        canal.instance = SimpleNamespace(edit=_espiao())
+        player, _bot = jogador(canal=canal)
+        player.stage_title_event = True
+
+        await executar(relogio, player.update_stage_topic())
+        await executar(relogio, player.update_stage_topic())
+
+        canal.instance.edit.assert_awaited_once()
+
+    async def test_without_manage_guild_the_stage_is_left_alone(self, relogio: RelogioFalso) -> None:
+        canal = palco()
+        player, _bot = jogador(canal=canal)
+        player.stage_title_event = True
+        player.guild.me.guild_permissions = disnake.Permissions.none()
+
+        await executar(relogio, player.update_stage_topic())
+
+        canal.create_instance.assert_not_awaited()
