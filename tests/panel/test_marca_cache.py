@@ -3,14 +3,17 @@ memória (sem ler o disco a cada GET), com ETag e GET condicional (304 sem corpo
 seja link simbólico. Reaproveita a base do painel de ``test_app.py``.
 """
 
+import asyncio
 import builtins
 import importlib
+import threading
 import pathlib
 import re
 import tempfile
 from unittest import mock
 
 import pytest
+import tornado.testing
 from tornado import httputil
 from tornado.http1connection import HTTP1Connection
 
@@ -117,6 +120,55 @@ class PanelBrandCacheTest(PanelTestBase):
         resposta = self.fetch("/painel/marca/logo.svg", method="HEAD", follow_redirects=False)
 
         assert resposta.code in (200, 405) and resposta.body == b""
+
+
+class PanelBrandColdBurstTest(PanelTestBase):
+    """Rajada de primeiras requisições do mesmo arquivo: uma só leitura e um só hash (o logo.svg tem 6 MB e a rota é pública)."""
+
+    RAJADA = 8
+    PASSOS_DO_LACO = 3000  # voltas do laço (sem relógio) para a rajada inteira chegar ao handler
+
+    def _contador(self, falhar_primeiro: bool = False):
+        real, chamadas, solta = brand._load, [], threading.Event()
+
+        def contado(nome):
+            chamadas.append(nome)
+            if len(chamadas) == 1 and falhar_primeiro:
+                raise FileNotFoundError(nome)
+            solta.wait(timeout=5)  # segura a leitura até a rajada chegar; sem isso a primeira acabaria antes das outras
+            return real(nome)
+
+        return chamadas, solta, contado
+
+    @tornado.testing.gen_test
+    async def test_concurrent_first_requests_for_one_file_load_it_exactly_once(self):
+        chamadas, solta, contado = self._contador()
+        with mock.patch.dict(brand._cache, clear=True), mock.patch.object(brand, "_load", contado):
+            url = self.get_url("/painel/marca/logo.svg")
+            tarefas = [
+                asyncio.ensure_future(self.http_client.fetch(url, raise_error=False)) for _ in range(self.RAJADA)
+            ]
+            for _ in range(self.PASSOS_DO_LACO):
+                if len(chamadas) >= self.RAJADA:
+                    break
+                await asyncio.sleep(0)
+            solta.set()
+            respostas = await asyncio.gather(*tarefas)
+
+        assert len(chamadas) == 1, f"{len(chamadas)} leituras para {self.RAJADA} requisições simultâneas"
+        assert {r.code for r in respostas} == {200}
+        assert len({r.body for r in respostas}) == 1 and len({r.headers["Etag"] for r in respostas}) == 1
+
+    @tornado.testing.gen_test
+    async def test_a_failed_load_is_not_cached_and_the_next_request_retries(self):
+        chamadas, solta, contado = self._contador(falhar_primeiro=True)
+        solta.set()
+        with mock.patch.dict(brand._cache, clear=True), mock.patch.object(brand, "_load", contado):
+            url = self.get_url("/painel/marca/logo.svg")
+            primeira = await self.http_client.fetch(url, raise_error=False)
+            segunda = await self.http_client.fetch(url, raise_error=False)
+
+        assert primeira.code == 404 and segunda.code == 200 and len(chamadas) == 2
 
 
 class PanelBrandLogoPequenoTest(PanelTestBase):

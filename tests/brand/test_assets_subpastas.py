@@ -112,7 +112,7 @@ class TestIndiceNomeParaSubcaminho:
 
         assert (
             branding.asset_url("provider_spotify_icon.png")
-            == f"{branding.assets_base_url(None)}/providers/provider_spotify_icon.png"
+            == f"{branding.ASSETS_BASE_URL}/providers/provider_spotify_icon.png"
         )
 
     def test_each_basename_resolves_to_its_own_subfolder(self, arvore):
@@ -137,7 +137,7 @@ class TestIndiceNomeParaSubcaminho:
         _, escrever = arvore
         escrever("ui/ui_warning_icon.png")
 
-        assert branding.asset_url("ui_warning_icon.png") == branding.assets_base_url(None) + "/ui/ui_warning_icon.png"
+        assert branding.asset_url("ui_warning_icon.png") == branding.ASSETS_BASE_URL + "/ui/ui_warning_icon.png"
 
     def test_a_root_copy_is_ignored_by_the_index(self, arvore):
         _, escrever = arvore
@@ -293,7 +293,7 @@ class TestBaseDasUrlsPorVersao:
         assert url == f"https://raw.githubusercontent.com/{REPO}/v2.1.1-rc.1/assets"
 
     def test_no_version_points_at_main_as_today(self):
-        assert branding.assets_base_url(None) == f"https://raw.githubusercontent.com/{REPO}/main/assets"
+        assert branding.ASSETS_BASE_URL == f"https://raw.githubusercontent.com/{REPO}/main/assets"
 
     def test_the_repo_comes_from_github_repo(self):
         assert f"/{branding.GITHUB_REPO}/" in branding.assets_base_url(parse_current_version("2.1.1"))
