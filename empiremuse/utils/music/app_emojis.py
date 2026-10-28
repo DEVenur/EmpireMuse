@@ -219,21 +219,17 @@ def _kind(error: BaseException) -> str:
     return f"{type(error).__name__} {status}" if status else type(error).__name__
 
 
-async def _create_with_retries(
-    bot: Any, name: str, data: bytes, sleep: Callable[[float], Awaitable[Any]], retries: int
-):
-    waits = 0
-
-    while True:
-        try:
-            return await bot.create_application_emoji(name=name, image=data)
-        except disnake.HTTPException as error:
-            if error.status == 429 and not _is_global_limit(error) and waits < retries:
-                waits += 1
-                await sleep(_retry_delay(error))
-                continue
-
+async def _create_with_retry(bot: Any, name: str, data: bytes, sleep: Callable[[float], Awaitable[Any]]):
+    """Um 429 espera ``min(retry_after, 60)`` UMA vez e tenta de novo (o disnake já repete por conta própria); o 2º 429 ou o global sobe."""
+    try:
+        return await bot.create_application_emoji(name=name, image=data)
+    except disnake.HTTPException as error:
+        if error.status != 429 or _is_global_limit(error):
             raise
+
+        await sleep(_retry_delay(error))
+
+    return await bot.create_application_emoji(name=name, image=data)
 
 
 async def sync_app_emojis(
@@ -241,7 +237,6 @@ async def sync_app_emojis(
     *,
     emojis_dir: Path,
     sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
-    max_retries: int = 3,
 ) -> dict[str, str]:
     """Garante os 25 emojis na aplicação do ``bot`` e devolve ``nome -> "<:nome:id>"``. Nunca apaga nem sobrescreve; nunca levanta."""
     try:
@@ -273,7 +268,7 @@ async def sync_app_emojis(
             continue
 
         try:
-            item = await _create_with_retries(bot, name, data, sleep, max_retries)
+            item = await _create_with_retry(bot, name, data, sleep)
         except asyncio.CancelledError:
             raise
         except disnake.HTTPException as error:
