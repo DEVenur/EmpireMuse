@@ -7,6 +7,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-28
+
+Status automático do canal de voz ligado por padrão (com a opção permanente no painel › Geral), nova tentativa quando o YouTube falha e correções de log e de seletor de skin.
+
+**Ao atualizar:**
+- O status do canal de voz passa a ficar **ligado em todo servidor**, inclusive onde alguém o tinha desligado antes (o ajuste antigo não se distingue de "nunca configurou"). Quem não quer o status desliga de vez em `/setvoicestatus` › permanente (texto vazio) ou no painel › Geral (caixa permanente desmarcada). O bot precisa da permissão Definir o Status do Canal de Voz; sem ela o player mostra um único aviso.
+- O `update` do Docker troca só a imagem do bot. A imagem do `updater-proxy` não muda nesta versão (`proxy.py` e o `Dockerfile` ficam como na 2.1.1), então, em quem já tem a 2.1.1 instalada, a linha do proxy no compose fica como está. Numa instalação nova, as duas linhas `image:` do compose usam a 2.1.2.
+- Não há variável nova nem mudança de compose além do número da imagem.
+
 ### Adicionado
 - **Status automático do canal de voz, ligado por padrão**: sempre que o bot entra num canal de voz, o status do canal passa a mostrar o emoji do provedor e `Tocando: Música - Artista`, e acompanha cada troca de faixa, sem ninguém rodar `/setvoicestatus` a cada sessão. O "permanente" é o modo automático: um valor por servidor, o mesmo para todos os bots do pool, ligado em todo servidor, **inclusive em quem tinha desligado antes** (o ajuste antigo não se distingue de "nunca configurou"). Para desligar de vez, use `/setvoicestatus` › permanente (texto vazio) ou o painel › Geral, onde a opção permanente é uma caixa de seleção mais o campo do modelo (vazio = modelo padrão). Modelos salvos continuam valendo; o modelo padrão é `{track.emoji} Tocando: {track.title} - {track.author}`. O modal permanente vem preenchido com o modelo em uso. O botão e o `/setvoicestatus <modelo>` mudam só a sessão atual, que volta ao permanente quando o bot sai, muda de canal ou reinicia. O palco continua só com o modo de sessão. O status é reaplicado a cada 5 minutos para desfazer edição manual do canal, e as trocas rápidas de faixa são coalescidas (no máximo um envio a cada 5 s por player e 2 por segundo por bot). Num canal sem a permissão Definir o Status do Canal de Voz o player mostra um único aviso.
 
@@ -14,7 +23,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Trava dos comandos com o status ligado**: em canal de voz, `skip`, `skipto`, `back`, `voteskip`, `seek` e o forceplay do embed passam a esperar 5 s depois do início da faixa (eram 30 s); no palco continuam 120 s. O dono do bot segue isento.
 
 ### Corrigido
-- **Desligar o status limpa o canal**: ao desligar (modal, `/setvoicestatus` vazio, sair ou mudar de canal) o último status deixa de ficar preso no canal de voz; antes o envio de limpeza não saía porque o status já estava marcado como desligado. Mudar de canal agora também limpa o canal antigo e a sessão volta ao permanente (o tratamento existia, mas nunca rodava para o próprio bot).
+- **Desligar o status limpa o canal**: ao desligar (modal, `/setvoicestatus` vazio, sair ou mudar de canal) o último status deixa de ficar preso no canal de voz; antes o envio de limpeza não saía porque o status já estava marcado como desligado. Quando o bot muda de canal por conta própria, o canal antigo também é limpo e a sessão volta ao permanente (o tratamento existia, mas nunca rodava para o próprio bot); se um moderador move o bot de canal, o canal antigo ainda pode ficar com o último status.
 - **Emoji do provedor no status**: o `{track.emoji}` usa o emoji do provedor (`emojis.json` do dono, depois o emoji de aplicação do próprio bot, depois o Unicode); antes saía sempre o genérico.
 - **Texto do status mais seguro**: título, artista, playlist e nome de quem pediu entram inertes (sem menções, emojis, links nem formatação), e um título como `{requester.id}` deixa de expor o ID de quem pediu; o corte em 500 unidades UTF-16 não parte mais um emoji personalizado.
 - **Seletor de skin do `/change_skin`**: as listas "Modo Normal" e "Modo Fixo (Song-Request)" passam a mostrar cada skin como um link embutido em que só o nome clica (até 4 por linha), com títulos legíveis, também nas linhas de resumo depois da seleção. Antes a lista do Modo Normal aparecia como texto cru no Discord desktop.
@@ -609,7 +618,8 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...v2.0.2
