@@ -110,11 +110,11 @@ class ServerManagerView(disnake.ui.View):
             self.add_item(self.build_bot_select())
 
         if has_server_select and len(self.pages) > 1:
-            back = disnake.ui.Button(label="Voltar", emoji=app_emoji(self.bot, "arrow_left"))
+            back = disnake.ui.Button(label="Voltar", emoji=app_emoji(self.inter.bot, "arrow_left"))
             back.callback = self.previous_page
             self.add_item(back)
 
-            next = disnake.ui.Button(label="Avançar", emoji=app_emoji(self.bot, "arrow_right"))
+            next = disnake.ui.Button(label="Avançar", emoji=app_emoji(self.inter.bot, "arrow_right"))
             next.callback = self.next_page
             self.add_item(next)
 
@@ -122,7 +122,9 @@ class ServerManagerView(disnake.ui.View):
         leave.callback = self.leave_guild
         self.add_item(leave)
 
-        stop = disnake.ui.Button(label="Parar", emoji=app_emoji(self.bot, "stop"), style=disnake.ButtonStyle.blurple)
+        stop = disnake.ui.Button(
+            label="Parar", emoji=app_emoji(self.inter.bot, "stop"), style=disnake.ButtonStyle.blurple
+        )
         stop.callback = self.stop_interaction
         self.add_item(stop)
 

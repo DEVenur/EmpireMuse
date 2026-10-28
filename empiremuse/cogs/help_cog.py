@@ -60,20 +60,20 @@ class ViewHelp(disnake.ui.View):
         if self.category:
             if len(self.cmd_lst[self.category]["cmds"]) > 1:
                 left_button = disnake.ui.Button(
-                    style=disnake.ButtonStyle.grey, emoji=app_emoji(self.bot, "arrow_left"), custom_id="left_page"
+                    style=disnake.ButtonStyle.grey, emoji=app_emoji(self.ctx.bot, "arrow_left"), custom_id="left_page"
                 )
                 left_button.callback = self.callback_left
                 self.add_item(left_button)
 
                 right_button = disnake.ui.Button(
-                    style=disnake.ButtonStyle.grey, emoji=app_emoji(self.bot, "arrow_right"), custom_id="right_page"
+                    style=disnake.ButtonStyle.grey, emoji=app_emoji(self.ctx.bot, "arrow_right"), custom_id="right_page"
                 )
                 right_button.callback = self.callback_right
                 self.add_item(right_button)
 
             back_button = disnake.ui.Button(
                 style=disnake.ButtonStyle.grey,
-                emoji=app_emoji(self.bot, "leftwards_arrow_with_hook"),
+                emoji=app_emoji(self.ctx.bot, "leftwards_arrow_with_hook"),
                 custom_id="back_page",
                 label="Voltar",
             )

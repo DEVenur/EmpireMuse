@@ -31,6 +31,7 @@ class AppEmojis(commands.Cog):
         if not hasattr(bot, "app_emojis"):
             bot.app_emojis = {}
         self._task: asyncio.Task | None = None
+        self._unloaded = False
 
     def _should_sync(self) -> bool:
         if self.bot in self.bot.pool.bots:
@@ -38,8 +39,7 @@ class AppEmojis(commands.Cog):
 
         return bool(self.bot.config.get("APP_EMOJIS_GUILD_BOTS"))
 
-    @commands.Cog.listener("on_ready")
-    async def on_ready(self):
+    def _start(self):
         # a flag fica no bot: recarregar a cog e reconectar não refaz o sync
         if getattr(self.bot, "_app_emojis_started", False):
             return
@@ -51,6 +51,23 @@ class AppEmojis(commands.Cog):
 
         self._task = self.bot.loop.create_task(self._sync())
 
+    def cog_load(self):
+        # as cogs carregam depois do primeiro on_ready; com o bot pronto, o sync sobe aqui
+        if self.bot.is_ready():
+            self._start()
+
+    def cog_unload(self):
+        self._unloaded = True
+
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            # sync interrompido não conta como feito: a cog recarregada tenta de novo
+            self.bot._app_emojis_started = False
+
+    @commands.Cog.listener("on_ready")
+    async def on_ready(self):
+        self._start()
+
     async def _sync(self):
         try:
             mapping = await sync_app_emojis(self.bot, emojis_dir=EMOJIS_DIR)
@@ -58,6 +75,9 @@ class AppEmojis(commands.Cog):
             raise
         except Exception as error:
             logger.warning("Falha ao sincronizar os emojis de aplicação (%s)", type(error).__name__)
+            return
+
+        if self._unloaded:
             return
 
         self.bot.app_emojis = dict(mapping)
