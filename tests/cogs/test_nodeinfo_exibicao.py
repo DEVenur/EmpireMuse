@@ -44,7 +44,7 @@ def estatisticas() -> SimpleNamespace:
     )
 
 
-def no(identificador: str, *, regiao: str = "us_central", rotulo=None) -> SimpleNamespace:
+def no(identificador: str, *, regiao: str = "us_central", rotulo: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         identifier=identificador,
         stats=estatisticas(),
@@ -58,17 +58,17 @@ def no(identificador: str, *, regiao: str = "us_central", rotulo=None) -> Simple
 
 
 class InteracaoDoNodeinfo(InteracaoFalsa):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(guild_id=SERVIDOR)
         self.embeds = []
 
-    async def send(self, *args, **kwargs):
+    async def send(self, *args: object, **kwargs: object) -> None:
         if kwargs.get("embed") is not None:
             self.embeds.append(kwargs["embed"])
         await super().send(*args, **kwargs)
 
 
-async def campos_do_nodeinfo(monkeypatch, *nos: SimpleNamespace) -> list:
+async def campos_do_nodeinfo(monkeypatch: pytest.MonkeyPatch, *nos: SimpleNamespace) -> list:
     bot = SimpleNamespace(
         get_guild=lambda _: None,
         get_color=lambda *a: 0,
@@ -80,7 +80,7 @@ async def campos_do_nodeinfo(monkeypatch, *nos: SimpleNamespace) -> list:
     )
     inter = InteracaoDoNodeinfo()
 
-    async def escolher(interaction, **kwargs):
+    async def escolher(interaction: InteracaoFalsa, **kwargs: object) -> tuple[InteracaoFalsa, SimpleNamespace]:
         return interaction, bot
 
     monkeypatch.setattr(music_settings, "select_bot_pool", escolher)
@@ -89,7 +89,7 @@ async def campos_do_nodeinfo(monkeypatch, *nos: SimpleNamespace) -> list:
     return [f for embed in inter.embeds for f in embed.fields]
 
 
-def valor_do_no(campos, identificador: str) -> str:
+def valor_do_no(campos: list, identificador: str) -> str:
     return next(f.value for f in campos if f.name.startswith(f"**{identificador}**"))
 
 
@@ -98,20 +98,20 @@ def valor_do_no(campos, identificador: str) -> str:
 
 class TestRegiaoNoNodeinfo:
     @pytest.mark.asyncio
-    async def test_the_local_node_shows_local(self, monkeypatch):
+    async def test_the_local_node_shows_local(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("LOCAL"))
 
         valor = valor_do_no(campos, "LOCAL")
         assert "Região: `Local`" in valor and "us_central" not in valor.lower()
 
     @pytest.mark.asyncio
-    async def test_a_remote_node_shows_the_owner_text_without_title_case(self, monkeypatch):
+    async def test_a_remote_node_shows_the_owner_text_without_title_case(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("REMOTO", regiao="brazil", rotulo="brazil"))
 
         assert "Região: `brazil`" in valor_do_no(campos, "REMOTO")
 
     @pytest.mark.asyncio
-    async def test_a_remote_node_without_a_region_has_no_region_line(self, monkeypatch):
+    async def test_a_remote_node_without_a_region_has_no_region_line(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("SEMREGIAO"))
 
         assert "Região" not in valor_do_no(campos, "SEMREGIAO")
@@ -121,7 +121,9 @@ class TestRegiaoGigante:
     """V-T4 — a ``region`` também vem da lista externa (``LAVALINK_SERVER_LIST``)."""
 
     @pytest.mark.asyncio
-    async def test_the_region_is_cut_in_the_field_and_the_field_stays_within_1024(self, monkeypatch):
+    async def test_the_region_is_cut_in_the_field_and_the_field_stays_within_1024(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("GIGANTE", regiao="x", rotulo=REGIAO_GIGANTE))
 
         valor = valor_do_no(campos, "GIGANTE")
@@ -130,7 +132,7 @@ class TestRegiaoGigante:
         assert REGIAO_GIGANTE not in valor
 
     @pytest.mark.asyncio
-    async def test_backticks_in_the_region_cannot_close_the_code_span(self, monkeypatch):
+    async def test_backticks_in_the_region_cannot_close_the_code_span(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("CRASES", regiao="x", rotulo="a`b**c"))
 
         (conteudo,) = re.findall(r"Região: `([^`]*)`\n", valor_do_no(campos, "CRASES"))
@@ -158,14 +160,14 @@ def dados_dos_nos(pool: BotPool) -> dict:
 
 
 class TestNoLocalNaoTemRegiao:
-    def test_the_embedded_local_node_has_no_region_key(self):
+    def test_the_embedded_local_node_has_no_region_key(self) -> None:
         pool = pool_de_nos()
 
         pool.node_check({}, start_local=True)
 
         assert "region" not in dados_dos_nos(pool)["LOCAL"]
 
-    def test_a_remote_node_from_the_server_list_keeps_its_region(self):
+    def test_a_remote_node_from_the_server_list_keeps_its_region(self) -> None:
         pool = pool_de_nos()
         remoto = {"identifier": "R1", "host": "h", "port": 1, "password": "p", "region": "brazil"}
 
@@ -177,13 +179,13 @@ class TestNoLocalNaoTemRegiao:
 class Servidor:
     """O que o ``connect_node`` pede ao ``bot.music``: devolve o nó que ``initiate_node`` criaria."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.no = SimpleNamespace(connect=AsyncMock())
         self.initiate_node = AsyncMock(return_value=self.no)
         self.nodes = {}
 
 
-async def conectar(**dados):
+async def conectar(**dados: object) -> Servidor:
     servidor = Servidor()
     cog = SimpleNamespace(bot=SimpleNamespace(music=servidor))
     base = {"identifier": "N1", "host": "h", "port": 1, "password": "p", "info": {}}
@@ -193,14 +195,14 @@ async def conectar(**dados):
 
 class TestRotuloDaRegiaoNoNo:
     @pytest.mark.asyncio
-    async def test_the_owner_text_goes_to_the_label_and_the_internal_region_is_unchanged(self):
+    async def test_the_owner_text_goes_to_the_label_and_the_internal_region_is_unchanged(self) -> None:
         servidor = await conectar(region="brazil")
 
         assert servidor.no.region_label == "brazil"
         assert servidor.initiate_node.await_args.kwargs["region"] == "brazil"
 
     @pytest.mark.asyncio
-    async def test_without_a_region_the_label_is_none_and_the_internal_default_stays(self):
+    async def test_without_a_region_the_label_is_none_and_the_internal_default_stays(self) -> None:
         servidor = await conectar()
 
         assert servidor.no.region_label is None
@@ -210,13 +212,13 @@ class TestRotuloDaRegiaoNoNo:
     @pytest.mark.parametrize(
         "regiao", [123, ["brazil"], {"a": 1}, None, 1.5], ids=["int", "lista", "dict", "none", "float"]
     )
-    async def test_a_region_that_is_not_a_string_gives_no_label(self, regiao):
+    async def test_a_region_that_is_not_a_string_gives_no_label(self, regiao: object) -> None:
         servidor = await conectar(region=regiao)
 
         assert servidor.no.region_label is None
 
     @pytest.mark.asyncio
-    async def test_a_2000_character_region_is_kept_as_text_for_the_display_to_cut(self):
+    async def test_a_2000_character_region_is_kept_as_text_for_the_display_to_cut(self) -> None:
         servidor = await conectar(region=REGIAO_GIGANTE)
 
         assert isinstance(servidor.no.region_label, str)
@@ -227,7 +229,7 @@ class TestRotuloDaRegiaoNoNo:
 
 class TestHeapNoNodeinfo:
     @pytest.mark.asyncio
-    async def test_the_labels_say_heap_java_with_binary_sizes(self, monkeypatch):
+    async def test_the_labels_say_heap_java_with_binary_sizes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("N1", rotulo="brazil"))
 
         valor = valor_do_no(campos, "N1")
@@ -236,14 +238,14 @@ class TestHeapNoNodeinfo:
         assert "Heap Java máximo: `512,0 MiB`" in valor
 
     @pytest.mark.asyncio
-    async def test_no_line_says_only_ram_and_no_size_is_decimal(self, monkeypatch):
+    async def test_no_line_says_only_ram_and_no_size_is_decimal(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("N1", rotulo="brazil"))
 
         valor = valor_do_no(campos, "N1")
         assert "RAM" not in valor and " MB" not in valor and "GB" not in valor
 
     @pytest.mark.asyncio
-    async def test_the_other_lines_stay(self, monkeypatch):
+    async def test_the_other_lines_stay(self, monkeypatch: pytest.MonkeyPatch) -> None:
         campos = await campos_do_nodeinfo(monkeypatch, no("N1"))
 
         valor = valor_do_no(campos, "N1")

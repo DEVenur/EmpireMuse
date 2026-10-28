@@ -29,10 +29,10 @@ SERVIDORES = 2345
 class ProcessoFalso:
     rss_por_pid = {111: RSS_PYTHON, 222: RSS_LAVALINK}
 
-    def __init__(self, pid):
+    def __init__(self, pid: int) -> None:
         self.pid = pid
 
-    def memory_info(self):
+    def memory_info(self) -> SimpleNamespace:
         return SimpleNamespace(rss=self.rss_por_pid[self.pid])
 
 
@@ -69,24 +69,30 @@ def bot_do_sobre(*, usuarios: int = USUARIOS, servidores: int = SERVIDORES) -> S
 
 
 class InteracaoDoSobre:
-    def __init__(self):
+    def __init__(self) -> None:
         self.guild_id = 31
         self.guild = SimpleNamespace(me=SimpleNamespace())
         self.author = SimpleNamespace(id=900)
         self.response = SimpleNamespace(defer=AsyncMock())
         self.embeds = []
 
-    async def edit_original_message(self, **kwargs):
+    async def edit_original_message(self, **kwargs: object) -> None:
         self.embeds.append(kwargs["embed"])
 
 
-async def descricao_do_sobre(monkeypatch, *, bot=None, versao=None, com_lavalink: bool = True) -> str:
+async def descricao_do_sobre(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    bot: SimpleNamespace | None = None,
+    versao: str | None = None,
+    com_lavalink: bool = True,
+) -> str:
     bot = bot or bot_do_sobre()
     if not com_lavalink:
         bot.pool.lavalink_instance = None
     inter = InteracaoDoSobre()
 
-    async def escolher(interaction, **kwargs):
+    async def escolher(interaction: InteracaoDoSobre, **kwargs: object) -> tuple[InteracaoDoSobre, SimpleNamespace]:
         return interaction, bot
 
     monkeypatch.setattr(misc, "select_bot_pool", escolher)
@@ -105,7 +111,7 @@ async def descricao_do_sobre(monkeypatch, *, bot=None, versao=None, com_lavalink
 
 class TestRamNoSobre:
     @pytest.mark.asyncio
-    async def test_the_labels_name_the_process_and_the_sizes_are_in_mib(self, monkeypatch):
+    async def test_the_labels_name_the_process_and_the_sizes_are_in_mib(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch)
 
         assert "RAM do bot (processo Python)" in descricao and "`124,0 MiB`" in descricao
@@ -113,13 +119,15 @@ class TestRamNoSobre:
         assert "RAM total (bot + Lavalink)" in descricao and "`244,5 MiB`" in descricao
 
     @pytest.mark.asyncio
-    async def test_the_old_labels_and_decimal_units_are_gone(self, monkeypatch):
+    async def test_the_old_labels_and_decimal_units_are_gone(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch)
 
         assert "Uso de RAM" not in descricao and " MB" not in descricao
 
     @pytest.mark.asyncio
-    async def test_without_the_lavalink_process_only_the_bot_line_remains(self, monkeypatch):
+    async def test_without_the_lavalink_process_only_the_bot_line_remains(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         descricao = await descricao_do_sobre(monkeypatch, com_lavalink=False)
 
         assert "RAM do bot (processo Python)" in descricao
@@ -128,19 +136,19 @@ class TestRamNoSobre:
 
 class TestContadoresDoSobre:
     @pytest.mark.asyncio
-    async def test_the_counters_use_a_dot_for_thousands(self, monkeypatch):
+    async def test_the_counters_use_a_dot_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch)
 
         assert "`1.035`" in descricao and "`2.345`" in descricao
 
     @pytest.mark.asyncio
-    async def test_no_counter_uses_a_comma_for_thousands(self, monkeypatch):
+    async def test_no_counter_uses_a_comma_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch)
 
         assert "1,035" not in descricao and "2,345" not in descricao
 
     @pytest.mark.asyncio
-    async def test_a_small_count_stays_plain(self, monkeypatch):
+    async def test_a_small_count_stays_plain(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch, bot=bot_do_sobre(usuarios=7, servidores=3))
 
         assert "`7`" in descricao and "`3`" in descricao
@@ -148,7 +156,9 @@ class TestContadoresDoSobre:
 
 class TestVersaoNoSobre:
     @pytest.mark.asyncio
-    async def test_with_a_version_it_links_the_release_tag_just_before_python(self, monkeypatch):
+    async def test_with_a_version_it_links_the_release_tag_just_before_python(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         descricao = await descricao_do_sobre(monkeypatch, versao="2.1.1")
 
         linhas = descricao.splitlines()
@@ -157,14 +167,14 @@ class TestVersaoNoSobre:
         assert "Versão do Python" in linhas[posicao + 1]
 
     @pytest.mark.asyncio
-    async def test_an_image_without_a_version_shows_dev(self, monkeypatch):
+    async def test_an_image_without_a_version_shows_dev(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch, versao="dev")
 
         (linha,) = [x for x in descricao.splitlines() if "Versão do EmpireMuse" in x]
         assert "`dev`" in linha and "releases/tag" not in linha
 
     @pytest.mark.asyncio
-    async def test_outside_the_image_there_is_no_line(self, monkeypatch):
+    async def test_outside_the_image_there_is_no_line(self, monkeypatch: pytest.MonkeyPatch) -> None:
         descricao = await descricao_do_sobre(monkeypatch, versao=None)
 
         assert "Versão do EmpireMuse" not in descricao
@@ -201,7 +211,7 @@ def top(chave_extra: dict | None = None) -> list:
     return [item]
 
 
-async def textos_do_lastfm(monkeypatch) -> str:
+async def textos_do_lastfm(monkeypatch: pytest.MonkeyPatch) -> str:
     visao = SimpleNamespace(
         wait=AsyncMock(), children=[], session_key="", clear_session=False, error=None, scrobble_enabled=True
     )
@@ -232,14 +242,14 @@ async def textos_do_lastfm(monkeypatch) -> str:
 
 class TestContadoresDoLastfm:
     @pytest.mark.asyncio
-    async def test_every_counter_uses_a_dot_for_thousands(self, monkeypatch):
+    async def test_every_counter_uses_a_dot_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
         texto = await textos_do_lastfm(monkeypatch)
 
         for esperado in ("1.035", "1.234.567", "2.050"):
             assert esperado in texto
 
     @pytest.mark.asyncio
-    async def test_no_counter_uses_a_comma_for_thousands(self, monkeypatch):
+    async def test_no_counter_uses_a_comma_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
         texto = await textos_do_lastfm(monkeypatch)
 
         for proibido in ("1,035", "1,234,567", "2,050"):
