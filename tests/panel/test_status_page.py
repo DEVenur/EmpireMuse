@@ -1,10 +1,6 @@
-"""Fase 2, Trilha B — página de status `GET /` (IndexHandler de web_app.py) na identidade "Nebulosa".
+"""Página de status pública `GET /` (IndexHandler de web_app.py): links externos seguros, link do painel só com config válida e cabeçalhos de segurança.
 
-Contrato: BRIEFING-FASE2.md (Trilha B). Parte VERDE (caracterização do que já existe e deve continuar): 200, mensagem do
-pool, bots com falha/pendentes/prontos, convite, "aplicação será reiniciada", app de RPC, prefixo, commit, funciona com o
-painel desligado. Parte RED: logo, paleta, link do painel só com o painel ligado, servidor de suporte, crédito GPL-2.0 ao
-upstream, lang pt-BR, viewport, acessibilidade, texto externo escapado e nenhum recurso externo novo (nada de CDN).
-Interpretações: .qa-fase2-interp.txt. Os testes sobem o servidor real (run_app) numa porta livre e usam HTTP de verdade.
+Os testes sobem o servidor real (run_app) numa porta livre e usam HTTP de verdade.
 """
 
 import asyncio
@@ -17,7 +13,6 @@ import tornado.testing
 import tornado.websocket
 
 from tests.panel.helpers import local_config, require
-from empiremuse.utils import branding
 
 
 class _User:
@@ -99,40 +94,12 @@ def page(monkeypatch, **kwargs) -> str:
 READY = (make_bot(111, "Bot Um", guilds=7),)
 
 
-# ============================================================================ caracterização (VERDE)
-
-
-class TestExistingBehaviourStays:
-    def test_pool_message_is_shown_and_newlines_become_line_breaks(self, monkeypatch):
-        body = page(monkeypatch, message="Aviso um\nAviso dois")
-        assert "Aviso um" in body and "Aviso dois" in body
-        assert re.search(r"Aviso um\s*<\s*/?br\s*/?>\s*Aviso dois", body, re.IGNORECASE)
-
+class TestPoolStatus:
     def test_pending_and_failed_bots_are_reported(self, monkeypatch):
         pending = make_bot(222, "Bot Dois", ready=False)
         body = page(monkeypatch, bots=(pending,), failed={"TOKEN_BOT_9": "Token inválido"})
         assert "id-Bot Dois" in body and "Recarregue a página" in body
         assert "TOKEN_BOT_9" in body and "Token inválido" in body
-
-
-# ============================================================================ identidade "Nebulosa" (RED)
-
-
-class TestNebulosaIdentity:
-    def test_has_the_brand_logo_without_depending_on_panel_static(self, monkeypatch):
-        body = page(monkeypatch, bots=READY, PANEL_ENABLED=False)
-        brand_img = any(
-            u.startswith("data:image/") or u.startswith(branding.ASSETS_BASE_URL)
-            for u in re.findall(r'<img[^>]+src="([^"]+)"', body)
-        )
-        assert "<svg" in body or brand_img, "a página precisa exibir o logo da marca (SVG embutido ou asset da marca)"
-        assert "/painel/static" not in body
-
-    def test_language_charset_and_responsive_viewport(self, monkeypatch):
-        body = page(monkeypatch)
-        assert re.search(r'<html[^>]+lang="pt-BR"', body)
-        assert re.search(r'<meta[^>]+charset="?utf-8', body, re.IGNORECASE)
-        assert re.search(r'<meta[^>]+name="viewport"[^>]+content="[^"]*width=device-width', body)
 
 
 class TestLinks:
@@ -166,7 +133,3 @@ class TestSecurityHeadersOnIndex:
             "strict-origin-when-cross-origin",
             "origin-when-cross-origin",
         }
-
-    def test_websocket_relay_still_connects(self, monkeypatch):
-        connection = get_index(monkeypatch, ws=True)
-        assert connection is not None

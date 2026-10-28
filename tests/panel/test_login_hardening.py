@@ -62,10 +62,7 @@ class NoClientIdTest(ClientIdBase):
             assert leak not in body
         for name, value in EXPECTED_SECURITY_HEADERS.items():
             assert response.headers.get(name) == value, name
-
-    def test_503_does_not_set_attempt_cookie(self):
-        response = self.browser().get("/painel/login")
-        assert not set_cookie_headers(response, "painel_login")
+        assert not set_cookie_headers(response, "painel_login"), "o 503 não define o cookie da tentativa"
 
 
 class RetryAfterTest(LoginBase):

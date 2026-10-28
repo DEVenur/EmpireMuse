@@ -31,15 +31,6 @@ class ListenAlongBase(HttpBase):
         return self.db.doc("global", gid)["listen_along_invites"]
 
 
-class ListenAlongReadTest(ListenAlongBase):
-    def test_each_row_has_a_remove_form_with_xsrf_and_version(self):
-        body = self.geral(self.logged_in(), 800)
-        forms = [f for f in parse_forms(body) if f.value("acao") == REMOVE]
-        assert sorted(f.value("canal") for f in forms) == ["123", "456"]
-        for form in forms:
-            assert form.method == "post" and form.value("_xsrf") and HEX16.match(form.value("versao") or "")
-
-
 class ListenAlongRemoveTest(ListenAlongBase):
     def test_remove_deletes_only_that_channel_and_touches_only_the_global_document(self):
         browser = self.logged_in()

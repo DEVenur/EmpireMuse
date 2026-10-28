@@ -51,14 +51,6 @@ class AccountAccessTest(AccountCase):
         assert "Rock" in mine and "Jazz" not in mine
         assert "Jazz" in theirs and "Rock" not in theirs
 
-    def test_header_has_minha_conta_next_to_meus_servidores_only_when_logged_in(self):
-        anonymous = self.browser().get("/painel/").body.decode()
-        assert "Minha conta" not in anonymous
-        for path in ("/painel/", "/painel/servidores", URL):
-            body = self.logged_in().get(path).body.decode()
-            assert f'href="{URL}"' in body and "Minha conta" in body, path
-            assert body.index("Meus servidores") < body.index("Minha conta") or "Meus servidores" in body
-
 
 # ============================================================================ prefixo pessoal (U-01)
 

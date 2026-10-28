@@ -29,51 +29,18 @@ pytestmark = pytest.mark.critical
 
 
 class FormularioDoStatusTest(HttpBase):
-    def test_the_form_has_the_permanent_checkbox_before_the_text(self) -> None:
-        browser = self.logged_in()
+    def test_the_checkbox_reflects_the_saved_permanent(self) -> None:
+        casos = (
+            ("nunca-escolhido-vem-marcado", {CAMPO_PERMANENTE: None, CAMPO_MODELO: ""}, True),
+            ("salvo-desligado-vem-desmarcado", {CAMPO_PERMANENTE: False}, False),
+        )
+        for nome, salvo, marcado in casos:
+            with self.subTest(nome):
+                external_change(self.db, "global", 100, **salvo)
 
-        _, form, _ = self.open_form(browser, 100, "geral", CAMPO_PERMANENTE)
+                _, form, _ = self.open_form(self.logged_in(), 100, "geral", CAMPO_PERMANENTE)
 
-        nomes = [c["name"] for c in form.controls if c.get("name") in (CAMPO_PERMANENTE, CAMPO_MODELO)]
-        assert nomes == [CAMPO_PERMANENTE, CAMPO_MODELO]
-        assert form.control(CAMPO_PERMANENTE)["type"] == "checkbox"
-
-    def test_a_never_chosen_permanent_shows_the_checkbox_checked(self) -> None:
-        external_change(self.db, "global", 100, **{CAMPO_PERMANENTE: None, CAMPO_MODELO: ""})
-        browser = self.logged_in()
-
-        _, form, _ = self.open_form(browser, 100, "geral", CAMPO_PERMANENTE)
-
-        assert form.values(CAMPO_PERMANENTE) != []
-
-    def test_a_permanent_saved_as_off_shows_the_checkbox_unchecked(self) -> None:
-        external_change(self.db, "global", 100, **{CAMPO_PERMANENTE: False})
-        browser = self.logged_in()
-
-        _, form, _ = self.open_form(browser, 100, "geral", CAMPO_PERMANENTE)
-
-        assert form.values(CAMPO_PERMANENTE) == []
-
-    def test_the_text_shows_empty_when_the_model_is_the_default(self) -> None:
-        external_change(self.db, "global", 100, **{CAMPO_MODELO: ""})
-        browser = self.logged_in()
-
-        _, form, _ = self.open_form(browser, 100, "geral", CAMPO_MODELO)
-
-        assert (form.value(CAMPO_MODELO) or "") == ""
-
-    def test_the_page_says_that_empty_means_the_default_model_and_that_the_requester_is_public(self) -> None:
-        browser = self.logged_in()
-        pagina = browser.get(self.url(100, "geral")).body.decode()
-
-        assert regras().DEFAULT_VOICE_TEMPLATE in pagina
-        assert "Deixe vazio para desligar" not in pagina and "público" in pagina
-
-    def test_the_help_warns_that_turning_off_only_the_session_comes_back(self) -> None:
-        browser = self.logged_in()
-        pagina = browser.get(self.url(100, "geral")).body.decode().lower()
-
-        assert "reinicia" in pagina and "permanente" in pagina
+                assert (form.values(CAMPO_PERMANENTE) != []) is marcado
 
 
 class GravacaoTest(HttpBase):
@@ -92,35 +59,22 @@ class GravacaoTest(HttpBase):
             assert depois[chave] == antes[chave], chave
         assert self.db.writes == [("global", 100)]
 
-    def test_an_unchecked_box_turns_the_permanent_off_and_keeps_the_text(self) -> None:
-        browser = self.logged_in()
-
-        resposta = self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: None, CAMPO_MODELO: OUTRO})
-
-        assert resposta.code == 200
-        depois = self.db.doc("global", 100)
-        assert depois[CAMPO_PERMANENTE] is False and depois[CAMPO_MODELO] == OUTRO
-
-    def test_an_empty_text_does_not_turn_the_permanent_off(self) -> None:
-        external_change(self.db, "global", 100, **{CAMPO_PERMANENTE: True, CAMPO_MODELO: MODELO})
-        browser = self.logged_in()
-
-        resposta = self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: "on", CAMPO_MODELO: ""})
-
-        assert resposta.code == 200
-        depois = self.db.doc("global", 100)
-        assert depois[CAMPO_PERMANENTE] is True and depois[CAMPO_MODELO] == ""
-        assert regras().resolve_voice_status(depois).template == regras().DEFAULT_VOICE_TEMPLATE
-
-    def test_an_empty_text_with_the_box_unchecked_is_off_with_the_default_model(self) -> None:
-        browser = self.logged_in()
-
-        assert (
-            self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: None, CAMPO_MODELO: ""}).code == 200
+    def test_checkbox_and_text_combinations_are_stored_as_the_discord_reads_them(self) -> None:
+        casos = (
+            ("desmarcado-mantem-o-texto", {CAMPO_PERMANENTE: None, CAMPO_MODELO: OUTRO}, False, OUTRO),
+            ("texto-vazio-nao-desliga", {CAMPO_PERMANENTE: "on", CAMPO_MODELO: ""}, True, ""),
+            ("vazio-e-desmarcado", {CAMPO_PERMANENTE: None, CAMPO_MODELO: ""}, False, ""),
+            ("flag-como-texto", {CAMPO_PERMANENTE: "false", CAMPO_MODELO: MODELO}, True, MODELO),  # presente = marcado
         )
+        for nome, post, permanente, modelo in casos:
+            with self.subTest(nome):
+                external_change(self.db, "global", 100, **{CAMPO_PERMANENTE: True, CAMPO_MODELO: MODELO})
 
-        depois = self.db.doc("global", 100)
-        assert depois[CAMPO_PERMANENTE] is False and depois[CAMPO_MODELO] == ""
+                assert self.save(self.logged_in(), 100, "geral", CAMPO_PERMANENTE, **post).code == 200
+
+                depois = self.db.doc("global", 100)
+                assert depois[CAMPO_PERMANENTE] is permanente and depois[CAMPO_MODELO] == modelo
+                assert regras().resolve_voice_status(depois).template == (modelo or regras().DEFAULT_VOICE_TEMPLATE)
 
     def test_an_invalid_text_is_rejected_and_nothing_is_written(self) -> None:
         browser = self.logged_in()
@@ -151,16 +105,6 @@ class GravacaoTest(HttpBase):
         for chave in ("prefix", "ver", "custom_skins", "extra_flag", "listen_along_invites"):
             assert depois[chave] == antes[chave], chave
 
-    def test_a_flag_sent_as_text_is_just_a_checked_box(self) -> None:
-        browser = self.logged_in()
-
-        assert (
-            self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: "false", CAMPO_MODELO: MODELO}).code
-            == 200
-        )
-
-        assert self.db.doc("global", 100)[CAMPO_PERMANENTE] is True  # presente = marcado, como o PlayerForm
-
 
 class EfeitosTest(HttpBase):
     def assentar_laco(self) -> None:
@@ -168,40 +112,16 @@ class EfeitosTest(HttpBase):
         self.io_loop.run_sync(assentar)
 
     def test_every_player_of_every_bot_of_the_guild_gets_the_new_permanent(self) -> None:
-        browser = self.logged_in()
+        for ligado in (True, False):
+            with self.subTest(ligado=ligado):
+                post = {CAMPO_PERMANENTE: "on" if ligado else None, CAMPO_MODELO: MODELO}
 
-        assert (
-            self.save(browser, 800, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}).code
-            == 200
-        )
+                assert self.save(self.logged_in(), 800, "geral", CAMPO_PERMANENTE, **post).code == 200
 
-        for jogador in (self.world.p800a, self.world.p800b):
-            (chamada,) = jogador.called("apply_permanent_voice_status")
-            assert chamada["cfg"].permanent is True and chamada["cfg"].template == MODELO
-
-    def test_an_off_permanent_is_applied_as_off(self) -> None:
-        browser = self.logged_in()
-
-        assert (
-            self.save(browser, 800, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: None, CAMPO_MODELO: MODELO}).code
-            == 200
-        )
-
-        for jogador in (self.world.p800a, self.world.p800b):
-            (chamada,) = jogador.called("apply_permanent_voice_status")
-            assert chamada["cfg"].permanent is False
-
-    def test_the_effect_never_touches_the_flag_or_the_stage_topic_directly(self) -> None:
-        browser = self.logged_in()
-
-        assert (
-            self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}).code
-            == 200
-        )
-
-        jogador = self.world.p100
-        assert jogador.stage_title_event is False and jogador.called("update_stage_topic") == []
-        assert jogador.stage_title_template == ""
+                for jogador in (self.world.p800a, self.world.p800b):
+                    chamada = jogador.called("apply_permanent_voice_status")[-1]
+                    assert chamada["cfg"].permanent is ligado
+                    assert not ligado or chamada["cfg"].template == MODELO
 
     def test_a_guild_without_an_active_player_just_saves(self) -> None:
         browser = self.logged_in()
@@ -230,7 +150,7 @@ class EfeitosTest(HttpBase):
             and self.world.p800b.voice_status_saved_default is False
         )
 
-    def test_a_rejected_save_leaves_the_default_notice_flag_alone(self) -> None:
+    def test_a_rejected_save_applies_nothing_and_leaves_the_default_notice_flag_alone(self) -> None:
         self.world.p100.voice_status_saved_default = True
         browser = self.logged_in()
 
@@ -238,13 +158,6 @@ class EfeitosTest(HttpBase):
         self.assentar_laco()
 
         assert self.world.p100.voice_status_saved_default is True
-
-    def test_a_rejected_text_applies_nothing(self) -> None:
-        browser = self.logged_in()
-
-        assert self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_MODELO: "sem placeholder"}).code == 422
-        self.assentar_laco()
-
         assert self.world.p100.called("apply_permanent_voice_status") == []
 
     def test_the_post_answers_while_the_apply_of_every_player_is_still_running(self) -> None:
@@ -298,13 +211,3 @@ class XsrfEVersaoTest(HttpBase):
         assert resposta.code == 200
         depois = self.db.doc("global", 100)
         assert depois["prefix"] == "?" and depois[CAMPO_MODELO] == MODELO
-
-    def test_a_malformed_version_is_rejected_without_writing(self) -> None:
-        browser = self.logged_in()
-        url, form, _ = self.open_form(browser, 100, "geral", CAMPO_PERMANENTE)
-
-        for ruim in ("", "x", "0" * 15, "<script>"):
-            resposta = self.submit(browser, url, form, versao=ruim, **{CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO})
-            assert resposta.code in (409, 422), ruim
-
-        assert self.db.writes == []

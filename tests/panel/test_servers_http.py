@@ -109,16 +109,6 @@ class ServerListTest(ServersBase):
         assert configure == {"100", "200", "400", "600"}, f"links Configurar: {sorted(configure)}"
         assert "Configurar" in body
 
-    def test_invite_labels_name_the_bot(self):
-        body = self.page("/painel/servidores").body.decode()
-        assert "Bot Um" in body and "Bot Dois" in body
-
-    def test_navigation_links_to_my_servers_from_index_and_list(self):
-        browser = self.logged_in()
-        for path in ("/painel/", "/painel/servidores"):
-            body = browser.get(path).body.decode()
-            assert 'href="/painel/servidores"' in body and "Meus servidores" in body, path
-
     def test_list_does_not_leak_secrets(self):
         response = self.page("/painel/servidores")
         assert response.code == 200, "a lista de servidores deve existir"

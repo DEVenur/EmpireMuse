@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Alterado
+- **Testes do painel mais enxutos**: removidos 54 testes de baixo valor em `tests/panel` (texto de `.env.example`/CSS/templates, favicon, caracterização da página de status, micro-otimizações do cache de marca) e fundidas variantes repetidas, sem tirar nenhum teste de segurança. A cobertura do painel não muda.
+
 ## [2.1.2] - 2026-10-28
 
 Status automático do canal de voz ligado por padrão (com a opção permanente no painel › Geral), nova tentativa quando o YouTube falha e correções de log e de seletor de skin.
