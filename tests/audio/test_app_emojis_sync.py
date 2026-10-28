@@ -1,7 +1,7 @@
 """Emojis de aplicação (#130), E3/E4 e o threat model do Vigil (TM-E2, TM-E3): ``sync_app_emojis`` com um cliente falso.
 
 Nada de rede nem de sono (``sleep`` injetado). O sync nunca apaga nem edita, cria em série, respeita o 429 com teto, para no primeiro 401/403,
-só envia arquivo válido (tipo pelos bytes, 128×128 pelo cabeçalho, tamanho por ``stat`` antes de ler), e só sobe nome das 25 constantes.
+só envia arquivo válido (tipo pelos bytes, 128×128 pelo cabeçalho, tamanho por ``stat`` antes de ler), e só sobe nome das 37 constantes.
 """
 
 import asyncio
@@ -13,6 +13,7 @@ import sys
 import pytest
 
 from empiremuse.utils.music.app_emojis import APP_EMOJIS, sync_app_emojis
+from tests.support.raiz import RAIZ
 from tests.support.emojis_app import (
     MAXIMO_BYTES,
     NOMES,
@@ -23,6 +24,7 @@ from tests.support.emojis_app import (
     escrever_emojis,
     escrever_somas,
     gif,
+    gif_animado,
     jpeg,
     png,
     png_so_cabecalho,
@@ -364,6 +366,8 @@ class TestValidacaoDeArquivo:
             ("png-128x127", png(128, 127)),
             ("png-zero", png(0, 0)),
             ("gif-64", gif(64, 64)),
+            ("gif-128x129", gif_animado(128, 129)),
+            ("gif-animado-grande", gif_animado(quadros=3) + b"\x00" * MAXIMO_BYTES),
             ("png-truncado-na-assinatura", b"\x89PNG\r\n"),
             ("gif-versao-errada", gif(versao=b"GIF90a")),
             ("png-grande", png(extra=MAXIMO_BYTES)),
@@ -487,6 +491,37 @@ class TestSomenteArquivosRegulares:
         mapa = await sincronizar(cliente, elo)
 
         assert cliente.criacoes == [] and mapa == {}
+
+
+class TestGifAnimado:
+    """O ``headset`` é um GIF89a ANIMADO 128×128: entra, e sai no formato ``<a:nome:id>``."""
+
+    async def test_an_animated_gif_89a_128_by_128_is_uploaded_and_comes_out_animated(self, pasta):
+        pasta.mkdir(parents=True)
+        (pasta / "headset.gif").write_bytes(gif_animado(quadros=4))
+        cliente = ClienteFalso()
+
+        mapa = await sincronizar(cliente, pasta)
+
+        assert mapa["headset"] == f"<a:headset:{cliente.existentes[0].id}>"
+        assert cliente.criacoes[0][1].startswith(b"GIF89a")
+
+    async def test_the_real_headset_comes_out_animated_and_the_other_files_as_static(self):
+        real = RAIZ / "assets" / "emojis"
+        assert (real / "headset.gif").is_file(), "assets/emojis/headset.gif ainda não chegou (§12 do contrato)"
+        cliente = ClienteFalso()
+
+        mapa = await sincronizar(cliente, real)
+
+        assert mapa["headset"].startswith("<a:headset:")
+        assert all(valor.startswith("<:") for nome, valor in mapa.items() if nome != "headset")
+
+    async def test_all_37_real_files_are_uploaded_when_the_app_has_none(self):
+        cliente = ClienteFalso()
+
+        mapa = await sincronizar(cliente, RAIZ / "assets" / "emojis")
+
+        assert sorted(mapa) == sorted(NOMES)
 
 
 class TestSomasDeIntegridade:

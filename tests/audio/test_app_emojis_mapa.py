@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from empiremuse.utils.music.app_emojis import APP_EMOJIS, emoji
-from tests.support.emojis_app import NOMES
+from tests.support.emojis_app import EXTRAS, NOMES
 
 pytestmark = pytest.mark.critical
 
@@ -27,8 +27,12 @@ def bot(app_emojis=None, emoji_data=None, **mais):
 
 
 class TestMapaDeReserva:
-    def test_it_has_exactly_the_25_names(self):
-        assert sorted(APP_EMOJIS) == sorted(NOMES) and len(NOMES) == 25
+    def test_it_has_exactly_the_37_names(self):
+        assert sorted(APP_EMOJIS) == sorted(NOMES) and len(NOMES) == 37 and len(set(NOMES)) == 37
+
+    @pytest.mark.parametrize(("nome", "reserva"), sorted(EXTRAS.items()))
+    def test_each_of_the_12_owner_icons_has_its_documented_unicode_fallback(self, nome, reserva):
+        assert APP_EMOJIS[nome] == reserva
 
     @pytest.mark.parametrize("nome", NOMES)
     def test_each_name_matches_the_pattern_and_has_a_non_empty_unicode_fallback(self, nome):

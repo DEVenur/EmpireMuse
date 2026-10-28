@@ -168,7 +168,7 @@ class TestInfoDaSubida:
 
         linhas = [r.getMessage() for r in caplog.records if r.name == "empiremuse.boot" and r.levelno == logging.INFO]
         assert len([linha for linha in linhas if "Emojis de aplicação" in linha]) == 1
-        assert any("25" in linha for linha in linhas if "Emojis de aplicação" in linha)
+        assert any(str(len(NOMES)) in linha for linha in linhas if "Emojis de aplicação" in linha)
 
 
 class TestSoBotsPrincipaisPorPadrao:

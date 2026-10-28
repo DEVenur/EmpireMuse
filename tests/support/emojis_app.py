@@ -1,4 +1,4 @@
-"""Apoio dos testes de emojis de aplicação (#130): os 25 nomes, imagens sintéticas e um cliente falso da API.
+"""Apoio dos testes de emojis de aplicação (#130): os 37 nomes, imagens sintéticas e um cliente falso da API.
 
 Imagens: só os bytes que o validador lê (assinatura e cabeçalho); sem Pillow. O cliente falso grava cada chamada e mede a concorrência
 (``create`` nunca em paralelo). Nenhum teste dorme: o ``sleep`` é injetado.
@@ -18,8 +18,25 @@ import disnake
 NOMES = (
     "music_queue add_music play play_source playpause stop skip backward arrow_left arrow_right "
     "leftwards_arrow_with_hook help git stagechannel bandcamp youtube youtube_music spotify soundcloud "
-    "deezer applemusic twitch jiosaavn tidal lastfm"
+    "deezer applemusic twitch jiosaavn tidal lastfm "
+    "loved search config gear replay tools pinned bot voice_event community_server plus headset"
 ).split()
+# §12 do contrato: os 12 extras do dono e a reserva Unicode de cada um; o ``headset`` é o único ANIMADO (GIF89a)
+EXTRAS = {
+    "loved": "❤️",
+    "search": "🔍",
+    "config": "📝",
+    "gear": "⚙️",
+    "replay": "🔁",
+    "tools": "🧰",
+    "pinned": "📌",
+    "bot": "🤖",
+    "voice_event": "🔊",
+    "community_server": "🏘️",
+    "plus": "➕",
+    "headset": "🎧",
+}
+ANIMADOS = ("headset",)
 MAXIMO_BYTES = 256 * 1024
 LADO = 128
 
@@ -44,6 +61,49 @@ def png_so_cabecalho(largura: int = LADO, altura: int = LADO) -> bytes:
 def gif(largura: int = LADO, altura: int = LADO, *, versao: bytes = b"GIF89a", extra: int = 0) -> bytes:
     tela = struct.pack("<HHBBB", largura, altura, 0, 0, 0)
     return versao + tela + b"\x00" * extra + b"\x3b"
+
+
+def gif_animado(largura: int = LADO, altura: int = LADO, *, quadros: int = 3, versao: bytes = b"GIF89a") -> bytes:
+    """GIF com ``quadros`` imagens 1×1 (cada uma com seu bloco de controle gráfico) e a tela lógica ``largura``×``altura``."""
+    tela = struct.pack("<HHBBB", largura, altura, 0, 0, 0)
+    controle = b"\x21\xf9\x04\x00\x0a\x00\x00\x00"
+    imagem = b"\x2c" + struct.pack("<HHHH", 0, 0, 1, 1) + b"\x00" + b"\x02" + b"\x02\x44\x01" + b"\x00"
+    return versao + tela + (controle + imagem) * quadros + b"\x3b"
+
+
+def quadros_do_gif(dados: bytes) -> int:
+    """Quantas imagens o GIF tem (percorre os blocos; 0 se não for GIF ou se estiver mal formado)."""
+    if dados[:6] not in (b"GIF87a", b"GIF89a") or len(dados) < 13:
+        return 0
+    flags, pos = dados[10], 13
+    if flags & 0x80:
+        pos += 3 * 2 ** ((flags & 7) + 1)
+    quadros = 0
+    try:
+        while pos < len(dados):
+            marca = dados[pos]
+            if marca == 0x3B:
+                return quadros
+            if marca == 0x21:
+                pos += 2
+                while dados[pos]:
+                    pos += dados[pos] + 1
+                pos += 1
+            elif marca == 0x2C:
+                local = dados[pos + 9]
+                pos += 10
+                if local & 0x80:
+                    pos += 3 * 2 ** ((local & 7) + 1)
+                pos += 1
+                while dados[pos]:
+                    pos += dados[pos] + 1
+                pos += 1
+                quadros += 1
+            else:
+                return 0
+    except IndexError:
+        return 0
+    return 0
 
 
 def jpeg(largura: int = LADO, altura: int = LADO) -> bytes:

@@ -19,7 +19,7 @@ import pytest
 
 from tests.audio.test_md_link_rotulos_fixos import NOME_COM_BLOCO, servidor_com_nome
 from tests.audio.test_skins_caracterizacao import NORMAL, STATIC, make_player
-from tests.support.emojis_app import LADO, MAXIMO_BYTES, NOMES
+from tests.support.emojis_app import ANIMADOS, LADO, MAXIMO_BYTES, NOMES, gif_animado, quadros_do_gif
 from tests.support.marcas_md import textos_da_saida
 from tests.support.raiz import RAIZ
 
@@ -282,12 +282,33 @@ class TestIntegridadeDosArquivos:
         esperado = somas().get(f"emojis/{arquivo.name}")
         assert esperado == hashlib.sha256(arquivo.read_bytes()).hexdigest()
 
-    def test_the_folder_has_no_file_with_a_name_outside_the_25(self):
+    def test_the_folder_has_no_file_with_a_name_outside_the_37(self):
         if not PASTA.is_dir():
             pytest.skip("assets/emojis/ ainda não existe")
 
         estranhos = [p.name for p in PASTA.iterdir() if p.stem not in NOMES or p.suffix not in (".png", ".gif")]
         assert estranhos == []
+
+    @pytest.mark.parametrize("nome", ANIMADOS)
+    def test_the_animated_emoji_is_a_gif89a_with_more_than_one_frame(self, nome):
+        arquivo = PASTA / f"{nome}.gif"
+        if not arquivo.is_file():
+            pytest.skip(f"assets/emojis/{nome}.gif ainda não chegou")
+
+        dados = arquivo.read_bytes()
+        assert dados.startswith(b"GIF89a") and quadros_do_gif(dados) > 1
+        assert tipo_e_lado(dados) == ("gif", LADO, LADO) and len(dados) <= MAXIMO_BYTES
+
+    def test_only_the_animated_ones_are_gifs_everything_else_is_a_png(self):
+        if not PASTA.is_dir():
+            pytest.skip("assets/emojis/ ainda não existe")
+
+        gifs = sorted(p.stem for p in PASTA.iterdir() if p.suffix == ".gif")
+        assert gifs == sorted(n for n in ANIMADOS if (PASTA / f"{n}.gif").exists())
+
+    def test_the_frame_counter_itself(self):
+        assert quadros_do_gif(gif_animado(quadros=1)) == 1 and quadros_do_gif(gif_animado(quadros=5)) == 5
+        assert quadros_do_gif(b"nada") == 0 and quadros_do_gif(gif_animado()[:-4]) == 0
 
     def test_the_checker_itself_reads_a_header(self):
         assert tipo_e_lado(b"\x89PNG\r\n\x1a\n" + bytes(8) + struct.pack(">II", 128, 128)) == ("png", 128, 128)
