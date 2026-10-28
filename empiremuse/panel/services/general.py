@@ -6,13 +6,13 @@ import logging
 import unicodedata
 from typing import Any
 
-import disnake
-
-from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, first
+from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, first, flag
 from empiremuse.panel.services.player import active_player
 from empiremuse.rules import limits
 from empiremuse.rules.errors import PREFIX_LENGTH, STATUS_CHARS, STATUS_TOO_LONG, RuleError
 from empiremuse.rules.settings import validate_prefix, validate_voice_status
+from empiremuse.rules.voice_status import DEFAULT_VOICE_TEMPLATE, resolve_voice_status
+from empiremuse.utils.music.models.player_voice import schedule_permanent_voice_status
 
 logger = logging.getLogger(__name__)
 
@@ -56,44 +56,38 @@ class VoiceStatusForm(SettingsForm):
     key = "status_voz"
     category = "geral"
     scope_kind = "global"
-    fields = ("voice_channel_status",)
+    fields = ("voice_status_permanent", "voice_channel_status")
     markers = fields
 
     def extract(self, doc: dict) -> dict[str, Any]:
-        return {"voice_channel_status": doc["voice_channel_status"]}
+        cfg = resolve_voice_status(doc)
+        return {
+            "voice_status_permanent": cfg.permanent,
+            "voice_channel_status": "" if cfg.template == DEFAULT_VOICE_TEMPLATE else cfg.template,
+        }
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
+        doc["voice_status_permanent"] = new["voice_status_permanent"]
         doc["voice_channel_status"] = new["voice_channel_status"]
 
     def extras(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
-        return {"placeholders": limits.VOICE_PLACEHOLDERS}
+        return {"placeholders": limits.VOICE_PLACEHOLDERS, "modelo_padrao": DEFAULT_VOICE_TEMPLATE}
 
     def parse(self, ctx: FormContext, current: dict[str, Any], args: Args) -> ParseResult:
         raw = first(args, "voice_channel_status") or ""
-        echo = {"voice_channel_status": raw}
+        permanent = flag(args, "voice_status_permanent")
+        echo = {"voice_status_permanent": permanent, "voice_channel_status": raw}
         text = validate_voice_status(raw)
         if isinstance(text, RuleError):
             message = {STATUS_TOO_LONG: MSG_VOICE_LENGTH, STATUS_CHARS: MSG_VOICE_CHARS}.get(
                 text.code, MSG_VOICE_PLACEHOLDER
             )
             return ParseResult({}, {"voice_channel_status": message}, echo)
-        return ParseResult({"voice_channel_status": text}, {}, echo)
+        return ParseResult({"voice_status_permanent": permanent, "voice_channel_status": text}, {}, echo)
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
-        text = new["voice_channel_status"]
+        cfg = resolve_voice_status(new)
         for bot in ctx.pool.get_guild_bots(ctx.guild_id):
             player = active_player(bot, ctx.guild_id)
             if player is not None:
-                await self._update_player(player, text)
-
-    @staticmethod
-    async def _update_player(player: Any, text: str) -> None:
-        player.stage_title_event = bool(text)
-        player.stage_title_template = text
-        player.start_time = disnake.utils.utcnow()
-        player.set_command_log(
-            text="O painel " + ("ativou" if text else "desativou") + " o status automático.", emoji="📢"
-        )
-        player.update = True
-        await player.update_stage_topic(clear=not text)
-        await player.process_save_queue()
+                schedule_permanent_voice_status(player, cfg)  # não espera: o POST responde sem aguardar o Discord
