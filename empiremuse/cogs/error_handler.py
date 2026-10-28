@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 UNEXPECTED_ERROR_TEXT = "Ocorreu um erro inesperado ao executar o comando. Tente novamente em instantes."
 
 
+def _safe_text(text: object) -> str:
+    """Nome de servidor, canal ou autor para o embed do relatório: sem segredo registrado, sem controle e com tamanho limitado."""
+    return fix_characters(scrub(str(text), MAX_MESSAGE_CHARS), MAX_MESSAGE_CHARS)
+
+
 class ErrorHandler(commands.Cog):
     def __init__(self, bot: BotCore):
         self.bot = bot
@@ -476,20 +481,20 @@ class ErrorHandler(commands.Cog):
             embed.add_field(
                 name="Servidor:",
                 inline=False,
-                value=f"```\n{fix_characters(ctx.guild.name)}\nID: {ctx.guild.id}```",
+                value=f"```\n{_safe_text(ctx.guild.name)}\nID: {ctx.guild.id}```",
             )
 
             embed.add_field(
                 name="Canal de texto:",
                 inline=False,
-                value=f"```\n{fix_characters(ctx.channel.name)}\nID: {ctx.channel.id}```",
+                value=f"```\n{_safe_text(ctx.channel.name)}\nID: {ctx.channel.id}```",
             )
 
             if vc := ctx.author.voice:
                 embed.add_field(
                     name="Canal de voz (user):",
                     inline=False,
-                    value=f"```\n{fix_characters(vc.channel.name)}"
+                    value=f"```\n{_safe_text(vc.channel.name)}"
                     + (f" ({len(vc.channel.voice_states)}/{vc.channel.user_limit})" if vc.channel.user_limit else "")
                     + f"\nID: {vc.channel.id}```",
                 )
@@ -499,7 +504,7 @@ class ErrorHandler(commands.Cog):
                     embed.add_field(
                         name="Canal de voz (bot):",
                         inline=False,
-                        value=f"```\n{fix_characters(vcbot.channel.name)}"
+                        value=f"```\n{_safe_text(vcbot.channel.name)}"
                         + (
                             f" ({len(vcbot.channel.voice_states)}/{vcbot.channel.user_limit})"
                             if vcbot.channel.user_limit
@@ -519,7 +524,8 @@ class ErrorHandler(commands.Cog):
             embed.add_field(name="Servidor [ID]:", inline=False, value=f"```\n{guild_id}```")
 
         embed.set_footer(
-            text=f"{ctx.author} [{ctx.author.id}]", icon_url=ctx.author.display_avatar.with_static_format("png").url
+            text=f"{_safe_text(ctx.author)} [{ctx.author.id}]",
+            icon_url=ctx.author.display_avatar.with_static_format("png").url,
         )
 
         try:

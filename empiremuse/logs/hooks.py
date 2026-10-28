@@ -55,14 +55,16 @@ def _log_if_configured(
     """
     with suppress(Exception):
         from empiremuse.logs.errors import log_unhandled
-        from empiremuse.logs.setup import is_configured
+        from empiremuse.logs.setup import is_configured, take_console_failure
 
         if not is_configured():
             return False
         if not chain and exc_value is not None:
             exc_value.__context__ = exc_value.__cause__ = None
+        take_console_failure()
         log_unhandled(exc_type, exc_value, exc_tb, what)
-        return True
+        # Console com o fluxo quebrado: o traceback não saiu, então o gancho escreve o seu.
+        return not take_console_failure()
     return False
 
 

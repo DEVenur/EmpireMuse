@@ -31,8 +31,23 @@ _aggregator: RepeatAggregator | None = None
 _debug_guilds: frozenset[int] = frozenset()
 
 
+_console_state = threading.local()
+
+
+def take_console_failure() -> bool:
+    """Se o console falhou ao emitir nesta thread desde a última chamada; limpa a marca.
+
+    O ``emit`` é síncrono, então o gancho de exceções lê a marca logo depois do ``log_unhandled``
+    e, se o console perdeu o traceback, escreve o seu próprio. O logger comum não levanta nem muda.
+    """
+    failed = getattr(_console_state, "failed", False)
+    _console_state.failed = False
+    return failed
+
+
 class _ConsoleHandler(logging.StreamHandler):
     def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802 (nome da API do logging)
+        _console_state.failed = True
         report_emit_failure()
 
 
