@@ -9,6 +9,7 @@ Sem Discord e sem rede: canais, bots e players são dublês e cada envio ao Disc
 import asyncio
 import logging
 import re
+import time
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -30,7 +31,7 @@ from tests.support.drivers_de_regras import (
     InteracaoFalsa,
 )
 from tests.support.modais import SERVIDOR_DO_COMANDO as SERVIDOR
-from tests.support.voz_auto import assentar
+from tests.support.voz_auto import assentar, instalar_relogio
 
 pytestmark = pytest.mark.critical
 
@@ -520,12 +521,15 @@ class TestOutrosErrosHttp:
         assert len(avisos(caplog)) == 1
 
     @pytest.mark.asyncio
-    async def test_a_different_code_warns_again(self, caminho, caplog):
+    async def test_a_different_code_warns_again(self, caminho, caplog, monkeypatch):
+        agora = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: agora[0])  # o throttle de borda (2.1.2) lê time.monotonic
         erro = erro_500(0)
         jogador = cenario(caminho, erro)
 
         with caplog.at_level(logging.DEBUG):
             await rodar(jogador, caminho)
+            agora[0] += 6  # passou a janela de VOICE_STATUS_MIN_INTERVAL: o 2º envio sai na hora, não fica pendente
             novo = erro_500(10003)
             jogador.bot.edit_voice_channel_status.side_effect = novo
             if caminho == "palco":
@@ -571,16 +575,19 @@ class TestComportamentoQueSegue:
 @pytest.mark.parametrize("caminho", CAMINHOS)
 class TestForbiddenSimultaneo:
     @pytest.mark.asyncio
-    async def test_two_runs_waiting_on_a_slow_403_give_one_notice_and_one_warning(self, caminho, caplog):
+    async def test_two_runs_waiting_on_a_slow_403_give_one_notice_and_one_warning(self, caminho, caplog, monkeypatch):
+        relogio = instalar_relogio(monkeypatch)  # o throttle de borda (2.1.2) espera pelo relógio, nunca de verdade
         jogador = cenario(caminho, proibido())
         portao = asyncio.Event()
         ambos_no_portao = asyncio.Event()
         no_portao = 0
+        # No palco e no clear os dois envios chegam juntos; no definir da voz o throttle serializa: o 2º fica pendente atrás do 1º.
+        chegadas_esperadas = 1 if caminho == "voz-definir" else 2
 
         async def lento(*args, **kwargs):
             nonlocal no_portao
             no_portao += 1
-            if no_portao == 2:
+            if no_portao == chegadas_esperadas:
                 ambos_no_portao.set()
             await portao.wait()
             raise proibido()
@@ -600,7 +607,10 @@ class TestForbiddenSimultaneo:
             finally:
                 portao.set()  # nunca deixa os envios presos, passe ou falhe o teste
             await asyncio.gather(*execucoes)
+            await relogio.avancar(10)  # o envio pendente da voz acorda, vê o status desligado pelo 403 e não envia
 
         assert jogador.stage_title_event is False
         assert jogador.set_command_log.call_count == 1
+        if caminho == "voz-definir":
+            assert jogador.bot.edit_voice_channel_status.await_count == 1
         assert len(avisos(caplog)) == 1 and com_traceback(caplog) == []
