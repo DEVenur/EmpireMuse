@@ -38,55 +38,55 @@ LINHAS_DA_211 = [
 
 
 class TestSoAVersaoPedida:
-    def test_it_returns_only_the_block_of_the_asked_version(self):
+    def test_it_returns_only_the_block_of_the_asked_version(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, 3500)
 
         assert texto == "\n".join(LINHAS_DA_211)
 
-    def test_the_neighbour_blocks_the_unreleased_and_the_link_references_stay_out(self):
+    def test_the_neighbour_blocks_the_unreleased_and_the_link_references_stay_out(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, 3500)
 
         assert "2.1.0" not in texto.replace("2.1.1", "") and "Item da 2.1.0" not in texto
         assert "ainda não lançado" not in texto and "exemplo.invalid" not in texto
 
-    def test_the_previous_version_gives_its_own_block(self):
+    def test_the_previous_version_gives_its_own_block(self) -> None:
         texto = release.changelog_section(CHANGELOG, V210, 3500)
 
         assert "Item da 2.1.0" in texto and "Primeiro item da 2.1.1" not in texto
 
-    def test_a_version_without_a_block_gives_an_empty_string(self):
+    def test_a_version_without_a_block_gives_an_empty_string(self) -> None:
         assert release.changelog_section(CHANGELOG, V300, 3500) == ""
 
-    def test_an_empty_changelog_gives_an_empty_string(self):
+    def test_an_empty_changelog_gives_an_empty_string(self) -> None:
         assert release.changelog_section("", V211, 3500) == ""
 
 
 class TestCorte:
-    def test_a_text_that_fits_has_no_ellipsis(self):
+    def test_a_text_that_fits_has_no_ellipsis(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, len("\n".join(LINHAS_DA_211)))
 
         assert ELLIPSIS not in texto
 
-    def test_a_longer_text_is_cut_within_the_limit_and_ends_with_the_ellipsis(self):
+    def test_a_longer_text_is_cut_within_the_limit_and_ends_with_the_ellipsis(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, 120)
 
         assert texto.endswith(ELLIPSIS) and len(texto) <= 120
 
-    def test_the_cut_falls_at_the_end_of_a_line_never_in_the_middle_of_one(self):
+    def test_the_cut_falls_at_the_end_of_a_line_never_in_the_middle_of_one(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, 120)
 
         mantidas = texto.removesuffix(ELLIPSIS).split("\n")
         assert mantidas and all(linha in LINHAS_DA_211 for linha in mantidas)
         assert mantidas == LINHAS_DA_211[: len(mantidas)]
 
-    def test_the_cut_keeps_as_many_whole_lines_as_fit(self):
+    def test_the_cut_keeps_as_many_whole_lines_as_fit(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, 120)
 
         tres_linhas = "\n".join(LINHAS_DA_211[:3]) + ELLIPSIS
         assert len(tres_linhas) <= 120 < len("\n".join(LINHAS_DA_211[:4]) + ELLIPSIS)
         assert texto == tres_linhas
 
-    def test_a_limit_smaller_than_the_first_line_never_breaks(self):
+    def test_a_limit_smaller_than_the_first_line_never_breaks(self) -> None:
         texto = release.changelog_section(CHANGELOG, V211, 5)
 
         assert len(texto) <= 5
