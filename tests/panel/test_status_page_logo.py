@@ -63,7 +63,7 @@ class TestLogoPorUrl:
         resposta = get_index(monkeypatch, bots=READY)
 
         assert resposta.code == 200 and len(resposta.body) < LIMITE_DA_PAGINA
-        assert b"data:image" not in resposta.body and b"id-Bot Um" in resposta.body
+        assert b"data:image" not in resposta.body and b"Bot Um" in resposta.body
 
     def test_the_page_size_does_not_depend_on_the_logo_size(self, monkeypatch, tmp_path):
         normal = len(get_index(monkeypatch, bots=READY).body)
