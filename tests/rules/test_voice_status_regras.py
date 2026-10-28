@@ -235,10 +235,14 @@ class TestVoiceStatusValue:
         assert "\\*\\*forte\\*\\*" in saida and "\\_it\\_" in saida and "\\[t](u)" in saida
 
     @pytest.mark.parametrize("url", ["https://discord.gift/abc", "http://exemplo.invalid/x", "ftp://exemplo.invalid/y"])
-    def test_a_bare_url_loses_its_scheme_separator(self, url: str) -> None:
+    def test_a_bare_url_loses_its_double_slash(self, url: str) -> None:
         saida = regras().voice_status_value(f"veja {url} ok")
 
-        assert "://" not in saida and ":／／" in saida
+        assert "//" not in saida and "／／" in saida
+
+    def test_a_double_slash_anywhere_in_the_value_is_swapped(self) -> None:
+        assert regras().voice_status_value("a//b") == "a／／b"
+        assert "//" not in regras().voice_status_value("x///y////z")
 
     def test_the_zero_width_joiner_trick_is_not_used(self) -> None:
         assert "⁠" not in regras().voice_status_value("<@123456789012345678> @everyone")
@@ -323,3 +327,59 @@ class TestRenderVoiceStatus:
         assert saida.startswith("<:spotify:123456789012345678> ")
         titulo = saida.removeprefix("<:spotify:123456789012345678> ")
         assert "<" not in titulo and "@" not in titulo and "‮" not in titulo and "\\[t](u)" in titulo
+
+
+# ============================================================================ V-145-4 — todo "<" e todo "@" do valor externo ficam inertes
+
+
+class TestNeutralizacaoIncondicional:
+    def test_every_angle_bracket_and_at_sign_of_the_value_is_swapped_without_looking_for_a_token(self) -> None:
+        assert regras().voice_status_value("a<b@c") == "a‹b＠c"
+
+    @pytest.mark.parametrize("solto", ["<", "@", "x<", "@&123>", "x@", "everyone", "a < b", "mail@host"])
+    def test_loose_pieces_never_keep_the_ascii_characters(self, solto: str) -> None:
+        saida = regras().voice_status_value(solto)
+
+        assert "<" not in saida and "@" not in saida
+
+    def test_markdown_is_still_escaped_next_to_the_swapped_characters(self) -> None:
+        saida = regras().voice_status_value("**a**<_b_@")
+
+        assert saida == "\\*\\*a\\*\\*‹\\_b\\_＠"
+
+    @pytest.mark.parametrize(
+        ("modelo", "titulo", "autor"),
+        [
+            (
+                "{track.title}:{track.author}",
+                "x<a",
+                "b:123456789012345678>",
+            ),  # '<a:b:id>' (emoji animado) colado pelo modelo
+            ("{track.title}{track.author}", "x<", "@&123456789012345678>"),  # '<@&id>' (menção de cargo) colada
+            ("{track.title}{track.author}", "x@", "everyone"),  # '@everyone' colado
+            ("{track.title}{track.author}", "x@", "here"),
+            ("{track.title}{track.author}", "x<", "#123456789012345678>"),  # '<#id>' (canal) colado
+            ("{track.title}{track.author}", "x</", "cmd:123456789012345678>"),  # '</cmd:id>' colado
+            ("{track.title}{track.author}", "x<t", ":1700000000:R>"),  # '<t:…:R>' colado
+        ],
+    )
+    def test_a_template_that_glues_two_values_cannot_rebuild_a_token(
+        self, modelo: str, titulo: str, autor: str
+    ) -> None:
+        r = regras()
+        valores = {"{track.title}": r.voice_status_value(titulo), "{track.author}": r.voice_status_value(autor)}
+
+        saida = r.render_voice_status(modelo, valores)
+
+        assert "<" not in saida and "@" not in saida, saida
+
+
+class TestUrlColadaPeloModelo:
+    @pytest.mark.parametrize(("titulo", "autor"), [("https:", "//evil.example/x"), ("ftp:", "//h")])
+    def test_a_template_that_glues_two_values_cannot_form_a_bare_url(self, titulo: str, autor: str) -> None:
+        r = regras()
+        valores = {"{track.title}": r.voice_status_value(titulo), "{track.author}": r.voice_status_value(autor)}
+
+        saida = r.render_voice_status("{track.title}{track.author}", valores)
+
+        assert "//" not in saida, saida

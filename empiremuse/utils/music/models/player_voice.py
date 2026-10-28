@@ -460,6 +460,8 @@ class PlayerVoiceMixin:
         muitas sessões; o canal só é conferido depois da espera, quando o bot já entrou). A permissão é revalidada a cada chamada,
         porque é por canal.
         """
+        if self.is_closing:
+            return  # o save do permanente durante o destroy não escreve depois da limpeza do cleanup
         self.stage_title_template = cfg.template
         self.voice_status_permanent = cfg.permanent
         if not cfg.permanent:
@@ -546,6 +548,8 @@ class PlayerVoiceMixin:
 
     async def _queue_voice_status(self, text: str | None, *, force: bool) -> None:
         """Decide e volta: envia já se há janela do player e ficha do bot; senão guarda UM pendente (o último vence)."""
+        if self.is_closing:
+            return
         on_air = self.last_stage_title or None
         pending = self.voice_status_pending
         pending_active = pending is not None and not pending.done()
@@ -590,7 +594,7 @@ class PlayerVoiceMixin:
                 self.voice_status_pending = None
 
     def _ensure_voice_status_reapply(self) -> None:
-        if not (self.stage_title_event and self.voice_status_permanent):
+        if self.is_closing or not (self.stage_title_event and self.voice_status_permanent):
             return
         task = self.voice_status_reapply
         if task is None or task.done():
@@ -614,7 +618,10 @@ class PlayerVoiceMixin:
                     return
                 if not isinstance(self._voice_status_channel(), disnake.VoiceChannel):
                     return
-                if self.last_stage_title:
+                pending = self.voice_status_pending
+                if self.last_stage_title and (
+                    pending is None or pending.done()
+                ):  # com pendente, o texto novo já vai sair
                     await self._queue_voice_status(self.last_stage_title, force=True)
                 due = time.monotonic() + VOICE_STATUS_REAPPLY_INTERVAL
         finally:
