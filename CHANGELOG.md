@@ -37,6 +37,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Segurança
 - **Nomes externos com escape de markdown (S-31)**: nomes vindos de fontes externas (artistas, títulos, playlists, álbuns, Last.fm) e de skins personalizadas passam por escape de markdown antes de aparecer em embeds e mensagens; links montados pelo bot só aceitam `http` e `https`.
+- **`ytoauth` só por mensagem direta (S-32)**: o comando envia a confirmação da conta do Google e o token só por mensagem direta ao dono, que se apaga em 10 minutos; o canal recebe só um aviso. Quem já teve um token exibido num canal deve revogá-lo e gerar outro (`docs/guides/youtube-oauth.md`).
 - **Redator único de segredos no console e no arquivo de log (item 7, fase P1)**: tokens, senhas e demais segredos configurados passam por um só redator antes de chegar ao console e ao arquivo, e os caracteres de controle e o tamanho de cada registro são saneados. Segredos novos (por exemplo, senhas de nó) são registrados no redator quando surgem.
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
 - **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
