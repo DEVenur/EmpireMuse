@@ -8,6 +8,7 @@ import asyncio
 import importlib
 import json
 from collections import Counter
+from types import ModuleType
 
 import aiohttp
 import pytest
@@ -111,6 +112,7 @@ async def test_only_published_immutable_releases_with_the_digest_asset_are_eligi
             release_json("v2.3.0"),
             release_json("v2.9.0", draft=True),
             release_json("v2.8.0", prerelease=True),
+            release_json("v2.4.0-rc.1"),  # publicada como estável (prerelease false), mas a tag é rc: nunca é alvo
             release_json("v2.7.0", immutable=False),
             release_json("latest"),
             release_json("v2.6.0", asset="outro.txt"),
@@ -389,3 +391,68 @@ async def test_an_invalid_tag_is_refused_without_any_request(releases, github, s
         await releases.fetch_changelog(sessao, tag)
 
     assert sum(github.chamadas.values()) == 0
+
+
+# ============================================================================ fetch_changelog com tag rc (imagem rc)
+
+TAGS_ACEITAS = ["v2.1.0", "v2.1.0-rc.1", "v2.1.0-rc.12", "v10.20.30-rc.3"]
+TAGS_RECUSADAS = [
+    "2.1.0",
+    "v2.1",
+    "v2.1.0-rc",
+    "v2.1.0-rc.",
+    "v2.1.0-beta.1",
+    "v2.1.0/../x",
+    "v2.1.0-rc.1/x",
+    "v2.1.0-rc.1\n",
+    "v2.1.0-rc.1 ",
+    "v2.1.0-RC.1",
+    "V2.1.0-rc.1",
+    "v2.1.0-rc.-1",
+    "v2.1.0-rc.1-rc.2",
+    "v2.1.0+build",
+    "v2.1.0-rc.1?x=1",
+    "v2.1.0-rc.1#x",
+    "../v2.1.0-rc.1",
+]
+
+
+@pytest.mark.parametrize("tag", TAGS_ACEITAS)
+async def test_a_release_or_rc_tag_reaches_the_request_with_its_own_raw_path(
+    releases: ModuleType, github: GitHubFalso, sessao: aiohttp.ClientSession, tag: str
+) -> None:
+    caminho = f"/EmpireCommunity/EmpireMuse/{tag}/CHANGELOG.md"
+    github.rotas[caminho] = web.Response(body=f"## [x]\n- da {tag}\n".encode(), content_type="text/plain")
+
+    texto = await releases.fetch_changelog(sessao, tag)
+
+    assert texto == f"## [x]\n- da {tag}\n" and github.chamadas[caminho] == 1
+    assert sum(github.chamadas.values()) == 1
+
+
+@pytest.mark.parametrize("tag", TAGS_RECUSADAS, ids=lambda t: repr(t)[:24])
+async def test_anything_else_is_refused_without_any_request(
+    releases: ModuleType, github: GitHubFalso, sessao: aiohttp.ClientSession, tag: str
+) -> None:
+    with pytest.raises(UpdateError):
+        await releases.fetch_changelog(sessao, tag)
+
+    assert sum(github.chamadas.values()) == 0
+
+
+async def test_an_rc_tag_that_does_not_exist_is_an_update_error_without_the_url(
+    releases: ModuleType, github: GitHubFalso, sessao: aiohttp.ClientSession
+) -> None:
+    caminho = "/EmpireCommunity/EmpireMuse/v2.1.0-rc.1/CHANGELOG.md"
+    github.rotas[caminho] = web.Response(status=404)
+
+    with pytest.raises(UpdateError) as erro:
+        await releases.fetch_changelog(sessao, "v2.1.0-rc.1")
+
+    assert github.url not in str(erro.value) and github.chamadas[caminho] == 1
+
+
+def test_the_update_targets_stay_stable_only(releases: ModuleType) -> None:
+    from empiremuse.rules.release import parse_tag
+
+    assert parse_tag("v2.1.0") == Version(2, 1, 0) and parse_tag("v2.1.0-rc.1") is None
