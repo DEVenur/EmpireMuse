@@ -625,3 +625,91 @@ class TestTextoSeguro:
         texto = bot.textos[0]
         assert unidades(texto) <= 500
         assert "<" not in texto.replace(EMOJI_DO_APP, "")
+
+
+# ============================================================================ VP12b — o balde esgotado não prende quem chama (condição D5 do Vigil)
+
+
+def jogadores_do_mesmo_bot(n: int, bot: BotDeVoz) -> list[JogadorDeVoz]:
+    return [
+        JogadorDeVoz(
+            servidor(canal_de_voz(1000 + i), id_=5000 + i), bot, atual=faixa(f"M{i}"), template="{track.title}"
+        )
+        for i in range(n)
+    ]
+
+
+class TestSemEsperaComOBaldeEsgotado:
+    async def test_with_the_bucket_exhausted_a_track_change_returns_at_once_and_the_status_goes_out_later(
+        self, relogio: RelogioFalso
+    ) -> None:
+        """O ``_he_track_start`` e o skip/seek só chamam ``update_stage_topic``: se ele esperasse o balde, o player travaria."""
+        bot = BotDeVoz()
+        jogadores = jogadores_do_mesmo_bot(9, bot)
+        for jogador_ in jogadores:
+            jogador_.stage_title_event = True
+        esgotando = [asyncio.ensure_future(j.update_stage_topic()) for j in jogadores[:8]]
+        await assentar()
+        enviados = len(bot.puts)
+        assert enviados < 8  # o balde (2 por segundo) não deixou todos saírem no mesmo instante
+        novo = jogadores[8]
+        instante = relogio.agora
+
+        chamada = asyncio.ensure_future(novo.update_stage_topic())
+        await assentar()
+
+        assert chamada.done() and relogio.agora == instante, "a chamada esperou o balde em vez de voltar"
+        assert "M8" not in bot.textos
+        await relogio.avancar(30)
+        await asyncio.gather(*esgotando)
+        assert sorted(bot.textos) == sorted(f"M{i}" for i in range(9))
+
+    async def test_the_forced_send_also_returns_at_once(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        jogadores = jogadores_do_mesmo_bot(7, bot)
+        for jogador_ in jogadores:
+            jogador_.stage_title_event = True
+        esgotando = [asyncio.ensure_future(j.update_stage_topic()) for j in jogadores[:6]]
+        await assentar()
+
+        chamada = asyncio.ensure_future(jogadores[6].update_stage_topic(force=True))
+        await assentar()
+
+        assert chamada.done() and "M6" not in bot.textos
+        await relogio.avancar(30)
+        await asyncio.gather(*esgotando)
+        assert "M6" in bot.textos
+
+    async def test_the_last_text_wins_while_the_bucket_is_exhausted(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        jogadores = jogadores_do_mesmo_bot(7, bot)
+        for jogador_ in jogadores:
+            jogador_.stage_title_event = True
+        esgotando = [asyncio.ensure_future(j.update_stage_topic()) for j in jogadores[:6]]
+        await assentar()
+        alvo = jogadores[6]
+
+        for n in range(3):
+            com_troca_de_faixa(alvo, n)
+            chamada = asyncio.ensure_future(alvo.update_stage_topic())
+            await assentar()
+            assert chamada.done()
+        await relogio.avancar(30)
+        await asyncio.gather(*esgotando)
+
+        assert [t for t in bot.textos if t.startswith("Musica")] == ["Musica 2"]
+
+    async def test_after_the_tokens_return_everything_stays_inside_the_bot_rate(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        jogadores = jogadores_do_mesmo_bot(10, bot)
+        for jogador_ in jogadores:
+            jogador_.stage_title_event = True
+        tarefas = [asyncio.ensure_future(j.update_stage_topic()) for j in jogadores]
+        for _ in range(200):
+            await relogio.avancar(0.1)
+        await asyncio.gather(*tarefas)
+
+        quando = sorted(p.quando for p in bot.puts)
+        assert len(quando) == 10
+        for i, inicio in enumerate(quando):
+            assert len([t for t in quando[i:] if t < inicio + 1.0]) <= regras().VOICE_STATUS_BOT_RATE
