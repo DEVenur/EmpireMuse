@@ -5,9 +5,10 @@ ao projeto original são preservados em ``UPSTREAM_*``, em ``CREDITS.md`` e em `
 """
 
 from functools import lru_cache
-from pathlib import Path
 
 from empiremuse.paths import PROJECT_DIR
+from empiremuse.rules.release import Version
+from empiremuse.version import image_version
 
 BOT_NAME = "EmpireMuse"
 GITHUB_REPO = "EmpireCommunity/EmpireMuse"
@@ -15,7 +16,6 @@ DOCKER_IMAGE_REPO = "or4cu1o/empiremuse"
 REPO_URL = f"https://github.com/{GITHUB_REPO}"
 SOURCE_REPO_GIT = REPO_URL + ".git"
 RAW_BASE_URL = "https://raw.githubusercontent.com/EmpireCommunity/EmpireMuse/main"
-ASSETS_BASE_URL = RAW_BASE_URL + "/assets"
 LICENSE_URL = REPO_URL + "/blob/main/LICENSE"
 GUIDES_URL = REPO_URL + "/blob/main/docs/guides"
 RPC_APP_URL = "https://github.com/EmpireCommunity/EmpireMuse-RPC-app"
@@ -89,22 +89,58 @@ UPSTREAM_AUTHOR = "zRitsu"
 UPSTREAM_URL = "https://github.com/zRitsu/MuseHeart-MusicBot"
 
 _ASSETS_DIR = PROJECT_DIR / "assets"
+_UNSET = object()
+
+
+def assets_base_url(version: Version | None | object = _UNSET) -> str:
+    """URL base dos assets: a TAG da versão quando ela é conhecida, senão a ``main``.
+
+    Com a tag (``v2.1.1``, ``v2.1.1-rc.1``) uma versão publicada nunca perde as próprias imagens, mesmo que a ``main`` mude de novo.
+    Sem versão (checkout git, ``dev``, testes) vale a ``main``, como sempre valeu. Sem argumento usa a versão da imagem em execução.
+    """
+    if version is _UNSET:
+        version = image_version()
+    ref = f"v{version}" if version is not None else "main"
+    return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{ref}/assets"
+
+
+# Calculada uma vez por processo; a versão da imagem não muda enquanto o bot roda.
+ASSETS_BASE_URL = assets_base_url(image_version())
 
 
 @lru_cache(maxsize=None)
-def _ensure_asset_exists(name: str) -> None:
-    """Valida a existência de ``assets/<name>``; só chamadas bem-sucedidas entram no cache (exceções não)."""
-    if not (_ASSETS_DIR / name).is_file():
-        raise ValueError(f"Asset inexistente em assets/: {name!r}")
+def _assets_index() -> dict[str, str]:
+    """``nome do arquivo -> subcaminho`` dos arquivos REAIS em ``assets/<subpasta>/``, montado uma vez.
+
+    A raiz de ``assets/`` fica de fora (cópias de compatibilidade da 2.1.0 e o ``SHA256SUMS``), assim como qualquer caminho cujo
+    ``resolve()`` saia de ``assets/`` (link simbólico para fora). Basename repetido entre subpastas é erro: o nome deixa de apontar
+    para um só arquivo, e o índice inteiro não é montado (só chamadas bem-sucedidas entram no cache).
+    """
+    root = _ASSETS_DIR.resolve()
+    index: dict[str, str] = {}
+    if not root.is_dir():
+        return index
+    for folder in sorted(p for p in _ASSETS_DIR.iterdir() if p.is_dir()):
+        if not folder.resolve().is_relative_to(root):
+            continue
+        for path in sorted(folder.rglob("*")):
+            if not path.is_file() or not path.resolve().is_relative_to(root):
+                continue
+            if path.name in index:
+                raise ValueError(f"Nome de asset repetido em assets/: {path.name!r}")
+            index[path.name] = path.relative_to(_ASSETS_DIR).as_posix()
+    return index
 
 
 def asset_url(name: str) -> str:
-    """Retorna a URL pública de um arquivo em ``assets/``.
+    """Retorna a URL pública de um arquivo em ``assets/<subpasta>/``, pelo nome do arquivo.
 
-    Levanta ``ValueError`` se ``name`` for vazio, contiver separador de caminho
-    (``/`` ou ``\\``) ou ``..``, ou se ``assets/<name>`` não existir no repositório.
+    Levanta ``ValueError`` se ``name`` for vazio, contiver separador de caminho (``/`` ou ``\\``) ou ``..``, se o nome não existir
+    em nenhuma subpasta de ``assets/`` ou se o mesmo nome existir em mais de uma.
     """
     if not name or "/" in name or "\\" in name or ".." in name:
         raise ValueError(f"Nome de asset inválido: {name!r}")
-    _ensure_asset_exists(name)
-    return f"{ASSETS_BASE_URL}/{name}"
+    subpath = _assets_index().get(name)
+    if subpath is None:
+        raise ValueError(f"Asset inexistente em assets/: {name!r}")
+    return f"{ASSETS_BASE_URL}/{subpath}"
