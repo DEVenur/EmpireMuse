@@ -125,11 +125,16 @@ class BotDeVoz:
         self.puts: list[Put] = []
         self.erros: list[Exception] = []
         self.porta: asyncio.Event | None = None
+        self.reter_canal: int | None = (
+            None  # PUT de TEXTO para este canal fica preso em ``porta_texto`` até o teste soltar
+        )
+        self.porta_texto = asyncio.Event()
         self.app_emojis: dict[str, str] = {}
         self.pool = SimpleNamespace(emoji_data={"music_sources": {}}, get_guild_bots=lambda _gid: [self])
         self.config: dict[str, Any] = {}
         self.dispatch = MagicMock()
         self.documentos: dict[int, dict[str, Any]] = {}
+        self.leituras = 0  # quantas vezes o global do servidor foi lido
 
     async def edit_voice_channel_status(
         self, status: str | None, *, channel_id: int, reason: str | None = None
@@ -137,10 +142,13 @@ class BotDeVoz:
         self.puts.append(Put(channel_id, status, time.monotonic()))
         if self.porta is not None and status is None:
             await self.porta.wait()
+        if status is not None and channel_id == self.reter_canal:
+            await self.porta_texto.wait()
         if self.erros:
             raise self.erros.pop(0)
 
     async def get_global_data(self, guild_id: int, *, db_name: Any = None) -> dict[str, Any]:
+        self.leituras += 1
         return self.documentos.setdefault(guild_id, {})
 
     @property

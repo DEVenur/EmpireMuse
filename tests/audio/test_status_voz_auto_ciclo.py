@@ -291,7 +291,11 @@ class TestMoverDeCanal:
 
 
 async def retomar_com(
-    monkeypatch: pytest.MonkeyPatch, saida: dict[str, Any], doc: dict[str, Any], *, portao: asyncio.Event | None = None
+    monkeypatch: pytest.MonkeyPatch,
+    saida: dict[str, Any],
+    doc: dict[str, Any],
+    *,
+    portao: asyncio.Event | None = None,
 ) -> SimpleNamespace:
     """Retoma a sessão com o ``resume_player`` REAL; com ``portao``, o apply de cada player fica preso nele até o teste soltar."""
     from tests.persistence.test_sessao_retomada_sem_voice_state import JogadorRetomado
@@ -389,3 +393,189 @@ class TestApplyNaoPrendeAQuemChama:
         finally:
             portao.set()
             await assentar()
+
+
+# ============================================================================ I4/V-S2 — a entrada do bot não reaplica por cima da aplicação agendada
+
+
+async def entrar(
+    relogio: RelogioFalso, *, agendada: bool, ja_ligado: bool, doc: dict[str, Any] | None = None
+) -> SimpleNamespace:
+    """O bot (já com o player) entra no canal: ``on_voice_state_update`` REAL com ``before.channel`` ``None``.
+
+    ``agendada``: a retomada deixou ``player.voice_status_apply`` pendente (aplicação com jitter). ``ja_ligado``: a criação já aplicou.
+    """
+    bot = BotDeVoz()
+    canal = canal_de_voz(1001)
+    guilda = servidor(canal)
+    guilda.voice_client = SimpleNamespace(channel=canal)
+    player = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+    player.start_members_timeout = lambda **_k: None
+    cfg = regras().VoiceStatusConfig(True, "{track.title}")
+    bot.documentos[SERVIDOR] = copy.deepcopy(
+        doc or {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+    )
+    bot.music = SimpleNamespace(players={SERVIDOR: player})
+    if ja_ligado:
+        await executar(relogio, player.apply_permanent_voice_status(cfg))
+    if agendada:
+        player.voice_status_apply = asyncio.ensure_future(player.apply_permanent_voice_status(cfg, jitter=True))
+        await assentar()  # preso no jitter
+    cog = _Lifecycle()
+    cog.bot = bot
+    membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+    antes = len(bot.puts)
+    await executar(
+        relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=None), SimpleNamespace(channel=canal))
+    )
+    return SimpleNamespace(player=player, bot=bot, antes=antes)
+
+
+class TestEntradaComAplicacaoAgendada:
+    async def test_the_entry_does_not_apply_on_the_spot_over_the_scheduled_apply(self, relogio: RelogioFalso) -> None:
+        r = await entrar(relogio, agendada=True, ja_ligado=False)
+
+        assert r.bot.puts == [], "a entrada aplicou na hora, sem o jitter da retomada"
+        assert not r.player.voice_status_apply.done()
+
+    async def test_the_scheduled_apply_sends_once_after_the_jitter_and_nothing_doubles(
+        self, relogio: RelogioFalso
+    ) -> None:
+        r = await entrar(relogio, agendada=True, ja_ligado=False)
+
+        await relogio.avancar(regras().VOICE_STATUS_RESUME_JITTER + 1)
+        assert r.bot.textos == ["Musica"]
+        await relogio.avancar(60)
+
+        assert r.bot.textos == ["Musica"], "a sessão enviou duas vezes (entrada + agendada)"
+        assert r.player.stage_title_event is True
+
+    async def test_with_the_status_already_on_from_the_creation_the_entry_adds_nothing(
+        self, relogio: RelogioFalso
+    ) -> None:
+        r = await entrar(relogio, agendada=False, ja_ligado=True)
+        await relogio.avancar(60)
+
+        assert len(r.bot.puts) == r.antes == 1
+
+    async def test_a_finished_scheduled_apply_does_not_count_as_pending(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        canal = canal_de_voz(1001)
+        guilda = servidor(canal)
+        player = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+        player.start_members_timeout = lambda **_k: None
+        await executar(relogio, player.apply_permanent_voice_status(regras().VoiceStatusConfig(True, "{track.title}")))
+        player.voice_status_apply = asyncio.ensure_future(asyncio.sleep(0))
+        await assentar()
+        bot.documentos[SERVIDOR] = {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+        bot.music = SimpleNamespace(players={SERVIDOR: player})
+        cog = _Lifecycle()
+        cog.bot = bot
+
+        await executar(
+            relogio,
+            cog.player_vc_disconnect(
+                SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda),
+                SimpleNamespace(channel=None),
+                SimpleNamespace(channel=canal),
+            ),
+        )
+        await relogio.avancar(60)
+
+        assert len(bot.puts) == 1  # o ligado pela criação continua valendo; a tarefa terminada não é "pendente"
+
+
+# ============================================================================ V-145-1 — mover durante o 1º PUT em voo
+
+
+class TestMoverComPutEmVoo:
+    async def test_moving_while_the_first_put_is_in_flight_clears_the_old_channel_and_writes_the_new_one(
+        self, relogio: RelogioFalso
+    ) -> None:
+        bot = BotDeVoz()
+        antigo, novo = canal_de_voz(1001), canal_de_voz(1002)
+        guilda = servidor(antigo)
+        guilda.voice_client = SimpleNamespace(channel=antigo)
+        player = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+        player.last_channel = antigo
+        player.start_members_timeout = lambda **_k: None
+        bot.documentos[SERVIDOR] = {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+        bot.music = SimpleNamespace(players={SERVIDOR: player})
+        bot.reter_canal = antigo.id
+        envio = asyncio.ensure_future(
+            player.apply_permanent_voice_status(regras().VoiceStatusConfig(True, "{track.title}"))
+        )
+        await assentar()
+        assert [p.status for p in bot.puts if p.canal == antigo.id] == ["Musica"] and not envio.done()
+
+        guilda.me.voice.channel = novo  # o Discord já mostra o canal novo quando o evento chega
+        cog = _Lifecycle()
+        cog.bot = bot
+        membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+        await executar(
+            relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=antigo), SimpleNamespace(channel=novo))
+        )
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        assert [p.status for p in bot.puts if p.canal == antigo.id] == ["Musica", None], (
+            "o canal antigo ficou com o status preso"
+        )
+        assert [p.status for p in bot.puts if p.canal == novo.id] == ["Musica"]
+        assert player.last_stage_title == "Musica" and player.stage_title_event is True
+
+
+# ============================================================================ V-145-2 — voice_state do próprio bot no MESMO canal não mexe na sessão
+
+
+async def mesmo_canal(
+    relogio: RelogioFalso, *, canal: Any, sessao_ligada: bool, doc: dict[str, Any]
+) -> SimpleNamespace:
+    """Mute/deafen de servidor, self_deaf ou suppress: o ``on_voice_state_update`` do bot com ``before.channel is after.channel``."""
+    bot = BotDeVoz()
+    guilda = servidor(canal)
+    guilda.voice_client = SimpleNamespace(channel=canal)
+    player = JogadorDeVoz(guilda, bot, atual=faixa(), template="escolha da sessão {track.title}")
+    player.last_channel = canal
+    player.start_members_timeout = lambda **_k: None
+    player.stage_title_event = sessao_ligada
+    bot.documentos[SERVIDOR] = copy.deepcopy(doc)
+    bot.music = SimpleNamespace(players={SERVIDOR: player})
+    cog = _Lifecycle()
+    cog.bot = bot
+    membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+    await executar(
+        relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=canal), SimpleNamespace(channel=canal))
+    )
+    await relogio.avancar(10)
+    return SimpleNamespace(player=player, bot=bot)
+
+
+DOC_LIGADO = {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+
+
+class TestMesmoCanal:
+    async def test_a_session_turned_off_in_a_voice_channel_stays_off(self, relogio: RelogioFalso) -> None:
+        r = await mesmo_canal(relogio, canal=canal_de_voz(1001), sessao_ligada=False, doc=DOC_LIGADO)
+
+        assert r.player.stage_title_event is False and r.bot.puts == []
+        assert r.player.stage_title_template == "escolha da sessão {track.title}"
+        assert r.bot.leituras == 0, "releu o documento global a cada voice_state do mesmo canal"
+
+    async def test_a_session_on_in_a_voice_channel_keeps_its_own_template(self, relogio: RelogioFalso) -> None:
+        r = await mesmo_canal(relogio, canal=canal_de_voz(1001), sessao_ligada=True, doc=DOC_LIGADO)
+
+        assert r.player.stage_title_event is True and r.player.stage_title_template == "escolha da sessão {track.title}"
+        assert r.bot.puts == [] and r.bot.leituras == 0
+
+    async def test_a_manual_stage_session_is_not_broken_by_a_suppress_event(self, relogio: RelogioFalso) -> None:
+        r = await mesmo_canal(relogio, canal=palco(), sessao_ligada=True, doc=DOC_LIGADO)
+
+        assert r.player.stage_title_event is True and r.player.stage_title_template == "escolha da sessão {track.title}"
+        assert r.bot.puts == [] and r.bot.leituras == 0
+
+    async def test_entering_still_applies_the_permanent(self, relogio: RelogioFalso) -> None:
+        r = await entrar(relogio, agendada=False, ja_ligado=False)
+
+        assert r.player.stage_title_event is True and r.bot.leituras >= 1

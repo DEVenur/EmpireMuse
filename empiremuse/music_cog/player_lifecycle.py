@@ -281,17 +281,19 @@ class PlayerLifecycleMixin:
     async def _voice_status_follow_move(
         self, player: LavalinkPlayer, before: disnake.VoiceState, after: disnake.VoiceState
     ) -> None:
-        """O próprio bot saiu, entrou ou mudou de canal: limpa o canal antigo e a sessão volta ao permanente (2.1.2).
+        """O próprio bot saiu, entrou ou mudou de canal (só com mudança de canal): limpa o canal antigo e a sessão volta ao permanente (2.1.2).
 
         Relê o documento global do servidor (ele pode ter mudado desde a criação, inclusive pelo painel ou por outro bot do pool).
-        Entrar em canal com o status já ligado pela criação ou pela retomada não reaplica.
+        Entrar em canal com o status já ligado pela criação, ou com a aplicação da retomada agendada (ela espera o jitter), não reaplica.
         """
-        if player.is_closing:
-            return
+        if player.is_closing or before.channel == after.channel:
+            return  # mute, deafen e suppress do próprio bot chegam como voice_state no MESMO canal: não mexem na sessão
         try:
-            if before.channel and before.channel != after.channel:
+            if before.channel:
                 await player.disable_voice_status(channel=before.channel)
-            if after.channel and not (before.channel is None and player.stage_title_event):
+            entering = before.channel is None
+            pending_apply = player.voice_status_apply is not None and not player.voice_status_apply.done()
+            if after.channel and not (entering and (player.stage_title_event or pending_apply)):
                 global_data = await player.bot.get_global_data(player.guild.id, db_name=DBModel.guilds)
                 await player.apply_permanent_voice_status(resolve_voice_status(global_data))
         except Exception:

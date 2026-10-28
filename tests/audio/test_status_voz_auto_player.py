@@ -5,32 +5,33 @@ Os métodos de voz do ``PlayerVoiceMixin`` e o ``process_destroy`` são os de pr
 """
 
 import asyncio
+import datetime
 import importlib
 import logging
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import disnake
-from unittest.mock import AsyncMock
 import pytest
 
-from empiremuse.utils.music.checks import VOICE_STATUS_PERMISSION
 from empiremuse.utils.music.app_emojis import APP_EMOJIS
+from empiremuse.utils.music.checks import VOICE_STATUS_PERMISSION
 from tests.support.voz_auto import (
     ID_DO_CANAL,
     ID_DO_EMOJI,
     REQUISITANTE,
     BotDeVoz,
-    RelogioFalso,
     JogadorDeVoz,
+    RelogioFalso,
+    assentar,
     canal_de_voz,
+    executar,
     faixa,
+    instalar_relogio,
     jogador,
     palco,
-    executar,
-    instalar_relogio,
     servidor,
-    assentar,
 )
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -630,12 +631,12 @@ class TestTextoSeguro:
 # ============================================================================ VP12b — o balde esgotado não prende quem chama (condição D5 do Vigil)
 
 
-def jogadores_do_mesmo_bot(n: int, bot: BotDeVoz) -> list[JogadorDeVoz]:
+def jogadores_do_mesmo_bot(n: int, bot: BotDeVoz, *, inicio: int = 0) -> list[JogadorDeVoz]:
     return [
         JogadorDeVoz(
             servidor(canal_de_voz(1000 + i), id_=5000 + i), bot, atual=faixa(f"M{i}"), template="{track.title}"
         )
-        for i in range(n)
+        for i in range(inicio, inicio + n)
     ]
 
 
@@ -713,3 +714,322 @@ class TestSemEsperaComOBaldeEsgotado:
         assert len(quando) == 10
         for i, inicio in enumerate(quando):
             assert len([t for t in quando[i:] if t < inicio + 1.0]) <= regras().VOICE_STATUS_BOT_RATE
+
+
+# ============================================================================ gate #145 — placeholders de ponta a ponta, destroy durante o jitter, palco em sessão
+
+AGORA_FIXO = datetime.datetime(2026, 11, 2, 12, 0, 0, tzinfo=datetime.timezone.utc)
+
+
+class TestPlaceholdersNoPlayer:
+    async def test_every_placeholder_is_filled_from_the_track(
+        self, relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(disnake.utils, "utcnow", lambda: AGORA_FIXO)
+        player, bot = jogador(atual=faixa(titulo="Faixa", autor="Banda", playlist_name="Minha Lista"))
+        player.position = 20_000
+        bot.app_emojis = {"spotify": EMOJI_DO_APP}
+        modelo = "{track.emoji}|{track.title}|{track.author}|{track.duration}|{track.source}|{track.playlist}|{requester.name}|{requester.id}|{track.timestamp}"
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo=modelo)))
+
+        fim = int((AGORA_FIXO + datetime.timedelta(milliseconds=180_000)).timestamp())
+        assert bot.textos == [f"{EMOJI_DO_APP}|Faixa|Banda|03:20|spotify|Minha Lista|Fulano|{REQUISITANTE}|<t:{fim}:R>"]
+
+    async def test_a_track_without_a_playlist_says_so(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.playlist}")))
+
+        assert bot.textos == ["Sem playlist"]
+
+    async def test_a_paused_track_shows_paused_instead_of_a_countdown(
+        self, relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(disnake.utils, "utcnow", lambda: AGORA_FIXO)
+        player, bot = jogador()
+        player.auto_pause = player.paused = True
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.timestamp}")))
+
+        assert bot.textos == [f"pausado <t:{int(AGORA_FIXO.timestamp())}:R>"]
+
+    async def test_a_livestream_has_no_countdown_and_says_livestream_as_duration(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador(atual=faixa(is_stream=True))
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.duration}|{track.timestamp}")))
+
+        assert bot.textos == ["Livestream|"]
+
+    async def test_an_unknown_requester_is_a_neutral_name(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        player.guild.get_member = lambda _uid: None
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{requester.name}")))
+
+        assert bot.textos == ["Membro desconhecido"]
+
+
+class TestDestroyDuranteOJitter:
+    async def test_a_player_closed_while_waiting_the_jitter_sends_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        tarefa = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}"), jitter=True))
+        await assentar()
+
+        player.is_closing = True
+        await relogio.avancar(regras().VOICE_STATUS_RESUME_JITTER + 1)
+        await tarefa
+
+        assert bot.puts == []
+
+    async def test_a_permanent_turned_off_while_waiting_the_jitter_sends_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        tarefa = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}"), jitter=True))
+        await assentar()
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(permanente=False)))
+        await relogio.avancar(regras().VOICE_STATUS_RESUME_JITTER + 1)
+        await tarefa
+
+        assert bot.textos == [] and player.stage_title_event is False
+
+
+class TestPalcoEmSessao:
+    """No palco só vale o modo de sessão, como hoje; o ``render_voice_status`` (V-S1) vale lá também."""
+
+    async def test_the_session_creates_the_instance_with_a_neutralised_text_within_110_chars(
+        self, relogio: RelogioFalso
+    ) -> None:
+        canal = palco()
+        player, bot = jogador(canal=canal, atual=faixa(titulo="{requester.id} <@&1> @everyone " + "x" * 200))
+        player.stage_title_event = True
+        player.stage_title_template = "{track.emoji} {track.title}"
+
+        await executar(relogio, player.update_stage_topic())
+
+        canal.create_instance.assert_awaited_once()
+        topico = canal.create_instance.await_args.kwargs["topic"]
+        assert (
+            len(topico) <= 110 and str(REQUISITANTE) not in topico and "<@" not in topico and "@everyone" not in topico
+        )
+        assert bot.puts == []  # nada vai ao endpoint de status de voz
+
+    async def test_with_an_instance_it_edits_it_and_not_twice_for_the_same_text(self, relogio: RelogioFalso) -> None:
+        canal = palco()
+        canal.instance = SimpleNamespace(edit=_espiao())
+        player, _bot = jogador(canal=canal)
+        player.stage_title_event = True
+
+        await executar(relogio, player.update_stage_topic())
+        await executar(relogio, player.update_stage_topic())
+
+        canal.instance.edit.assert_awaited_once()
+
+    async def test_without_manage_guild_the_stage_is_left_alone(self, relogio: RelogioFalso) -> None:
+        canal = palco()
+        player, _bot = jogador(canal=canal)
+        player.stage_title_event = True
+        player.guild.me.guild_permissions = disnake.Permissions.none()
+
+        await executar(relogio, player.update_stage_topic())
+
+        canal.create_instance.assert_not_awaited()
+
+
+# ============================================================================ V-145-1 — desligar ou mover durante o 1º PUT em voo não deixa o status preso
+
+
+def put_de(bot: BotDeVoz, canal: int) -> list[str | None]:
+    return [p.status for p in bot.puts if p.canal == canal]
+
+
+class TestPutEmVooEDesligar:
+    async def test_turning_it_off_while_the_first_put_is_in_flight_clears_the_channel_when_it_lands(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        bot.reter_canal = ID_DO_CANAL
+        envio = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await assentar()
+        assert put_de(bot, ID_DO_CANAL) == ["Musica"] and not envio.done()  # o texto está no ar, preso
+
+        await executar(relogio, player.disable_voice_status())
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        assert put_de(bot, ID_DO_CANAL) == ["Musica", None], "o status ficou preso no canal"
+        assert player.last_stage_title == "" and player.stage_title_event is False
+
+    async def test_a_second_disable_after_it_landed_adds_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        bot.reter_canal = ID_DO_CANAL
+        envio = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await assentar()
+        await executar(relogio, player.disable_voice_status())
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        await executar(relogio, player.disable_voice_status())
+        await relogio.avancar(10)
+
+        assert put_de(bot, ID_DO_CANAL) == ["Musica", None]
+
+    async def test_without_turning_it_off_the_normal_flow_is_unchanged(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        bot.reter_canal = ID_DO_CANAL
+        envio = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await assentar()
+
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        assert put_de(bot, ID_DO_CANAL) == ["Musica"]
+        assert player.last_stage_title == "Musica" and player.stage_title_event is True
+
+    async def test_turning_it_off_for_a_channel_that_never_got_a_text_sends_nothing(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+
+        await executar(relogio, player.disable_voice_status())
+        await relogio.avancar(10)
+
+        assert bot.puts == []
+
+
+# ============================================================================ V-145-3 — player fechando não escreve nem cria tarefa
+
+
+class TestPlayerFechando:
+    async def test_applying_the_permanent_to_a_closing_player_sends_nothing_and_starts_no_reapplication(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        player.is_closing = True
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(3 * regras().VOICE_STATUS_REAPPLY_INTERVAL)
+
+        assert bot.textos == []
+        tarefa = player.voice_status_reapply
+        assert tarefa is None or tarefa.done()
+
+    async def test_a_save_of_the_permanent_during_the_destroy_does_not_write_after_the_clear(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+
+        await player.process_destroy()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="Outro {track.title}")))
+        await relogio.avancar(3 * regras().VOICE_STATUS_REAPPLY_INTERVAL)
+
+        assert bot.textos == ["Musica"]
+
+    async def test_a_track_change_on_a_closing_player_sends_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        player.stage_title_event = True
+        player.is_closing = True
+
+        await executar(relogio, player.update_stage_topic())
+        await relogio.avancar(60)
+
+        assert bot.puts == []
+        tarefa = player.voice_status_reapply
+        assert tarefa is None or tarefa.done()
+
+
+# ============================================================================ V-145-4 — modelo que cola placeholders não reconstrói token
+
+
+class TestModeloQueColaValores:
+    @pytest.mark.parametrize(
+        ("modelo", "titulo", "autor"),
+        [
+            ("{track.title}:{track.author}", "x<a", "b:123456789012345678>"),
+            ("{track.title}{track.author}", "x<", "@&123456789012345678>"),
+            ("{track.title}{track.author}", "x@", "everyone"),
+            ("{track.title}{track.author}", "https:", "//evil.example"),
+        ],
+    )
+    async def test_the_published_status_has_no_token_rebuilt_from_two_values(
+        self, relogio: RelogioFalso, modelo: str, titulo: str, autor: str
+    ) -> None:
+        player, bot = jogador(atual=faixa(titulo=titulo, autor=autor))
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo=modelo)))
+
+        (texto,) = bot.textos
+        assert "<" not in texto and "@" not in texto and "//" not in texto, texto
+
+
+# ============================================================================ Info A — a reaplicação não troca o texto novo pelo antigo
+
+
+class TestReaplicacaoComPendente:
+    async def test_a_due_reapplication_does_not_replace_a_newer_pending_text(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        player = jogadores_do_mesmo_bot(1, bot)[0]
+        player.current = player.last_track = faixa("Antiga")
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        assert bot.textos == ["Antiga"]
+        await relogio.avancar(regras().VOICE_STATUS_REAPPLY_INTERVAL - 0.5)
+        outros = jogadores_do_mesmo_bot(8, bot, inicio=100)
+        for outro in outros:
+            outro.stage_title_event = True
+        gastando = [asyncio.ensure_future(o.update_stage_topic()) for o in outros]
+        await assentar()  # o balde do bot esgotou
+        com_troca_de_faixa(player, 7)  # "Musica 7"
+        troca = asyncio.ensure_future(player.update_stage_topic())
+        await assentar()
+        assert troca.done() and "Musica 7" not in bot.textos  # sem ficha: ficou pendente
+
+        await relogio.avancar(1)  # a reaplicação vence enquanto o texto novo espera
+        await relogio.avancar(30)
+        await asyncio.gather(troca, *gastando)
+
+        daquele = [p.status for p in bot.puts if p.canal == player.guild.me.voice.channel.id]
+        assert daquele == ["Antiga", "Musica 7"], daquele
+
+
+class TestOClearDoDestroySegueSaindo:
+    """V-145-3: o ``is_closing`` bloqueia texto e reaplicação, mas NUNCA o clear: o destroy precisa limpar o canal."""
+
+    async def test_disable_with_a_closing_player_still_clears_the_channel(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+        player.is_closing = True
+
+        await executar(relogio, player.disable_voice_status())
+
+        assert [p.status for p in bot.puts] == ["Musica", None] and player.last_stage_title == ""
+
+    async def test_the_clear_branch_of_update_stage_topic_still_goes_out_while_closing(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+        player.is_closing = True
+
+        await executar(relogio, player.update_stage_topic(clear=True))
+
+        assert [p.status for p in bot.puts] == ["Musica", None]
+
+    async def test_the_destroy_clears_the_channel_and_nothing_else_is_written_after_it(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+
+        await player.process_destroy()
+        await relogio.avancar(3 * regras().VOICE_STATUS_REAPPLY_INTERVAL)
+
+        assert [p.status for p in bot.puts][-1] is None or bot.textos == ["Musica"]
+        assert bot.textos == ["Musica"]

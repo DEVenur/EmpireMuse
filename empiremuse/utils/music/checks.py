@@ -568,7 +568,7 @@ def check_stage_topic():
         if (remaining := voice_status_lock_remaining(player)) > 0 and not (await bot.is_owner(inter.author)):
             raise GenericError(
                 f"**Você terá que aguardar {time_format(remaining * 1000, use_names=True)} para usar essa função "
-                f"com o anúncio automático do palco ativo...**"
+                f"com o status automático do canal ligado...**"
             )
 
         return True
