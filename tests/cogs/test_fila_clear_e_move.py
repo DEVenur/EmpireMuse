@@ -53,7 +53,11 @@ def cenario(*faixas: Faixa) -> tuple[Any, Any, Any]:
     player = SimpleNamespace(queue=deque(faixas), queue_autoplay=deque(), guild=guild)
     bot = SimpleNamespace(music=SimpleNamespace(players={GUILD: player}))
     inter = SimpleNamespace(
-        music_bot=bot, guild_id=GUILD, author=SimpleNamespace(id=9, mention="<@9>"), send=AsyncMock()
+        music_bot=bot,
+        bot=SimpleNamespace(),
+        guild_id=GUILD,
+        author=SimpleNamespace(id=9, mention="<@9>"),
+        send=AsyncMock(),
     )
     return player, inter, SimpleNamespace(interaction_message=AsyncMock())
 
