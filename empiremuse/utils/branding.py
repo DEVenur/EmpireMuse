@@ -112,19 +112,18 @@ ASSETS_BASE_URL = assets_base_url(image_version())
 def _assets_index() -> dict[str, str]:
     """``nome do arquivo -> subcaminho`` dos arquivos REAIS em ``assets/<subpasta>/``, montado uma vez.
 
-    A raiz de ``assets/`` fica de fora (cópias de compatibilidade da 2.1.0 e o ``SHA256SUMS``), assim como qualquer caminho cujo
-    ``resolve()`` saia de ``assets/`` (link simbólico para fora). Basename repetido entre subpastas é erro: o nome deixa de apontar
-    para um só arquivo, e o índice inteiro não é montado (só chamadas bem-sucedidas entram no cache).
+    A raiz de ``assets/`` fica de fora (cópias de compatibilidade da 2.1.0 e o ``SHA256SUMS``). Nenhum link simbólico entra, nem de
+    arquivo nem de pasta, aponte para onde apontar: o raw do GitHub serve o TEXTO do link, não a imagem, e um atalho de pasta criaria
+    um segundo caminho para o mesmo arquivo. Basename repetido entre subpastas é erro: o nome deixa de apontar para um só arquivo, e o
+    índice inteiro não é montado (só chamadas bem-sucedidas entram no cache).
     """
     root = _ASSETS_DIR.resolve()
     index: dict[str, str] = {}
     if not root.is_dir():
         return index
-    for folder in sorted(p for p in _ASSETS_DIR.iterdir() if p.is_dir()):
-        if not folder.resolve().is_relative_to(root):
-            continue
+    for folder in sorted(p for p in _ASSETS_DIR.iterdir() if p.is_dir() and not p.is_symlink()):
         for path in sorted(folder.rglob("*")):
-            if not path.is_file() or not path.resolve().is_relative_to(root):
+            if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root):
                 continue
             if path.name in index:
                 raise ValueError(f"Nome de asset repetido em assets/: {path.name!r}")
