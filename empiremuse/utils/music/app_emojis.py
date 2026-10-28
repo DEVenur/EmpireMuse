@@ -50,6 +50,19 @@ APP_EMOJIS: Mapping[str, str] = MappingProxyType(
         "jiosaavn": "📻",
         "tidal": "🌊",
         "lastfm": "🎧",
+        # sem uso no código ainda (§12 do contrato)
+        "loved": "❤️",
+        "search": "🔍",
+        "config": "📝",
+        "gear": "⚙️",
+        "replay": "🔁",
+        "tools": "🧰",
+        "pinned": "📌",
+        "bot": "🤖",
+        "voice_event": "🔊",
+        "community_server": "🏘️",
+        "plus": "➕",
+        "headset": "🎧",
     }
 )
 
