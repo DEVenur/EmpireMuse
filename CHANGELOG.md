@@ -37,6 +37,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Fixar a mensagem do player**: a checagem passa a exigir Fixar Mensagens, em vez de Gerenciar Mensagens.
 - **Lista de artistas das faixas do Spotify**: os três montadores da lista de artistas com link passam a montar o link com escape, então um nome com caracteres especiais deixa de quebrar a exibição.
 - **Ícone do Apple Music**: o arquivo `assets/provider_applemusic_icon.png` estava truncado e aparecia quebrado onde o bot o exibe; foi substituído pela imagem completa (500×500).
+- **Exibição do `!nodeinfo` e do "sobre"**: a região do nó aparece como o dono a escreveu (o nó local mostra "Local", em vez de "Us_Central"), a memória sai com rótulos que dizem o que é (heap Java no `!nodeinfo`; RAM do bot, do Lavalink e total no "sobre"), em MiB e no formato brasileiro, os contadores usam ponto de milhar (1.035) e o "sobre" ganha a linha da versão do EmpireMuse.
 
 ### Segurança
 - **Nomes externos com escape de markdown (S-31)**: nomes vindos de fontes externas (artistas, títulos, playlists, álbuns, Last.fm) e de skins personalizadas passam por escape de markdown antes de aparecer em embeds e mensagens; links montados pelo bot só aceitam `http` e `https`.
