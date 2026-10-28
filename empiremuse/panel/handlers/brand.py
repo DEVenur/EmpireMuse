@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import stat
 
+import tornado.iostream
 import tornado.web
 
 from empiremuse.paths import PROJECT_DIR
@@ -59,4 +60,12 @@ class BrandHandler(PanelHandler):
             self.finish()
             return
 
-        self.finish(data)
+        # Content-Length ANTES do flush: sem ele o Tornado usa chunked e copia o corpo de novo; o corpo vai depois, sem juntar com o cabeçalho
+        self.set_header("Content-Length", str(len(data)))
+
+        try:
+            await self.flush()
+            self.write(data)
+            self.finish()
+        except tornado.iostream.StreamClosedError:
+            return
