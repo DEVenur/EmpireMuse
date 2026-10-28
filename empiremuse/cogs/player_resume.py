@@ -610,21 +610,26 @@ class PlayerSession(commands.Cog):
                 player.live_lyrics_enabled = data.get("live_lyrics_status", False)
                 player.mini_queue_enabled = data.get("mini_queue_enabled")
                 player.lastfm_artists = data.get("lastfm_artists")
-                # O reinício é uma saída do canal: a sessão volta ao permanente do servidor (o flag e o modelo salvos não valem).
-                # Agendado como tarefa do player, com jitter, para a retomada de muitas sessões não estourar o limite do bot.
-                # Falha de leitura fecha: o padrão ligado (D1) vale para quem nunca salvou, não para quem não deu para ler; um erro
-                # de banco passageiro não pode sobrepor o desligado do dono. Fica sem status até o próximo entrar/mover.
-                # O modal/painel pode salvar e agendar a aplicação deste player enquanto a leitura espera: se o agendamento mudou, o
-                # valor lido é velho e a retomada não sobrepõe o do modal.
-                apply_before_read = getattr(player, "voice_status_apply", None)
-                try:
-                    global_data = await self.bot.get_global_data(guild.id, db_name=DBModel.guilds)
-                except Exception:
-                    logger.exception("Falha ao ler o status permanente do canal", extra=guild_extra(guild.id))
+                if isinstance(voice_channel, disnake.StageChannel) and voice_channel.id == data["voice_channel"]:
+                    # Palco gravado e retomado no mesmo palco: o permanente nunca vai ao palco, então o flag salvo só está ligado por
+                    # sessão de palco (2.1.1). Restaura-o com o modelo da sessão, sem ler o global nem agendar a aplicação.
+                    player.stage_title_event = data.get("stage_title_event", False)
                 else:
-                    if getattr(player, "voice_status_apply", None) is apply_before_read:
-                        player.voice_status_saved_default = global_data.get("voice_status_permanent") is None
-                        schedule_permanent_voice_status(player, resolve_voice_status(global_data), jitter=True)
+                    # O reinício é uma saída do canal: a sessão volta ao permanente do servidor (o flag e o modelo salvos não valem).
+                    # Agendado como tarefa do player, com jitter, para a retomada de muitas sessões não estourar o limite do bot.
+                    # Falha de leitura fecha: o padrão ligado (D1) vale para quem nunca salvou, não para quem não deu para ler; um erro
+                    # de banco passageiro não pode sobrepor o desligado do dono. Fica sem status até o próximo entrar/mover.
+                    # O modal/painel pode salvar e agendar a aplicação deste player enquanto a leitura espera: se o agendamento
+                    # mudou, o valor lido é velho e a retomada não sobrepõe o do modal.
+                    apply_before_read = getattr(player, "voice_status_apply", None)
+                    try:
+                        global_data = await self.bot.get_global_data(guild.id, db_name=DBModel.guilds)
+                    except Exception:
+                        logger.exception("Falha ao ler o status permanente do canal", extra=guild_extra(guild.id))
+                    else:
+                        if getattr(player, "voice_status_apply", None) is apply_before_read:
+                            player.voice_status_saved_default = global_data.get("voice_status_permanent") is None
+                            schedule_permanent_voice_status(player, resolve_voice_status(global_data), jitter=True)
                 player.listen_along_invite = data.pop("listen_along_invite", "")
                 player.command_log_list.extend(data.pop("command_log_list", []))
 
