@@ -1747,34 +1747,8 @@ class BotCore(commands.AutoShardedBot):
 
         try:
             self.owner = self.appinfo.team.owner
-            owners = self.appinfo.team.members
         except AttributeError:
             self.owner = self.appinfo.owner
-            owners = [self.appinfo.owner]
-
-        if self.appinfo.bot_public and not self.config.get("SILENT_PUBLICBOT_WARNING"):
-
-            def check_member(u: disnake.User, g: disnake.Guild):
-                member = g.get_member(u.id)
-                return member and member.guild_permissions.manage_guild
-
-            guilds = set()
-            for guild in self.guilds:
-                if not [dev for dev in owners if check_member(dev, guild)]:
-                    guilds.add(guild)
-
-            if guilds:
-                warn_msg = (
-                    f"Atenção: O bot [{self.user}] (ID: {self.user.id}) se encontra em servidores nos quais o dono do "
-                    "bot (ou membro da equipe) não está ou que não possuem permissão de gerenciar servidor para "
-                    f"adicionar o próprio bot [{self.user}] nos servidores abaixo:\n\n"
-                    + "\n".join(f"{g.name} [ID: {g.id}]" for g in list(guilds)[:10])
-                )
-
-                if (gcount := len(guilds)) > 10:
-                    warn_msg += f"\ne em mais {gcount - 10} servidor(es)."
-
-                logger.warning("%s", warn_msg)
 
     async def on_application_command_autocomplete(self, inter: disnake.ApplicationCommandInteraction):
         if not self.bot_ready or not self.is_ready():

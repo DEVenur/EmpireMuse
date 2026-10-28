@@ -190,7 +190,6 @@ DEFAULT_CONFIG = {
     ##############
     "FORCE_USE_DEEZER_CLIENT": False,
     "YOUTUBE_TRACK_COOLDOWN": 20,
-    "SILENT_PUBLICBOT_WARNING": False,
     "DBCACHE_SIZE": 1000,
     "DBCACHE_TTL": 300,
 }
@@ -361,7 +360,6 @@ def load_config():
         "ONLY_USE_NATIVE_SEARCH_PROVIDERS",
         "USE_YTM_TRACKINFO_SCROBBLE",
         "FORCE_USE_DEEZER_CLIENT",
-        "SILENT_PUBLICBOT_WARNING",
         "ENABLE_SONGREQUEST_MENTION",
     ]:
         if isinstance(
