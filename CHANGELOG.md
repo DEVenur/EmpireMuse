@@ -20,6 +20,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Alterado
 - **Sem `print` no caminho de subida (item 7, fase P2)**: a subida do bot deixa de usar `print`; tudo sai pelo log, com nível, cor e contexto.
 
+### Corrigido
+- **Ícone do Apple Music**: o arquivo `assets/provider_applemusic_icon.png` estava truncado e aparecia quebrado onde o bot o exibe; foi substituído pela imagem completa (500×500).
+
 ### Segurança
 - **Saída de erro do Java e do Lavalink pelo log, com redação (item 7, fase P2)**: o `stderr` do Java e do Lavalink passa a sair pelo log do bot, com os segredos redigidos, em vez de ir direto ao console. O log de comandos (`COMMAND_LOG`) também passa pelo redator.
 - **`exportsource` sem links simbólicos para fora do projeto (S-29)**: o `source.zip` deixa de incluir arquivos cujo caminho real fica fora do projeto e do diretório de execução (links simbólicos). Uma exportação interrompida também deixa de deixar arquivos temporários para trás.
