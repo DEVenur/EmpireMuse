@@ -15,7 +15,7 @@ import urllib.parse
 
 import aiohttp
 
-from empiremuse.rules.release import Version, parse_tag
+from empiremuse.rules.release import TAG_PREFIX, Version, parse_current_version, parse_tag
 from empiremuse.updater.git_flow import UpdateError
 from empiremuse.utils import branding
 
@@ -162,8 +162,11 @@ async def fetch_image_digest(session: aiohttp.ClientSession, release: Release) -
 
 
 async def fetch_changelog(session: aiohttp.ClientSession, tag: str) -> str:
-    """CHANGELOG.md da tag em ``raw.githubusercontent.com`` (até 1 MiB, utf-8 com substituição)."""
-    if parse_tag(tag) is None:
+    """CHANGELOG.md da tag em ``raw.githubusercontent.com`` (até 1 MiB, utf-8 com substituição).
+
+    Aceita ``vX.Y.Z`` e ``vX.Y.Z-rc.N`` (a imagem rc consulta a própria tag); ``parse_tag`` segue só estável para os alvos do ``/update``.
+    """
+    if not tag.startswith(TAG_PREFIX) or parse_current_version(tag[len(TAG_PREFIX) :]) is None:
         raise UpdateError(MSG_CHANGELOG)
     url = f"{RAW_URL}/{branding.GITHUB_REPO}/{tag}/CHANGELOG.md"
     try:
