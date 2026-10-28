@@ -58,7 +58,7 @@ Todo ponto do código que registra um código de erro em `WARNING` ou acima tem 
 ### Positivas
 - Console calmo em escala (no máximo uma linha de resumo por intervalo, mais os problemas) e detalhe sob demanda por servidor.
 - Nenhum destino recebe segredo nem texto de terceiros sem tratamento; o webhook de erro passa pelo mesmo redator.
-- Erros com contexto mínimo (IDs, comando, parâmetros resumidos por tipo) e códigos `ERR-…` sempre localizáveis.
+- Erros com contexto mínimo (IDs, comando, parâmetros resumidos por tipo) e códigos `ERR-…` localizáveis (até 50 ocorrências com código por chave e janela; acima disso só o resumo as conta).
 - Sem dependência nova e sem rede.
 
 ### Negativas

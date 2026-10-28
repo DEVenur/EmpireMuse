@@ -2,7 +2,7 @@
 
 Guia do operador sobre o log do EmpireMuse: o que aparece no console e no arquivo, como ajustar o detalhe, o que nunca é gravado e como investigar um erro. A decisão de projeto está no [ADR-0005](../adr/0005-logs-stdlib.md); os módulos, em [`architecture.md`](../architecture.md).
 
-Toda a telemetria é **local**: console e arquivo. Nada é enviado a serviço externo.
+A telemetria é **local**: console e arquivo, sem serviço externo de métricas ou de log. A única saída para fora do host é opcional e escolha sua: com `AUTO_ERROR_REPORT_WEBHOOK` (ou `ERROR_REPORT_WEBHOOK`, no botão manual) o relatório de um erro, com traceback, contexto do comando e dados do servidor, é enviado a um canal do Discord. Ele passa pelo mesmo redator (seção 4), mas use um canal privado.
 
 ---
 
@@ -48,7 +48,7 @@ Formato do console: `HH:MM:SS NÍVEL emoji [bot/servidor] logger: mensagem`. O `
 
 ### Erros repetidos
 
-Avisos e erros iguais (mesmo logger, nível, modelo da mensagem, tipo de exceção e ponto de origem) saem **inteiros uma vez por janela de 60 s**. As repetições são contadas e viram uma linha `↻ … repetida N× em 60 s`. Erros com código `ERR-…` repetidos mantêm cada código no log (uma linha curta apontando o traceback igual), para o código que o usuário informou sempre poder ser encontrado.
+Avisos e erros iguais (mesmo logger, nível, modelo da mensagem, tipo de exceção e ponto de origem) saem **inteiros uma vez por janela de 60 s**. As repetições são contadas e viram uma linha `↻ … repetida N× em 60 s`. Erros com código `ERR-…` repetidos mantêm cada código no log (uma linha curta apontando o traceback igual), para o código que o usuário informou poder ser encontrado. Isso vale para **no máximo 50 ocorrências com código por chave e janela** (a primeira inteira e as demais em linha curta). Da 51ª em diante, a ocorrência não ganha linha nem código: só entra na contagem do resumo (`repetida N× …, códigos omitidos`), que não repete as 50 primeiras.
 
 ---
 
@@ -84,7 +84,7 @@ Com `COMMAND_LOG=true`, cada comando de quem não é dono gera uma linha `INFO` 
 
 - `user_id` e `guild_id` (nunca nome de usuário, apelido nem nome do servidor);
 - o nome qualificado do comando;
-- as opções resumidas como na seção 4. Em comandos de prefixo, o resto da mensagem sai só como `str(len=N)`, nunca o conteúdo.
+- as opções resumidas como na seção 4. Em comandos de prefixo, o resto da mensagem sai só como `str(len=N)`, **salvo nos servidores de `LOG_DEBUG_GUILDS`**: ali o texto livre (opções e resto da mensagem de prefixo, até 100 caracteres por parâmetro e 500 no conjunto, redigido e saneado) sai também em `INFO`, no console e no arquivo.
 
 IDs são dado pessoal (LGPD). Mantenha o `COMMAND_LOG` desligado quando não precisar, e lembre que a retenção é a da rotação do arquivo (seção 1.2) e a do driver de log do Docker.
 
