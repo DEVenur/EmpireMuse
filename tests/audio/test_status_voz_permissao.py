@@ -545,3 +545,33 @@ class TestComportamentoQueSegue:
         await rodar(jogador, "voz-definir")
 
         assert jogador.last_stage_title == TITULO and jogador.set_command_log.call_count == 0
+
+
+# ============================================================================ V-A1 — dois envios simultâneos com 403 lento
+
+
+@pytest.mark.parametrize("caminho", CAMINHOS)
+class TestForbiddenSimultaneo:
+    @pytest.mark.asyncio
+    async def test_two_runs_waiting_on_a_slow_403_give_one_notice_and_one_warning(self, caminho, caplog):
+        jogador = cenario(caminho, proibido())
+        portao = asyncio.Event()
+
+        async def lento(*args, **kwargs):
+            await portao.wait()
+            raise proibido()
+
+        jogador.bot.edit_voice_channel_status = AsyncMock(side_effect=lento)
+        if caminho == "palco":
+            jogador.guild.me.voice.channel.instance.edit = AsyncMock(side_effect=lento)
+
+        with caplog.at_level(logging.DEBUG):
+            execucoes = [asyncio.ensure_future(rodar(jogador, caminho)) for _ in range(2)]
+            for _ in range(25):
+                await asyncio.sleep(0)
+            portao.set()
+            await asyncio.gather(*execucoes)
+
+        assert jogador.stage_title_event is False
+        assert jogador.set_command_log.call_count == 1
+        assert len(avisos(caplog)) == 1 and com_traceback(caplog) == []
