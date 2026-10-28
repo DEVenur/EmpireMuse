@@ -423,7 +423,7 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/cogs/help_cog.py` | Comando de ajuda | 406 |
 | `empiremuse/cogs/ll_yt_oauth.py` | OAuth do YouTube para o Lavalink | 290 |
 | `empiremuse/cogs/server_manager.py` | Gestão de servidores/bots do dono | 209 |
-| `empiremuse/utils/branding.py` | Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`); só stdlib, sem efeitos colaterais no import | — |
+| `empiremuse/utils/branding.py` | Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`); importa `empiremuse.paths`, `empiremuse.rules.release` e `empiremuse.version`, e no import lê a versão da imagem (variáveis de ambiente) para fixar `ASSETS_BASE_URL` (tag `v{versão}` na imagem, `main` fora dela); o índice de `assets/` só é montado na primeira chamada de `asset_url` | — |
 | `assets/` | Imagens em subpastas por função (`brand/`, `providers/`, `player/`, `skins/`, `ui/`, `docs/`, `emojis/`) + `SHA256SUMS` com caminhos relativos; `asset_url(nome)` resolve o subcaminho e serve pela tag da versão (imagem) ou pela `main` (checkout), via `ASSETS_BASE_URL`. Os arquivos soltos na raiz são cópias de compatibilidade da 2.1.0 | — |
 | `data/lavalink_servers.ini` | Lista de servidores Lavalink públicos (origem: gist do upstream, com crédito no cabeçalho) | — |
 | `docs/guides/` | Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web, Spotify e Docker) | — |
