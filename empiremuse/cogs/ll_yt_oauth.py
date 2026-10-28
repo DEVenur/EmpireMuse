@@ -20,6 +20,19 @@ from empiremuse.utils.others import CustomContext
 
 logger = logging.getLogger(__name__)
 
+DM_DELETE_AFTER = 600  # segundos: a DM com a conta e a DM com o token somem sozinhas
+DM_DEADLINE_NOTE = "⏳ Esta mensagem some em 10 minutos: guarde o que precisar antes e não repasse a ninguém."
+OPEN_DMS_NOTICE = (
+    "### Não consegui enviar a mensagem por DM\n"
+    "Abra suas mensagens diretas (DM) para os membros do servidor e execute o comando de novo.\n"
+)
+
+
+def dm_failed_notice(code: str) -> str:
+    """Aviso genérico do canal quando a DM falha por outro motivo: só o código do erro, que leva ao log do servidor."""
+    return f"### Não consegui enviar a mensagem por DM\nVeja o log do servidor{code_suffix(code)}.\n"
+
+
 RESPONSE_LOG_LIMIT = 500
 
 if TYPE_CHECKING:
@@ -210,24 +223,41 @@ class YtOauthLL(commands.Cog):
             '⚠️ Cuidado! Caso essa conta seja de uso pessoal, clique no botão "Não" e use (ou crie) uma conta descartável!',
         ).set_thumbnail(data["picture"])
 
+        embed.description += f"\n\n{DM_DEADLINE_NOTE}"
         view_confirm = AskView(ctx=ctx)
+        view_confirm.timeout = DM_DELETE_AFTER  # sem resposta a DM some e o comando não fica pendurado
 
-        await func(embed=embed, view=view_confirm)
+        # S-32 (opção A): a confirmação da conta (e-mail, nome e foto) vai por DM a quem executou o comando; o canal só aponta
+        # para a DM. DM fechada nesta etapa aborta o fluxo antes de salvar qualquer coisa, sem versão mascarada no canal.
+        try:
+            await ctx.author.send(embed=embed, view=view_confirm, delete_after=DM_DELETE_AFTER)
+        except disnake.Forbidden:
+            await func(embed=disnake.Embed(color=color, description=OPEN_DMS_NOTICE), view=None)
+            return
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "enviar a confirmação da conta por DM")
+            await func(embed=disnake.Embed(color=color, description=dm_failed_notice(code)), view=None)
+            return
+
+        await func(
+            embed=disnake.Embed(
+                color=color, description="### Confira a conta na sua DM\nConfirme por lá para continuar."
+            ),
+            view=None,
+        )
 
         await view_confirm.wait()
 
-        if view_confirm.interaction_resp:
-            ctx.inter = view_confirm.interaction_resp
-            if view_confirm.selected:
-                func = ctx.inter.edit_original_message
-            else:
-                func = ctx.inter.response.edit_message
-
         if not view_confirm.selected:
-            await func(content="**Operação cancelada.**", embed=None, view=None)
+            if view_confirm.interaction_resp:
+                await view_confirm.interaction_resp.response.edit_message(
+                    content="**Operação cancelada.**", embed=None, view=None
+                )
+            await func(embed=disnake.Embed(color=color, description="**Operação cancelada.**"), view=None)
             return
 
         await view_confirm.interaction_resp.response.defer()
+        await view_confirm.interaction_resp.edit_original_message(view=None)  # os botões da DM não valem mais
 
         txts = []
 
@@ -295,14 +325,37 @@ class YtOauthLL(commands.Cog):
 
         txts.append("Evite mostrar esse token publicamente!")
 
+        # S-32: o refresh token só vai por DM a quem executou o comando; a mensagem do canal nunca o leva (nem o nome e o email
+        # da conta) e uma DM que falha nunca cai de volta no canal.
+        try:
+            await ctx.author.send(
+                embed=disnake.Embed(
+                    color=color,
+                    description=f"### refreshToken da conta do google obtido com sucesso!\n```{refresh_token}``` "
+                    f"**Usuário autorizado:**  ```ansi\n[34;1m{name}[0m``` "
+                    f"**Email:** ```ansi\n[34;1m{data['email']}[0m``` "
+                    f"**Nota{'s'[: len(txts) ^ 1]}:**\n"
+                    + "\n".join(f"* {t}" for t in txts)
+                    + f"\n\n{DM_DEADLINE_NOTE}",
+                ).set_thumbnail(data["picture"]),
+                delete_after=DM_DELETE_AFTER,
+            )
+        except disnake.Forbidden:
+            channel_text = OPEN_DMS_NOTICE
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "enviar o refreshToken por DM")
+            channel_text = dm_failed_notice(code)
+        else:
+            channel_text = (
+                "### refreshToken da conta do google obtido com sucesso!\n"
+                "Enviei o refreshToken por mensagem direta (DM).\n"
+            )
+
         await func(
             embed=disnake.Embed(
                 color=color,
-                description=f"### refreshToken da conta do google obtido com sucesso!\n```{refresh_token}``` "
-                f"**Usuário autorizado:**  ```ansi\n[34;1m{name}[0m``` "
-                f"**Email:** ```ansi\n[34;1m{data['email']}[0m``` "
-                f"**Nota{'s'[: len(txts) ^ 1]}:**\n" + "\n".join(f"* {t}" for t in txts),
-            ).set_thumbnail(data["picture"]),
+                description=channel_text + f"**Nota{'s'[: len(txts) ^ 1]}:**\n" + "\n".join(f"* {t}" for t in txts),
+            ),
             view=None,
         )
 

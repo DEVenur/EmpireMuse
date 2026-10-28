@@ -60,10 +60,12 @@ O EmpireMuse possui um módulo integrado (`modules/ll_yt_oauth.py`) que implemen
 4. Abra o link no navegador em uma janela anônima (para assegurar que fará login com a **conta descartável**).
 5. Faça login com a conta Google descartável e autorize os escopos solicitados pelo cliente do YouTube.
 6. Aguarde cerca de 10 a 15 segundos até que o bot confirme o recebimento do token.
-7. O bot apresentará uma mensagem de conferência exibindo o nome e o e-mail da conta autorizada:
+7. O bot enviará, **por mensagem direta (DM) para você**, uma mensagem de conferência exibindo o nome e o e-mail da conta autorizada:
    - Verifique se o e-mail corresponde à **conta descartável**;
    - Clique em **Sim** para confirmar; caso tenha selecionado sua conta pessoal por engano, clique em **Não** imediatamente.
-8. Após a confirmação, o bot exibirá o `refresh_token` gerado em um bloco de código. Copie esse valor e guarde-o com segurança.
+8. Após a confirmação, o bot enviará o `refresh_token` gerado, também por DM, em um bloco de código. Copie esse valor e guarde-o com segurança. As DMs do bot se apagam em 10 minutos e o canal recebe só um aviso.
+
+> **Token que já apareceu num canal:** se, numa versão anterior, o token ou a confirmação da conta foram exibidos num canal de servidor, revogue o acesso na conta Google descartável e gere um novo token.
 
 ---
 
