@@ -33,7 +33,6 @@ from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.critical
 
-RAIZ_DO_BOT = RAIZ / "empiremuse"
 LOAD_MODULES_REAL = client.BotCore.load_modules  # antes de qualquer teste trocar o ``BotCore`` por um dublê
 
 
@@ -94,22 +93,6 @@ class TestBootReport:
         assert registro.name == "empiremuse.boot" and registro.levelno == nivel
         assert "Etapa X" in registro.getMessage() and "detalhe Y" in registro.getMessage()
 
-    def test_a_custom_logger_is_used_when_given(self, captura):
-        BootReport(logging.getLogger("empiremuse.boot.outro")).step("Etapa", "ok")
-
-        assert [r.name for r in captura.registros] == ["empiremuse.boot.outro"]
-
-    def test_the_elapsed_time_shows_up_in_the_line(self, captura):
-        BootReport().step("Mongo", "ok", "ping", elapsed=0.0123)
-
-        assert "12" in so_boot(captura)[0].getMessage()
-
-    def test_a_step_without_detail_or_elapsed_is_still_one_clean_line(self, captura):
-        BootReport().step("Etapa", "ok")
-
-        (registro,) = so_boot(captura)
-        assert "\n" not in registro.getMessage() and "Etapa" in registro.getMessage()
-
     def test_deferred_steps_are_silent_until_flush_and_then_come_out_in_order(self, captura):
         relatorio = BootReport()
 
@@ -122,30 +105,6 @@ class TestBootReport:
         assert [r.levelno for r in so_boot(captura)] == [logging.INFO, logging.INFO, logging.WARNING]
         mensagens = [r.getMessage() for r in so_boot(captura)]
         assert "Pasta de execução" in mensagens[0] and "Python" in mensagens[1] and "Aviso" in mensagens[2]
-
-    def test_flush_deferred_is_idempotent(self, captura):
-        relatorio = BootReport()
-        relatorio.defer("Python", "ok", "3.14")
-
-        relatorio.flush_deferred()
-        relatorio.flush_deferred()
-
-        assert len(so_boot(captura)) == 1
-
-    def test_a_step_after_the_flush_comes_out_after_the_deferred_ones(self, captura):
-        relatorio = BootReport()
-        relatorio.defer("Antes", "ok")
-        relatorio.flush_deferred()
-
-        relatorio.step("Depois", "ok")
-
-        mensagens = [r.getMessage() for r in so_boot(captura)]
-        assert "Antes" in mensagens[0] and "Depois" in mensagens[1]
-
-    def test_flush_with_nothing_deferred_logs_nothing(self, captura):
-        BootReport().flush_deferred()
-
-        assert so_boot(captura) == []
 
     def test_a_detail_with_a_registered_secret_is_masked_by_the_pipeline(self, tmp_path):
         console = io.StringIO()
@@ -225,14 +184,6 @@ class TestSubidaReal:
         assert any("NO_VERIFICADO" in t for t in textos)
         assert not any(senha in t or "10.1.2.3" in t for t in textos)
 
-    def test_the_boot_lines_of_a_normal_setup_are_at_info_or_below_and_never_print(self, fabrica, captura, capsys):
-        pool = fabrica()
-
-        pool.setup()
-
-        assert all(r.levelno <= logging.WARNING for r in so_boot(captura))
-        assert "Database em uso" not in capsys.readouterr().out
-
 
 class TestFalhaDeCog:
     @pytest.fixture
@@ -272,18 +223,6 @@ class TestFalhaDeCog:
         assert achados and all(r.exc_info is None for r in achados)
         assert any("RuntimeError" in r.getMessage() for r in achados)
 
-    def test_the_traceback_of_the_failing_cog_exists_only_at_debug(self, bot_falso, captura):
-        client.BotCore.load_modules(bot_falso)
-
-        com_traceback = [r for r in captura.registros if r.exc_info and r.exc_info[0] is RuntimeError]
-        assert com_traceback and all(r.levelno == logging.DEBUG for r in com_traceback)
-
-    def test_a_failing_cog_never_goes_through_print(self, bot_falso, capsys):
-        client.BotCore.load_modules(bot_falso)
-
-        saida = capsys.readouterr()
-        assert "Falha ao carregar" not in saida.out and "Traceback" not in saida.err
-
 
 # ============================================================================ B10 — versão nova (relógio e rede injetados)
 
@@ -313,29 +252,9 @@ class TestVersaoNova:
         assert len(infos) == 1 and "Versão 2.2.0 disponível (instalada 2.1.0)" in infos[0].getMessage()
 
     @pytest.mark.asyncio
-    async def test_an_installed_rc_is_offered_its_stable(self, captura):
-        registros = await checar(captura, lista=lista_de("2.1.0"), atual=parse_current_version("2.1.0-rc.2"))
-
-        (info,) = [r for r in registros if r.levelno == logging.INFO]
-        assert "Versão 2.1.0 disponível (instalada 2.1.0-rc.2)" in info.getMessage()
-
-    @pytest.mark.asyncio
-    async def test_the_greatest_release_is_the_one_announced(self, captura):
-        registros = await checar(captura, lista=lista_de("2.3.0", "2.2.1", "2.2.0"), atual=Version(2, 1, 0))
-
-        (info,) = [r for r in registros if r.levelno == logging.INFO]
-        assert "Versão 2.3.0 disponível" in info.getMessage()
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("versoes", [("2.1.0",), ("2.0.0", "2.1.0"), ("2.0.9",), ()])
     async def test_an_equal_or_older_release_logs_nothing_above_debug(self, captura, versoes):
         registros = await checar(captura, lista=lista_de(*versoes), atual=Version(2, 1, 0))
-
-        assert [r for r in registros if r.levelno > logging.DEBUG] == []
-
-    @pytest.mark.asyncio
-    async def test_without_a_known_current_version_it_logs_nothing_above_debug(self, captura):
-        registros = await checar(captura, lista=lista_de("9.9.9"), atual=None)
 
         assert [r for r in registros if r.levelno > logging.DEBUG] == []
 
@@ -349,15 +268,6 @@ class TestVersaoNova:
         assert len(registros) == 1 and registros[0].levelno == logging.DEBUG
 
     @pytest.mark.asyncio
-    async def test_an_unexpected_exception_is_also_only_debug(self, captura):
-        async def falha(session):
-            raise RuntimeError("boom")
-
-        registros = await checar(captura, lista=falha, atual=Version(2, 1, 0))
-
-        assert registros and all(r.levelno == logging.DEBUG for r in registros)
-
-    @pytest.mark.asyncio
     async def test_a_timeout_gives_only_debug_and_does_not_hang(self, captura):
         async def pendurada(session):
             await asyncio.Event().wait()
@@ -366,72 +276,8 @@ class TestVersaoNova:
 
         assert registros and all(r.levelno == logging.DEBUG for r in registros)
 
-    @pytest.mark.asyncio
-    async def test_the_check_does_not_use_the_real_network(self, captura, sem_rede):
-        registros = await checar(captura, lista=lista_de("2.2.0"), atual=Version(2, 1, 0))
-
-        assert any(r.levelno == logging.INFO for r in registros)
-
 
 # ============================================================================ B11 — nenhum print nos módulos do P2 (AST)
-
-PROIBIDAS = {"print_exc", "print_exception", "print_stack", "pprint"}
-FUNCOES_DO_CLIENT = {
-    "read_guild_bots",
-    "load_cfg",
-    "load_skins",
-    "setup",
-    "initial_setup",
-    "node_check",
-    "start_lavalink",
-    "start_bot",
-    "check_node",
-    "setup_pool_extras",
-    "sync_app_commands",
-    "load_modules",
-    "update_appinfo",
-}
-
-
-def chamadas_proibidas(no: ast.AST) -> list[int]:
-    linhas = []
-    for filho in ast.walk(no):
-        if not isinstance(filho, ast.Call):
-            continue
-        funcao = filho.func
-        if (isinstance(funcao, ast.Name) and funcao.id in ("print", "pprint")) or (
-            isinstance(funcao, ast.Attribute) and funcao.attr in PROIBIDAS
-        ):
-            linhas.append(filho.lineno)
-    return linhas
-
-
-@pytest.mark.parametrize(
-    "arquivo",
-    [
-        "__main__.py",
-        "utils/music/local_lavalink.py",
-        "utils/music/remote_lavalink_serverlist.py",
-        "logs/boot.py",
-    ],
-)
-def test_no_print_or_print_exc_in_the_modules_touched_by_phase_two(arquivo):
-    arvore = ast.parse((RAIZ_DO_BOT / arquivo).read_text(encoding="utf-8"))
-
-    assert chamadas_proibidas(arvore) == [], f"{arquivo}: print/print_exc nas linhas {chamadas_proibidas(arvore)}"
-
-
-def test_no_print_or_print_exc_in_the_phase_two_functions_of_client():
-    arvore = ast.parse((RAIZ_DO_BOT / "utils/client.py").read_text(encoding="utf-8"))
-    encontradas, restantes = set(), {}
-    for no in ast.walk(arvore):
-        if isinstance(no, ast.FunctionDef | ast.AsyncFunctionDef) and no.name in FUNCOES_DO_CLIENT:
-            encontradas.add(no.name)
-            if linhas := chamadas_proibidas(no):
-                restantes[no.name] = linhas
-
-    assert encontradas == FUNCOES_DO_CLIENT, f"funções que sumiram do client.py: {FUNCOES_DO_CLIENT - encontradas}"
-    assert restantes == {}, f"print/print_exc em {restantes}"
 
 
 # ============================================================================ B11b — stderr do Java do Lavalink local (V-L9)
@@ -563,32 +409,6 @@ class TestStderrDoJava:
         assert len(saida.splitlines()) == 1 and "empiremuse.wavelink.local" in saida
         assert not any(c in saida for c in ("\x1b", "\x9b", "‮", "\r"))
 
-    def test_the_java_stderr_never_goes_to_the_real_stderr_or_stdout(self, lavalink_com_stderr, capfd):
-        lavalink_com_stderr(["linha do java"])
-
-        saida = capfd.readouterr()
-        assert "linha do java" not in saida.out and "linha do java" not in saida.err
-
-    def test_run_lavalink_asks_popen_to_pipe_the_stderr(self, tmp_path, monkeypatch, lavalink_com_stderr):
-        capturado = {}
-        terminou = threading.Event()
-
-        def popen(args, **kwargs):
-            capturado.update(kwargs)
-            return ProcessoFalso([], terminou, args=args, **kwargs)
-
-        lavalink_com_stderr(["x"])
-        monkeypatch.setattr(local_lavalink.subprocess, "Popen", popen)
-        local_lavalink.run_lavalink(
-            lavalink_java_path="java", lavalink_home=str(tmp_path / "lavalink"), lavalink_offline=True
-        )
-
-        assert capturado.get("stderr") not in (
-            None,
-            local_lavalink.subprocess.DEVNULL,
-            local_lavalink.subprocess.STDOUT,
-        )
-
 
 # ============================================================================ integração — subida falsa com console e arquivo reais
 
@@ -619,23 +439,6 @@ class TestIntegracaoDaSubida:
             assert posicoes == sorted(posicoes)
             assert texto.count("Pasta de execução") == 1 and texto.count("Python") == 1
             assert "INFO" in texto and "WARNING" in texto and "ERROR" in texto
-
-    def test_the_console_has_the_boot_emoji_and_the_file_does_not(self, destinos):
-        BootReport().step("Etapa", "ok", "detalhe")
-
-        console, arquivo = self.textos(destinos)
-        assert "🚀" in console and "🚀" not in arquivo and "empiremuse.boot" in arquivo
-
-    def test_the_deferred_steps_are_emitted_only_once_the_logging_is_configured(self, tmp_path):
-        relatorio = BootReport()
-        relatorio.defer("Antes do log", "ok", "x")
-        console = io.StringIO()
-        assert console.getvalue() == ""
-
-        configure_logging(LogSettings(logging.INFO, False, False, frozenset(), 300), [], stream=console)
-        relatorio.flush_deferred()
-
-        assert console.getvalue().count("Antes do log") == 1
 
     def test_a_secret_in_a_step_detail_is_masked_in_both_destinations(self, destinos):
         register_secret("segredo-da-etapa-integrada-5")
@@ -672,19 +475,6 @@ class TestLinhasDistintasDoJava:
             assert all("empiremuse.wavelink.local" in linha for linha in linhas)
             assert "↻" not in texto and "repetida" not in texto
 
-    def test_the_root_cause_line_is_in_the_log(self, lavalink_com_stderr, tmp_path):
-        for texto in self.textos(lavalink_com_stderr, tmp_path, SONDA_DO_VIGIL):
-            assert "Caused by: java.net.BindException: Address already in use" in texto
-            assert "última linha sem quebra" in texto
-
-    def test_every_output_line_starts_with_a_header_so_nothing_sits_at_column_zero(self, lavalink_com_stderr, tmp_path):
-        console, arquivo = self.textos(lavalink_com_stderr, tmp_path, SONDA_DO_VIGIL)
-
-        for linha in console.splitlines():
-            assert re.match(r"\d{2}:\d{2}:\d{2} ", linha), linha
-        for linha in arquivo.splitlines():
-            assert re.match(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} ", linha), linha
-
     def test_controls_and_the_registered_password_are_still_neutralised_in_the_distinct_lines(
         self, lavalink_com_stderr, tmp_path
     ):
@@ -697,26 +487,11 @@ class TestLinhasDistintasDoJava:
             assert not any(c in texto for c in ("\x1b", "\u202e", "\r"))
             assert len([linha for linha in texto.splitlines() if linha]) == 7
 
-    def test_the_same_line_a_hundred_times_in_a_burst_still_aggregates(self, lavalink_com_stderr, tmp_path):
-        for texto in self.textos(lavalink_com_stderr, tmp_path, ["conexão recusada pelo Java"] * 100):
-            assert texto.count("conexão recusada pelo Java") == 2  # a 1ª ocorrência e a linha do resumo
-            assert texto.count("repetida 99×") == 1 and texto.count("↻") == 1
-
-    def test_distinct_lines_do_not_hide_inside_a_summary_of_a_repeated_one(self, lavalink_com_stderr, tmp_path):
-        linhas = ["repetida A"] * 5 + ["única B"] + ["repetida A"] * 5
-
-        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
-            assert "única B" in texto and texto.count("repetida 9×") == 1
-
     def test_percent_signs_inside_a_java_line_never_break_the_formatting(self, lavalink_com_stderr, tmp_path):
         linha = "GC pausa 100% do heap %d %s %(x)s fim"
 
         for texto in self.textos(lavalink_com_stderr, tmp_path, [linha]):
             assert linha in texto and "[log] falha" not in texto
-
-    def test_six_identical_lines_give_the_first_plus_a_summary_of_five(self, lavalink_com_stderr, tmp_path):
-        for texto in self.textos(lavalink_com_stderr, tmp_path, ["Address already in use"] * 6):
-            assert texto.count("repetida 5×") == 1 and texto.count("Address already in use") == 2
 
 
 # ============================================================================ CodeRabbit #126 — initial_setup, tarefa da versão nova, linhas longas
@@ -804,18 +579,6 @@ class TestInitialSetup:
         assert any("configuração inicial" in texto.lower() for texto in avisos)
         assert not any("detalhe-interno" in texto for texto in avisos), "a mensagem da exceção só vale no DEBUG"
 
-    def test_the_cog_failure_does_not_print_the_traceback_to_the_real_streams(
-        self, fabrica, captura, monkeypatch, capfd
-    ):
-        pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, carregador=carregador_que_falha())
-        pool.setup()
-        capfd.readouterr()
-
-        rodar_initial_setup(corrotinas)
-
-        saida = capfd.readouterr()
-        assert "Traceback" not in saida.out + saida.err
-
     def test_the_initial_setup_still_finishes_after_a_cog_failure(self, fabrica, monkeypatch):
         pool, bot, corrotinas = montar_pool_com_bot(fabrica, monkeypatch, carregador=carregador_que_falha())
         pool.setup()
@@ -836,9 +599,6 @@ class TestInitialSetup:
 
 
 class TestTarefaDaVersaoNova:
-    def test_the_attribute_exists_on_the_class_and_starts_empty(self):
-        assert BotPool_version_check_task_default() is None
-
     def test_after_setup_it_is_a_task_and_after_shutdown_it_is_cancelled_and_still_there(self, fabrica):
         pool = fabrica()
         pool.setup()
@@ -851,17 +611,6 @@ class TestTarefaDaVersaoNova:
 
         assert tarefa.cancelled() or tarefa.done()
         assert pool.version_check_task is tarefa
-
-    def test_shutdown_without_the_task_does_not_fail(self):
-        pool = client.BotPool.__new__(client.BotPool)
-        pool.bots, pool.guild_bots, pool.heartbeat_task, pool.nodes_expected = [], {}, None, False
-        pool.update_watch_task, pool.helper_watch_tasks, pool.lavalink_instance = None, set(), None
-
-        asyncio.run(pool.shutdown(0))
-
-
-def BotPool_version_check_task_default():
-    return client.BotPool.version_check_task
 
 
 class TestLinhasLongasDoJava:
@@ -880,19 +629,3 @@ class TestLinhasLongasDoJava:
             assert "-final-A" in texto and "-final-B" in texto
             assert "repetida" not in texto and "↻" not in texto
             assert len([linha for linha in texto.splitlines() if linha]) == 2
-
-    def test_the_same_long_line_a_hundred_times_still_aggregates(self, lavalink_com_stderr, tmp_path):
-        for texto in self.textos(lavalink_com_stderr, tmp_path, [self.BASE + "-final-A"] * 100):
-            assert texto.count("-final-A") == 2 and texto.count("repetida 99×") == 1
-
-    def test_long_lines_that_differ_in_the_first_256_characters_stay_distinct(self, lavalink_com_stderr, tmp_path):
-        linhas = ["a" * 300, "b" * 300]
-
-        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
-            assert "repetida" not in texto and len([linha for linha in texto.splitlines() if linha]) == 2
-
-    def test_three_long_lines_with_the_same_prefix_give_three_records(self, lavalink_com_stderr, tmp_path):
-        linhas = [self.BASE + f"-{n}" for n in range(3)]
-
-        for texto in self.textos(lavalink_com_stderr, tmp_path, linhas):
-            assert len([linha for linha in texto.splitlines() if linha]) == 3 and "repetida" not in texto

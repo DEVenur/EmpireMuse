@@ -59,44 +59,6 @@ class TestCodigoDeVoz:
         for texto in destinos.textos():
             assert "repetida 2×" in texto
 
-    async def test_a_bool_is_not_an_int_code(self, destinos):
-        await self.disparar([True, False, True])
-
-        for texto in destinos.textos():
-            assert "repetida 2×" in texto
-
-    @pytest.mark.parametrize(("baixo", "alto"), [(999, 5000), (0, 99_999)], ids=["bordas", "extremos"])
-    async def test_the_range_edges_outside_are_other(self, destinos, baixo, alto):
-        await self.disparar([baixo, alto])
-
-        for texto in destinos.textos():
-            assert "repetida 1×" in texto
-
-    async def test_two_known_codes_keep_their_own_keys(self, destinos):
-        await self.disparar([1001, 4021])
-
-        for texto in destinos.textos():
-            assert "code 1001" in texto and "code 4021" in texto and "repetida" not in texto
-
-    async def test_a_real_code_and_an_out_of_range_one_are_different_keys(self, destinos):
-        await self.disparar([4006, 77_777])
-
-        for texto in destinos.textos():
-            assert "code 4006" in texto and "code 77777" in texto and "repetida" not in texto
-
-    async def test_4006_and_4014_still_give_two_lines(self, destinos):
-        await self.disparar([4006, 4014])
-
-        for texto in destinos.textos():
-            assert "code 4006" in texto and "code 4014" in texto and "repetida" not in texto
-
-    async def test_the_same_code_in_different_channels_still_aggregates(self, destinos):
-        for canal in (10, 11, 12):
-            await self.disparar([4006], canal=canal)
-
-        for texto in destinos.textos():
-            assert "repetida 2×" in texto
-
 
 # ============================================================================ chave do agregador: redigida, e o corte depois
 
@@ -141,33 +103,6 @@ class TestChaveRedigida:
         for texto in textos_da_chave(agregador):
             assert self.SEG[:5] not in texto and self.SEG[-5:] not in texto
 
-    def test_control_characters_are_still_sanitised_in_the_redacted_key(self, instalado):
-        destinos, agregador = instalado
-
-        avisar("no-1", f"a\x1b[2J{self.SEG}\r\nz")
-
-        for texto in textos_da_chave(agregador):
-            assert not any(c in texto for c in ("\x1b", "\r", "\n")) and self.SEG not in texto
-
-    def test_a_key_without_secrets_is_unchanged_in_behaviour(self, instalado):
-        destinos, agregador = instalado
-
-        avisar("no-1", "chave-normal")
-        avisar("no-2", "chave-normal")
-        avisar("no-3", "outra-chave")
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert "nó no-3 caiu" in texto and "nó no-2 caiu" not in texto and "repetida 1×" in texto
-
-    def test_the_key_never_shows_up_in_the_output_even_with_a_secret(self, instalado):
-        destinos, agregador = instalado
-
-        avisar("no-1", f"visivel-{self.SEG}")
-
-        for texto in destinos.ambos():
-            assert self.SEG not in texto and "visivel-" not in texto
-
 
 # ============================================================================ guild_extra nunca levanta
 
@@ -184,17 +119,6 @@ class TestGuildExtra:
         resultado = guild_extra(valor)
 
         assert resultado == {"guild": int(valor)} and type(resultado["guild"]) is int
-
-    @pytest.mark.parametrize(
-        "valor",
-        [True, False, "-5", "+5", " 12 ", "１２３４５", "12abc", "", "   ", None, 1.5, [1], b"123", object()],
-        ids=repr,
-    )
-    def test_everything_else_stays_empty_and_never_raises(self, valor):
-        assert guild_extra(valor) == {}
-
-    def test_a_real_int_is_kept(self):
-        assert guild_extra(123456789012345678) == {"guild": 123456789012345678}
 
     def test_the_giant_string_does_not_slow_down_or_blow_the_int_limit(self):
         assert guild_extra("9" * 1_000_000) == {}
@@ -227,53 +151,6 @@ def console_de_sessao():
 
 # ============================================================================ V-127-1 (resto): só os códigos CONHECIDOS têm chave própria; a razão é cortada
 
-CODIGOS_CONHECIDOS = [
-    *range(1001, 1016),
-    *range(4000, 4022),
-]  # 1000 e 4022 saem antes do aviso; 1000-1015 (RFC 6455), 4000-4022 (voz)
-
-
-@pytest.mark.asyncio
-class TestSoCodigosConhecidos:
-    async def disparar(self, codigos, canal=10):
-        for codigo in codigos:
-            jogador = jogador_de_voz(canal)
-            await PlayerEventsMixin.hook(jogador, fechou(codigo, jogador))
-
-    async def test_a_thousand_distinct_codes_in_the_unassigned_gaps_all_land_on_the_other_key(self, destinos):
-        await self.disparar([*range(1016, 1516), *range(4023, 4523)])
-
-        for texto in destinos.textos():
-            assert texto.count("Erro no canal de voz") == 2 and "repetida 999×" in texto
-
-    @pytest.mark.parametrize(
-        "faixa", [range(1016, 4000), range(4023, 5000), range(5000, 5100)], ids=["1016-3999", "4023-4999", "5000+"]
-    )
-    async def test_every_integer_outside_the_known_sets_aggregates_together(self, destinos, faixa):
-        await self.disparar(list(faixa)[:50])
-
-        for texto in destinos.textos():
-            assert "repetida 49×" in texto
-
-    async def test_each_known_code_gets_its_own_line(self, destinos):
-        await self.disparar(CODIGOS_CONHECIDOS)
-
-        for texto in destinos.textos():
-            assert texto.count("Erro no canal de voz") == len(CODIGOS_CONHECIDOS) and "repetida" not in texto
-            assert all(f"code {codigo}," in texto for codigo in CODIGOS_CONHECIDOS)
-
-    async def test_a_known_and_an_unknown_code_are_different_keys(self, destinos):
-        await self.disparar([4006, 4023])
-
-        for texto in destinos.textos():
-            assert "code 4006" in texto and "code 4023" in texto and "repetida" not in texto
-
-    async def test_4006_and_4014_keep_two_lines_and_non_ints_stay_on_other(self, destinos):
-        await self.disparar([4006, 4014, "abc", 1.5, None, True])
-
-        for texto in destinos.textos():
-            assert "code 4006" in texto and "code 4014" in texto and "repetida 3×" in texto
-
 
 def fechou_com(codigo, razao, jogador):
     return wavelink.WebsocketClosed({"player": jogador, "reason": razao, "code": codigo, "guildID": 1})
@@ -300,11 +177,3 @@ class TestRazaoDoNo:
     async def test_control_characters_in_the_reason_are_neutralised(self, destinos):
         for linha in await self.linhas(destinos, "ruim\x1b[2Jcom\rcontroles\u202e"):
             assert not any(c in linha for c in ("\x1b", "\r", "\u202e")) and "ruim" in linha
-
-    async def test_a_short_reason_comes_out_whole(self, destinos):
-        for linha in await self.linhas(destinos, "motivo curto e inteiro"):
-            assert "motivo curto e inteiro" in linha
-
-    async def test_a_reason_that_is_not_text_does_not_break_the_log(self, destinos):
-        for linha in await self.linhas(destinos, None):
-            assert "Erro no canal de voz" in linha

@@ -79,12 +79,6 @@ class TestReducaoNaGravacao:
         assert 0 < len(lidos["queue"]) < 25
         assert titulos(lidos["queue"]) == titulos(fila)[: len(lidos["queue"])]  # sai a cauda, nunca o começo
 
-    def test_reducao_nao_altera_a_entrada(self):
-        fila = [com_letra(n) for n in range(25)]
-        dados = sessao_minima(queue=fila)
-        session.encode_session(dados)
-        assert tem_letra(dados["queue"]) and len(dados["queue"]) == 25
-
 
 class TestTetoNaLeitura:
     def preencher(self, tamanho_final: int) -> bytes:

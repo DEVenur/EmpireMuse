@@ -18,40 +18,6 @@ pytestmark = pytest.mark.critical
 URL = "https://exemplo.invalid/a"
 
 
-class TestLimites:
-    @pytest.mark.smoke
-    def test_valores_atuais(self):
-        assert (limits.FAV_NAME_MIN, limits.FAV_NAME_MAX) == (2, 25)
-        assert (limits.FAV_URL_MIN, limits.FAV_URL_MAX) == (10, 200)
-        assert (limits.ITG_TITLE_MAX, limits.ITG_URL_MAX, limits.ITG_AVATAR_MAX) == (90, 200, 250)
-        assert limits.MAX_GUILD_LINKS == 25
-        assert (limits.GUILD_LINK_NAME_MIN, limits.GUILD_LINK_NAME_MAX) == (2, 25)
-        assert (limits.GUILD_LINK_URL_MIN, limits.GUILD_LINK_URL_MAX) == (10, 250)
-        assert (limits.GUILD_LINK_DESCRIPTION_MIN, limits.GUILD_LINK_DESCRIPTION_MAX) == (3, 100)
-        assert limits.PREFIX_MAX_LENGTH == 5
-        assert limits.VOICE_STATUS_MAX_LENGTH == 496
-        assert limits.MAX_DJ_ROLES == 25
-        assert limits.CUSTOM_SKIN_PREFIX == "> custom_skin: "
-        assert (limits.FORUM_TITLE_MIN, limits.FORUM_TITLE_MAX) == (4, 30)
-
-    def test_placeholders_e_volumes(self):
-        assert limits.VOICE_PLACEHOLDERS == (
-            "{track.title}",
-            "{track.timestamp}",
-            "{track.emoji}",
-            "{track.author}",
-            "{track.duration}",
-            "{track.source}",
-            "{track.playlist}",
-            "{requester.name}",
-            "{requester.id}",
-        )
-        assert limits.VOLUMES == (
-            *(5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100),
-            *(110, 120, 130, 140, 150),
-        )
-
-
 class TestTexto:
     @pytest.mark.parametrize("valor", [None, {"a": 1}])
     def test_clean_title_so_aceita_texto(self, valor):

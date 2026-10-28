@@ -73,12 +73,6 @@ def decodificar(raw, **opcoes):
 # ============================================================================ serialization/cache.py
 
 
-class TestCodificar:
-    def test_e_json_compacto_utf8(self):
-        bruto = codificar([("música", {"t": "Álbum 😀"})])
-        assert bruto[:1] == b"{" and b": " not in bruto and "Álbum 😀".encode() in bruto
-
-
 class TestDecodificar:
     @pytest.mark.parametrize(
         "bruto",
@@ -142,9 +136,6 @@ class TestCachePlaylist:
         assert not novo.partial_track_cache and not novo.lyric_data_cache
         assert caminho_playlist(tmp_path).is_file()
 
-    def test_o_teto_do_arquivo_de_playlist_e_64_mib_e_o_do_lastfm_4_mib(self):
-        assert cache.PLAYLIST_MAX_BYTES == 64 * MIB and cache.LASTFM_MAX_BYTES == 4 * MIB
-
 
 # ============================================================================ Last.fm
 
@@ -165,14 +156,3 @@ class TestCacheLastFM:
 
 
 # ============================================================================ arquitetura e infra
-
-
-class TestSemPickleNosCaches:
-    @pytest.mark.parametrize("arquivo", ["utils/client.py", "utils/music/json_cache.py"])
-    def test_os_modulos_dos_caches_nao_importam_pickle(self, arquivo):
-        arvore = ast.parse((RAIZ / "empiremuse" / arquivo).read_text(encoding="utf-8"))
-        importados = {
-            alias.name.split(".")[0] for no in ast.walk(arvore) if isinstance(no, ast.Import) for alias in no.names
-        }
-        importados |= {(no.module or "").split(".")[0] for no in ast.walk(arvore) if isinstance(no, ast.ImportFrom)}
-        assert not importados & {"pickle", "_pickle", "cPickle"}

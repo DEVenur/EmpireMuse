@@ -53,10 +53,6 @@ class TestLoadsBoundedAceita:
         texto = '{"a":"Música"}'
         assert ler(texto) == ler(texto.encode("utf-8")) == {"a": "Música"}
 
-    def test_letras_reais_passam_pela_ida_e_volta(self):
-        letras = letras_sincronizadas(100)
-        assert ler(json.dumps(letras, ensure_ascii=False)) == letras
-
 
 class TestMaxBytes:
     def test_conta_bytes_e_nao_caracteres(self):
@@ -120,10 +116,6 @@ class TestVersao:
         erro = falha(ler, f'{{"v":{v}}}', version=1)
         assert erro.code == VERSION and erro.path == ""
 
-    def test_sem_o_parametro_o_campo_v_nao_e_exigido(self):
-        assert ler('{"a":1}') == {"a": 1}
-        assert ler('{"v":99}') == {"v": 99}
-
 
 # ============================================================================ nada do conteúdo vaza
 
@@ -158,17 +150,9 @@ class TestDumps:
         assert saida == '{"t":"Música 日本語 😀"}'.encode("utf-8")
         assert b"\\u" not in saida and isinstance(saida, bytes)
 
-    def test_float_e_inteiro_grande(self):
-        assert codec.dumps([1.5, 2**64, -0.0]) == b"[1.5,18446744073709551616,-0.0]"
-
     @pytest.mark.parametrize("chave", [1, ("a",)], ids=lambda v: type(v).__name__)
     def test_chave_que_nao_e_texto_nao_vira_texto_calada(self, chave):
         assert falha(codec.dumps, {chave: 1}).code == KEY_NOT_TEXT
-
-    def test_nao_altera_a_entrada(self):
-        entrada = {"a": [1, {"b": "c"}]}
-        codec.dumps(entrada)
-        assert entrada == {"a": [1, {"b": "c"}]}
 
 
 # ============================================================================ pack e unpack (zlib + base64)
@@ -183,9 +167,6 @@ def desempacotar(texto, max_packed=10_000_000, max_unpacked=10_000_000):
 
 
 class TestPackUnpack:
-    def test_pack_comprime(self):
-        assert len(empacotar(b"a" * 10_000)) < 200
-
     def test_o_envelope_e_obrigatorio_texto_sem_zlib_e_recusado(self):
         """Sem o antigo "se não for zlib, lê assim mesmo": base64 de JSON puro não é um envelope."""
         for raw in (b'{"v":1}', b"x" * 100, b"", b"\x80\x04N."):

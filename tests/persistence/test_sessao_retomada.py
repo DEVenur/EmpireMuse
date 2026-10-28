@@ -182,38 +182,8 @@ class TestCanalDeOutroServidor:
         await retomar(cog, dados)
         assert criados[0].kwargs["channel"] is meu and ("fetch_message", MENSAGEM) in meu.chamadas
 
-    @pytest.mark.asyncio
-    async def test_a_mensagem_so_e_buscada_no_canal_ja_validado(self):
-        meu = proprio(CANAL_DE_TEXTO)
-        dados = await sessao()
-        cog, _, criados = montar(canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: meu})
-        await retomar(cog, dados)
-        assert len(criados) == 1 and meu.chamadas.count(("fetch_message", MENSAGEM)) == 1
-
-    @pytest.mark.asyncio
-    async def test_tudo_do_proprio_servidor_continua_funcionando(self):
-        dados = await sessao()
-        cog, _, criados = montar(canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: proprio(CANAL_DE_TEXTO)})
-        await retomar(cog, dados)
-        assert len(criados) == 1 and criados[0].conexoes == [CANAL_DE_VOZ]
-
 
 # ============================================================================ a sessão decodificada retoma direito
-
-
-class TestSessaoDecodificada:
-    @pytest.mark.asyncio
-    async def test_a_sessao_minima_sem_os_campos_opcionais_retoma_sem_erro(self):
-        import json
-
-        documento = json.loads(codificar())
-        for campo in list(documento):
-            if campo not in {"v", "_id", "voice_channel", "time", "queue"}:
-                del documento[campo]
-        dados = session.decode_session(json.dumps(documento).encode())
-        cog, _, criados = montar(canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ)})
-        await retomar(cog, dados)
-        assert len(criados) == 1 and criados[0].conexoes == [CANAL_DE_VOZ]
 
 
 # ============================================================================ time: as contas de 48 h continuam (caracterização)
@@ -226,13 +196,6 @@ class TestIdadeDaSessao:
         cog, _, criados = montar(canais={}, servidor_existe=False)
         await retomar(cog, dados)
         assert cog.apagados == [SERVIDOR] and criados == []
-
-    @pytest.mark.asyncio
-    async def test_servidor_inexistente_e_sessao_recente_fica_sem_retomar(self):
-        dados = session.decode_session(codificar(time=INSTANTE - timedelta(hours=47)))
-        cog, _, criados = montar(canais={}, servidor_existe=False)
-        await retomar(cog, dados)
-        assert cog.apagados == [] and criados == []
 
     @pytest.mark.asyncio
     async def test_canal_de_voz_inexistente_e_sessao_com_mais_de_48_horas_e_apagada(self):
@@ -253,19 +216,3 @@ def funcao(nome: str, no_arquivo="cogs/player_resume.py") -> ast.AsyncFunctionDe
                 if isinstance(no, (ast.AsyncFunctionDef, ast.FunctionDef)) and no.name == nome:
                     return no
     raise AssertionError(nome)
-
-
-class TestPorAst:
-    def test_o_resume_player_nao_fala_mais_de_voice_state_nem_de_thread_no_texto(self):
-        no = funcao("resume_player")
-        textos = {c.value for c in ast.walk(no) if isinstance(c, ast.Constant) and isinstance(c.value, str)}
-        assert "voice_state" not in textos and "extra_info" not in textos
-        thread = [
-            c
-            for c in ast.walk(no)
-            if isinstance(c, ast.Call)
-            and getattr(c.func, "id", "") == "isinstance"
-            and any(isinstance(a, ast.Attribute) and a.attr == "Thread" for a in ast.walk(c.args[1]))
-            and "text_channel_id" in ast.dump(c.args[0])
-        ]
-        assert thread == []

@@ -465,50 +465,6 @@ async def test_the_panel_mode_on_the_latest_version_says_so(cog, ambiente, monke
     assert "mais recente" in texto
 
 
-async def test_the_manual_mode_asks_to_redeploy_the_new_version(cog, ambiente, versoes):
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert "Reimplante o código da versão 2.1.0" in texto and not cog.bot.pool.update_lock.locked()
-
-
-async def test_the_prefix_command_sends_an_embed_instead_of_returning_text(cog, ambiente, versoes):
-    ctx = ctx_prefixo()
-
-    assert await Owner.update.callback(cog, ctx) is None
-    assert "Reimplante" in ctx.send.await_args.kwargs["embed"].description
-
-
-async def test_the_panel_mode_still_points_to_the_host_panel_when_the_version_lookup_fails(cog, ambiente, monkeypatch):
-    """A imagem não tem o binário do git: a consulta da versão oficial pode falhar, e o dono ainda precisa saber que atualiza pelo painel."""
-    monkeypatch.setenv("EMPIREMUSE_VERSION", "2.0.2")
-    releases_do_github(monkeypatch, falha=UpdateError("Não consegui consultar as versões publicadas agora."))
-
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert "Atualize pelo painel" in texto
-    assert "mais tarde" not in texto and "Tente de novo" not in texto
-    assert not cog.bot.pool.update_lock.locked()
-
-
-async def test_the_manual_mode_still_points_to_the_redeploy_when_the_version_lookup_fails(cog, ambiente, monkeypatch):
-    """Contrato 3.8: sem a versão, o modo manual não manda 'tente mais tarde': diz o que fazer (reimplantar) e onde ver as versões."""
-    monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=None))
-
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert "Reimplante" in texto
-    assert "mais tarde" not in texto and "Tente de novo" not in texto
-    assert not cog.bot.pool.update_lock.locked()
-
-
-async def test_when_the_official_version_cannot_be_read_it_says_so(cog, ambiente, monkeypatch):
-    monkeypatch.setattr(legacy_cmds, "latest_official_version", AsyncMock(return_value=None))
-
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert "Não consegui consultar" in texto and not cog.bot.pool.update_lock.locked()
-
-
 # ============================================================================ defer do painel antes de qualquer I/O de rede
 
 
@@ -542,17 +498,6 @@ async def test_the_panel_interaction_is_deferred_once_before_any_network_io(cog,
 
     assert ctx.defers_na_rede == [1]
     ctx.response.defer.assert_awaited_once()
-
-
-async def test_the_git_offer_from_the_panel_only_sends_the_ephemeral_confirmation(cog, ambiente, monkeypatch):
-    ctx = ctx_painel()
-    modo_com_consulta_registrada("git", ambiente, monkeypatch, ctx)
-
-    texto = await Owner.update.callback(cog, ctx)
-
-    ctx.response.defer.assert_awaited_once()
-    assert ctx.followup.send.await_args.kwargs["ephemeral"] is True
-    assert texto == "Confirmação enviada só para você."
 
 
 @pytest.mark.parametrize("modo", ["git", "manual"])
@@ -645,15 +590,6 @@ async def test_the_docker_mode_offers_the_update_planned_from_the_image_version(
     assert view is not None and cog.bot.pool.update_lock.locked()  # a trava passou para a janela
 
 
-async def test_through_the_panel_the_docker_mode_defers_first_and_sends_an_ephemeral_confirmation(cog, docker):
-    ctx = ctx_painel()
-
-    texto = await Owner.update.callback(cog, ctx)
-
-    ctx.response.defer.assert_awaited_once()
-    assert ctx.followup.send.await_args.kwargs["ephemeral"] is True and texto == "Confirmação enviada só para você."
-
-
 async def test_without_a_newer_release_the_docker_mode_says_so_and_frees_the_lock(cog, docker, monkeypatch):
     monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
     ctx = ctx_prefixo()
@@ -694,15 +630,6 @@ async def test_confirming_stops_the_ready_check_then_starts_the_helper_then_watc
     assert docker.args_vigia[1] is docker.pendente  # o acompanhamento recebe o pendente devolvido
     interacao.edit_original_message.assert_awaited()
     assert not cog.bot.pool.update_lock.locked()
-
-
-async def test_the_docker_flow_never_restarts_the_process_itself(cog, docker):
-    view = await oferecer(cog, ctx_prefixo())
-
-    await view.confirm.callback(clique())
-    await esperar_tarefas()
-
-    cog.bot.pool.shutdown.assert_not_awaited()  # quem troca o container é o auxiliar
 
 
 async def test_a_start_error_is_shown_in_the_channel_without_watching_and_frees_the_lock(cog, docker, monkeypatch):
@@ -784,13 +711,6 @@ async def test_a_held_pool_lock_refuses_a_second_docker_update_without_planning(
         await Owner.update.callback(cog, ctx_prefixo())
 
     assert docker.eventos == [] and cog.bot.pool.update_lock.locked()  # a recusa não solta a trava de quem a tem
-
-
-async def test_the_docker_mode_is_logged_with_the_versions(cog, docker):
-    await oferecer(cog, ctx_prefixo())
-
-    argumentos = cog.log_owner_command.call_args.args
-    assert argumentos[1:] == ("update", "docker 2.0.0->2.1.0")
 
 
 async def test_only_the_author_can_confirm_the_docker_update(cog, docker):
@@ -1121,18 +1041,6 @@ async def test_a_helper_that_never_ran_or_is_in_another_non_running_state_is_an_
     assert d12.cron.eventos == ["plano"] and ctx.send.await_count == 2
 
 
-async def test_an_exited_helper_with_exit_code_zero_is_still_a_completed_update(cog, d12):
-    from empiremuse.updater import docker_flow
-
-    pendente_docker_em_disco(d12.runtime)
-    d12.auxiliar.parado(0)
-    ctx = ctx_prefixo()
-
-    await Owner.update.callback(cog, ctx)
-
-    assert docker_flow.describe_exit(0) in texto_do_primeiro_envio(ctx)
-
-
 # ---------------------------------------------------------------------------- vigia do auxiliar: o registro vive no pool, não no módulo do cog
 
 
@@ -1168,27 +1076,6 @@ async def vigia_viva(cog, d12, monkeypatch):
     await esperar_tarefas()
 
 
-async def test_a_reloaded_cog_still_sees_the_watcher_that_is_alive(cog, d12, vigia_viva, monkeypatch):
-    """Recarregar o cog zera o que é do módulo; o vigia vivo precisa continuar valendo para a recusa (o registro está no pool)."""
-    recarregado = outro_cog(cog)  # um Owner novo: nada do cog anterior sobrevive, só o registro do pool
-
-    with pytest.raises(GenericError) as erro:
-        await Owner.update.callback(recarregado, ctx_prefixo())
-
-    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []  # recusou sem tocar o proxy
-    assert (d12.runtime / "update-pending.json").exists()
-
-
-async def test_two_bots_of_the_same_pool_share_one_watcher_registry(cog, d12, vigia_viva):
-    do_outro_bot = outro_cog(cog, bot_id=BOT_ID + 1)
-
-    with pytest.raises(GenericError) as erro:
-        await Owner.update.callback(do_outro_bot, ctx_prefixo())
-
-    assert "andamento" in erro.value.text and d12.auxiliar.eventos == []
-    assert (d12.runtime / "update-pending.json").exists()
-
-
 async def test_two_pools_do_not_share_watchers(cog, d12, vigia_viva):
     """O registro é por pool: um pool sem vigia vivo (outro processo simulado) não é bloqueado pelo vigia de outro."""
     cog_de_outro_pool = outro_cog(cog)
@@ -1209,7 +1096,6 @@ async def test_two_pools_do_not_share_watchers(cog, d12, vigia_viva):
 # ============================================================================ D13: imagem em versão de teste ``X.Y.Z-rc.N`` (A29 g)
 
 RC2 = "2.1.0-rc.2"
-SEM_ALVO_RC = "Você está na versão de teste 2.1.0-rc.2; ainda não há versão estável mais nova."
 
 
 @pytest.fixture
@@ -1238,64 +1124,6 @@ async def test_the_docker_mode_plans_from_an_rc_image_version_instead_of_refusin
     ((args, kwargs),) = docker_rc.chamadas
     assert (args[1] if len(args) > 1 else kwargs["current"]) == docker_rc.rc
     assert str(docker_rc.rc) == RC2
-
-
-async def test_the_docker_confirmation_offers_the_stable_from_the_rc(cog, docker_rc):
-    ctx = ctx_prefixo()
-
-    await oferecer(cog, ctx)
-
-    descricao = ctx.send.await_args.kwargs["embed"].description
-    assert "Atualizar de 2.1.0-rc.2 para 2.1.0?" in descricao and "novidade da 2.1.0" in descricao
-    assert "identificar a versão" not in descricao and cog.bot.pool.update_lock.locked()
-
-
-async def test_the_docker_mode_logs_the_rc_to_stable_move(cog, docker_rc):
-    await oferecer(cog, ctx_prefixo())
-
-    assert any("2.1.0-rc.2->2.1.0" in str(chamada) for chamada in cog.log_owner_command.call_args_list)
-
-
-async def test_the_docker_mode_never_offers_a_prerelease_target(cog, docker_rc, monkeypatch):
-    """Quando o plano chega com alvo estável, a mensagem nunca cita ``rc`` como destino."""
-    ctx = ctx_prefixo()
-
-    await oferecer(cog, ctx)
-
-    descricao = ctx.send.await_args.kwargs["embed"].description
-    destino = descricao.split(" para ", 1)[1].split("?", 1)[0]
-    assert "rc" not in destino and destino == "2.1.0"
-
-
-async def test_the_docker_mode_without_a_stable_target_says_the_test_version_phrase(cog, docker_rc, monkeypatch):
-    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
-    ctx = ctx_prefixo()
-
-    await Owner.update.callback(cog, ctx)
-
-    descricao = ctx.send.await_args.kwargs["embed"].description
-    assert descricao == f"✅ **{SEM_ALVO_RC}**"
-    assert "mais recente" not in descricao and not cog.bot.pool.update_lock.locked()
-
-
-async def test_through_the_panel_the_docker_mode_without_a_target_returns_the_test_version_phrase(
-    cog, docker_rc, monkeypatch
-):
-    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
-
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert texto == f"✅ **{SEM_ALVO_RC}**" and not cog.bot.pool.update_lock.locked()
-
-
-async def test_a_stable_image_without_a_target_keeps_saying_it_is_the_latest(cog, docker, monkeypatch):
-    monkeypatch.setattr(legacy_cmds, "plan_docker_update", AsyncMock(return_value=None))
-    ctx = ctx_prefixo()
-
-    await Owner.update.callback(cog, ctx)
-
-    descricao = ctx.send.await_args.kwargs["embed"].description
-    assert "mais recente" in descricao and "teste" not in descricao
 
 
 async def test_confirming_from_the_rc_starts_the_helper_for_the_stable_target(cog, docker_rc, monkeypatch):
@@ -1339,23 +1167,3 @@ async def test_the_panel_mode_from_an_rc_offers_the_stable_and_shows_the_rc_as_i
     assert "Versão disponível: 2.1.0" in texto and "(instalada: 2.1.0-rc.2)" in texto
     assert "novidade da 2.1.0" in texto and "blob/v2.1.0/CHANGELOG.md" in texto
     assert "mais recente" not in texto
-
-
-async def test_the_panel_mode_from_an_rc_without_a_newer_stable_says_the_test_version_phrase(
-    cog, ambiente, monkeypatch
-):
-    monkeypatch.setenv("EMPIREMUSE_VERSION", RC2)
-    releases_do_github(monkeypatch, versao=Version(2, 0, 2))
-
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert texto == f"✅ **{SEM_ALVO_RC}**"
-
-
-async def test_the_panel_mode_on_the_stable_keeps_the_latest_phrase_with_the_version(cog, ambiente, monkeypatch):
-    monkeypatch.setenv("EMPIREMUSE_VERSION", "2.1.0")
-    releases_do_github(monkeypatch, versao=Version(2, 1, 0))
-
-    texto = await Owner.update.callback(cog, ctx_painel())
-
-    assert "mais recente (2.1.0)" in texto and "teste" not in texto

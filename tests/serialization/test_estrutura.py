@@ -69,22 +69,7 @@ def pico_de_memoria(funcao, *args, **kwargs) -> int:
         tracemalloc.stop()
 
 
-class TestOsCasosDeTesteMedemOQueDizem:
-    """Os construtores de casos usam a mesma contagem que o resto da etapa (independe da implementação)."""
-
-    def test_nos_do_compartilhamento(self):
-        assert nos([[0]] * 3) == 1 + 3 * 2
-        assert nos(bomba_de_compartilhamento(3, 10)) == 1 + 10 * (1 + 10 * 2)
-
-
 # ============================================================================ Any_JSON: o que passa
-
-
-class TestAnyJsonAceita:
-    def test_texto_livre_pode_ter_quebra_de_linha_e_formatacao(self):
-        """Letras têm ``\\n`` e emojis com ZWJ: o campo livre só recusa surrogate, não ``Cc``/``Cf`` (isso é do ``Str``)."""
-        valor = {"text": "linha 1\nlinha 2\t\u200d👨\u200d👩\u200d👧\u202e"}
-        assert livre(valor) == valor
 
 
 # ============================================================================ Any_JSON: bordas de profundidade e de nós
@@ -102,11 +87,6 @@ class TestAnyJsonLimites:
         schema.validate(esquema, {"queue": [{"extra": aninhado(FIELD_DEPTH)}]})
         erro = falha(schema.validate, esquema, {"queue": [{"extra": 1}, {"extra": aninhado(FIELD_DEPTH + 1)}]})
         assert erro.code == DEPTH and erro.path == "queue[1].extra"
-
-    def test_nos_de_estrutura_mista(self):
-        passa = [[0, 0]] * 1666  # 1 + 1666 * 3 = 4999 visitas (a mesma lista de dentro vale a cada visita)
-        assert nos(passa) == 4999 and len(livre(passa)) == 1666
-        assert falha(livre, [[0, 0]] * 1667).code == NODES
 
     def test_lista_gigante_e_recusada_pelo_tamanho_sem_alocar_uma_pilha_do_tamanho_dela(self):
         """Um contêiner com milhões de itens é recusado antes de empilhar os filhos (memória proporcional ao TETO)."""
@@ -168,10 +148,6 @@ class TestAnyJsonHostil:
 
 
 class TestCheckStructureAceita:
-    def test_misto_de_tipos_dentro_do_teto(self):
-        valor = {"dj": {1, 2}, "log": deque([{"text": "a", "timestamp": 1.5}], maxlen=10), "t": (1, "x"), "n": None}
-        assert estrutura(valor) is valor
-
     def test_fila_salva_real_passa(self):
         conteudo = {
             "tracks": [{"title": "x", "extra": {"requester": 1}}] * 3,

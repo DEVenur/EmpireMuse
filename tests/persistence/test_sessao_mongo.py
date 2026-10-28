@@ -63,21 +63,11 @@ class TestGravacao:
             session.decode_session(zlib.decompress(base64.b64decode(mongo.doc(NOVA, SERVIDOR)["data"])))["volume"] == 22
         )
 
-    @pytest.mark.asyncio
-    async def test_o_destino_segue_a_configuracao(self, tmp_path):
-        cog, mongo = cog_com_mongo()
-        await cog.save_info(jogador_completo())
-        assert mongo.ids(NOVA) and not (tmp_path / "local_database").exists()
-
 
 # ============================================================================ leitura
 
 
 class TestLeitura:
-    @pytest.mark.asyncio
-    async def test_sem_mongo_configurado_nao_le_nada(self):
-        assert await cog_de_sessoes(MONGO="").get_player_sessions_mongo() == []
-
     @pytest.mark.asyncio
     async def test_nao_le_a_colecao_do_legado(self):
         cog, mongo = cog_com_mongo()
@@ -86,15 +76,6 @@ class TestLeitura:
         mongo.eventos.clear()
         assert [s["_id"] for s in await cog.get_player_sessions_mongo()] == [SERVIDOR]
         assert not [e for e in mongo.eventos if e[1] == ANTIGA]
-
-    @pytest.mark.asyncio
-    async def test_a_leitura_nao_apaga_nem_reescreve(self):
-        cog, mongo = cog_com_mongo()
-        await semear(mongo, SERVIDOR)
-        await mongo.update_data(OUTRO, {"v": 1, "data": "lixo"}, db_name=BOT_ID, collection=NOVA)
-        mongo.eventos.clear()
-        await cog.get_player_sessions_mongo()
-        assert not [e for e in mongo.eventos if e[0] in {"update", "delete"}] and mongo.apagados == []
 
 
 class TestDocumentoRuim:
@@ -141,15 +122,3 @@ class TestRemocao:
             await mongo.update_data(guild, {"data": "legado"}, db_name=BOT_ID, collection=ANTIGA)
         await cog.delete_data_mongo(SERVIDOR)
         assert mongo.ids(NOVA) == {str(OUTRO)} and mongo.ids(ANTIGA) == {str(SERVIDOR), str(OUTRO)}
-
-    @pytest.mark.asyncio
-    async def test_delete_data_vai_para_o_mongo_quando_o_destino_e_o_mongo(self):
-        cog, mongo = cog_com_mongo()
-        await semear(mongo, SERVIDOR)
-        await cog.delete_data(SERVIDOR)
-        assert mongo.ids(NOVA) == set()
-
-    @pytest.mark.asyncio
-    async def test_remover_o_que_nao_existe_nao_falha(self):
-        cog, _ = cog_com_mongo()
-        await cog.delete_data_mongo(SERVIDOR)

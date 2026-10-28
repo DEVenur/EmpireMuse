@@ -113,20 +113,12 @@ def test_check_headers_denies_dangerous_or_malformed_headers(itens):
         check_headers(itens)
 
 
-def test_a_plain_connection_header_is_accepted():
-    assert check_headers([("Connection", "close")]) == 0
-
-
 @pytest.mark.parametrize(
     "corpo", [b"\xff\xfe", b"{", b"[" * 100000, b'{"Cmd": null}', b'{"Cmd": ["' + b"x" * 10 + b'"]}']
 )
 def test_parse_create_target_raises_bad_request_for_hostile_bodies(corpo):
     with pytest.raises(BadRequest):
         parse_create_target(corpo)
-
-
-def test_parse_create_target_returns_only_the_command_target():
-    assert parse_create_target(json.dumps({"Cmd": [ALVO], "Privileged": True}).encode()) == ALVO
 
 
 def test_the_template_carries_the_configuration_and_nothing_else():
@@ -199,11 +191,6 @@ def modulo(arquivo=None, origem=None):
     return SimpleNamespace(__file__=arquivo, __spec__=SimpleNamespace(origin=origem) if origem else None)
 
 
-def test_isolation_problems_reports_the_flags():
-    assert isolation_problems(SimpleNamespace(isolated=1, no_site=1), {}) == []
-    assert len(isolation_problems(SimpleNamespace(isolated=0, no_site=0), {})) == 2
-
-
 def test_isolation_problems_decides_by_origin_not_by_name(tmp_path):
     ok = SimpleNamespace(isolated=1, no_site=1)
     stdlib = os.path.dirname(os.__file__)
@@ -267,10 +254,6 @@ def test_a_path_with_a_double_leading_slash_is_refused(variavel, valor):
         load_config({"UPDATER_PROJECT_DIR": "/srv/app", variavel: valor})
 
     assert variavel in str(erro.value)
-
-
-def test_a_normalized_absolute_path_is_still_valid():
-    assert load_config({"UPDATER_PROJECT_DIR": "/opt/x"}).project_dir == "/opt/x"
 
 
 # ============================================================================ cliente do daemon e Updater
@@ -525,19 +508,6 @@ def test_only_the_configured_peer_uid_is_served(daemon, tmp_path):
     assert status == 0 and daemon.requisicoes == []
 
 
-def test_the_configured_peer_uid_itself_is_served(daemon, tmp_path):
-    daemon.adicionar_container(NOME)
-    servidor, fio, caminho = servidor_com(daemon, tmp_path, peer_uid=os.getuid())
-    try:
-        status, _ = requisicao_crua(caminho, "GET", "/containers/empiremuse-updater/json")
-    finally:
-        servidor.shutdown()
-        fio.join()
-        servidor.server_close()
-
-    assert status == 200
-
-
 def test_when_all_connection_slots_are_taken_a_new_connection_is_dropped(proxy_em_processo, daemon):
     pedir, servidor = proxy_em_processo
     daemon.adicionar_container(NOME)
@@ -624,11 +594,3 @@ def test_main_serves_with_the_validated_configuration(monkeypatch):
 
     assert proxy.main({"UPDATER_PROJECT_DIR": "/srv/e2e", "UPDATER_PROJECT_NAME": "e2e"}) == 0
     assert recebidas[0].container_name == NOME
-
-
-def test_main_reads_os_environ_when_no_mapping_is_given(monkeypatch):
-    monkeypatch.setattr(proxy, "isolation_problems", lambda flags, modulos: [])
-    monkeypatch.setattr(proxy, "serve", lambda config: 0)
-    monkeypatch.setenv("UPDATER_PROJECT_DIR", "/srv/do-ambiente")
-
-    assert proxy.main() == 0

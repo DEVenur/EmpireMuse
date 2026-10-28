@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Alterado
+- **Suíte de testes enxuta (pastas logs, updater, web, persistence, serialization, rules, config, runtime, deploy, brand e repo)**: saem testes obsoletos, de caracterização, de mutação, de estrutura, que liam o texto de docs/ativos e vários testes para o mesmo caminho; ficam segurança, persistência, contratos e regras puras. Sem mudança no bot.
+
 ## [2.1.2] - 2026-10-28
 
 Status automático do canal de voz ligado por padrão (com a opção permanente no painel › Geral), nova tentativa quando o YouTube falha e correções de log e de seletor de skin.

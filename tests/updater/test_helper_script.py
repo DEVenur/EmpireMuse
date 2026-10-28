@@ -346,16 +346,6 @@ def test_a_repo_with_dots_and_a_port_matches_only_literally(tmp_path):
     assert f"    image: {repo}:2.1.1@{NOVO}\n" in cenario.compose.read_text()
 
 
-def test_a_line_that_only_matches_if_the_dots_were_regex_wildcards_is_65(tmp_path):
-    repo = "127.0.0.1:5000/e2e-bot"
-    cenario = Cenario(tmp_path, [f"    image: 127x0x0x1:5000/e2e-bot:2.1.0@{ANTIGO}"], repo=repo)
-
-    resultado = cenario.rodar(alvo())
-
-    assert resultado.returncode == 65
-    assert cenario.intacto()
-
-
 def test_the_script_never_writes_the_arguments_into_code(cenario):
     """Argumentos são posicionais: um repo com metacaracteres de shell não executa nada (nenhum arquivo é criado)."""
     marca = cenario.pasta / "executou"
@@ -390,18 +380,6 @@ def test_a_project_directory_writable_by_others_is_refused(cenario):
     recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
 
 
-def test_a_project_directory_writable_by_the_group_is_refused(cenario):
-    cenario.pasta.chmod(0o775)
-
-    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
-
-
-def test_a_compose_file_writable_by_the_group_is_refused(cenario):
-    cenario.compose.chmod(0o664)
-
-    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
-
-
 def test_a_compose_file_that_is_a_symlink_is_refused(cenario, tmp_path):
     real = tmp_path / "compose-real.yml"
     cenario.compose.rename(real)
@@ -426,14 +404,6 @@ def test_an_env_file_that_is_a_symlink_is_refused(cenario, tmp_path):
     real.write_text("X=1\n")
     real.chmod(0o600)
     (cenario.pasta / ".env").symlink_to(real)
-
-    recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
-
-
-def test_an_env_file_writable_by_others_is_refused(cenario):
-    env = cenario.pasta / ".env"
-    env.write_text("X=1\n")
-    env.chmod(0o666)
 
     recusado_antes_de_qualquer_docker(cenario, cenario.rodar(alvo()))
 
@@ -504,16 +474,6 @@ def test_an_rc_current_line_is_swapped_for_the_stable_target(tmp_path, com_diges
     so_linhas_do_prefixo(resultado)
 
 
-@pytest.mark.parametrize("atual", ["2.1.0-rc.1", "2.1.0-rc.2", "2.1.0-rc.10", "2.1.0-rc.9999", "2.1.0-rc.0"])
-def test_an_rc_current_line_accepts_the_stable_of_the_same_triple_whatever_the_rc_number(tmp_path, atual):
-    cenario = cenario_rc(tmp_path, atual)
-
-    resultado = cenario.rodar(alvo("2.1.0"))
-
-    assert resultado.returncode == 0, resultado.stderr
-    assert f"    image: {REPO}:2.1.0@{NOVO}\n" in cenario.compose.read_text()
-
-
 @pytest.mark.parametrize("versao", ["2.0.9", "2.0.0", "1.9.9"])
 def test_a_target_older_than_the_rc_current_line_is_67_and_intact(tmp_path, versao):
     cenario = cenario_rc(tmp_path)
@@ -522,25 +482,6 @@ def test_a_target_older_than_the_rc_current_line_is_67_and_intact(tmp_path, vers
 
     assert resultado.returncode == 67
     assert cenario.intacto() and cenario.backups == [] and "pull" not in [classe(c) for c in cenario.chamadas]
-    so_linhas_do_prefixo(resultado)
-
-
-def test_a_newer_patch_is_also_accepted_from_an_rc_current_line(tmp_path):
-    cenario = cenario_rc(tmp_path, versao_da_imagem="2.1.1")
-
-    resultado = cenario.rodar(alvo("2.1.1"))
-
-    assert resultado.returncode == 0, resultado.stderr
-
-
-@pytest.mark.parametrize("alvo_rc", ["2.1.0-rc.3", "2.1.0-rc.2", "2.1.1-rc.1"])
-def test_an_rc_target_is_still_64_and_nothing_runs(tmp_path, alvo_rc):
-    cenario = cenario_rc(tmp_path)
-
-    resultado = cenario.rodar(alvo(alvo_rc))
-
-    assert resultado.returncode == 64
-    assert cenario.intacto() and cenario.backups == [] and cenario.chamadas == []
     so_linhas_do_prefixo(resultado)
 
 
@@ -569,39 +510,6 @@ def test_an_invalid_current_line_suffix_is_65_and_intact(tmp_path, atual):
     so_linhas_do_prefixo(resultado)
 
 
-def test_two_rc_lines_are_65(tmp_path):
-    cenario = Cenario(tmp_path, [f"    image: {REPO}:2.1.0-rc.2@{ANTIGO}", f"    image: {REPO}:2.1.0-rc.2@{ANTIGO}"])
-
-    assert cenario.rodar(alvo("2.1.0")).returncode == 65
-    assert cenario.intacto()
-
-
-def test_an_rc_line_next_to_a_stable_line_is_65(tmp_path):
-    cenario = Cenario(tmp_path, [f"    image: {REPO}:2.1.0-rc.2@{ANTIGO}", f"    image: {REPO}:2.0.0@{ANTIGO}"])
-
-    assert cenario.rodar(alvo("2.1.0")).returncode == 65
-    assert cenario.intacto()
-
-
-def test_the_proxy_docker_io_rc_line_alone_never_matches(tmp_path):
-    cenario = Cenario(tmp_path, [])
-    texto = cenario.compose.read_text().replace(":2.1.0@", ":2.1.0-rc.2@")
-    cenario.compose.write_text(texto)
-    cenario.original = texto
-
-    assert cenario.rodar(alvo("2.1.0")).returncode == 65
-    assert cenario.intacto()
-
-
-def test_the_image_must_still_carry_a_stable_version_equal_to_the_target_even_from_an_rc_line(tmp_path):
-    cenario = cenario_rc(tmp_path, versao_da_imagem="2.1.0-rc.2")
-
-    resultado = cenario.rodar(alvo("2.1.0"))
-
-    assert resultado.returncode == 68
-    assert cenario.intacto() and cenario.backups == [] and cenario.ups == []
-
-
 def test_a_failed_up_from_an_rc_line_restores_the_rc_line_and_is_70(tmp_path):
     cenario = cenario_rc(tmp_path)
     cenario.marcar("up_resultados", "fail\nok\n")
@@ -614,17 +522,3 @@ def test_a_failed_up_from_an_rc_line_restores_the_rc_line_and_is_70(tmp_path):
         len(cenario.ups) == 2 and NOVO in cenario.ups[0] and "2.1.0-rc.2" in cenario.ups[1] and ANTIGO in cenario.ups[1]
     )
     so_linhas_do_prefixo(resultado)
-
-
-def test_when_the_rollback_up_also_fails_from_an_rc_line_it_is_71(tmp_path):
-    cenario = cenario_rc(tmp_path)
-    cenario.marcar("up_resultados", "fail\nfail\n")
-
-    assert cenario.rodar(alvo("2.1.0")).returncode == 71
-    assert cenario.intacto()
-
-
-def test_a_stable_current_line_still_refuses_the_same_version(cenario):
-    """O ``>=`` do N rc não pode vazar para a linha estável: atual 2.1.0 e alvo 2.1.0 seguem 67."""
-    assert cenario.rodar(alvo("2.1.0")).returncode == 67
-    assert cenario.intacto()

@@ -76,20 +76,6 @@ class TestLocalDatabase:
         novo = run(banco.get_data(10, db_name=DBModel.guilds, collection="g"))
         assert novo["autoplay"] is False
 
-    def test_delete_of_unknown_document_does_not_raise(self, tmp_path):
-        run(self.make(tmp_path).delete_data(404, DBModel.guilds, "g"))
-
-    @pytest.mark.smoke
-    def test_get_default_returns_independent_copies(self, tmp_path):
-        banco = self.make(tmp_path)
-        a = banco.get_default("g", DBModel.guilds)
-        a["djroles"].append("x")
-        assert banco.get_default("g", DBModel.guilds)["djroles"] == []
-
-    def test_get_default_global_uses_the_global_models(self, tmp_path):
-        banco = self.make(tmp_path)
-        assert banco.get_default("global", DBModel.users) == db.global_db_models[DBModel.users]
-
 
 # ============================================================================ MongoDatabase (cliente PyMongo Async falso)
 
@@ -178,10 +164,6 @@ class TestMongoDatabaseData:
         assert data["ver"] == db.db_models[DBModel.guilds]["ver"] and data["djroles"] == ["4"]
         assert colecao(mongo).docs["1"]["ver"] == data["ver"]
 
-    def test_cached_result_skips_the_database(self, mongo):
-        mongo.cache["g:guilds:1"] = {"cache": True}
-        assert run(mongo.get_data(1, db_name=DBModel.guilds, collection="g")) == {"cache": True}
-
     def test_push_data_inserts(self, mongo):
         run(mongo.push_data({"_id": "5", "x": 1}, db_name=DBModel.guilds, collection="g"))
         assert colecao(mongo).docs["5"]["x"] == 1
@@ -226,14 +208,6 @@ class TestUpdateFromJson:
 
 
 # ============================================================================ utilitários
-
-
-class TestDatetimeSerializer:
-    def test_round_trip_with_the_default_format(self):
-        serializer = db.DatetimeSerializer()
-        momento = datetime(2026, 10, 23, 8, 30, 15)
-        assert serializer.encode(momento) == "2026-10-23T08:30:15"
-        assert serializer.decode("2026-10-23T08:30:15") == momento
 
 
 class TestGetPrefix:

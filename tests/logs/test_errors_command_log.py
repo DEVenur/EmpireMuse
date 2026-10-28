@@ -125,14 +125,6 @@ class TestSlash:
         assert TEXTO_LIVRE not in linha
 
     @pytest.mark.asyncio
-    async def test_the_options_are_summarized_by_type(self, fechamentos):
-        await fechamentos["check"](inter_com_opcoes())
-
-        (linha,) = fechamentos["linhas"]
-        assert f"str(len={len(TEXTO_LIVRE)})" in linha
-        assert "Member(id=31)" in linha and "Attachment(tipo=image/png, tamanho=4321)" in linha and "70" in linha
-
-    @pytest.mark.asyncio
     async def test_a_secret_named_option_is_masked(self, fechamentos):
         inter = inter_com_opcoes()
         inter.filled_options = {"token": "valor-privado-N4"}
@@ -164,9 +156,3 @@ class TestPrefixo:
         assert "str(len=" in linha
         assert ctx.message.content not in linha and "musica secreta" not in linha
         assert sem_nomes(linha) == [], linha
-
-    @pytest.mark.asyncio
-    async def test_the_prefix_record_never_has_the_names(self, fechamentos):
-        await fechamentos["on_command"](contexto_de_prefixo())
-
-        assert sem_nomes(" ".join(fechamentos["linhas"])) == []

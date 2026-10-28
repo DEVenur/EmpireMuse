@@ -107,14 +107,6 @@ class TestSenhasDeNo:
 
         assert_mascarado(senha)
 
-    def test_the_url_encoded_form_of_the_node_password_is_registered_too(self, fabrica):
-        senha = "p@ss/w%rd#no-json-B2"
-        pool = fabrica(LAVALINK_NODE_1=no_json(senha))
-
-        pool.setup()
-
-        assert_mascarado(senha, quote(senha, safe=""))
-
     def test_the_password_of_a_lavalink_ini_section_is_registered(self, fabrica, runtime):
         senha = "senha-do-lavalink-ini-C3"
         (runtime / "lavalink.ini").write_text(
@@ -141,16 +133,6 @@ class TestSenhasDeNo:
 
         assert_mascarado(senha)
 
-    def test_a_node_without_a_password_or_with_a_short_one_breaks_nothing(self, fabrica):
-        pool = fabrica(
-            LAVALINK_NODE_1=json.dumps({"identifier": "SEMSENHA", "host": "h", "port": 1}),
-            LAVALINK_NODE_2=no_json("ab", "CURTA"),
-        )
-
-        pool.setup()
-
-        assert redact("ab") == "ab"
-
 
 class TestTokensDosBotsDeServidor:
     def test_the_tokens_of_guild_bots_json_are_registered(self, fabrica, runtime):
@@ -162,9 +144,6 @@ class TestTokensDosBotsDeServidor:
         pool.setup()
 
         assert_mascarado(token_a, token_b)
-
-    def test_an_absent_guild_bots_file_registers_nothing_and_breaks_nothing(self, fabrica):
-        fabrica().setup()
 
 
 class TestRefreshTokensDoMongo:

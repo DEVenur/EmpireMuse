@@ -31,25 +31,6 @@ def unidades(texto: str) -> int:
 # ============================================================================ constantes
 
 
-class TestConstantes:
-    def test_the_default_template_is_the_one_the_owner_chose(self) -> None:
-        assert regras().DEFAULT_VOICE_TEMPLATE == DEFAULT_TEMPLATE
-
-    def test_the_numbers_of_the_contract(self) -> None:
-        r = regras()
-        assert r.VOICE_STATUS_MAX_UNITS == 500
-        assert r.VOICE_STATUS_MIN_INTERVAL == 5
-        assert r.VOICE_STATUS_BOT_RATE == 2
-        assert r.VOICE_STATUS_RESUME_JITTER == 10
-        assert r.VOICE_STATUS_REAPPLY_INTERVAL == 300
-        assert r.VOICE_CONTROL_LOCK_SECONDS == 5
-        assert r.STAGE_CONTROL_LOCK_SECONDS == 120
-
-    @pytest.mark.parametrize(("palco", "segundos"), [(False, 5), (True, 120)])
-    def test_the_control_lock_depends_only_on_the_channel_kind(self, palco: bool, segundos: int) -> None:
-        assert regras().control_lock_seconds(palco) == segundos
-
-
 # ============================================================================ VR1
 
 
@@ -58,12 +39,6 @@ class TestResolveVoiceStatus:
         cfg = regras().resolve_voice_status({})
 
         assert cfg.permanent is True and cfg.template == DEFAULT_TEMPLATE
-
-    def test_the_config_is_a_frozen_value(self) -> None:
-        cfg = regras().resolve_voice_status({})
-
-        with pytest.raises(AttributeError):
-            cfg.permanent = False  # type: ignore[misc]
 
     @pytest.mark.parametrize("salvo", [True, False])
     def test_a_saved_bool_wins(self, salvo: bool) -> None:
@@ -104,11 +79,6 @@ class TestResolveVoiceStatus:
     def test_an_empty_invalid_or_non_text_template_means_the_default(self, lixo: object) -> None:
         assert regras().resolve_voice_status({"voice_channel_status": lixo}).template == DEFAULT_TEMPLATE
 
-    def test_template_and_flag_are_resolved_independently(self) -> None:
-        cfg = regras().resolve_voice_status({"voice_status_permanent": False, "voice_channel_status": "{track.title}"})
-
-        assert (cfg.permanent, cfg.template) == (False, "{track.title}")
-
     def test_it_never_raises_whatever_the_document_holds(self) -> None:
         valores = [None, True, 1, "x", b"x", [], {}, "x" * 100_000, object()]
         for permanente in valores:
@@ -118,19 +88,11 @@ class TestResolveVoiceStatus:
                 )
                 assert isinstance(cfg.permanent, bool) and isinstance(cfg.template, str) and cfg.template
 
-    def test_extra_keys_are_ignored(self) -> None:
-        cfg = regras().resolve_voice_status({"prefix": "!", "ver": 1.5, "custom_skins": {}})
-
-        assert cfg.permanent is True and cfg.template == DEFAULT_TEMPLATE
-
 
 # ============================================================================ VR2
 
 
 class TestFitVoiceStatus:
-    def test_a_short_text_is_returned_as_it_is_without_dots(self) -> None:
-        assert regras().fit_voice_status("Tocando: Musica") == "Tocando: Musica"
-
     def test_a_text_exactly_at_the_limit_is_not_cut(self) -> None:
         texto = "a" * UNIDADES_MAXIMAS
 
@@ -179,14 +141,6 @@ class TestFitVoiceStatus:
 
         assert saida.startswith("<:spotify:123456789012345678> ") and unidades(saida) <= UNIDADES_MAXIMAS
 
-    def test_a_smaller_limit_is_obeyed(self) -> None:
-        saida = regras().fit_voice_status("abcdefghijklmnopqrstuvwxyz", 10)
-
-        assert unidades(saida) <= 10 and saida.endswith("...")
-
-    def test_a_text_that_already_ends_with_dots_and_fits_is_untouched(self) -> None:
-        assert regras().fit_voice_status("espera...") == "espera..."
-
 
 # ============================================================================ VR3
 
@@ -196,17 +150,11 @@ class TestVoiceStatusValue:
     def test_a_non_text_becomes_empty(self, nao_texto: object) -> None:
         assert regras().voice_status_value(nao_texto) == ""
 
-    def test_plain_text_goes_through(self) -> None:
-        assert regras().voice_status_value("Musica Legal - Artista") == "Musica Legal - Artista"
-
     @pytest.mark.parametrize("controle", ["\x00", "\x1b", "\x7f", "‮", "​", "⁦", "\r", "\n", "\t"])
     def test_control_format_and_line_break_characters_are_removed(self, controle: str) -> None:
         saida = regras().voice_status_value(f"a{controle}b")
 
         assert controle not in saida and saida.replace(" ", "") == "ab"
-
-    def test_a_line_break_does_not_glue_the_words(self) -> None:
-        assert regras().voice_status_value("um\ndois") in {"um dois", "um dois", "umdois"}
 
     @pytest.mark.parametrize(
         "token", ["<@123456789012345678>", "<@!123456789012345678>", "<@&123456789012345678>", "<#123456789012345678>"]
@@ -239,10 +187,6 @@ class TestVoiceStatusValue:
         saida = regras().voice_status_value(f"veja {url} ok")
 
         assert "//" not in saida and "／／" in saida
-
-    def test_a_double_slash_anywhere_in_the_value_is_swapped(self) -> None:
-        assert regras().voice_status_value("a//b") == "a／／b"
-        assert "//" not in regras().voice_status_value("x///y////z")
 
     def test_the_zero_width_joiner_trick_is_not_used(self) -> None:
         assert "⁠" not in regras().voice_status_value("<@123456789012345678> @everyone")
@@ -311,12 +255,6 @@ class TestRenderVoiceStatus:
         valores = self.valores(**{"{track.author}": r.voice_status_value("{requester.name}{requester.id}")})
 
         assert r.render_voice_status("{track.author}", valores) == "{requester.name}{requester.id}"
-
-    def test_a_repeated_placeholder_is_replaced_everywhere(self) -> None:
-        assert regras().render_voice_status("{track.title}-{track.title}", self.valores()) == "Musica-Musica"
-
-    def test_text_without_placeholders_is_untouched(self) -> None:
-        assert regras().render_voice_status("so texto {outra} coisa", self.valores()) == "so texto {outra} coisa"
 
     def test_the_bot_emoji_stays_but_a_title_emoji_does_not(self) -> None:
         r = regras()

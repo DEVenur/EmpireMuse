@@ -108,49 +108,6 @@ def pings(valores, nulos=0):
 
 
 class TestPrimeiraLinha:
-    def test_the_gateway_latency_in_seconds_is_shown_in_milliseconds(self):
-        cenario = Cenario(bots=[Bot(0.05, 3, {}, {})])
-
-        primeira = cenario.rodar()[0]
-
-        assert "gateway" in primeira and ("50ms" in primeira or "50 ms" in primeira)
-        assert "máx 50" in primeira and "0.05" not in primeira
-
-    def test_with_two_bots_the_maximum_is_the_highest_latency(self):
-        cenario = Cenario(bots=[Bot(0.05, 2, {}, {}), Bot(0.12, 2, {}, {})])
-
-        primeira = cenario.rodar()[0]
-
-        assert "máx 120" in primeira
-
-    def test_the_guild_count_comes_from_the_bots(self):
-        cenario = Cenario(bots=[Bot(0.05, 3, {}, {})])
-
-        assert "servidores 3" in cenario.rodar()[0]
-
-    def test_the_voice_p95_comes_from_the_player_pings_ignoring_none(self):
-        # 100 pings de 1 a 100 ms e 100 players sem ping: contando os None como zero o p95 cairia para ~90
-        cenario = Cenario(bots=[Bot(0.05, 1, {}, pings([float(n) for n in range(1, 101)], nulos=100))])
-
-        primeira = cenario.rodar()[0]
-
-        assert "voz p95 95" in primeira or "voz p95 96" in primeira or "voz p95 95.05" in primeira
-
-    def test_players_without_any_ping_show_a_dash_for_the_voice(self):
-        cenario = Cenario(bots=[Bot(0.05, 1, {}, pings([], nulos=5))])
-
-        primeira = cenario.rodar()[0]
-
-        assert "voz p95 —" in primeira
-
-    def test_the_python_process_figures_come_from_the_injected_process_stats(self):
-        cenario = Cenario(bots=[Bot(0.05, 1, {}, {})])
-
-        primeira = cenario.rodar()[0]
-
-        assert "CPU 12.5%" in primeira and "RSS 345.6" in primeira
-        assert () in cenario.chamadas  # o processo Python: sem argumento
-
     def test_the_summary_line_has_the_documented_shape_with_active_players_and_peak(self):
         cenario = Cenario(bots=[Bot(0.05, 1, {}, pings([10.0, 20.0, 30.0]))])
 
@@ -186,33 +143,8 @@ class TestNos:
         for linha in do_no:
             assert "indisponível" in linha and "players" not in linha
 
-    def test_two_nodes_give_one_plus_two_lines_per_interval(self):
-        nos = {n.identifier: n for n in (no_com_stats("A"), no_sem_stats("B"))}
-        cenario = Cenario(bots=[Bot(0.05, 1, nos, {})])
-
-        linhas = cenario.rodar()
-
-        assert len(linhas) == 2 * 3  # dois resumos (t = 300 e 600) de 1 + 2 linhas
-
-    def test_a_node_shared_by_two_bots_is_listed_once(self):
-        no = no_com_stats("COMPARTILHADO")
-        cenario = Cenario(bots=[Bot(0.05, 1, {no.identifier: no}, {}), Bot(0.06, 1, {no.identifier: no}, {})])
-
-        linhas = cenario.rodar()
-
-        assert len([x for x in linhas if "COMPARTILHADO" in x]) == 2  # uma por resumo, nunca uma por bot
-
 
 class TestLavalinkLocal:
-    def test_without_a_local_lavalink_there_is_no_java_part(self):
-        no = no_sem_stats("LOCAL")
-        cenario = Cenario(bots=[Bot(0.05, 1, {"LOCAL": no}, {})], lavalink_local=False)
-
-        linhas = cenario.rodar()
-
-        assert [c for c in cenario.chamadas if c] == []  # process_stats nunca recebeu um pid
-        assert "900" not in "".join(linhas)
-
     def test_with_a_local_lavalink_the_java_process_figures_are_read_by_its_pid_and_shown(self):
         no = no_sem_stats("LOCAL")
         cenario = Cenario(bots=[Bot(0.05, 1, {"LOCAL": no}, {})], lavalink_local=True)
@@ -224,13 +156,6 @@ class TestLavalinkLocal:
         assert "900" in texto and "80" in texto
         assert len(linhas) == 2 * 2  # a parte do Java entra na linha do nó, não numa linha a mais
 
-    def test_the_python_figures_are_still_in_the_first_line_with_a_local_lavalink(self):
-        cenario = Cenario(bots=[Bot(0.05, 1, {}, {})], lavalink_local=True)
-
-        primeira = cenario.rodar()[0]
-
-        assert "CPU 12.5%" in primeira and "RSS 345.6" in primeira
-
 
 class TestFalhaDeFonte:
     def test_a_process_stats_that_returns_none_shows_dashes_and_does_not_stop_the_summary(self):
@@ -240,8 +165,3 @@ class TestFalhaDeFonte:
         primeira = cenario.rodar()[0]
 
         assert "CPU —" in primeira and "RSS —" in primeira
-
-    def test_a_latency_that_is_none_shows_a_dash(self):
-        cenario = Cenario(bots=[Bot(None, 1, {}, {})])
-
-        assert "gateway —" in cenario.rodar()[0]

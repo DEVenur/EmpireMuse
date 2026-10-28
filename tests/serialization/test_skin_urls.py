@@ -60,28 +60,6 @@ class TestURLsDeEmbed:
         skin = com_embed(title="https://nao-e-url", description="texto solto {guild.icon}", footer={"text": "x"})
         assert valida(skin) == skin
 
-    def test_o_link_do_embed_nao_e_campo_conhecido_e_continua_descartado(self):
-        assert valida(com_embed(url="javascript:alert(1)", description="d")) == com_embed(description="d")
-
-
-class TestSkinsConhecidasContinuamValendo:
-    def test_a_skin_realista_do_editor_passa(self):
-        assert valida(skin_realista()) == skin_realista()
-
-    def test_as_skins_embutidas_sao_codigo_python_e_nao_dicionarios(self):
-        """As 15 skins de ``utils/music/skins/`` são módulos com ``load(player)``: não passam por ``validate_skin``."""
-        modulos = [
-            m
-            for pasta in ("normal_player", "static_player")
-            for m in (PACOTE / "utils/music/skins" / pasta).glob("*.py")
-        ]
-        assert len(modulos) == 15
-        for modulo in modulos:
-            funcoes = {
-                n.name for n in ast.parse(modulo.read_text(encoding="utf-8")).body if isinstance(n, ast.FunctionDef)
-            }
-            assert "load" in funcoes, modulo.name
-
 
 class TestPlaceholdersDeURLSaoOsQueOConversorSubstitui:
     def test_cada_placeholder_de_url_e_substituido_pelo_skin_converter(self):

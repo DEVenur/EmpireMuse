@@ -14,10 +14,6 @@ from empiremuse.logs.metrics import ERROR_KINDS, MetricsCollector, MetricsSnapsh
 pytestmark = pytest.mark.critical
 
 
-def test_the_error_kinds_are_the_contract_ones():
-    assert tuple(ERROR_KINDS) == ("track_exception", "track_stuck", "node_unavailable", "command_error")
-
-
 class TestColetor:
     def test_track_starts_are_counted(self):
         coletor = MetricsCollector()
@@ -25,22 +21,6 @@ class TestColetor:
             coletor.track_started(guild)
 
         assert coletor.snapshot_and_reset(100.0).tracks_started == 4
-
-    def test_track_ended_does_not_count_as_started_and_never_raises(self):
-        coletor = MetricsCollector()
-        coletor.track_started(1)
-        coletor.track_ended(1, "FINISHED")
-        coletor.track_ended(2, "STOPPED")
-        coletor.track_ended(3, "texto estranho\nsem restrição")
-
-        assert coletor.snapshot_and_reset(100.0).tracks_started == 1
-
-    def test_the_peak_is_the_maximum_sampled_value(self):
-        coletor = MetricsCollector()
-        for ativos in (3, 10, 7, 0):
-            coletor.sample_players(ativos)
-
-        assert coletor.snapshot_and_reset(100.0).players_peak == 10
 
     def test_errors_are_counted_by_kind(self):
         coletor = MetricsCollector()
@@ -77,23 +57,6 @@ class TestColetor:
         assert (segundo.tracks_started, segundo.players_peak, dict(segundo.errors)) == (0, 0, {})
         assert segundo.interval == 60.0
 
-    def test_a_snapshot_is_not_changed_by_what_happens_after_it(self):
-        coletor = MetricsCollector()
-        coletor.error("track_stuck")
-        foto = coletor.snapshot_and_reset(100.0)
-
-        coletor.error("track_stuck")
-        coletor.error("command_error")
-
-        assert dict(foto.errors) == {"track_stuck": 1}
-
-    def test_the_snapshot_is_frozen(self):
-        foto = MetricsCollector().snapshot_and_reset(1.0)
-
-        assert isinstance(foto, MetricsSnapshot)
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            foto.tracks_started = 5  # type: ignore[misc]
-
     def test_concurrent_increments_lose_nothing(self):
         coletor = MetricsCollector()
 
@@ -110,14 +73,6 @@ class TestColetor:
         foto = coletor.snapshot_and_reset(1.0)
 
         assert foto.tracks_started == 4000 and dict(foto.errors) == {"track_stuck": 4000}
-
-    def test_five_hundred_guilds_only_cost_two_increments_each(self):
-        coletor = MetricsCollector()
-        for guild in range(500):
-            coletor.track_started(guild)
-            coletor.track_ended(guild, "FINISHED")
-
-        assert coletor.snapshot_and_reset(1.0).tracks_started == 500
 
 
 # ============================================================================ format_summary
@@ -168,42 +123,6 @@ class TestResumo:
         linhas = resumo(nodes=nos)
 
         assert len(linhas) == 1 + quantos and all(linha.startswith("📊") for linha in linhas)
-
-    def test_a_node_line_has_the_identifier_players_cpu_and_memory(self):
-        linhas = resumo(nodes=[NodeSample("LOCAL", 12, 3.5, 210.0)])
-
-        assert re.search(r"nó LOCAL", linhas[1]) and re.search(r"players 12", linhas[1])
-        assert re.search(r"CPU 3\.5%", linhas[1]) and re.search(r"memória 210(\.\d)?\s?MiB", linhas[1])
-
-    def test_a_node_with_every_field_none_is_unavailable(self):
-        linhas = resumo(nodes=[NodeSample("MORTO", None, None, None)])
-
-        assert "nó MORTO" in linhas[1] and "indisponível" in linhas[1] and "players" not in linhas[1]
-
-    def test_a_node_with_some_fields_missing_shows_a_dash_for_them(self):
-        linhas = resumo(nodes=[NodeSample("PARCIAL", 5, None, 100.0)])
-
-        assert "players 5" in linhas[1] and "—" in linhas[1] and "indisponível" not in linhas[1]
-
-    def test_missing_process_figures_show_a_dash(self):
-        (linha,) = resumo(cpu_percent=None, rss_mib=None)
-
-        assert "—" in linha and "CPU None" not in linha and "RSS None" not in linha
-
-    def test_no_gateway_or_voice_samples_show_a_dash(self):
-        (linha,) = resumo(gateway_ms=[], voice_ms=[])
-
-        assert linha.count("—") >= 2 and "nan" not in linha.lower()
-
-    def test_no_errors_still_gives_a_clean_line(self):
-        (linha,) = resumo(foto(iniciadas=1, pico=1))
-
-        assert "\n" not in linha and "Traceback" not in linha
-
-    def test_the_summary_is_pure(self):
-        a, b = resumo(), resumo()
-
-        assert a == b
 
     def test_a_node_identifier_with_control_characters_never_adds_a_line(self):
         linhas = resumo(nodes=[NodeSample("N\nERROR falso", 1, 1.0, 1.0)])

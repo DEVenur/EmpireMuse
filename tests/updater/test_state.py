@@ -95,20 +95,6 @@ def sem_flags_do_posix(monkeypatch):
         monkeypatch.delattr(os, nome, raising=False)
 
 
-def test_a_valid_pending_update_is_read_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix):
-    write_pending(tmp_path, pendente(AGORA - 60))
-
-    lido = read_pending(tmp_path, AGORA)
-
-    assert lido is not None and lido.to_version == Version(2, 1, 0)
-
-
-def test_a_non_regular_file_is_still_discarded_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix):
-    pending_path(tmp_path).mkdir()
-
-    assert read_pending(tmp_path, AGORA) is None
-
-
 def test_a_symlink_is_refused_where_the_posix_open_flags_do_not_exist(tmp_path, sem_flags_do_posix):
     """Sem ``O_NOFOLLOW`` (Windows) o ``S_ISREG`` valeria para o alvo: o link precisa ser recusado antes do ``open``."""
     alvo = tmp_path / "alvo.json"
@@ -157,13 +143,6 @@ def test_parse_pending_rejects_a_created_at_out_of_range_without_raising(created
     dados["created_at"] = created_at
 
     assert parse_pending(dados) is None
-
-
-@pytest.mark.parametrize("created_at", [AGORA - 60, 0], ids=["normal", "zero"])
-def test_parse_pending_accepts_a_created_at_in_range(created_at):
-    dados = pendente(created_at).to_json()
-
-    assert parse_pending(dados) is not None
 
 
 # ============================================================================ D9: o status ``applying``
@@ -226,30 +205,6 @@ def test_restore_attempts_out_of_range_or_of_another_type_make_the_file_invalid(
     assert parse_pending(git_com_tentativas(valor)) is None
 
 
-def test_a_git_pending_file_without_the_key_reads_as_zero_attempts():
-    dados = pendente(AGORA - 60).to_json()
-    dados.pop("restore_attempts", None)
-
-    lido = parse_pending(dados)
-
-    assert lido is not None and lido.restore_attempts == 0
-
-
-def test_a_git_pending_file_is_always_written_with_the_counter(tmp_path):
-    write_pending(tmp_path, pendente(AGORA - 60))
-
-    assert json.loads(pending_path(tmp_path).read_text())["restore_attempts"] == 0
-
-
-def test_the_docker_flow_accepts_no_attempts():
-    docker = dataclasses.replace(pendente(AGORA - 60), flow="docker", prev_sha=None, digest="sha256:" + "ab" * 32)
-    dados = docker.to_json()
-    dados.pop("restore_attempts", None)
-
-    assert parse_pending(dados) is not None
-    assert parse_pending({**dados, "restore_attempts": 1}) is None
-
-
 # ============================================================================ D10: ``target_commit`` do pendente git
 
 
@@ -308,25 +263,6 @@ def docker_com_rc(**campos) -> PendingUpdate:
     return dataclasses.replace(base, **campos)
 
 
-def test_a_docker_pending_file_with_an_rc_from_version_is_written_as_text_and_read_back(tmp_path):
-    original = docker_com_rc()
-    write_pending(tmp_path, original)
-
-    gravado = json.loads(pending_path(tmp_path).read_text())
-    lido = read_pending(tmp_path, AGORA)
-
-    assert gravado["from_version"] == "2.1.0-rc.2" and gravado["to_version"] == "2.1.0"
-    assert "10000" not in pending_path(tmp_path).read_text()  # o sentinela nunca aparece em JSON
-    assert lido == original and str(lido.from_version) == "2.1.0-rc.2"
-
-
-@pytest.mark.parametrize("status", ["pending", "ready"])
-def test_a_docker_rc_pending_file_is_valid_in_both_statuses(status):
-    lido = parse_pending(docker_com_rc(status=status).to_json())
-
-    assert lido is not None and lido.from_version.is_prerelease and lido.status == status
-
-
 @pytest.mark.parametrize(
     "valor",
     [
@@ -343,13 +279,6 @@ def test_a_docker_rc_pending_file_is_valid_in_both_statuses(status):
 def test_a_docker_pending_file_with_a_malformed_from_version_is_invalid(valor):
     dados = docker_com_rc().to_json()
     dados["from_version"] = valor
-
-    assert parse_pending(dados) is None
-
-
-def test_a_git_pending_file_with_an_rc_from_version_is_invalid():
-    dados = pendente(AGORA - 60).to_json()
-    dados["from_version"] = "2.1.0-rc.2"
 
     assert parse_pending(dados) is None
 

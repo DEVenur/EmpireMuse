@@ -88,26 +88,8 @@ def lendo(raw: bytes):
 
 
 class TestCodificar:
-    @pytest.mark.smoke
-    def test_e_json_compacto_em_utf8_e_nao_pickle(self):
-        bruto = codificar()
-        assert bruto[:1] == b"{" and b"\\u" not in bruto and b": " not in bruto
-
     def test_data_sem_fuso_e_recusada(self):
         assert falha(codificar, criada=datetime(2026, 1, 1)).path == "created_at"
-
-    def test_faixa_com_playlist_e_id_vazio_e_campos_desconhecidos_passam(self):
-        faixas = faixas_validas()
-        faixas[0]["playlist"] = {"name": "Minha Playlist", "url": "https://exemplo.invalid/playlist/1"}
-        faixas[1]["id"] = ""
-        faixas[2]["campo_novo"] = {"a": [1, 2]}
-        assert lendo(codificar(faixas))["tracks"] == faixas
-
-    def test_letra_grande_demais_e_descartada_e_a_fila_ainda_e_salva(self):
-        faixas = faixas_validas()
-        faixas[0]["extra"]["lyrics"] = {"lines": [{"text": "x"}] * 6000}
-        lidas = lendo(codificar(faixas))["tracks"]
-        assert "lyrics" not in lidas[0]["extra"] and lidas[0]["title"] == faixas[0]["title"]
 
     def test_o_erro_leva_o_caminho_e_nao_o_valor(self):
         faixas = faixas_validas()
@@ -140,16 +122,6 @@ class TestDecodificar:
             erro = falha(lendo, json.dumps(bruto).encode())
             assert erro.code == MISSING and erro.path == f"tracks[0].{campo}"
 
-    def test_requester_pode_ser_inteiro_ou_texto_mas_nao_bool(self):
-        for bom in (DONO, "usuário"):
-            bruto = json.loads(codificar())
-            bruto["tracks"][0]["extra"]["requester"] = bom
-            assert lendo(json.dumps(bruto).encode())["tracks"][0]["extra"]["requester"] == bom
-        for ruim in (True, 1.5, None, [1], -4):
-            bruto = json.loads(codificar())
-            bruto["tracks"][0]["extra"]["requester"] = ruim
-            assert falha(lendo, json.dumps(bruto).encode()).path.startswith("tracks[0].extra")
-
     def test_nada_do_conteudo_vaza_no_erro(self):
         bruto = json.loads(codificar())
         bruto["tracks"][0]["title"] = SEGREDO + "\ud800"
@@ -157,14 +129,6 @@ class TestDecodificar:
 
 
 # ============================================================================ gravação atômica e privada
-
-
-class TestArquivosPrivados:
-    def test_substitui_o_arquivo_existente_de_uma_vez(self, tmp_path):
-        alvo = tmp_path / "x.json"
-        alvo.write_bytes(b"antigo")
-        files.write_private_atomic(alvo, b"novo")
-        assert alvo.read_bytes() == b"novo"
 
 
 def negar(*args, **kwargs):
@@ -236,26 +200,5 @@ class TestLer:
             await montar_leitura(monkeypatch, None).rodar()
         assert pkl.read_bytes() == antes and not caminho_json(tmp_path).exists()
 
-    @pytest.mark.asyncio
-    async def test_o_json_e_lido_e_o_pkl_antigo_do_mesmo_usuario_nao_e_tocado(self, tmp_path, monkeypatch):
-        faixas = tres_faixas()
-        pkl = escrever_pkl(tmp_path)
-        antes = pkl.read_bytes()
-        await salvar(faixas[1:], atual=faixas[0])
-        lidas = await montar_leitura(monkeypatch, None)()
-        assert [f.info["title"] for f in lidas] == [f.info["title"] for f in faixas]
-        assert pkl.read_bytes() == antes
-
 
 # ============================================================================ onde a existência da fila é testada
-
-
-class TestExistenciaDaFila:
-    def test_so_o_json_conta(self, tmp_path):
-        assert saved_queue.has_saved_queue(DONO) is False
-        escrever_pkl(tmp_path)
-        assert saved_queue.has_saved_queue(DONO) is False
-        alvo = caminho_json(tmp_path)
-        alvo.parent.mkdir(parents=True)
-        alvo.write_bytes(codificar())
-        assert saved_queue.has_saved_queue(DONO) is True

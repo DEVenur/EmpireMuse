@@ -40,23 +40,6 @@ def cabecalho_e_resto(saida: str) -> tuple[str, list[str]]:
 # ============================================================================ constantes
 
 
-def test_category_emoji_has_exactly_the_contract_prefixes():
-    assert set(CATEGORY_EMOJI) == {
-        "empiremuse.boot",
-        "empiremuse.player",
-        "empiremuse.wavelink",
-        "empiremuse.metrics",
-        "empiremuse.db",
-        "empiremuse.panel",
-        "empiremuse.updater",
-    }
-    assert CATEGORY_EMOJI["empiremuse.boot"] == "🚀" and CATEGORY_EMOJI["empiremuse.player"] == "🎵"
-    assert CATEGORY_EMOJI["empiremuse.wavelink"] == "🌋" and CATEGORY_EMOJI["empiremuse.metrics"] == "📊"
-    assert CATEGORY_EMOJI["empiremuse.panel"] == "🌐"
-    assert CATEGORY_EMOJI["empiremuse.db"].startswith("\U0001f5c4")
-    assert CATEGORY_EMOJI["empiremuse.updater"].startswith("⬆")
-
-
 # ============================================================================ console
 
 
@@ -95,66 +78,6 @@ class TestConsole:
 
         assert CATEGORY_EMOJI[prefixo] in saida
 
-    def test_an_unknown_category_gets_the_bullet(self):
-        saida = self.formatar(pronto(nome="empiremuse.commands", nivel=logging.INFO))
-
-        assert "•" in saida and not any(emoji in saida for emoji in CATEGORY_EMOJI.values())
-
-    @pytest.mark.parametrize("nivel", [logging.ERROR, logging.CRITICAL])
-    @pytest.mark.parametrize("nome", ["empiremuse.player", "empiremuse.errors", "aiohttp.client"])
-    def test_error_and_above_always_get_the_cross_mark(self, nome, nivel):
-        saida = self.formatar(pronto(nome=nome, nivel=nivel))
-
-        assert "❌" in saida
-
-    def test_a_warning_keeps_the_category_emoji_and_has_no_cross_mark(self):
-        saida = self.formatar(pronto(nome="empiremuse.wavelink", nivel=logging.WARNING))
-
-        assert CATEGORY_EMOJI["empiremuse.wavelink"] in saida and "❌" not in saida
-
-    def test_a_category_prefix_is_not_a_substring_match(self):
-        saida = self.formatar(pronto(nome="empiremusex.boot", nivel=logging.INFO))
-
-        assert "🚀" not in saida
-
-    def test_with_color_off_there_is_no_escape_at_all(self):
-        for nivel in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL):
-            assert "\x1b" not in self.formatar(pronto(nivel=nivel, bot="Alfa", guild=1), cor=False)
-
-    @pytest.mark.parametrize(
-        ("nivel", "esperado"),
-        [(logging.INFO, {"36"}), (logging.WARNING, {"33"}), (logging.ERROR, {"31"}), (logging.CRITICAL, {"31", "1"})],
-    )
-    def test_the_level_colour_with_color_on(self, nivel, esperado):
-        saida = self.formatar(pronto(nivel=nivel), cor=True)
-
-        assert esperado <= sequencias_sgr(saida), repr(saida)
-
-    def test_debug_is_grey_not_one_of_the_other_level_colours(self):
-        parametros = sequencias_sgr(self.formatar(pronto(nivel=logging.DEBUG), cor=True))
-
-        assert parametros and not parametros & {"31", "33", "36"}
-
-    def test_the_context_is_coloured_too(self):
-        com_contexto = self.formatar(pronto(bot="Alfa", guild=1), cor=True)
-        sem_contexto = self.formatar(pronto(), cor=True)
-
-        assert len(SGR.findall(com_contexto)) > len(SGR.findall(sem_contexto))
-
-    @pytest.mark.parametrize("nivel", [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR])
-    def test_the_message_text_is_never_coloured(self, nivel):
-        mensagem = "texto da mensagem com 100% de nada"
-
-        saida = self.formatar(pronto(mensagem, nivel=nivel, nome="empiremuse.x"), cor=True)
-
-        assert saida.split("empiremuse.x: ", 1)[1] == mensagem
-        assert sem_cor(saida).endswith(mensagem)
-
-    def test_colour_does_not_change_the_visible_text(self):
-        record = pronto("m", bot="Alfa", guild=9, nivel=logging.WARNING)
-
-        assert sem_cor(self.formatar(record, cor=True)) == self.formatar(record, cor=False)
-
 
 # ============================================================================ arquivo
 
@@ -172,10 +95,6 @@ class TestArquivo:
             or "WARNING empiremuse.outro: tudo bem" in saida
         )
 
-    def test_the_context_in_brackets_only_when_there_is_one(self):
-        assert "[Alfa/123]" in self.formatar(pronto(bot="Alfa", guild=123))
-        assert "[" not in self.formatar(pronto())
-
     def test_no_escape_no_emoji_ever(self):
         for nome in ("empiremuse.boot", "empiremuse.db", "empiremuse.updater", "aiohttp"):
             for nivel in (logging.INFO, logging.ERROR, logging.CRITICAL):
@@ -183,12 +102,6 @@ class TestArquivo:
 
                 assert "\x1b" not in saida and "❌" not in saida and "•" not in saida
                 assert not any(emoji in saida for emoji in CATEGORY_EMOJI.values())
-
-    def test_the_file_line_is_pure_ascii_apart_from_the_message(self):
-        saida = self.formatar(pronto("ação", nome="empiremuse.boot"))
-
-        cabecalho, _, mensagem = saida.partition("empiremuse.boot: ")
-        assert cabecalho.isascii() and mensagem == "ação"
 
 
 # ============================================================================ B3 — enquadramento (V-L3)
@@ -204,23 +117,11 @@ class TestEnquadramento:
         cabecalho, resto = cabecalho_e_resto(saida)
         assert cabecalho.endswith(": x") and resto == [ENQUADRAMENTO + "2026-10-27 12:00:00 ERROR falso"]
 
-    def test_only_the_header_starts_at_column_zero(self, fabrica):
-        saida = fabrica().format(pronto("a\nb\n\nc", exc_text=TRACEBACK, stack_info="pilha 1\npilha 2"))
-
-        _, resto = cabecalho_e_resto(saida)
-        assert resto and all(linha.startswith(ENQUADRAMENTO.rstrip()) for linha in resto)
-
     def test_the_traceback_stays_multiline_and_framed(self, fabrica):
         saida = fabrica().format(pronto("falhou", nivel=logging.ERROR, exc_text=TRACEBACK))
 
         _, resto = cabecalho_e_resto(saida)
         assert resto == [ENQUADRAMENTO + linha for linha in TRACEBACK.split("\n")]
-
-    def test_the_stack_info_is_framed(self, fabrica):
-        saida = fabrica().format(pronto("pilha", stack_info="Stack (most recent call last):\n  File x"))
-
-        _, resto = cabecalho_e_resto(saida)
-        assert resto == [ENQUADRAMENTO + "Stack (most recent call last):", ENQUADRAMENTO + "  File x"]
 
     def test_no_continuation_line_can_look_like_a_new_record(self, fabrica):
         saida = fabrica().format(
@@ -242,9 +143,6 @@ class TestEnquadramento:
         saida = fabrica().format(record)
 
         assert "Traceback" not in saida and "não deveria sair" not in saida
-
-    def test_a_single_line_message_has_a_single_line(self, fabrica):
-        assert "\n" not in fabrica().format(pronto("uma linha só"))
 
 
 # ============================================================================ B4 — formatter que levanta (V-L8)

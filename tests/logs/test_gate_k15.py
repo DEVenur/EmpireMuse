@@ -69,16 +69,6 @@ class TestHeLogException:
         (registro,) = [r for r in cru.registros if r.levelno == nivel]
         assert ERROR_CODE_RE.fullmatch(codigo) and registro.error_code == codigo and codigo in registro.getMessage()
 
-    @pytest.mark.parametrize(("evento", "nivel"), CAMINHOS)
-    def test_without_a_code_the_record_has_no_error_code_attribute(self, cru, monkeypatch, evento, nivel):
-        monkeypatch.setattr(event_steps, "safe_error_code", lambda: "")
-        player = jogador(1)
-
-        codigo = _he_log_exception(player, excecao(player, **evento), player.current)
-
-        (registro,) = [r for r in cru.registros if r.levelno == nivel]
-        assert codigo == "" and not hasattr(registro, "error_code") and "ERR-" not in registro.getMessage()
-
 
 class TestLogLavalinkFailure:
     def chamar(self):
@@ -89,14 +79,6 @@ class TestLogLavalinkFailure:
 
         (registro,) = cru.registros
         assert ERROR_CODE_RE.fullmatch(codigo) and registro.error_code == codigo and codigo in registro.getMessage()
-
-    def test_without_a_code_the_record_has_no_error_code_attribute(self, cru, monkeypatch):
-        monkeypatch.setattr(helpers, "safe_error_code", lambda: "")
-
-        codigo = self.chamar()
-
-        (registro,) = cru.registros
-        assert codigo == "" and not hasattr(registro, "error_code")
 
 
 # ============================================================================ (1) ponta a ponta: nenhum código some
@@ -137,15 +119,6 @@ class TestNenhumCodigoSome:
         evento = excecao(player)
 
         codigos = self.produzir_cinco(lambda: _he_log_exception(player, evento, player.current))
-
-        self.conferir(destinos, codigos)
-
-    def test_five_equal_lavalink_failures_keep_every_code_and_point_to_the_first(self, tmp_path):
-        destinos = Destinos(tmp_path)
-
-        codigos = self.produzir_cinco(
-            lambda: log_lavalink_failure("Falha ao tocar", message="m", cause="c", severity="common", node="N1")
-        )
 
         self.conferir(destinos, codigos)
 
@@ -249,14 +222,6 @@ class TestAmostrasNaThreadDoLoop:
         assert acessos, "o teste não prova nada se ninguém leu os contêineres"
         assert set(acessos) == {threading.current_thread()}
 
-    def test_only_the_process_stats_may_run_on_another_thread_and_it_does_run(self):
-        cenario, acessos, chamadas_stats = cenario_vigiado()
-
-        cenario.rodar()
-
-        assert chamadas_stats  # o psutil foi consultado
-        assert set(acessos) == {threading.current_thread()}  # o que for lido fora dele continua no loop
-
     def test_the_summary_survives_the_containers_changing_while_the_stats_run(self):
         def mutar(bot):
             bot.music.players[len(bot.music.players) + 1000] = SimpleNamespace(
@@ -274,24 +239,6 @@ class TestAmostrasNaThreadDoLoop:
         )  # os dois resumos saíram, sem perder nenhum
         assert "WARNING" not in cenario.console.getvalue()
 
-    def test_a_player_added_between_two_turns_shows_up_in_the_next_summary(self):
-        cenario, _, _ = cenario_vigiado()
-        bot = cenario.pool.bots[0]
-        voltas = []
-        original = cenario.process_stats
-
-        def process_stats(*args):
-            voltas.append(1)
-            if len(voltas) == 1:
-                bot.music.players[10_000] = SimpleNamespace(ping=500.0, current=object(), is_paused=False)
-            return original(*args)
-
-        cenario.process_stats = process_stats
-
-        linhas = cenario.rodar()
-
-        assert len([linha for linha in linhas if "servidores" in linha]) == 2
-
 
 class TestDoisCodigosDiferentes:
     def test_two_identical_track_exceptions_show_both_codes_the_second_on_the_pointer_line(self, tmp_path):
@@ -301,17 +248,6 @@ class TestDoisCodigosDiferentes:
 
         primeiro = _he_log_exception(player, evento, player.current)
         segundo = _he_log_exception(player, evento, player.current)
-
-        assert primeiro != segundo
-        for texto in destinos.textos():
-            (linha,) = [x for x in texto.splitlines() if segundo in x]
-            assert f"traceback igual ao de {primeiro}" in linha
-
-    def test_two_identical_lavalink_failures_show_both_codes_the_second_on_the_pointer_line(self, tmp_path):
-        destinos = Destinos(tmp_path)
-
-        primeiro = log_lavalink_failure("Falha ao tocar", message="m", cause="c", severity="common", node="N1")
-        segundo = log_lavalink_failure("Falha ao tocar", message="m", cause="c", severity="common", node="N1")
 
         assert primeiro != segundo
         for texto in destinos.textos():

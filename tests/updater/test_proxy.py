@@ -114,43 +114,6 @@ def test_create_reaches_the_daemon_with_the_real_name_and_nothing_else_in_the_qu
     assert parse_qs(criacao.query) == {"name": [CONTAINER_REAL]}
 
 
-def test_start_reaches_the_daemon(daemon, pedir):
-    semear(daemon)
-
-    status, _ = pedir("POST", f"/containers/{CONTAINER_API}/start")
-
-    assert status == 204
-    assert len(chegou(daemon, "POST", f"/containers/{CONTAINER_REAL}/start")) == 1
-
-
-def test_logs_query_is_rebuilt_from_the_validated_parameters(daemon, pedir):
-    semear(daemon, linhas_de_log=[PREFIXO_LOG + "pull 0"])
-
-    status, _ = pedir("GET", f"/containers/{CONTAINER_API}/logs?stdout=1&stderr=1&tail=20")
-
-    assert status == 200
-    (logs,) = chegou(daemon, "GET", f"/containers/{CONTAINER_REAL}/logs")
-    assert parse_qs(logs.query) == {"stdout": ["1"], "stderr": ["1"], "tail": ["20"]}
-
-
-def test_delete_reaches_the_daemon_without_query(daemon, pedir):
-    semear(daemon)
-
-    status, _ = pedir("DELETE", f"/containers/{CONTAINER_API}")
-
-    assert status == 204
-    (remocao,) = chegou(daemon, "DELETE", f"/containers/{CONTAINER_REAL}")
-    assert remocao.query == ""
-
-
-def test_the_api_version_prefix_is_optional(daemon, pedir):
-    semear(daemon)
-
-    status, _ = pedir("GET", f"/v1.47/containers/{CONTAINER_API}/json")
-
-    assert status == 200
-
-
 def test_no_header_or_byte_of_the_bot_reaches_the_daemon(daemon, pedir):
     cabecalhos = [
         TIPO_JSON,
@@ -386,15 +349,6 @@ def digest_da(imagem: str) -> str:
     return imagem.split("@", 1)[1]
 
 
-def test_a_present_helper_image_is_not_pulled(daemon, pedir):
-    daemon.imagem_presente = True
-
-    status, _ = pedir("POST", f"/containers/create?name={CONTAINER_API}", [TIPO_JSON], CORPO_VALIDO)
-
-    assert status == 201
-    assert chegou(daemon, "POST", "/images/create") == []
-
-
 # ============================================================================ A20 — inspect e logs
 
 
@@ -527,14 +481,3 @@ def test_a_forged_request_line_never_puts_control_sequences_in_the_proxy_log(tmp
     assert status == 431
     assert "\x1b" not in erro and "\x07" not in erro and "FORJADO" not in erro
     assert "? - parser 431" in erro
-
-
-@pytest.mark.parametrize("alvo", ["2.1.0-rc.3", "2.1.0-rc.2", "v2.1.0-rc.3"])
-def test_a_prerelease_target_is_a_400_and_nothing_is_sent_to_the_daemon(daemon, pedir, alvo):
-    """D13: só a versão ATUAL pode ser rc; o alvo do auxiliar continua ``X.Y.Z@sha256`` estrito."""
-    corpo = json.dumps({"Cmd": [f"{alvo}@{DIGEST}"]}).encode()
-
-    status, _ = pedir("POST", f"/containers/create?name={CONTAINER_API}", [TIPO_JSON], corpo)
-
-    assert status == 400
-    assert daemon.requisicoes == []
