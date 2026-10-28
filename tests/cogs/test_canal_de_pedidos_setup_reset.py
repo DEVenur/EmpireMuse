@@ -11,6 +11,7 @@ import pytest
 
 import empiremuse.cogs.music_settings as ms
 from tests.support.canal_de_pedidos import (
+    GUILD_ID,
     CommandInter,
     FakeBot,
     FakeCategory,
@@ -18,12 +19,12 @@ from tests.support.canal_de_pedidos import (
     FakeForum,
     FakeGuild,
     FakeMessage,
+    FakePlayer,
     FakeStage,
     FakeText,
     FakeThreadInfo,
     FakeVoice,
     Journal,
-    ModalInter,
     perms,
 )
 
@@ -101,14 +102,31 @@ def world(monkeypatch):
     return Scenario(monkeypatch)
 
 
-def modal_answer(world, title, custom_id="777"):
-    answer = ModalInter(world.j, world.bot, world.guild, custom_id, {"forum_title": title})
-    world.bot.script.setdefault("modal_submit", []).append(answer)
-    return answer
-
-
 def configured(world, thread=True):
     """Canal de pedidos #pedidos (22) com a mensagem 555 (e thread) gravados no banco."""
     message = world.text.add_message(555, world.guild.me, FakeThreadInfo(world.j, "song-requests") if thread else None)
     world.db.doc["player_controller"].update({"channel": "22", "message_id": "555"})
     return message
+
+
+class TestResetTextChannel:
+    def test_player_is_reset_after_the_discord_cleanup_the_database_and_the_reply(self, world):
+        configured(world)
+        player = FakePlayer(world.j, world.guild, world.text, static=True, message=object())
+        world.bot.music.players[GUILD_ID] = player
+        world.reset()
+        names = [
+            n
+            for n in world.j.names()
+            if n
+            in ("db.update", "inter.edit_original_message", "player.process_hint", "player.invoke_np", "message.edit")
+        ]
+        assert names == [
+            "message.edit",
+            "db.update",
+            "inter.edit_original_message",
+            "player.process_hint",
+            "player.invoke_np",
+        ]
+        assert player.static is False and player.message is None and player.text_channel is world.lobby
+        assert world.j.of("player.invoke_np") == [("player.invoke_np", True)]

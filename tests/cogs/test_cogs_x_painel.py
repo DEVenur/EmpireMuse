@@ -54,6 +54,8 @@ class TestKI36ResetFalhaNoDiscord:
     def test_falha_ao_editar_a_mensagem_preserva_a_configuracao_no_banco(self, world):
         configured(world).fail_edit = RuntimeError("falha simulada")
         run_reset(world)
+        assert world.j.of("message.edit"), "o /reset nem chegou à edição da mensagem que deveria falhar"
+        assert world.j.of("db.update") == []
         assert (world.saved["channel"], world.saved["message_id"]) == ("22", "555"), (
             "KI-36: o Discord falhou, o canal continua de pé e o banco foi desconfigurado"
         )
