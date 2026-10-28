@@ -325,6 +325,7 @@ O pacote `empiremuse/rules/` centraliza as regras de negócio puras compartilhad
 - **`urls.py`**: validações e expressões regulares de endereços (`URL_REG`, `is_clean_url`, `clean_avatar` e variantes legadas de extração e prefixo);
 - **`quota.py`**: cálculo e checagem de cotas (`quota_limit`, `has_room`, `import_has_room`, `file_exceeds`);
 - **`settings.py`**: validação de prefixo, status de voz, volume do player, cargos de DJ e skins permitidas (`allowed_names`);
+- **`voice_status.py`**: regras do status automático do canal de voz: modelo padrão, leitura do permanente e do modelo do documento do servidor (`resolve_voice_status`), texto seguro (`render_voice_status`, `fit_voice_status`), limites e trava de comandos (`control_lock_seconds`); o envio ao Discord é do player;
 - **`errors.py`**: códigos e exceções padronizadas de validação de regras de negócio (`RuleError`);
 - **`entries.py`**: validação de pares nome/valor e sanitização de entradas estruturadas;
 - **`favorites.py`**: validações de nomes de favoritos pessoais, importação e favoritar faixas (`check_import_name`, `save_track`, `name_limit`);
@@ -353,7 +354,7 @@ Auxiliar em `empiremuse/utils/music/user_limits.py`: cálculo de cota do usuári
 | `<id do bot>` / `guilds` | `db_models[guilds]` v1.11 | Canal/mensagem do controlador, skin, `autoplay`, volume padrão, DJ roles, modo restrito. |
 | `<id do bot>` / `users` | `db_models[users]` v1.0 | Favoritos do usuário. |
 | `global` / `users` | `global_db_models[users]` v1.6 | Favoritos, integrações, `token` do RPC, prefixo próprio, últimas faixas, dados do Last.fm. |
-| `global` / `guilds` | `global_db_models[guilds]` v1.4 | Prefixo, skins globais, **skins personalizadas**, status do canal de voz, convites "ouvir junto". |
+| `global` / `guilds` | `global_db_models[guilds]` v1.5 | Prefixo, skins globais, **skins personalizadas**, convites "ouvir junto" e o **status do canal de voz**: `voice_status_permanent` (`None` = nunca escolhido = ligado; `True` ligado; `False` desligado) e o modelo `voice_channel_status` (vazio ou inválido = modelo padrão). São um valor por servidor, global para todos os bots do pool. |
 | `global` / `default` | `global_db_models[default]` v1.0 | Tokens extras. |
 | `global` / `global` (id `youtube_data`) | sem modelo | `refresh_tokens` do OAuth do YouTube (`BotPool.check_node` em `empiremuse/utils/client.py`). |
 | `player_sessions_json` / `<id do bot>` | sem modelo | Sessões de players para retomada em formato JSON (a coleção `player_sessions` do formato antigo não é lida nem apagada). |

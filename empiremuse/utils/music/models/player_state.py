@@ -68,6 +68,8 @@ class PlayerStateMixin:
         except Exception:
             pass
 
+        self._cancel_voice_status_tasks()  # envio pendente e reaplicação do status do canal (2.1.2)
+
         await self.cleanup(inter)
 
         try:

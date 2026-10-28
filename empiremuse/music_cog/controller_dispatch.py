@@ -8,6 +8,7 @@ from disnake.ext import commands
 
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.music.checks import voice_status_lock_remaining
 from empiremuse.utils.music.converters import (
     time_format,
 )
@@ -371,14 +372,8 @@ class ControllerDispatchMixin:
         await self.player_controller(interaction, interaction.data.custom_id)
 
     async def check_stage_title(self, inter, bot: BotCore, player: LavalinkPlayer):
-        time_limit = 30 if isinstance(player.guild.me.voice.channel, disnake.VoiceChannel) else 120
-
-        if (
-            player.stage_title_event
-            and (time_ := int((disnake.utils.utcnow() - player.start_time).total_seconds())) < time_limit
-            and not (await bot.is_owner(inter.author))
-        ):
+        if (remaining := voice_status_lock_remaining(player)) > 0 and not (await bot.is_owner(inter.author)):
             raise GenericError(
-                f"**Você terá que aguardar {time_format((time_limit - time_) * 1000, use_names=True)} para usar essa função "
-                f"com o anúncio automático do palco ativo...**"
+                f"**Você terá que aguardar {time_format(remaining * 1000, use_names=True)} para usar essa função "
+                f"com o status automático do canal ligado...**"
             )

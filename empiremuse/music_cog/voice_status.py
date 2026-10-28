@@ -3,6 +3,8 @@
 import disnake
 from disnake.ext import commands
 
+from empiremuse.rules.errors import RuleError
+from empiremuse.rules.settings import validate_voice_status
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.errors import (
     GenericError,
@@ -14,6 +16,7 @@ from empiremuse.utils.music.checks import VOICE_STATUS_PERMISSION, voice_status_
 from empiremuse.utils.music.interactions import (
     SetStageTitle,
 )
+from empiremuse.utils.music.interactions.stage_title import voice_status_error_text
 from empiremuse.utils.others import (
     CustomContext,
     pool_command,
@@ -91,10 +94,16 @@ class VoiceStatusMixin:
             view.message = await inter.send(view=view, embeds=view.build_embeds(), ephemeral=True)
             await view.wait()
         else:
-            if not any(p in template for p in SetStageTitle.placeholders):
+            status = validate_voice_status(template)
+
+            if isinstance(status, RuleError) or not status:
                 raise GenericError(
-                    f"**Você deve usar pelo menos um placeholder válido:** {SetStageTitle.placeholder_text}"
+                    voice_status_error_text(status)
+                    if isinstance(status, RuleError)
+                    else f"**Você deve usar pelo menos um placeholder válido:** {SetStageTitle.placeholder_text}"
                 )
+
+            template = status
 
             try:
                 player = bot.music.players[inter.guild_id]
@@ -119,7 +128,7 @@ class VoiceStatusMixin:
             player.stage_title_template = template
             player.start_time = disnake.utils.utcnow()
 
-            await player.update_stage_topic()
+            await player.update_stage_topic(force=True)
 
             await player.process_save_queue()
 

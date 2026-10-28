@@ -10,6 +10,7 @@ import disnake
 from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
+from empiremuse.rules.voice_status import control_lock_seconds
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import time_format
 from empiremuse.utils.music.errors import (
@@ -537,6 +538,18 @@ def check_queue_loading():
     return commands.check(predicate)
 
 
+def voice_status_lock_remaining(player: LavalinkPlayer) -> int:
+    """Segundos que faltam da trava de comandos com o status do canal ligado (``<= 0`` sem trava); 5 s em voz, 120 s no palco.
+
+    Fica aqui o único cálculo da trava: o ``check_stage_topic`` dos comandos e o forceplay do embed usam esta função.
+    """
+    if not player.stage_title_event or player.start_time is None:
+        return 0
+    channel_is_stage = not isinstance(player.guild.me.voice.channel, disnake.VoiceChannel)
+    elapsed = int((disnake.utils.utcnow() - player.start_time).total_seconds())
+    return control_lock_seconds(channel_is_stage) - elapsed
+
+
 def check_stage_topic():
     async def predicate(inter):
         try:
@@ -552,16 +565,10 @@ def check_stage_topic():
         if not player.guild.me.voice:
             raise NoPlayer()
 
-        time_limit = 30 if isinstance(player.guild.me.voice.channel, disnake.VoiceChannel) else 120
-
-        if (
-            player.stage_title_event
-            and (time_ := int((disnake.utils.utcnow() - player.start_time).total_seconds())) < time_limit
-            and not (await bot.is_owner(inter.author))
-        ):
+        if (remaining := voice_status_lock_remaining(player)) > 0 and not (await bot.is_owner(inter.author)):
             raise GenericError(
-                f"**Você terá que aguardar {time_format((time_limit - time_) * 1000, use_names=True)} para usar essa função "
-                f"com o anúncio automático do palco ativo...**"
+                f"**Você terá que aguardar {time_format(remaining * 1000, use_names=True)} para usar essa função "
+                f"com o status automático do canal ligado...**"
             )
 
         return True

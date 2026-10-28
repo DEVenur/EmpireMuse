@@ -79,12 +79,13 @@ global_db_models = {
         },
     },
     DBModel.guilds: {
-        "ver": 1.4,
+        "ver": 1.5,
         "prefix": "",
         "global_skin": False,
         "player_skin": None,
         "player_skin_static": None,
         "voice_channel_status": "",
+        "voice_status_permanent": None,  # None = nunca escolhido = ligado (2.1.2); um valor por servidor para todo o pool
         "custom_skins": {},
         "custom_skins_static": {},
         "listen_along_invites": {},
