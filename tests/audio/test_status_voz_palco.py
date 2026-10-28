@@ -164,15 +164,21 @@ class TestApplyForaDeVoz:
 
         assert no_palco.sessao_intacta() and no_palco.nada_foi_ao_palco()
 
-    async def test_without_a_channel_it_only_stores_the_flag_too(self, no_palco: SessaoDePalco) -> None:
+    @pytest.mark.parametrize("permanente", [True, False])
+    async def test_without_a_channel_the_apply_disables_the_session_with_the_permanent_on_or_off(
+        self, no_palco: SessaoDePalco, permanente: bool
+    ) -> None:
+        """Sem canal (ao contrário do palco) o apply chama ``disable_voice_status()``: zera o flag e cancela as tarefas, sem API."""
         await no_palco.ligar_sessao()
         no_palco.player.guild.me.voice = None
 
-        await no_palco.player.apply_permanent_voice_status(cfg_de(False))
+        await no_palco.player.apply_permanent_voice_status(cfg_de(permanente))
+        await assentar()
 
-        assert no_palco.player.voice_status_permanent is False
-        assert no_palco.sessao_intacta(), "sem canal, o permanente mexeu na sessão"
-        assert no_palco.bot.puts == []
+        assert no_palco.player.voice_status_permanent is permanente
+        assert no_palco.player.stage_title_event is False, "sem canal o flag da sessão antiga seguiu ligado"
+        assert all(t.cancelled() for t in no_palco.tarefas.values()), "alguma tarefa de fundo seguiu viva"
+        assert no_palco.nada_foi_ao_palco()
 
     async def test_in_a_voice_channel_the_same_apply_still_turns_the_status_on(self, relogio: RelogioFalso) -> None:
         bot, canal = BotDeVoz(), canal_de_voz()
@@ -256,7 +262,7 @@ async def mover_entre(
     player.start_members_timeout = lambda **_k: None
     if sessao_ligada:
         player.stage_title_event, player.last_stage_title = True, TOPICO_DA_SESSAO
-    bot.documentos[SERVIDOR] = copy.deepcopy(
+    bot.documentos[guilda.id] = copy.deepcopy(
         doc or {"voice_status_permanent": True, "voice_channel_status": MODELO_PERMANENTE}
     )
     bot.music = SimpleNamespace(players={guilda.id: player})
@@ -483,6 +489,94 @@ class TestSairSalvarSemCanalEVoltar:
 
         assert r.player.stage_title_event is True
         assert r.bot.puts[-1].canal == 1002 and r.bot.puts[-1].status is not None
+
+
+# ============================================================================ V-147-1 — mover, ser derrubado, salvar desligado, conectar em outro canal
+
+
+class TestMoverDerrubadoSalvarEConectar:
+    """Pelo listener REAL: o moderador move o bot A→B (o ramo ``member.bot`` volta antes de atualizar ``_last_channel``, que fica em A), o bot é
+    derrubado de B (o listener sai cedo: ``last_channel`` A != B, então nada limpa o flag), o dono salva o permanente SEM canal e o ``/play``
+    conecta em C. Sem canal o apply sempre chama ``disable_voice_status()`` (ligado ou desligado); só o palco volta intocado."""
+
+    @staticmethod
+    async def percurso(
+        relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch, *, via: str, ligado: bool
+    ) -> SimpleNamespace:
+        bot = BotDeVoz()
+        a, b, c = canal_de_voz(1001), canal_de_voz(1002), canal_de_voz(1003)
+        guilda = servidor(a)
+        jogador = JogadorDeVoz(guilda, bot, atual=faixa(), template=MODELO_DA_SESSAO)
+        jogador.last_channel = a
+        jogador.start_members_timeout = lambda **_k: None
+        bot.music = SimpleNamespace(players={guilda.id: jogador})
+        bot.documentos[guilda.id] = {"voice_status_permanent": True, "voice_channel_status": MODELO_DA_SESSAO}
+        cog = _Lifecycle()
+        cog.bot = bot
+        membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+
+        async def ouvir(antes: Any, depois: Any) -> None:
+            await executar(
+                relogio,
+                cog.player_vc_disconnect(membro, SimpleNamespace(channel=antes), SimpleNamespace(channel=depois)),
+            )
+            await assentar()
+
+        await executar(relogio, jogador.apply_permanent_voice_status(cfg_de(True, MODELO_DA_SESSAO)))
+        await relogio.avancar(regras().VOICE_STATUS_MIN_INTERVAL + 1)
+
+        guilda.me.voice.channel = b  # o moderador move o bot de A para B
+        await ouvir(a, b)
+        assert jogador.stage_title_event is True and bot.puts[-1].canal == 1002, "preparo: o status foi para B"
+        await relogio.avancar(regras().VOICE_STATUS_MIN_INTERVAL + 1)
+
+        guilda.me.voice = None  # o bot é derrubado de B
+        await ouvir(b, None)
+
+        bot.documentos[guilda.id] = {"voice_status_permanent": ligado, "voice_channel_status": MODELO_PERMANENTE}
+        if via == "painel":
+            schedule_permanent_voice_status(jogador, cfg_de(ligado))
+            await assentar()
+        else:
+            pool = BotDoPool({})
+            pool.guilds[SERVIDOR] = guilda
+            pool.music.players[SERVIDOR] = jogador
+            pool.pool.get_guild_bots = lambda _gid: [pool]
+            documento_global(pool).update(
+                {"voice_status_permanent": not ligado, "voice_channel_status": MODELO_PERMANENTE}
+            )
+            membro_de_antes = guilda.get_member
+            await enviar_modal(pool, texto=MODELO_PERMANENTE if ligado else "", aberto_com=documento_global(pool))
+            guilda.get_member = membro_de_antes  # o modal troca o ``get_member`` do servidor pelo do autor
+        antes_de_conectar = len(bot.puts)
+
+        guilda.me.voice = SimpleNamespace(channel=c)  # o /play conecta em C
+        jogador.last_channel = c
+        await ouvir(None, c)
+        for _ in range(3):  # trocas de faixa seguintes
+            await executar(relogio, jogador.update_stage_topic(force=True))
+            await relogio.avancar(10)
+        enviados = [p.status for p in bot.puts[antes_de_conectar:] if p.status is not None]
+        return SimpleNamespace(player=jogador, bot=bot, enviados=enviados)
+
+    @pytest.mark.parametrize("via", ["painel", "modal"])
+    async def test_saving_the_permanent_off_leaves_nothing_to_send_to_the_new_channel(
+        self, relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch, via: str
+    ) -> None:
+        r = await self.percurso(relogio, monkeypatch, via=via, ligado=False)
+
+        assert r.player.stage_title_event is False, "o flag seguiu ligado depois de salvar o permanente desligado"
+        assert r.enviados == [], "texto de status enviado em C"
+
+    @pytest.mark.parametrize("via", ["painel", "modal"])
+    async def test_saving_the_permanent_on_sends_the_permanent_template_and_not_the_stale_session_one(
+        self, relogio: RelogioFalso, monkeypatch: pytest.MonkeyPatch, via: str
+    ) -> None:
+        r = await self.percurso(relogio, monkeypatch, via=via, ligado=True)
+
+        assert r.enviados, "o permanente ligado não foi aplicado no canal novo"
+        assert all(t.startswith("permanente") for t in r.enviados), f"modelo velho da sessão em C: {r.enviados}"
+        assert r.player.stage_title_template == MODELO_PERMANENTE
 
 
 # ============================================================================ VP4e — desligar no palco
