@@ -7,7 +7,8 @@ import os
 import random
 import string
 import logging
-from typing import TYPE_CHECKING, Union, Optional
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Union, Optional
 
 import disnake
 from disnake.ext import commands
@@ -25,7 +26,7 @@ from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel
 from empiremuse.rules.text import format_mib
-from empiremuse.utils.music.converters import time_format, md_link, md_bracketed, md_code
+from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -54,6 +55,31 @@ from empiremuse.utils.music.app_emojis import emoji as app_emoji
 logger = logging.getLogger(__name__)
 
 NODE_REGION_LIMIT = 32  # a região vem do dono ou da lista externa de servidores
+SKIN_LINKS_PER_ROW = 4  # o parágrafo de ~0,7 mil caracteres formou os links no desktop; o de ~1,4 mil não (2.1.1)
+
+
+def skin_link(skins: Mapping[str, Any], name: str) -> str:
+    """Nome da skin como link embutido (só o nome clica), com a URL da prévia; sem URL válida sai só o nome."""
+    return md_link(name, skins[name].preview, code=False)
+
+
+def skin_links(skins: Mapping[str, Any], names: Iterable[str]) -> str:
+    """Os links das skins em linhas curtas de até ``SKIN_LINKS_PER_ROW``, separados por " • "."""
+    links = [skin_link(skins, name) for name in names]
+    rows = (links[i : i + SKIN_LINKS_PER_ROW] for i in range(0, len(links), SKIN_LINKS_PER_ROW))
+    return "\n".join(" • ".join(row) for row in rows)
+
+
+def skin_selector_description(
+    skins: Mapping[str, Any], names: Iterable[str], static_skins: Mapping[str, Any], static_names: Iterable[str]
+) -> str:
+    """Descrição da embed do seletor: títulos em negrito (o ```ansi sumia no fundo escuro) e as duas listas de links."""
+    return (
+        f"**Modo Normal:**\n{skin_links(skins, names)}\n\n"
+        f"**Modo Fixo (Song-Request):**\n{skin_links(static_skins, static_names)}\n\n"
+        "`Nota: No modo global a skin será aplicada globalmente em todos os bots.`"
+    )
+
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -1030,12 +1056,9 @@ class MusicSettings(commands.Cog):
         ]
 
         embed = disnake.Embed(
-            description="```ansi\n[31;1mModo Normal:[0m``` "
-            + ", ".join(md_bracketed(md_link(s, bot.player_skins[s].preview)) for s in skin_list)
-            + "\n\n"
-            "```ansi\n[33;1mModo Fixo (Song-Request):[0m``` "
-            + ", ".join(md_bracketed(md_link(s, bot.player_static_skins[s].preview)) for s in static_skin_list)
-            + "\n\n`Nota: No modo global a skin será aplicada globalmente em todos os bots.`",
+            description=skin_selector_description(
+                bot.player_skins, skin_list, bot.player_static_skins, static_skin_list
+            ),
             colour=bot.get_color(guild.me),
         ).set_image(asset_url("ui_rainbow_bar_2.gif"))
 
@@ -1102,13 +1125,15 @@ class MusicSettings(commands.Cog):
 
             if global_selected != select_view.skin_selected:
                 try:
-                    changed_skins_txt += f"Global - Modo Normal: {md_link(select_view.skin_selected, self.bot.player_skins[select_view.skin_selected].preview)}\n"
+                    changed_skins_txt += (
+                        f"Global - Modo Normal: {skin_link(self.bot.player_skins, select_view.skin_selected)}\n"
+                    )
                 except Exception:
                     changed_skins_txt += f"Global - Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
             if global_static_selected != select_view.static_skin_selected:
                 try:
-                    changed_skins_txt += f"Global - Song Request: {md_link(select_view.static_skin_selected, self.bot.player_static_skins[select_view.static_skin_selected].preview)}\n"
+                    changed_skins_txt += f"Global - Song Request: {skin_link(self.bot.player_static_skins, select_view.static_skin_selected)}\n"
                 except Exception:
                     changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
@@ -1119,7 +1144,7 @@ class MusicSettings(commands.Cog):
 
             if selected != select_view.skin_selected:
                 try:
-                    changed_skins_txt += f"Modo Normal: {md_link(select_view.skin_selected, self.bot.player_skins[select_view.skin_selected].preview)}\n"
+                    changed_skins_txt += f"Modo Normal: {skin_link(self.bot.player_skins, select_view.skin_selected)}\n"
                 except Exception:
                     changed_skins_txt += (
                         f"Modo Normal: `{select_view.skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
@@ -1127,7 +1152,9 @@ class MusicSettings(commands.Cog):
 
             if static_selected != select_view.static_skin_selected:
                 try:
-                    changed_skins_txt += f"Song Request: {md_link(select_view.static_skin_selected, self.bot.player_static_skins[select_view.static_skin_selected].preview)}\n"
+                    changed_skins_txt += (
+                        f"Song Request: {skin_link(self.bot.player_static_skins, select_view.static_skin_selected)}\n"
+                    )
                 except Exception:
                     changed_skins_txt += f"Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
