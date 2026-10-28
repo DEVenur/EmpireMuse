@@ -237,7 +237,9 @@ async def _load_running_section(version: Version) -> str:
         return ""
     finally:
         _changelog_loading.pop(key, None)
-    section = changelog_section(raw, version, MANUAL_CHANGELOG_CHARS)
+    # O CHANGELOG de uma tag rc usa a seção da versão estável (o release.yml extrai as notas por X.Y.Z); a busca usa a tag inteira.
+    stable = Version(version.major, version.minor, version.patch)
+    section = changelog_section(raw, stable, MANUAL_CHANGELOG_CHARS)
     _changelog_cache[key] = section
     return section
 
