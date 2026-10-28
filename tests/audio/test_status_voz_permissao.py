@@ -30,6 +30,7 @@ from tests.support.drivers_de_regras import (
     InteracaoFalsa,
 )
 from tests.support.modais import SERVIDOR_DO_COMANDO as SERVIDOR
+from tests.support.voz_auto import assentar
 
 pytestmark = pytest.mark.critical
 
@@ -259,6 +260,7 @@ async def salvar_permanente(
     inter = InteracaoEfemera(guild_id=SERVIDOR, guild=bot.guilds[SERVIDOR], custom_id="status_voice_channel_perm")
     inter.text_values = {"status_voice_value": texto}
     await view.modal_handler(inter)
+    await assentar()  # o apply_permanent_voice_status de cada player é uma tarefa: deixa-as rodar
     return SimpleNamespace(bot=bot, jogadores=jogadores, inter=inter)
 
 

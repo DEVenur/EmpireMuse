@@ -21,6 +21,7 @@ from empiremuse.utils.music.interactions import SetStageTitle
 from tests.audio.test_status_voz_permissao import InteracaoEfemera, canal_de_voz, servidor_do_bot
 from tests.support.drivers_de_regras import AUTOR, BotDeComandos, ContextoDoStatus
 from tests.support.modais import SERVIDOR_DO_COMANDO as SERVIDOR
+from tests.support.voz_auto import assentar
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
 
@@ -90,10 +91,10 @@ def documento_global(bot: BotDeComandos) -> dict[str, Any]:
     return bot.documento("global", DBModel.guilds, SERVIDOR)
 
 
-async def enviar_modal(
+def preparar_modal(
     bot: BotDeComandos, *, texto: str, aberto_com: dict[str, Any], autor_pode: bool = True, membro_nulo: bool = False
-) -> InteracaoEfemera:
-    """O submit do modal permanente do ``SetStageTitle`` REAL; ``aberto_com`` é o documento que o menu tinha ao abrir."""
+) -> tuple[SetStageTitle, InteracaoEfemera]:
+    """A view e a interação do submit do modal permanente do ``SetStageTitle`` REAL; ``aberto_com`` é o documento do menu ao abrir."""
     guilda = bot.guilds[SERVIDOR]
     membro = SimpleNamespace(
         id=AUTOR, mention=f"<@{AUTOR}>", guild_permissions=SimpleNamespace(manage_guild=autor_pode)
@@ -102,7 +103,17 @@ async def enviar_modal(
     view = SetStageTitle(ContextoDoStatus(), bot, guilda, copy.deepcopy(aberto_com))
     inter = InteracaoEfemera(guild_id=SERVIDOR, guild=guilda, custom_id="status_voice_channel_perm")
     inter.text_values = {"status_voice_value": texto}
+    return view, inter
+
+
+async def enviar_modal(
+    bot: BotDeComandos, *, texto: str, aberto_com: dict[str, Any], autor_pode: bool = True, membro_nulo: bool = False
+) -> InteracaoEfemera:
+    view, inter = preparar_modal(
+        bot, texto=texto, aberto_com=aberto_com, autor_pode=autor_pode, membro_nulo=membro_nulo
+    )
     await view.modal_handler(inter)
+    await assentar()  # os apply_permanent_voice_status são tarefas por player: deixa-as rodar
     return inter
 
 
@@ -265,6 +276,7 @@ class TestPermissaoNoEnvio:
         inter.text_values = {"status_voice_value": MODELO}
 
         await view.modal_handler(inter)
+        await assentar()
 
         assert consultados == [AUTOR] and bots[0].ultimo_global is not None
 
@@ -497,3 +509,34 @@ class TestSessaoDesliga:
 
         jogador.disable_voice_status.assert_awaited_once()
         assert bot.gravacoes == []
+
+
+# ============================================================================ I4 ajustado — o modal agenda o apply por player, sem esperá-lo
+
+
+class TestApplyEmTarefaPorPlayer:
+    async def test_the_submit_answers_while_every_apply_is_still_running(self) -> None:
+        bots, jogadores, _ = pool_de(3)
+        portao = asyncio.Event()
+        iniciados: list[int] = []
+
+        def preso(indice: int) -> Any:
+            async def apply(cfg: Any, *, jitter: bool = False) -> None:
+                iniciados.append(indice)
+                await portao.wait()
+
+            return apply
+
+        for i, jogador in enumerate(jogadores):
+            jogador.apply_permanent_voice_status = preso(i)
+        view, inter = preparar_modal(bots[0], texto=MODELO, aberto_com=documento_global(bots[0]))
+        envio = asyncio.ensure_future(view.modal_handler(inter))
+        try:
+            await assentar()
+
+            assert envio.done(), "o modal esperou o apply em linha"
+            assert "salvo" in inter.texto and bots[0].ultimo_global["voice_channel_status"] == MODELO
+            assert sorted(iniciados) == [0, 1, 2], "um apply preso não pode segurar os dos outros players"
+        finally:
+            portao.set()
+            await assentar()

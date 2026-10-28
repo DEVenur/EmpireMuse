@@ -4,6 +4,7 @@ Os três usam a função REAL de produção (``create_player``, ``player_vc_disc
 o player criado é o ``JogadorDeVoz`` (métodos de voz reais, ``tests/support/voz_auto.py``) e cada envio vira um ``Put`` do bot.
 """
 
+import asyncio
 import copy
 import importlib
 from types import ModuleType, SimpleNamespace
@@ -21,6 +22,7 @@ from tests.support.voz_auto import (
     BotDeVoz,
     JogadorDeVoz,
     RelogioFalso,
+    assentar,
     canal_de_voz,
     executar,
     faixa,
@@ -288,13 +290,18 @@ class TestMoverDeCanal:
 # ============================================================================ VP8 — retomada
 
 
-async def retomar_com(monkeypatch: pytest.MonkeyPatch, saida: dict[str, Any], doc: dict[str, Any]) -> SimpleNamespace:
+async def retomar_com(
+    monkeypatch: pytest.MonkeyPatch, saida: dict[str, Any], doc: dict[str, Any], *, portao: asyncio.Event | None = None
+) -> SimpleNamespace:
+    """Retoma a sessão com o ``resume_player`` REAL; com ``portao``, o apply de cada player fica preso nele até o teste soltar."""
     from tests.persistence.test_sessao_retomada_sem_voice_state import JogadorRetomado
 
     chamadas: list[tuple[Any, bool]] = []
 
     async def apply(self: Any, cfg: Any, *, jitter: bool = False) -> None:
         chamadas.append((cfg, jitter))
+        if portao is not None:
+            await portao.wait()
 
     monkeypatch.setattr(JogadorRetomado, "apply_permanent_voice_status", apply, raising=False)
     monkeypatch.setattr(player_resume, "can_send_message", lambda *a, **k: None)
@@ -305,8 +312,11 @@ async def retomar_com(monkeypatch: pytest.MonkeyPatch, saida: dict[str, Any], do
         return doc
 
     cog.bot.get_global_data = get_global_data
-    await cog.resume_player(saida, hints=[])
-    return SimpleNamespace(jogador=criados[0], chamadas=chamadas)
+    resumo = asyncio.ensure_future(cog.resume_player(saida, hints=[]))
+    await assentar()  # o apply é uma tarefa por player: deixa-a rodar (ou ficar presa no portão)
+    return SimpleNamespace(
+        jogador=criados[0] if criados else None, chamadas=chamadas, terminou=resumo.done(), tarefa=resumo
+    )
 
 
 class TestRetomada:
@@ -350,3 +360,32 @@ class TestRetomada:
 
         ((cfg, jitter),) = r.chamadas
         assert cfg.permanent is True and jitter is True
+
+
+class TestApplyNaoPrendeAQuemChama:
+    """Contrato I4 ajustado: a retomada agenda o ``apply_permanent_voice_status`` como tarefa do player; nunca o espera em linha."""
+
+    async def test_the_resume_returns_while_the_apply_is_still_running(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        portao = asyncio.Event()
+        dados = await sessao_gravada()
+        try:
+            r = await retomar_com(monkeypatch, dados, {"voice_status_permanent": True}, portao=portao)
+
+            assert r.terminou, "a retomada esperou o apply em linha"
+            assert len(r.chamadas) == 1 and r.chamadas[0][1] is True  # começou, com jitter, e continua preso no portão
+        finally:
+            portao.set()
+            await assentar()
+
+    async def test_every_resumed_player_gets_its_own_apply_task(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        portao = asyncio.Event()
+        dados = await sessao_gravada()
+        try:
+            primeira = await retomar_com(monkeypatch, copy.deepcopy(dados), {}, portao=portao)
+            segunda = await retomar_com(monkeypatch, copy.deepcopy(dados), {}, portao=portao)
+
+            assert primeira.terminou and segunda.terminou
+            assert len(primeira.chamadas) == 1 and len(segunda.chamadas) == 1  # a 2ª não espera a 1ª soltar
+        finally:
+            portao.set()
+            await assentar()
