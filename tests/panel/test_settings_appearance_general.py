@@ -4,7 +4,7 @@ e efeitos em memória. Regras extraídas do código em helpers_settings (command
 
 import copy
 
-from tests.panel.helpers_settings import HOSTILE_SKIN, command_prefix_max_length
+from tests.panel.helpers_settings import HOSTILE_SKIN, assentar, command_prefix_max_length
 from tests.panel.test_settings_http import Each, HttpBase, external_change
 
 CUSTOM = "> custom_skin: Meu<b>"
@@ -133,6 +133,7 @@ class VoiceStatusEffectsTest(HttpBase):
         )
         browser = self.logged_in()
         assert self.save(browser, 100, "geral", "voice_channel_status", voice_channel_status="").code == 200
+        self.io_loop.run_sync(assentar)  # o apply é uma tarefa por player
         player = self.world.p100
         (aplicacao,) = player.called("apply_permanent_voice_status")
         assert aplicacao["cfg"].permanent is True and aplicacao["cfg"].template.startswith("{track.emoji}")

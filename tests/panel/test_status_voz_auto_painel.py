@@ -5,9 +5,11 @@ texto vazio usa o modelo padrão (não desliga); ``effects`` aplica a todos os b
 ``stage_title_event``; XSRF e versão otimista como os outros formulários.
 """
 
+import asyncio
 import importlib
 from types import ModuleType
 
+from tests.panel.helpers_settings import assentar
 from tests.panel.test_settings_http import HttpBase, external_change
 
 MODELO = "Ouvindo {track.title}"
@@ -156,6 +158,10 @@ class GravacaoTest(HttpBase):
 
 
 class EfeitosTest(HttpBase):
+    def assentar_laco(self) -> None:
+        """Deixa rodar as tarefas por player que o ``effects`` agendou (o apply nunca é esperado em linha)."""
+        self.io_loop.run_sync(assentar)
+
     def test_every_player_of_every_bot_of_the_guild_gets_the_new_permanent(self) -> None:
         browser = self.logged_in()
 
@@ -208,8 +214,28 @@ class EfeitosTest(HttpBase):
         browser = self.logged_in()
 
         assert self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_MODELO: "sem placeholder"}).code == 422
+        self.assentar_laco()
 
         assert self.world.p100.called("apply_permanent_voice_status") == []
+
+    def test_the_post_answers_while_the_apply_of_every_player_is_still_running(self) -> None:
+        portao = asyncio.Event()
+        self.world.p800a.portao = self.world.p800b.portao = portao
+        browser = self.logged_in()
+        try:
+            resposta = self.save(
+                browser, 800, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}
+            )
+            self.assentar_laco()
+
+            assert resposta.code == 200, "o painel esperou o apply em linha"
+            assert len(self.world.p800a.called("apply_permanent_voice_status")) == 1
+            assert len(self.world.p800b.called("apply_permanent_voice_status")) == 1, (
+                "um apply preso segura o do outro bot"
+            )
+        finally:
+            portao.set()
+            self.assentar_laco()
 
 
 class XsrfEVersaoTest(HttpBase):
