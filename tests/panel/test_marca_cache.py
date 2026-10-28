@@ -126,7 +126,7 @@ class PanelBrandColdBurstTest(PanelTestBase):
     """Rajada de primeiras requisições do mesmo arquivo: uma só leitura e um só hash (o logo.svg tem 6 MB e a rota é pública)."""
 
     RAJADA = 8
-    PASSOS_DO_LACO = 3000  # voltas do laço (sem relógio) para a rajada inteira chegar ao handler
+    TEMPO_MAXIMO_DA_ESPERA = 10  # segundos; limite de segurança, não é espera: o evento libera antes
 
     def _contador(self, falhar_primeiro: bool = False):
         real, chamadas, solta = brand._load, [], threading.Event()
@@ -140,18 +140,32 @@ class PanelBrandColdBurstTest(PanelTestBase):
 
         return chamadas, solta, contado
 
+    def _chegadas(self):
+        """Espia ``brand._entry``: ``todas`` dispara quando a rajada inteira já chegou ao handler (e passou pela checagem do cache)."""
+        real, chegaram, todas = brand._entry, [], asyncio.Event()
+
+        async def espiao(nome):
+            chegaram.append(nome)
+            if len(chegaram) == self.RAJADA:
+                todas.set()
+            return await real(nome)
+
+        return todas, espiao
+
     @tornado.testing.gen_test
     async def test_concurrent_first_requests_for_one_file_load_it_exactly_once(self):
         chamadas, solta, contado = self._contador()
-        with mock.patch.dict(brand._cache, clear=True), mock.patch.object(brand, "_load", contado):
+        todas, espiao = self._chegadas()
+        with (
+            mock.patch.dict(brand._cache, clear=True),
+            mock.patch.object(brand, "_load", contado),
+            mock.patch.object(brand, "_entry", espiao),
+        ):
             url = self.get_url("/painel/marca/logo.svg")
             tarefas = [
                 asyncio.ensure_future(self.http_client.fetch(url, raise_error=False)) for _ in range(self.RAJADA)
             ]
-            for _ in range(self.PASSOS_DO_LACO):
-                if len(chamadas) >= self.RAJADA:
-                    break
-                await asyncio.sleep(0)
+            await asyncio.wait_for(todas.wait(), self.TEMPO_MAXIMO_DA_ESPERA)
             solta.set()
             respostas = await asyncio.gather(*tarefas)
 
