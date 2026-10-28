@@ -126,7 +126,9 @@ class PanelBrandColdBurstTest(PanelTestBase):
     """Rajada de primeiras requisições do mesmo arquivo: uma só leitura e um só hash (o logo.svg tem 6 MB e a rota é pública)."""
 
     RAJADA = 8
-    PASSOS_DO_LACO = 3000  # voltas do laço (sem relógio) para a rajada inteira chegar ao handler
+    TEMPO_MAXIMO_DA_ESPERA = 10  # segundos; limite de segurança, não é espera: o evento libera antes
+    ESPERA_DA_LEITURA = 20  # a leitura presa desiste DEPOIS do limite acima (e antes do timeout do gen_test)
+    TIMEOUT_DO_TESTE = 30  # maior que as duas esperas; o padrão do gen_test (5 s) cortaria o teste no meio
 
     def _contador(self, falhar_primeiro: bool = False):
         real, chamadas, solta = brand._load, [], threading.Event()
@@ -135,24 +137,46 @@ class PanelBrandColdBurstTest(PanelTestBase):
             chamadas.append(nome)
             if len(chamadas) == 1 and falhar_primeiro:
                 raise FileNotFoundError(nome)
-            solta.wait(timeout=5)  # segura a leitura até a rajada chegar; sem isso a primeira acabaria antes das outras
+            # segura a leitura até a rajada chegar; sem isso a primeira acabaria antes das outras. Sem o sinal, falha em vez de ler.
+            if not solta.wait(timeout=self.ESPERA_DA_LEITURA):
+                raise TimeoutError("a rajada não chegou ao handler a tempo")
             return real(nome)
 
         return chamadas, solta, contado
 
-    @tornado.testing.gen_test
+    def _chegadas(self):
+        """Espia ``brand._entry``: ``todas`` dispara quando a rajada inteira já chegou ao handler (e passou pela checagem do cache)."""
+        real, chegaram, todas = brand._entry, [], asyncio.Event()
+
+        async def espiao(nome):
+            chegaram.append(nome)
+            if len(chegaram) == self.RAJADA:
+                todas.set()
+            return await real(nome)
+
+        return todas, espiao
+
+    @tornado.testing.gen_test(timeout=TIMEOUT_DO_TESTE)
     async def test_concurrent_first_requests_for_one_file_load_it_exactly_once(self):
         chamadas, solta, contado = self._contador()
-        with mock.patch.dict(brand._cache, clear=True), mock.patch.object(brand, "_load", contado):
+        todas, espiao = self._chegadas()
+        with (
+            mock.patch.dict(brand._cache, clear=True),
+            mock.patch.object(brand, "_load", contado),
+            mock.patch.object(brand, "_entry", espiao),
+        ):
             url = self.get_url("/painel/marca/logo.svg")
             tarefas = [
                 asyncio.ensure_future(self.http_client.fetch(url, raise_error=False)) for _ in range(self.RAJADA)
             ]
-            for _ in range(self.PASSOS_DO_LACO):
-                if len(chamadas) >= self.RAJADA:
-                    break
-                await asyncio.sleep(0)
-            solta.set()
+            try:
+                await asyncio.wait_for(todas.wait(), self.TEMPO_MAXIMO_DA_ESPERA)
+            except BaseException:
+                for tarefa in tarefas:
+                    tarefa.cancel()
+                raise
+            finally:
+                solta.set()  # nunca deixa a leitura presa, passe ou falhe o teste
             respostas = await asyncio.gather(*tarefas)
 
         assert len(chamadas) == 1, f"{len(chamadas)} leituras para {self.RAJADA} requisições simultâneas"

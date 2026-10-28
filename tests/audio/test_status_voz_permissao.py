@@ -40,6 +40,7 @@ SOLICITANTE = "Solicitante-Y"
 CORPO_DO_ERRO = "Corpo-Do-Erro-Z"
 ID_DO_CANAL = 555
 ID_DO_SERVIDOR = 4242
+TEMPO_MAXIMO_DA_ESPERA = 10  # segundos; limite de segurança, não é espera: o evento libera antes
 
 
 def http_erro(classe, status: int, codigo: int):
@@ -556,8 +557,14 @@ class TestForbiddenSimultaneo:
     async def test_two_runs_waiting_on_a_slow_403_give_one_notice_and_one_warning(self, caminho, caplog):
         jogador = cenario(caminho, proibido())
         portao = asyncio.Event()
+        ambos_no_portao = asyncio.Event()
+        no_portao = 0
 
         async def lento(*args, **kwargs):
+            nonlocal no_portao
+            no_portao += 1
+            if no_portao == 2:
+                ambos_no_portao.set()
             await portao.wait()
             raise proibido()
 
@@ -567,9 +574,14 @@ class TestForbiddenSimultaneo:
 
         with caplog.at_level(logging.DEBUG):
             execucoes = [asyncio.ensure_future(rodar(jogador, caminho)) for _ in range(2)]
-            for _ in range(25):
-                await asyncio.sleep(0)
-            portao.set()
+            try:
+                await asyncio.wait_for(ambos_no_portao.wait(), TEMPO_MAXIMO_DA_ESPERA)  # só um guarda contra travar
+            except BaseException:
+                for execucao in execucoes:
+                    execucao.cancel()
+                raise
+            finally:
+                portao.set()  # nunca deixa os envios presos, passe ou falhe o teste
             await asyncio.gather(*execucoes)
 
         assert jogador.stage_title_event is False
