@@ -13,7 +13,7 @@ Log centralizado com redação de segredos, `assets/` em subpastas e arte nova d
 
 **Ao atualizar:**
 - Quem fixa `INVITE_PERMISSIONS` no compose ou no `.env` (como o compose de produção da VPS) deve trocar o valor para `2533601240804560` e recriar o container para o convite novo valer; sem isso, vale o valor antigo. Os servidores onde o bot já está só ganham as permissões novas (Ler o Histórico de Mensagens, Definir o Status do Canal de Voz, Fixar Mensagens) se um administrador as conceder ao cargo do bot ou o bot for convidado de novo.
-- O `update` do Docker troca só a imagem do bot. A imagem do `updater-proxy` não muda nesta versão (`proxy.py` e o `Dockerfile` ficam como na 2.1.0), então o digest dela no compose não precisa ser trocado.
+- O `update` do Docker troca só a imagem do bot. A imagem do `updater-proxy` não muda nesta versão (`proxy.py` e o `Dockerfile` ficam como na 2.1.0), então, em quem já tem a 2.1.0 instalada, a linha do proxy no compose fica como está. Numa instalação nova, as duas linhas `image:` do compose usam a 2.1.1.
 - O console passa a mostrar só problemas e um resumo periódico em `INFO`; as chaves novas de log têm padrão seguro e são opcionais (`docs/guides/logs.md`).
 
 ### Adicionado
