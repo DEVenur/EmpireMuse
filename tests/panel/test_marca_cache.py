@@ -127,6 +127,8 @@ class PanelBrandColdBurstTest(PanelTestBase):
 
     RAJADA = 8
     TEMPO_MAXIMO_DA_ESPERA = 10  # segundos; limite de segurança, não é espera: o evento libera antes
+    ESPERA_DA_LEITURA = 20  # a leitura presa desiste DEPOIS do limite acima (e antes do timeout do gen_test)
+    TIMEOUT_DO_TESTE = 30  # maior que as duas esperas; o padrão do gen_test (5 s) cortaria o teste no meio
 
     def _contador(self, falhar_primeiro: bool = False):
         real, chamadas, solta = brand._load, [], threading.Event()
@@ -135,7 +137,9 @@ class PanelBrandColdBurstTest(PanelTestBase):
             chamadas.append(nome)
             if len(chamadas) == 1 and falhar_primeiro:
                 raise FileNotFoundError(nome)
-            solta.wait(timeout=5)  # segura a leitura até a rajada chegar; sem isso a primeira acabaria antes das outras
+            # segura a leitura até a rajada chegar; sem isso a primeira acabaria antes das outras. Sem o sinal, falha em vez de ler.
+            if not solta.wait(timeout=self.ESPERA_DA_LEITURA):
+                raise TimeoutError("a rajada não chegou ao handler a tempo")
             return real(nome)
 
         return chamadas, solta, contado
@@ -152,7 +156,7 @@ class PanelBrandColdBurstTest(PanelTestBase):
 
         return todas, espiao
 
-    @tornado.testing.gen_test
+    @tornado.testing.gen_test(timeout=TIMEOUT_DO_TESTE)
     async def test_concurrent_first_requests_for_one_file_load_it_exactly_once(self):
         chamadas, solta, contado = self._contador()
         todas, espiao = self._chegadas()
@@ -165,8 +169,14 @@ class PanelBrandColdBurstTest(PanelTestBase):
             tarefas = [
                 asyncio.ensure_future(self.http_client.fetch(url, raise_error=False)) for _ in range(self.RAJADA)
             ]
-            await asyncio.wait_for(todas.wait(), self.TEMPO_MAXIMO_DA_ESPERA)
-            solta.set()
+            try:
+                await asyncio.wait_for(todas.wait(), self.TEMPO_MAXIMO_DA_ESPERA)
+            except BaseException:
+                for tarefa in tarefas:
+                    tarefa.cancel()
+                raise
+            finally:
+                solta.set()  # nunca deixa a leitura presa, passe ou falhe o teste
             respostas = await asyncio.gather(*tarefas)
 
         assert len(chamadas) == 1, f"{len(chamadas)} leituras para {self.RAJADA} requisições simultâneas"

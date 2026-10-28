@@ -574,8 +574,14 @@ class TestForbiddenSimultaneo:
 
         with caplog.at_level(logging.DEBUG):
             execucoes = [asyncio.ensure_future(rodar(jogador, caminho)) for _ in range(2)]
-            await asyncio.wait_for(ambos_no_portao.wait(), TEMPO_MAXIMO_DA_ESPERA)  # só um guarda contra travar o teste
-            portao.set()
+            try:
+                await asyncio.wait_for(ambos_no_portao.wait(), TEMPO_MAXIMO_DA_ESPERA)  # só um guarda contra travar
+            except BaseException:
+                for execucao in execucoes:
+                    execucao.cancel()
+                raise
+            finally:
+                portao.set()  # nunca deixa os envios presos, passe ou falhe o teste
             await asyncio.gather(*execucoes)
 
         assert jogador.stage_title_event is False
