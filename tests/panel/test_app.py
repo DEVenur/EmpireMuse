@@ -1,5 +1,6 @@
 """Aplicação do painel: rotas, 404 genérico, cabeçalhos, cookie _xsrf e marca."""
 
+import re
 import json
 
 import tornado.web
@@ -136,10 +137,35 @@ class PanelBrandTest(PanelTestBase):
             assert response.headers["Content-Type"].startswith(mime), response.headers["Content-Type"]
             assert response.body == (BRAND_DIR / name).read_bytes(), "conteúdo difere de assets/brand/"
 
-        self.assert_all([("logo.svg", "image/svg+xml"), ("avatar.png", "image/png")], check)
+        self.assert_all(
+            [("logo.svg", "image/svg+xml"), ("avatar.png", "image/png"), ("favicon.ico", "image/x-icon")], check
+        )
+
+    def test_the_page_links_the_ico_favicon_as_the_icon(self):
+        corpo = self.get_page("/painel/").body.decode("utf-8")
+
+        icones = re.findall(r"<link\b[^>]*\brel=[\"']icon[\"'][^>]*>", corpo)
+        assert any('href="/painel/marca/favicon.ico"' in tag for tag in icones), icones
+
+    def test_the_ico_icon_link_declares_its_type_when_it_declares_one(self):
+        corpo = self.get_page("/painel/").body.decode("utf-8")
+
+        tag = next(t for t in re.findall(r"<link\b[^>]*>", corpo) if "/painel/marca/favicon.ico" in t)
+        assert "type=" not in tag or 'type="image/x-icon"' in tag or 'type="image/vnd.microsoft.icon"' in tag
+
+    def test_the_favicon_is_a_valid_ico_file(self):
+        dados = (BRAND_DIR / "favicon.ico").read_bytes()
+
+        assert dados[:4] == b"\x00\x00\x01\x00" and int.from_bytes(dados[4:6], "little") >= 1
 
     BRAND_BLOCKED_PATHS = [
         "/painel/marca/banner.png",  # existe em assets/brand/, mas fora da lista fechada
+        "/painel/marca/FAVICON.ICO",
+        "/painel/marca/favicon.ico/",
+        "/painel/marca/favicon.ico%00.png",
+        "/painel/marca/favicon.ico/..%2flogo.svg",
+        "/painel/marca/avatares/Avatar-EmpireMuse_1.png",  # subpasta de assets/brand/, fora da lista fechada
+        "/painel/marca/Avatar-EmpireMuse_1.png",
         "/painel/marca/",
         "/painel/marca",
         "/painel/marca/LOGO.SVG",

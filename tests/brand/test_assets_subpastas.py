@@ -246,13 +246,39 @@ class TestNomesRecusados:
         with pytest.raises(ValueError):
             branding.asset_url("dentro.png")
 
-    def test_a_symlink_to_another_file_inside_assets_is_accepted(self, arvore):
+    def test_a_symlink_to_another_file_inside_assets_is_refused_too(self, arvore):
         raiz, escrever = arvore
         escrever("ui/real.png")
         (raiz / "player").mkdir()
         (raiz / "player" / "atalho.png").symlink_to(raiz / "ui" / "real.png")
 
-        assert branding.asset_url("atalho.png").endswith("/player/atalho.png")
+        with pytest.raises(ValueError):
+            branding.asset_url("atalho.png")
+        assert branding.asset_url("real.png").endswith("/ui/real.png")
+
+    def test_a_subfolder_that_is_a_symlink_to_another_folder_inside_assets_is_refused_too(self, arvore):
+        raiz, escrever = arvore
+        escrever("ui/real.png")
+        (raiz / "atalho").symlink_to(raiz / "ui")
+
+        assert branding.asset_url("real.png").endswith("/ui/real.png")
+        limpar_caches()
+        # o atalho de pasta não cria um segundo caminho para o mesmo arquivo (nem um basename "repetido")
+        assert branding.asset_url("real.png").count("/atalho/") == 0
+
+    def test_a_nested_subfolder_resolves_with_its_full_subpath(self, arvore):
+        _, escrever = arvore
+        escrever("brand/avatares/Avatar_1.png")
+
+        assert branding.asset_url("Avatar_1.png").endswith("/brand/avatares/Avatar_1.png")
+
+    def test_the_same_basename_in_a_nested_and_a_top_level_subfolder_is_a_duplicate(self, arvore):
+        _, escrever = arvore
+        escrever("brand/avatares/igual.png")
+        escrever("ui/igual.png")
+
+        with pytest.raises(ValueError):
+            branding.asset_url("igual.png")
 
 
 class TestBaseDasUrlsPorVersao:
@@ -357,6 +383,28 @@ def somas() -> dict[str, str]:
     arquivo = ASSETS / "SHA256SUMS"
     pares = (linha.split(None, 1) for linha in arquivo.read_text(encoding="utf-8").splitlines() if linha.strip())
     return {nome.strip(): resumo for resumo, nome in pares}
+
+
+class TestSemLinksSimbolicos:
+    def test_there_is_no_symlink_anywhere_under_assets(self):
+        elos = sorted(p.relative_to(ASSETS).as_posix() for p in ASSETS.rglob("*") if p.is_symlink())
+
+        assert elos == []
+
+    def test_every_avatar_in_brand_avatares_resolves_through_asset_url(self):
+        limpar_caches()
+        pasta = ASSETS / "brand" / "avatares"
+        avatares = sorted(p for p in pasta.iterdir() if p.is_file())
+
+        assert len(avatares) >= 5
+        for avatar in avatares:
+            assert branding.asset_url(avatar.name).endswith(f"/brand/avatares/{avatar.name}")
+
+    def test_the_brand_files_resolve_to_their_subfolder(self):
+        limpar_caches()
+
+        for nome in ("avatar.png", "banner.png", "logo.svg", "favicon.ico"):
+            assert branding.asset_url(nome).endswith(f"/brand/{nome}")
 
 
 class TestSomasDeIntegridade:
