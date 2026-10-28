@@ -7,6 +7,7 @@ from disnake.ext import commands
 
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import CustomContext
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -58,16 +59,23 @@ class ViewHelp(disnake.ui.View):
 
         if self.category:
             if len(self.cmd_lst[self.category]["cmds"]) > 1:
-                left_button = disnake.ui.Button(style=disnake.ButtonStyle.grey, emoji="⬅️", custom_id="left_page")
+                left_button = disnake.ui.Button(
+                    style=disnake.ButtonStyle.grey, emoji=app_emoji(self.bot, "arrow_left"), custom_id="left_page"
+                )
                 left_button.callback = self.callback_left
                 self.add_item(left_button)
 
-                right_button = disnake.ui.Button(style=disnake.ButtonStyle.grey, emoji="➡️", custom_id="right_page")
+                right_button = disnake.ui.Button(
+                    style=disnake.ButtonStyle.grey, emoji=app_emoji(self.bot, "arrow_right"), custom_id="right_page"
+                )
                 right_button.callback = self.callback_right
                 self.add_item(right_button)
 
             back_button = disnake.ui.Button(
-                style=disnake.ButtonStyle.grey, emoji="↩️", custom_id="back_page", label="Voltar"
+                style=disnake.ButtonStyle.grey,
+                emoji=app_emoji(self.bot, "leftwards_arrow_with_hook"),
+                custom_id="back_page",
+                label="Voltar",
             )
             back_button.callback = self.callback_back
             self.add_item(back_button)

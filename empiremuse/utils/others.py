@@ -186,6 +186,11 @@ class EmbedPaginator(disnake.ui.View):
         self, ctx: Union[CustomContext, disnake.MessageInteraction], embeds: list[disnake.Embed], *, timeout=180
     ):
         super().__init__(timeout=timeout)
+        bot = getattr(ctx, "bot", None)
+        # o Unicode dos decoradores é a reserva; o emoji do bot que envia vale quando existe
+        self.back.emoji = app_emoji(bot, "arrow_left")
+        self.next.emoji = app_emoji(bot, "arrow_right")
+        self.close.emoji = app_emoji(bot, "stop")
         self.ctx = ctx
         self.embeds = embeds
         self.current = 0
