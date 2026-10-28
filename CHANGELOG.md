@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Corrigido
+- **Aviso de PyNaCl e dave.py no console**: o console deixa de mostrar, a cada subida, o aviso da biblioteca de que o suporte a voz não está instalado (`... not installed, voice will NOT be supported`). Os demais avisos da biblioteca continuam aparecendo.
+
 ## [2.1.1] - 2026-10-28
 
 Log centralizado com redação de segredos, `assets/` em subpastas e arte nova da marca, emojis de aplicação, novas permissões do convite e correções do teste em produção.
