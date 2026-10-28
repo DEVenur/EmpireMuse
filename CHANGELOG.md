@@ -8,7 +8,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Corrigido
-- **Falha de reprodução do YouTube**: ao falhar com "All clients failed" ou "Read timed out", o player tenta a mesma faixa mais uma vez após 2 s antes de reportar o erro e pular. A recuperação pelo YouTube também vale para faixas espelhadas, mas só quando há outro nó com busca no YouTube; sem ele, o erro é reportado e a faixa é pulada. As causas de erro passam a ser reconhecidas por trecho do texto.
+- **Falha de reprodução do YouTube**: quando o YouTube falha ao carregar a faixa ("All clients failed" ou "Read timed out"), o bot tenta a mesma faixa mais uma vez, após 2 s e a partir da posição inicial pedida, antes de reportar o erro e pular; a nova tentativa acontece uma só vez por faixa. Se não houver recuperação, o player pula a faixa em vez de ficar travado. A recuperação pelo YouTube também vale para faixas espelhadas, mas só quando há outro nó com busca no YouTube; sem ele, o erro é reportado e a faixa é pulada.
 
 ## [2.1.1] - 2026-10-28
 
