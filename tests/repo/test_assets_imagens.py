@@ -149,7 +149,8 @@ VERIFICADORES = {".png": problemas_png, ".jpg": problemas_jpeg, ".jpeg": problem
 
 
 def imagens() -> list[Path]:
-    return sorted(p for p in ASSETS.iterdir() if p.suffix.lower() in VERIFICADORES)
+    """Toda imagem em ``assets/**`` (a raiz e as subpastas)."""
+    return sorted(p for p in ASSETS.rglob("*") if p.is_file() and p.suffix.lower() in VERIFICADORES)
 
 
 def _chunk(tipo: bytes, corpo: bytes) -> bytes:
@@ -290,7 +291,7 @@ class TestAssets:
     def test_there_are_images_to_check(self):
         assert len(imagens()) >= 40
 
-    @pytest.mark.parametrize("imagem", imagens(), ids=lambda p: p.name)
+    @pytest.mark.parametrize("imagem", imagens(), ids=lambda p: p.relative_to(ASSETS).as_posix())
     def test_every_image_decodes_completely(self, imagem):
         achados = VERIFICADORES[imagem.suffix.lower()](imagem.read_bytes())
 
