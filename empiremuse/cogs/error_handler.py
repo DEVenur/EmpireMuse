@@ -10,7 +10,7 @@ from aiohttp import ClientSession
 from disnake.ext import commands
 
 from empiremuse.logs.errors import command_context
-from empiremuse.logs.redact import MAX_MESSAGE_CHARS, MAX_TRACEBACK_CHARS, scrub
+from empiremuse.logs.redact import MAX_TRACEBACK_CHARS, sanitize_value, scrub
 from empiremuse.rules.error_code import safe_error_code
 from empiremuse.utils.music.converters import URL_REG, fix_characters
 from empiremuse.utils.music.errors import parse_error, PoolException, error_code_text
@@ -26,9 +26,18 @@ logger = logging.getLogger(__name__)
 UNEXPECTED_ERROR_TEXT = "Ocorreu um erro inesperado ao executar o comando. Tente novamente em instantes."
 
 
+# Limites do Discord: nome de servidor, canal e usuário até 100; descrição do embed até 4096 (sobra para as crases e o título).
+NAME_LIMIT = 100
+DESCRIPTION_TEXT_LIMIT = 4000
+
+
 def _safe_text(text: object) -> str:
-    """Nome de servidor, canal ou autor para o embed do relatório: sem segredo registrado, sem controle e com tamanho limitado."""
-    return fix_characters(scrub(str(text), MAX_MESSAGE_CHARS), MAX_MESSAGE_CHARS)
+    """Nome de servidor, canal ou autor para o embed do relatório.
+
+    O saneamento e o redator vêm antes de ``fix_characters`` (que troca ``_``, ``*`` e ``[`` e esconderia um segredo
+    registrado do redator); as quebras de linha viram ``⏎`` para o nome não forjar uma linha ``ID:`` no bloco de código.
+    """
+    return fix_characters(scrub(sanitize_value(str(text)), NAME_LIMIT))[:NAME_LIMIT]
 
 
 class ErrorHandler(commands.Cog):
@@ -198,8 +207,10 @@ class ErrorHandler(commands.Cog):
         if not send_webhook or not full_error_msg:
             return
 
+        acquired = False
         try:
             await self.webhook_max_concurrency.acquire(inter)
+            acquired = True
 
             await self.send_webhook(
                 embed=self.report_embed_with_code(inter, code),
@@ -210,10 +221,12 @@ class ErrorHandler(commands.Cog):
 
             await asyncio.sleep(20)
 
-            await self.webhook_max_concurrency.release(inter)
-
         except Exception:
             logger.exception("Falha ao enviar o relatório de erro ao webhook")
+        finally:
+            # Uma falha do webhook não pode deixar o servidor adquirido para sempre.
+            if acquired:
+                await self.webhook_max_concurrency.release(inter)
 
     async def do_playcmd(self, ctx: CustomContext):
         if not self.bot.pool.config["ENABLE_SONGREQUEST_MENTION"]:
@@ -366,8 +379,10 @@ class ErrorHandler(commands.Cog):
         if not send_webhook or not full_error_msg:
             return
 
+        acquired = False
         try:
             await self.webhook_max_concurrency.acquire(ctx)
+            acquired = True
 
             await self.send_webhook(
                 embed=self.report_embed_with_code(ctx, code),
@@ -376,10 +391,12 @@ class ErrorHandler(commands.Cog):
 
             await asyncio.sleep(20)
 
-            await self.webhook_max_concurrency.release(ctx)
-
         except Exception:
             logger.exception("Falha ao enviar o relatório de erro ao webhook")
+        finally:
+            # Uma falha do webhook não pode deixar o servidor adquirido para sempre.
+            if acquired:
+                await self.webhook_max_concurrency.release(ctx)
 
     @commands.Cog.listener("on_button_click")
     async def on_error_report(self, inter: disnake.MessageInteraction):
@@ -535,7 +552,7 @@ class ErrorHandler(commands.Cog):
                 # Resumo por tipo (V-L4): str(Attachment) é a URL assinada da CDN, str(Member) é o nome e o texto livre pode ter segredo.
                 params = command_context(ctx, level=logging.ERROR)["params"]
                 # As crases do texto não fecham o bloco de código.
-                options = "\n".join(f"{k} -> {v}" for k, v in params.items()).replace("`", "'")
+                options = "\n".join(f"{k} -> {v}" for k, v in params.items())[:DESCRIPTION_TEXT_LIMIT].replace("`", "'")
                 embed.description += "**Options**```\n" + options + "```"
 
         except AttributeError:
@@ -548,7 +565,7 @@ class ErrorHandler(commands.Cog):
                     type_ = "Mensagem"
 
                 # O texto do usuário passa pelo saneamento e pelo redator único; as crases não fecham o bloco de código.
-                content = scrub(str(message.content), MAX_MESSAGE_CHARS).replace("`", "'")
+                content = scrub(str(message.content), DESCRIPTION_TEXT_LIMIT).replace("`", "'")
                 embed.description = f"**{type_}:**```\n{content}```"
 
         return embed
@@ -562,6 +579,7 @@ class ErrorHandler(commands.Cog):
         kwargs = {
             "username": self.bot.user.name,
             "avatar_url": self.bot.user.display_avatar.replace(static_format="png").url,
+            "allowed_mentions": disnake.AllowedMentions.none(),
         }
 
         if content:
