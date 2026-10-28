@@ -8,10 +8,12 @@ import pytest
 
 from empiremuse.logs.redact import register_secret
 from tests.logs.test_errors_relatorio import prefixo, tratador
-from tests.logs.test_errors_relatorio_limites import contexto_com_nome, tudo_do_embed
+from tests.logs.test_errors_relatorio_limites import blocos_de_nome, contexto_com_nome, tudo_do_embed
 from tests.logs.test_errors_relatorio_nomes import autor_com_nome
 
 pytestmark = pytest.mark.critical
+
+BLOCOS_DE_NOME = 4  # servidor, canal de texto, voz do usuário e voz do bot
 
 SEGREDO_FINAL = "".join(["segredo da forma", " final-Z9"])
 NOME_CRU = SEGREDO_FINAL.replace(" ", "_")
@@ -52,11 +54,13 @@ class TestRegrasVizinhasSeguem:
 
         embed = tratador().build_report_embed(contexto_com_nome(f"{NOME_CRU} " + "n_" * 200))
 
-        for f in embed.fields:
-            if f.name.startswith(("Servidor", "Canal")):
-                assert len(f.value.removeprefix("```\n").split("\nID: ")[0]) <= 100
+        blocos = blocos_de_nome(embed)
+        assert len(blocos) == BLOCOS_DE_NOME
+        assert all(len(b.removeprefix("```\n").split("\nID: ")[0]) <= 100 for b in blocos)
 
     def test_a_line_break_still_becomes_a_symbol(self):
         embed = tratador().build_report_embed(contexto_com_nome("a\nb_c"))
 
-        assert all(f.value.count("\n") == 2 for f in embed.fields if f.name.startswith(("Servidor", "Canal")))
+        blocos = blocos_de_nome(embed)
+        assert len(blocos) == BLOCOS_DE_NOME
+        assert all(b.count("\n") == 2 for b in blocos)
