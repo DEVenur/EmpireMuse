@@ -755,7 +755,6 @@ class BotPool:
                 "port": os.environ.get("SERVER_PORT") or 8090,
                 "password": LOCAL_LAVALINK_PASSWORD,
                 "identifier": "LOCAL",
-                "region": "us_central",
                 "retries": 120,
                 "prefer_youtube_native_playback": self.config["PREFER_YOUTUBE_NATIVE_PLAYBACK"],
                 "only_use_native_search_providers": self.config["ONLY_USE_NATIVE_SEARCH_PROVIDERS"],
