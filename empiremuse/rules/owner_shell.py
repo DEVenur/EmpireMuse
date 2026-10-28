@@ -24,9 +24,21 @@ _SECRET_NAME = re.compile(
 )
 
 
+# Identificadores públicos por construção (vão em toda URL de autorização do OAuth2). Lista exata e sensível a maiúsculas: o que
+# não está aqui continua segredo pelo nome. O valor só fica de fora da máscara se for um snowflake ASCII (ver ``is_public_id``).
+_PUBLIC_ID_NAMES = frozenset({"PANEL_OAUTH_CLIENT_ID"})
+_SNOWFLAKE = re.compile(r"[0-9]{17,20}", re.ASCII)
+
+
 def is_secret_name(name: str) -> bool:
     """Se o NOME de uma variável, chave ou parâmetro é de segredo (o valor nunca deve ir a log nem a relatório)."""
-    return bool(_SECRET_NAME.search(str(name)))
+    name = str(name)
+    return name not in _PUBLIC_ID_NAMES and bool(_SECRET_NAME.search(name))
+
+
+def is_public_id(name: str, value: str) -> bool:
+    """Se ``name`` é um ID público conhecido E ``value`` tem a forma de um snowflake (senão pode ser um segredo colado ali)."""
+    return name in _PUBLIC_ID_NAMES and _SNOWFLAKE.fullmatch(value) is not None
 
 
 def build_shell_env(environ: Mapping[str, str], *, windows: bool = False) -> dict[str, str]:
@@ -43,7 +55,10 @@ def collect_secret_values(*sources: Mapping[str, object]) -> frozenset[str]:
     values: set[str] = set()
     for source in sources:
         for key, value in source.items():
-            if isinstance(value, str) and len(value) >= MIN_SECRET_LENGTH and _SECRET_NAME.search(str(key)):
+            if not isinstance(value, str) or len(value) < MIN_SECRET_LENGTH:
+                continue
+            name = str(key)
+            if _SECRET_NAME.search(name) and not is_public_id(name, value):
                 values.add(value)
     return frozenset(values)
 
