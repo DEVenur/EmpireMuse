@@ -25,6 +25,8 @@ ETAG_HEX_LENGTH = 32
 
 # a rota é pública e sem limite de taxa: cada arquivo é lido do disco UMA vez e o resto das requisições usa a memória (e o 304 do ETag)
 _cache: dict[str, tuple[bytes, str]] = {}
+# uma carga por nome em andamento: pedidos simultâneos a frio esperam a MESMA leitura em vez de repeti-la
+_loading: dict[str, asyncio.Task[tuple[bytes, str]]] = {}
 
 
 def _load(name: str) -> tuple[bytes, str]:
@@ -39,19 +41,36 @@ def _load(name: str) -> tuple[bytes, str]:
     return data, f'"{hashlib.sha256(data).hexdigest()[:ETAG_HEX_LENGTH]}"'
 
 
+async def _load_once(name: str) -> tuple[bytes, str]:
+    try:
+        return _cache.setdefault(name, await asyncio.to_thread(_load, name))
+    finally:
+        # sai do dicionário ao terminar OU falhar: uma falha nunca fica em cache
+        _loading.pop(name, None)
+
+
+async def _entry(name: str) -> tuple[bytes, str]:
+    entry = _cache.get(name)
+
+    if entry is not None:
+        return entry
+
+    task = _loading.get(name)
+
+    if task is None:
+        task = _loading[name] = asyncio.ensure_future(_load_once(name))
+
+    # shield: o cliente que desiste não cancela a carga que os outros pedidos esperam
+    return await asyncio.shield(task)
+
+
 class BrandHandler(PanelHandler):
     async def get(self, name: str) -> None:
-        entry = _cache.get(name)
+        try:
+            data, etag = await _entry(name)
+        except OSError:
+            raise tornado.web.HTTPError(404)
 
-        if entry is None:
-            try:
-                entry = await asyncio.to_thread(_load, name)
-            except OSError:
-                raise tornado.web.HTTPError(404)
-
-            entry = _cache.setdefault(name, entry)
-
-        data, etag = entry
         self.set_header("Content-Type", BRAND_FILES[name])
         self.set_header("Cache-Control", BRAND_CACHE_CONTROL)
         self.set_header("Etag", etag)
