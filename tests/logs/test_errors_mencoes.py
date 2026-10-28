@@ -5,6 +5,7 @@ mensagem do bot não pode notificar ninguém; menção a usuário e a resposta c
 """
 
 from types import SimpleNamespace
+from typing import Any
 
 import disnake
 import pytest
@@ -15,7 +16,7 @@ from empiremuse.utils.client import BotCore
 pytestmark = pytest.mark.critical
 
 
-def bot_novo(**extra) -> BotCore:
+def bot_novo(**extra: Any) -> BotCore:
     return BotCore(
         command_prefix=commands.when_mentioned,
         intents=disnake.Intents.none(),
@@ -27,17 +28,17 @@ def bot_novo(**extra) -> BotCore:
 
 @pytest.mark.asyncio
 class TestMencoesPermitidas:
-    async def test_the_bot_starts_without_everyone_or_role_mentions(self):
+    async def test_the_bot_starts_without_everyone_or_role_mentions(self) -> None:
         permitidas = bot_novo().allowed_mentions
 
         assert permitidas is not None and permitidas.everyone is False and permitidas.roles is False
 
-    async def test_user_mentions_and_replies_keep_working(self):
+    async def test_user_mentions_and_replies_keep_working(self) -> None:
         permitidas = bot_novo().allowed_mentions
 
         assert permitidas is not None and permitidas.users is True and permitidas.replied_user is True
 
-    async def test_an_explicit_allowed_mentions_from_the_caller_is_respected(self):
+    async def test_an_explicit_allowed_mentions_from_the_caller_is_respected(self) -> None:
         explicita = disnake.AllowedMentions.all()
 
         assert bot_novo(allowed_mentions=explicita).allowed_mentions is explicita

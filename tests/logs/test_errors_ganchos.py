@@ -177,7 +177,7 @@ class TestOnError:
         (registro,) = [r for r in registros if r.levelno >= logging.ERROR]
         assert registro.exc_info[0] is RuntimeError
         assert "on_message" in registro.getMessage() + saida.getvalue()
-        assert capsys.readouterr().err == "" or "Traceback" not in capsys.readouterr().err
+        assert "Traceback" not in capsys.readouterr().err
 
 
 def _nomes_de_erro(caplog) -> list[logging.LogRecord]:

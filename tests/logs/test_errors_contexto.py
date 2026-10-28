@@ -137,6 +137,31 @@ class TestTextoLivre:
         assert resumo({"busca": "musica secreta"}, ERROR)["busca"] == "str(len=14)"
 
 
+class TestTextoDeComandoDePrefixo:
+    # o texto é UMA palavra: com espaço dentro dele o separador do comando nem importaria
+    @pytest.mark.parametrize("separador", [" ", "\n", "\t", "\r\n", "  \n "])
+    def test_the_text_after_the_command_is_found_with_any_whitespace_separator(self, separador):
+        ctx = contexto_de_prefixo("play")
+        ctx.message.content = f"!play{separador}segredo"
+
+        contexto = command_context(ctx, level=DEBUG)
+
+        assert contexto["params"]["texto"] == "segredo"
+
+    @pytest.mark.parametrize("separador", ["\n", "\t"])
+    def test_at_error_the_length_of_the_text_is_logged_with_any_separator(self, separador):
+        ctx = contexto_de_prefixo("play")
+        ctx.message.content = f"!play{separador}segredo"
+
+        assert command_context(ctx, level=ERROR)["params"]["texto"] == "str(len=7)"
+
+    def test_a_command_without_text_has_an_empty_text(self):
+        ctx = contexto_de_prefixo("skip")
+        ctx.message.content = "!skip\n"
+
+        assert command_context(ctx, level=DEBUG)["params"]["texto"] == ""
+
+
 class TestRobustez:
     def test_a_broken_option_never_raises_out_of_the_error_path(self):
         class Quebrado:

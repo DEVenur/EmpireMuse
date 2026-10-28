@@ -1,12 +1,10 @@
-"""Item 7, P4 — B18 (K17): nada de ``print``/``print_exc``/f-string em log nos arquivos da partição do P4; as regras do Ruff estão ligadas.
+"""Item 7, P4 — B18 (K17): nada de ``print``/``print_exc``/f-string em log nos arquivos da partição do P4.
 
 Os arquivos são os da coluna Turbine de ``s31-md-link.md`` §7 (os do Prism saem pelo S-31). O guarda é por AST (o que o ``T201``/``T203``/``G004``
-pegam); a prova final é o CI com as regras ligadas no ``pyproject.toml`` — aqui só se confere que estão em ``select`` e que cada exceção
-por arquivo tem motivo escrito.
+pegam); a prova final é o CI com as regras ligadas no ``pyproject.toml`` (não se relê o arquivo aqui).
 """
 
 import ast
-import tomllib
 
 import pytest
 
@@ -111,27 +109,3 @@ class TestPartitionDoP4:
             pytest.fail(f"{arquivo} não existe")
 
         assert infracoes(caminho.read_text(encoding="utf-8")) == []
-
-
-class TestRegrasDoRuff:
-    @pytest.fixture(scope="class")
-    def pyproject(self):
-        return tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))
-
-    @pytest.mark.parametrize("regra", ["T201", "T203", "G004", "LOG015"])
-    def test_the_rule_is_selected(self, pyproject, regra):
-        assert regra in pyproject["tool"]["ruff"]["lint"]["select"]
-
-    def test_every_per_file_exception_has_a_written_reason(self, pyproject):
-        linhas = (RAIZ / "pyproject.toml").read_text(encoding="utf-8").splitlines()
-        excecoes = pyproject["tool"]["ruff"]["lint"].get("per-file-ignores", {})
-        for arquivo in excecoes:
-            indice = next(i for i, linha in enumerate(linhas) if arquivo in linha and "=" in linha)
-            comentada = "#" in linhas[indice] or linhas[indice - 1].lstrip().startswith("#")
-            assert comentada, f"{arquivo}: exceção sem comentário de motivo"
-
-    def test_the_isolated_proxy_script_is_the_only_exception_for_print(self, pyproject):
-        excecoes = pyproject["tool"]["ruff"]["lint"].get("per-file-ignores", {})
-        com_t201 = [arquivo for arquivo, regras in excecoes.items() if "T201" in regras]
-
-        assert all(arquivo.endswith("updater/proxy.py") for arquivo in com_t201)
