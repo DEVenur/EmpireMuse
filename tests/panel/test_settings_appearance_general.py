@@ -116,7 +116,7 @@ class VoiceStatusTest(HttpBase):
         Each.run(["Tocando agora", "{foo}", "{track.titulo}", "track.title", "{ track.title }", "{TRACK.TITLE}"], check)
         assert self.db.doc("global", 100) == before and self.db.writes == []
 
-    def test_empty_status_uses_the_default_model_and_does_not_turn_the_feature_off(self):
+    def test_empty_status_uses_the_default_model_and_does_not_turn_the_feature_off(self) -> None:
         external_change(
             self.db, "global", 100, voice_channel_status="Tocando {track.title}", voice_status_permanent=True
         )
@@ -127,7 +127,7 @@ class VoiceStatusTest(HttpBase):
 
 
 class VoiceStatusEffectsTest(HttpBase):
-    def test_empty_template_applies_the_default_model_to_the_player_without_touching_its_flag(self):
+    def test_empty_template_applies_the_default_model_to_the_player_without_touching_its_flag(self) -> None:
         external_change(
             self.db, "global", 100, voice_channel_status="Tocando {track.title}", voice_status_permanent=True
         )
