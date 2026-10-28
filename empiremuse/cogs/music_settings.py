@@ -10,7 +10,6 @@ import logging
 from typing import TYPE_CHECKING, Union, Optional
 
 import disnake
-import humanize
 from disnake.ext import commands
 
 from empiremuse.rules.errors import ROLE_DUPLICATE, RuleError
@@ -25,6 +24,7 @@ from empiremuse.rules.settings import add_dj_role as add_role, allowed_names
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel
+from empiremuse.rules.text import format_mib
 from empiremuse.utils.music.converters import time_format, md_link, md_bracketed, md_code
 from empiremuse.utils.music.errors import GenericError, NoVoice
 from empiremuse.utils.music.interactions import SkinEditorMenu, EmbedPaginatorInteraction, ButtonInteraction
@@ -52,6 +52,8 @@ from empiremuse.utils.music.request_channel import (
 from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 logger = logging.getLogger(__name__)
+
+NODE_REGION_LIMIT = 32  # a região vem do dono ou da lista externa de servidores
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -1412,18 +1414,25 @@ class MusicSettings(commands.Cog):
                 except KeyError:
                     current_player = None
 
-                txt = f"Região: {md_code(node.region.title())}\n"
+                if identifier == "LOCAL":
+                    txt = "Região: `Local`\n"
+                elif getattr(node, "region_label", None):
+                    txt = f"Região: {md_code(node.region_label, limit=NODE_REGION_LIMIT)}\n"
+                else:
+                    txt = ""
 
-                used = humanize.naturalsize(node.stats.memory_used)
-                total = humanize.naturalsize(node.stats.memory_allocated)
-                free = humanize.naturalsize(node.stats.memory_free)
+                used = format_mib(node.stats.memory_used)
+                total = format_mib(node.stats.memory_allocated)
+                free = format_mib(node.stats.memory_free)
+                reservable = format_mib(node.stats.memory_reservable)
                 cpu_cores = node.stats.cpu_cores
                 cpu_usage = f"{node.stats.lavalink_load * 100:.2f}"
                 started = node.stats.players
 
                 txt += (
-                    f"RAM: `{used}/{free}`\n"
-                    f"RAM Total: `{total}`\n"
+                    f"Heap Java (usado/livre): `{used} / {free}`\n"
+                    f"Heap Java alocado: `{total}`\n"
+                    f"Heap Java máximo: `{reservable}`\n"
                     f"CPU Cores: {md_code(cpu_cores)}\n"
                     f"Uso de CPU: `{cpu_usage}%`\n"
                     f"Versão do Lavalink: {md_code(f'v{node.version}')}\n"

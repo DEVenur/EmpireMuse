@@ -11,6 +11,7 @@ from disnake.ext import commands
 from rapidfuzz import fuzz
 
 import empiremuse.wavelink as wavelink
+from empiremuse.rules.text import format_int
 from empiremuse.rules.title_match import title_matches
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, scrobble_model
@@ -226,10 +227,10 @@ class LastFmCog(commands.Cog):
                 txt += f"> `🌎` **⠂País:** `{lastfm_user['country']}`\n"
 
             if playcount := lastfm_user["playcount"]:
-                txt += f"> `🔊` **⠂Total de músicas reproduzidas:** {md_link(f'{int(playcount):,}', f'https://www.last.fm/user/{lastfm_user["name"]}/library')}\n"
+                txt += f"> `🔊` **⠂Total de músicas reproduzidas:** {md_link(format_int(int(playcount)), f'https://www.last.fm/user/{lastfm_user["name"]}/library')}\n"
 
-            if playlists := lastfm_user["playlists"] != "0":
-                txt += f"> `📄` **⠂Playlists públicas:** {md_link(f'{int(playlists):,}', f'https://www.last.fm/user/{lastfm_user["name"]}/playlists')}\n"
+            if (playlists := lastfm_user["playlists"]) != "0":
+                txt += f"> `📄` **⠂Playlists públicas:** {md_link(format_int(int(playlists)), f'https://www.last.fm/user/{lastfm_user["name"]}/playlists')}\n"
 
             try:
                 slashcmd = (
@@ -262,12 +263,12 @@ class LastFmCog(commands.Cog):
                 if top_tracks:
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"> ` {n + 1}º ` {md_link(t['name'], t['url'])} `De:` {md_link(t['artist']['name'], t['artist']['url'])} `(x{int(t['playcount']):,})`"
+                            f"> ` {n + 1}º ` {md_link(t['name'], t['url'])} `De:` {md_link(t['artist']['name'], t['artist']['url'])} `(x{format_int(int(t['playcount']))})`"
                             for n, t in enumerate(top_tracks)
                         ),
                         color=embed_color,
                     ).set_author(
-                        name=f"Top 3: Músicas que você mais ouviu (do total de {int(lastfm_user['track_count']):,}):",
+                        name=f"Top 3: Músicas que você mais ouviu (do total de {format_int(int(lastfm_user['track_count']))}):",
                         icon_url=asset_url("lastfm_disc_icon.jpg"),
                         url=f"https://www.last.fm/user/{lastfm_user['name']}/library",
                     )
@@ -301,12 +302,12 @@ class LastFmCog(commands.Cog):
                 if top_artists:
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"> ` {n + 1}º ` {md_link(t['name'], t['url'])} `(x{int(t['playcount']):,})`"
+                            f"> ` {n + 1}º ` {md_link(t['name'], t['url'])} `(x{format_int(int(t['playcount']))})`"
                             for n, t in enumerate(top_artists)
                         ),
                         color=embed_color,
                     ).set_author(
-                        name=f"Top 3: Artistas que você mais ouviu (do total de {int(lastfm_user['artist_count']):,}):",
+                        name=f"Top 3: Artistas que você mais ouviu (do total de {format_int(int(lastfm_user['artist_count']))}):",
                         icon_url=asset_url("lastfm_artist_icon.jpg"),
                         url=f"https://www.last.fm/user/{lastfm_user['name']}/library/artists",
                     )
@@ -330,12 +331,12 @@ class LastFmCog(commands.Cog):
                 if top_albuns:
                     embed = disnake.Embed(
                         description="\n".join(
-                            f"> ` {n + 1}º ` {md_link(b['name'], b['url'])} `de:` {md_link(b['artist']['name'], b['artist']['url'])} `(x{int(b['playcount']):,})`"
+                            f"> ` {n + 1}º ` {md_link(b['name'], b['url'])} `de:` {md_link(b['artist']['name'], b['artist']['url'])} `(x{format_int(int(b['playcount']))})`"
                             for n, b in enumerate(top_albuns)
                         ),
                         color=embed_color,
                     ).set_author(
-                        name=f"Top 3: Álbuns que você mais ouviu (do total de {int(lastfm_user['album_count']):,}):",
+                        name=f"Top 3: Álbuns que você mais ouviu (do total de {format_int(int(lastfm_user['album_count']))}):",
                         icon_url=asset_url("lastfm_album_icon.jpg"),
                         url=f"https://www.last.fm/user/{lastfm_user['name']}/library/albums",
                     )

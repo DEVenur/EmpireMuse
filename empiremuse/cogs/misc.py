@@ -15,18 +15,19 @@ from typing import TYPE_CHECKING
 
 import aiofiles
 import disnake
-import humanize
 import psutil
 from aiohttp import ClientSession
 from disnake.ext import commands
 
 from empiremuse import paths
+from empiremuse.rules.text import format_int, format_mib
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, db_models
 from empiremuse.utils.music.checks import check_requester_channel
 from empiremuse.utils.music.converters import time_format, URL_REG, md_bracketed, md_link, fix_characters
 from empiremuse.utils.others import select_bot_pool, CustomContext, paginator
+from empiremuse.version import image_version, running_from_image
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -128,9 +129,9 @@ class Misc(commands.Cog):
                 text = text.replace("{players_user_count}", str(len(users)))
 
         return (
-            text.replace("{users}", f"{len([m for m in self.bot.users if not m.bot]):,}".replace(",", "."))
-            .replace("{playing}", f"{len(self.bot.music.players):,}".replace(",", "."))
-            .replace("{guilds}", f"{len(self.bot.guilds):,}".replace(",", "."))
+            text.replace("{users}", format_int(len([m for m in self.bot.users if not m.bot])))
+            .replace("{playing}", format_int(len(self.bot.music.players)))
+            .replace("{guilds}", format_int(len(self.bot.guilds)))
             .replace(
                 "{uptime}",
                 time_format((disnake.utils.utcnow() - self.bot.uptime).total_seconds() * 1000, use_names=True),
@@ -475,12 +476,12 @@ class Misc(commands.Cog):
 
         python_ram = psutil.Process(getpid()).memory_info().rss
 
-        ram_msg = f"> 🖥️ **⠂Uso de RAM (Python):** `{humanize.naturalsize(python_ram)}`\n"
+        ram_msg = f"> 🖥️ **⠂RAM do bot (processo Python):** `{format_mib(python_ram)}`\n"
 
         if lavalink_ram:
             ram_msg += (
-                f"> 🌋 **⠂Uso de RAM (Lavalink):** `{humanize.naturalsize(lavalink_ram)}`\n"
-                f"> 🖥️ **⠂Uso de RAM (Total):** `{humanize.naturalsize(python_ram + lavalink_ram)}`\n"
+                f"> 🌋 **⠂RAM do Lavalink (processo Java inteiro):** `{format_mib(lavalink_ram)}`\n"
+                f"> 🖥️ **⠂RAM total (bot + Lavalink):** `{format_mib(python_ram + lavalink_ram)}`\n"
             )
 
         guild = bot.get_guild(inter.guild_id) or inter.guild
@@ -600,52 +601,56 @@ class Misc(commands.Cog):
         if len(allbots) < 2:
             embed.description += (
                 "### Estatíticas (bot atual):\n"
-                f"> 🏙️ **⠂Servidor{'es'[: (svcount := len(bot.guilds)) ^ 1]}:** `{svcount:,}`\n"
-                f"> 👥 **⠂Usuário{'s'[: user_count ^ 1]}:** `{user_count:,}`\n"
+                f"> 🏙️ **⠂Servidor{'es'[: (svcount := len(bot.guilds)) ^ 1]}:** `{format_int(svcount)}`\n"
+                f"> 👥 **⠂Usuário{'s'[: user_count ^ 1]}:** `{format_int(user_count)}`\n"
             )
 
             if bot_count:
-                embed.description += f"> 🤖 **⠂Bot{'s'[: bot_count ^ 1]}:** `{bot_count:,}`\n"
+                embed.description += f"> 🤖 **⠂Bot{'s'[: bot_count ^ 1]}:** `{format_int(bot_count)}`\n"
 
         else:
             embed.description += "### Estatísticas (totais em todos os bots):\n"
 
             if public_bot_count:
                 embed.description += (
-                    f"> 🤖 **⠂Bot{(s := 's'[: public_bot_count ^ 1])} público{s}:** `{public_bot_count:,}`\n"
+                    f"> 🤖 **⠂Bot{(s := 's'[: public_bot_count ^ 1])} público{s}:** `{format_int(public_bot_count)}`\n"
                 )
 
             if private_bot_count:
-                embed.description += (
-                    f"> 🤖 **⠂Bot{(s := 's'[: private_bot_count ^ 1])} privado{s}:** `{private_bot_count:,}`\n"
-                )
+                embed.description += f"> 🤖 **⠂Bot{(s := 's'[: private_bot_count ^ 1])} privado{s}:** `{format_int(private_bot_count)}`\n"
 
-            embed.description += f"> 🏙️ **⠂Servidor{'es'[: guilds_size ^ 1]}:** `{guilds_size:,}`\n"
+            embed.description += f"> 🏙️ **⠂Servidor{'es'[: guilds_size ^ 1]}:** `{format_int(guilds_size)}`\n"
 
             if users_amount := len(users):
-                embed.description += f"> 👥 **⠂Usuário{'s'[: users_amount ^ 1]}:** `{users_amount:,}`\n"
+                embed.description += f"> 👥 **⠂Usuário{'s'[: users_amount ^ 1]}:** `{format_int(users_amount)}`\n"
 
             if bots_amount := len(bots):
-                embed.description += f"> 🤖 **⠂Bot{'s'[: bots_amount ^ 1]}:** `{bots_amount:,}`\n"
+                embed.description += f"> 🤖 **⠂Bot{'s'[: bots_amount ^ 1]}:** `{format_int(bots_amount)}`\n"
 
         embed.description += "### Outras informações:\n"
 
         if active_players_other_bots:
-            embed.description += f"> ▶️ **⠂Player{(s := 's'[: active_players_other_bots ^ 1])} ativo{s}:** `{active_players_other_bots:,}`\n"
+            embed.description += f"> ▶️ **⠂Player{(s := 's'[: active_players_other_bots ^ 1])} ativo{s}:** `{format_int(active_players_other_bots)}`\n"
 
         if paused_players_other_bots:
-            embed.description += (
-                f"> ⏸️ **⠂Player{'s'[: paused_players_other_bots ^ 1]} em pausa:** `{paused_players_other_bots:,}`\n"
-            )
+            embed.description += f"> ⏸️ **⠂Player{'s'[: paused_players_other_bots ^ 1]} em pausa:** `{format_int(paused_players_other_bots)}`\n"
 
         if inactive_players_other_bots:
-            embed.description += f"> 💤 **⠂Player{(s := 's'[: inactive_players_other_bots ^ 1])} inativo{s}:** `{inactive_players_other_bots:,}`\n"
+            embed.description += f"> 💤 **⠂Player{(s := 's'[: inactive_players_other_bots ^ 1])} inativo{s}:** `{format_int(inactive_players_other_bots)}`\n"
 
         if listeners:
-            embed.description += f"> 🎧 **⠂Ouvinte{'s'[: (lcount := len(listeners)) ^ 1]} atua{'is'[: lcount ^ 1] or 'l'}:** `{lcount:,}`\n"
+            embed.description += f"> 🎧 **⠂Ouvinte{'s'[: (lcount := len(listeners)) ^ 1]} atua{'is'[: lcount ^ 1] or 'l'}:** `{format_int(lcount)}`\n"
 
         if bot.pool.commit:
             embed.description += f"> 📥 **⠂Commit atual:** {md_link(bot.pool.commit[:7], f'{bot.pool.remote_git_url}/commit/{bot.pool.commit}')}\n"
+
+        if (version := image_version()) is not None:
+            version_text = md_link(version, f"{branding.REPO_URL}/releases/tag/v{version}")
+        else:
+            version_text = "`dev`" if running_from_image() else ""
+
+        if version_text:
+            embed.description += f"> 🏷️ **⠂Versão do EmpireMuse:** {version_text}\n"
 
         embed.description += (
             f"> 🐍 **⠂Versão do Python:** `{platform.python_version()}`\n"

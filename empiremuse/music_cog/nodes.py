@@ -340,6 +340,7 @@ class NodesMixin:
         # data['user_agent'] = self.bot.pool.current_useragent
         search = data.pop("search", True)
         node_website = data.pop("website", "")
+        region_label = data["region"] if "region" in data else None
         region = data.pop("region", "us_central")
         heartbeat = int(data.pop("heartbeat", 30))
         search_providers = data.pop("search_providers", None) or ["ytsearch", "scsearch"]
@@ -354,6 +355,8 @@ class NodesMixin:
             auto_reconnect=False, region=region, heartbeat=heartbeat, max_retries=max_retries, **data
         )
         node.info = info
+        # Texto do dono (ou da lista externa) só para exibir; ``node.region`` segue sendo o valor interno de escolha de nó.
+        node.region_label = region_label if isinstance(region_label, str) else None
         node.search = search
         node.website = node_website
         node.search_providers = search_providers

@@ -73,3 +73,13 @@ def plain_snippet(value: Any, limit: int) -> str:
     text = "".join(char for char in text if unicodedata.category(char) not in ("Cc", "Cf"))
     text = " ".join(text.replace("`", "'").split())
     return text if len(text) <= limit else text[:limit] + "…"
+
+
+def format_mib(num_bytes: int) -> str:
+    """Tamanho em MiB (base binária, uma casa e vírgula decimal): ``126353408`` vira ``120,5 MiB``."""
+    return f"{num_bytes / (1 << 20):.1f}".replace(".", ",") + " MiB"
+
+
+def format_int(n: int) -> str:
+    """Inteiro com ponto de milhar: ``1035`` vira ``1.035``."""
+    return f"{n:,}".replace(",", ".")
