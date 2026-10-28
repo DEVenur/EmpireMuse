@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Corrigido
+- **Falha de reprodução do YouTube**: ao falhar com "All clients failed" ou "Read timed out", o player tenta a mesma faixa mais uma vez após 2 s antes de reportar o erro e pular. A recuperação pelo YouTube também vale para faixas espelhadas, mas só quando há outro nó com busca no YouTube; sem ele, o erro é reportado e a faixa é pulada. As causas de erro passam a ser reconhecidas por trecho do texto.
+
 ## [2.1.1] - 2026-10-28
 
 Log centralizado com redação de segredos, `assets/` em subpastas e arte nova da marca, emojis de aplicação, novas permissões do convite e correções do teste em produção.
