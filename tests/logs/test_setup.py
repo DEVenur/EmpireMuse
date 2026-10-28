@@ -91,12 +91,20 @@ class TestHandlers:
         consoles, arquivos = instalar(ajustes(arquivo=com_arquivo))
 
         for handler in consoles + arquivos:
-            assert nomes(handler.filters) == CADEIA
+            cadeia = nomes(handler.filters)
+            assert [n for n in cadeia if n in CADEIA] == CADEIA
+            extras = [n for n in cadeia if n not in CADEIA]
+            assert len(extras) == 1 and cadeia.index(extras[0]) < cadeia.index(
+                "LevelGate"
+            )  # o filtro do aviso de voz (2.1.2)
 
     def test_the_redactor_and_the_aggregator_are_shared_between_the_two_handlers(self, instalar):
         (console,), (arquivo,) = instalar(ajustes(arquivo=True))
 
-        assert console.filters[2] is arquivo.filters[2] and console.filters[3] is arquivo.filters[3]
+        for nome in ("SanitizeAndRedact", "RepeatAggregator"):
+            do_console = next(f for f in console.filters if type(f).__name__ == nome)
+            do_arquivo = next(f for f in arquivo.filters if type(f).__name__ == nome)
+            assert do_console is do_arquivo
 
     def test_the_formatters_are_the_console_and_the_file_ones(self, instalar):
         (console,), (arquivo,) = instalar(ajustes(arquivo=True))
