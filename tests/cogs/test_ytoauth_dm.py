@@ -80,7 +80,7 @@ class Cenario:
     def __init__(self, monkeypatch, tmp_path, *, dm_fecha: bool = False):
         monkeypatch.setattr(ll_yt_oauth, "YtOauthView", ViewFalsa)
         monkeypatch.setattr(ll_yt_oauth, "AskView", ConfirmacaoFalsa)
-        monkeypatch.setattr(ll_yt_oauth.paths, "RUNTIME_DIR", tmp_path)
+        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
         self.cog = ll_yt_oauth.YtOauthLL.__new__(ll_yt_oauth.YtOauthLL)
         self.cog.bot = SimpleNamespace(
             get_color=lambda *a: 0,

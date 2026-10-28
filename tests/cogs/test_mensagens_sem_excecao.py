@@ -137,7 +137,7 @@ def montar_oauth(monkeypatch, tmp_path, *, mongo=None, node=None, post=None):
     mensagem = SimpleNamespace(edit=AsyncMock())
     ctx = SimpleNamespace(
         guild=SimpleNamespace(me=object()),
-        author=SimpleNamespace(id=1),
+        author=SimpleNamespace(id=1, send=AsyncMock()),
         send=AsyncMock(return_value=mensagem),
         inter=None,
     )
