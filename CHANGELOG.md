@@ -38,6 +38,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Lista de artistas das faixas do Spotify**: os três montadores da lista de artistas com link passam a montar o link com escape, então um nome com caracteres especiais deixa de quebrar a exibição.
 - **Ícone do Apple Music**: o arquivo `assets/provider_applemusic_icon.png` estava truncado e aparecia quebrado onde o bot o exibe; foi substituído pela imagem completa (500×500).
 - **`!updatelog` na imagem Docker**: sem o `.git`, o comando deixa de dizer que o bot está em ambiente de desenvolvimento e mostra as novidades da versão em execução, com o link das notas da versão; se a consulta falhar, mostra só o link. Na imagem sem versão, informa que não há histórico de atualizações e aponta para as versões publicadas.
+- **Status do canal de voz sem a permissão**: `/setvoicestatus` e o status automático do player checam a permissão Definir Status do Canal de Voz no canal antes de ligar e avisam com uma mensagem clara quando ela falta, em vez de falhar com traceback. Se a permissão for retirada com o status já ligado, o bot o desliga e avisa uma vez no player.
 
 ### Segurança
 - **Nomes externos com escape de markdown (S-31)**: nomes vindos de fontes externas (artistas, títulos, playlists, álbuns, Last.fm) e de skins personalizadas passam por escape de markdown antes de aparecer em embeds e mensagens; links montados pelo bot só aceitam `http` e `https`.

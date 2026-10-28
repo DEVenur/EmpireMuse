@@ -17,6 +17,11 @@ from empiremuse.rules.limits import (
 )
 from empiremuse.rules.settings import validate_voice_status
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.music.checks import (
+    VOICE_STATUS_PERMISSION,
+    mention_channels,
+    voice_status_blocked_channel,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import (
     CustomContext,
@@ -196,20 +201,29 @@ class SetStageTitle(disnake.ui.View):
 
             await self.bot.update_global_data(inter.guild_id, self.data, db_name=DBModel.guilds)
 
+            blocked_channels = []
+
             for b in self.bot.pool.get_guild_bots(inter.guild_id):
                 try:
                     p = b.music.players[inter.guild_id]
                 except KeyError:
                     continue
-                p.stage_title_event = bool(values["status_voice_value"])
+
+                # O modelo é configuração do servidor e fica salvo; o player sem a permissão só não liga o status.
+                blocked = voice_status_blocked_channel(p.guild) if values["status_voice_value"] else None
+                if blocked:
+                    blocked_channels.append(blocked)
+
+                p.stage_title_event = bool(values["status_voice_value"]) and not blocked
                 p.stage_title_template = values["status_voice_value"]
                 p.start_time = disnake.utils.utcnow()
-                p.set_command_log(
-                    text=f"{inter.author.mention} "
-                    + ("ativou" if values["status_voice_value"] else "desativou")
-                    + " o status automático",
-                    emoji="📢",
-                )
+                if not blocked:
+                    p.set_command_log(
+                        text=f"{inter.author.mention} "
+                        + ("ativou" if values["status_voice_value"] else "desativou")
+                        + " o status automático",
+                        emoji="📢",
+                    )
                 p.update = True
 
                 if p.stage_title_event:
@@ -220,11 +234,17 @@ class SetStageTitle(disnake.ui.View):
                 await p.process_save_queue()
                 await asyncio.sleep(3)
 
-            await inter.edit_original_message(
-                "**Status permanente foi "
-                + ("salvo" if values["status_voice_value"] else "desativado")
-                + " com sucesso!**"
-            )
+            if blocked_channels:
+                await inter.edit_original_message(
+                    f"**Status permanente salvo, mas falta a permissão {VOICE_STATUS_PERMISSION} em "
+                    f"{mention_channels(blocked_channels)}.** Peça a um administrador para liberá-la."
+                )
+            else:
+                await inter.edit_original_message(
+                    "**Status permanente foi "
+                    + ("salvo" if values["status_voice_value"] else "desativado")
+                    + " com sucesso!**"
+                )
 
         elif inter.data.custom_id.startswith("status_voice_channel_temp"):
             player: Optional[LavalinkPlayer] = None
@@ -249,6 +269,14 @@ class SetStageTitle(disnake.ui.View):
             if not inter.author.guild_permissions.manage_guild:
                 await inter.send(
                     "Você não possui a permissão de gerenciar servidor para alterar o status do canal de voz",
+                    ephemeral=True,
+                )
+                return
+
+            if values["status_voice_value"] and (blocked := voice_status_blocked_channel(player.guild)):
+                await inter.send(
+                    f"**Não tenho a permissão {VOICE_STATUS_PERMISSION} em {blocked.mention}.** "
+                    "Peça a um administrador para liberá-la.",
                     ephemeral=True,
                 )
                 return
