@@ -38,6 +38,21 @@ CHANGELOG = """# Changelog
 ## [2.1.0] - 2026-10-20
 - Item B da 2.1.0
 """
+CHANGELOG_DA_RC = """# Changelog
+
+## [Unreleased]
+- ainda não lançado
+
+## [2.1.0] - em preparação
+### Adicionado
+- Item C da 2.1.0
+
+## [2.0.2] - 2026-10-26
+- Item D da 2.0.2
+"""
+CHANGELOG_RC_SEM_SECAO = (
+    "# Changelog\n\n## [Unreleased]\n- ainda não lançado\n\n## [2.0.2] - 2026-10-26\n- Item D da 2.0.2\n"
+)
 CHANGELOG_SEM_A_VERSAO = "# Changelog\n\n## [2.0.0] - 2026-01-01\n- Item Z da 2.0.0\n"
 TIPOS_DE_ESTADO = (dict, list, set, bool, int, float, str, type(None))
 
@@ -221,6 +236,54 @@ class TestComVersao:
         _, texto = await usar()
 
         assert "Novidades da versão 2.1.1" in texto and "releases/tag/v2.1.1" in texto and "Item Z" not in texto
+
+
+class TestImagemRc:
+    """O ``release.yml`` tira as notas de uma tag ``vX.Y.Z-rc.N`` da seção ESTÁVEL ``## [X.Y.Z]``: a imagem rc mostra essa seção."""
+
+    async def test_the_stable_section_is_shown_while_the_fetch_asks_for_the_full_tag(
+        self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        com_versao(monkeypatch, "2.1.0-rc.1")
+        rede.texto = CHANGELOG_DA_RC
+
+        _, texto = await usar()
+
+        assert "Item C da 2.1.0" in texto and "Item D da 2.0.2" not in texto
+        assert rede.consultas == ["v2.1.0-rc.1"]
+
+    async def test_the_title_and_the_link_keep_the_rc(
+        self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        com_versao(monkeypatch, "2.1.0-rc.1")
+        rede.texto = CHANGELOG_DA_RC
+
+        _, texto = await usar()
+
+        assert "📈 **Novidades da versão 2.1.0-rc.1 (em execução)**" in texto
+        assert f"{branding.REPO_URL}/releases/tag/v2.1.0-rc.1" in texto
+
+    async def test_an_rc_without_the_stable_section_gives_only_the_title_and_the_link(
+        self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        com_versao(monkeypatch, "2.1.0-rc.1")
+        rede.texto = CHANGELOG_RC_SEM_SECAO
+
+        _, texto = await usar()
+
+        assert "Novidades da versão 2.1.0-rc.1" in texto and "releases/tag/v2.1.0-rc.1" in texto
+        assert "Item D" not in texto and "ainda não lançado" not in texto
+
+    async def test_two_rcs_of_the_same_version_are_fetched_separately(
+        self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        rede.texto = CHANGELOG_DA_RC
+        com_versao(monkeypatch, "2.1.0-rc.1")
+        await usar()
+        com_versao(monkeypatch, "2.1.0-rc.2")
+        _, texto = await usar()
+
+        assert rede.consultas == ["v2.1.0-rc.1", "v2.1.0-rc.2"] and "Item C da 2.1.0" in texto
 
 
 class TestFalhaDaConsulta:
