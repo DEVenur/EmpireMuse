@@ -35,7 +35,7 @@ flowchart LR
 1. `python -m empiremuse` instancia `BotPool()` e chama `pool.setup()` via `main` em `empiremuse/__main__.py`.
    Na raiz, `main.py` atua como atalho direto chamando `empiremuse.__main__.main()` (`main.py`).
 2. A resolução de diretórios é centralizada em `empiremuse/paths.py`:
-   - `PROJECT_DIR`: raiz do repositório, onde residem os diretórios de dados estáticos `data/` (servidores Lavalink) e `assets/` (imagens e marca).
+   - `PROJECT_DIR`: raiz do repositório, onde residem os diretórios de dados estáticos `data/` (servidores Lavalink) e `assets/` (imagens e marca, em subpastas).
    - `PACKAGE_DIR`: raiz do pacote `empiremuse/`, contendo código-fonte e templates compartilhados (`empiremuse/templates/status.html`).
    - `RUNTIME_DIR`: diretório para dados de execução (`local_database/`, `Lavalink.jar`, `application.yml`, `.logs/`, `lavalink.ini` etc.), determinado por `get_runtime_dir()` a partir da variável `EMPIREMUSE_HOME` (com fallback padrão para `Path.cwd().resolve()`).
 3. `BotPool.__init__` em `empiremuse/utils/client.py` carrega a configuração (`load_cfg` → `empiremuse.config_loader.load_config`),
@@ -439,8 +439,8 @@ Linhas medidas com `wc -l` (total do projeto: ~34,5 mil linhas Python; testes em
 | `empiremuse/cogs/help_cog.py` | Comando de ajuda | 406 |
 | `empiremuse/cogs/ll_yt_oauth.py` | OAuth do YouTube para o Lavalink | 290 |
 | `empiremuse/cogs/server_manager.py` | Gestão de servidores/bots do dono | 209 |
-| `empiremuse/utils/branding.py` | Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`); só stdlib, sem efeitos colaterais no import | — |
-| `assets/` | Imagens re-hospedadas (previews, skins, ícones, tutoriais) + `SHA256SUMS`; servidas via `ASSETS_BASE_URL` | — |
+| `empiremuse/utils/branding.py` | Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`); importa `empiremuse.paths`, `empiremuse.rules.release` e `empiremuse.version`, e no import lê a versão da imagem (variáveis de ambiente) para fixar `ASSETS_BASE_URL` (tag `v{versão}` na imagem, `main` fora dela); o índice de `assets/` só é montado na primeira chamada de `asset_url` | — |
+| `assets/` | Imagens em subpastas por função (`brand/`, `providers/`, `player/`, `skins/`, `ui/`, `docs/`, `emojis/`) + `SHA256SUMS` com caminhos relativos; `asset_url(nome)` resolve o subcaminho e serve pela tag da versão (imagem) ou pela `main` (checkout), via `ASSETS_BASE_URL`. Os arquivos soltos na raiz são cópias de compatibilidade da 2.1.0 | — |
 | `data/lavalink_servers.ini` | Lista de servidores Lavalink públicos (origem: gist do upstream, com crédito no cabeçalho) | — |
 | `docs/guides/` | Guias técnicos oficiais do projeto (Lavalink local, YouTube OAuth, painel web, Spotify e Docker) | — |
 | `docs/painel/` | Inventário dos serviços e configurações do painel web (`servicos-configuracoes.md`) | — |

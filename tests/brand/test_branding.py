@@ -208,15 +208,17 @@ def default_config(monkeypatch, tmp_path):
 
 
 def _asset_files() -> list[Path]:
+    """Arquivos em SUBPASTAS de ``assets/`` (a raiz só guarda cópias de compatibilidade e o ``SHA256SUMS``; o índice as ignora)."""
     if not ASSETS_DIR.is_dir():
         pytest.fail("assets/ não existe", pytrace=False)
-    return sorted(p for p in ASSETS_DIR.iterdir() if p.is_file() and p.name != "SHA256SUMS")
+    return sorted(p for pasta in ASSETS_DIR.iterdir() if pasta.is_dir() for p in pasta.rglob("*") if p.is_file())
 
 
 @pytest.mark.smoke
 def test_asset_url_builds_url_from_base_and_name(branding):
-    name = _asset_files()[0].name
-    assert branding.asset_url(name) == branding.ASSETS_BASE_URL + "/" + name
+    arquivo = _asset_files()[0]
+    subcaminho = arquivo.relative_to(ASSETS_DIR).as_posix()
+    assert branding.asset_url(arquivo.name) == branding.ASSETS_BASE_URL + "/" + subcaminho
 
 
 @pytest.mark.parametrize("bad_name", ["", "nao_existe_xyz.png"])

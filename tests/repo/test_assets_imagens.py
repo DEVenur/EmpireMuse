@@ -145,11 +145,34 @@ def problemas_gif(dados: bytes) -> list[str]:
     return achados
 
 
-VERIFICADORES = {".png": problemas_png, ".jpg": problemas_jpeg, ".jpeg": problemas_jpeg, ".gif": problemas_gif}
+def problemas_ico(dados: bytes) -> list[str]:
+    """Cabeçalho ICO (reservado 0, tipo 1, ao menos 1 imagem) e cada entrada do diretório com deslocamento e tamanho dentro do arquivo."""
+    if len(dados) < 6 or dados[:4] != b"\x00\x00\x01\x00":
+        return ["cabeçalho ICO ausente"]
+    quantidade = int.from_bytes(dados[4:6], "little")
+    if quantidade < 1 or len(dados) < 6 + 16 * quantidade:
+        return ["diretório ICO incompleto"]
+    achados = []
+    for i in range(quantidade):
+        entrada = dados[6 + 16 * i : 22 + 16 * i]
+        tamanho, deslocamento = struct.unpack("<II", entrada[8:16])
+        if tamanho == 0 or deslocamento < 6 + 16 * quantidade or deslocamento + tamanho > len(dados):
+            achados.append(f"imagem {i} fora do arquivo")
+    return achados
+
+
+VERIFICADORES = {
+    ".ico": problemas_ico,
+    ".png": problemas_png,
+    ".jpg": problemas_jpeg,
+    ".jpeg": problemas_jpeg,
+    ".gif": problemas_gif,
+}
 
 
 def imagens() -> list[Path]:
-    return sorted(p for p in ASSETS.iterdir() if p.suffix.lower() in VERIFICADORES)
+    """Toda imagem em ``assets/**`` (a raiz e as subpastas)."""
+    return sorted(p for p in ASSETS.rglob("*") if p.is_file() and p.suffix.lower() in VERIFICADORES)
 
 
 def _chunk(tipo: bytes, corpo: bytes) -> bytes:
@@ -174,6 +197,20 @@ def png_sintetico(largura=3, altura=2, tipo_cor=2, profundidade=8, entrelacado=0
     bruto = bytes(_tamanho_esperado(largura, altura, tipo_cor, profundidade, entrelacado))
     paleta = bytes(3 * min(4, 2**profundidade)) if tipo_cor == 3 else None
     return _montar_png(ihdr, bruto, paleta=paleta)
+
+
+class TestVerificadorIco:
+    def ico(self, tamanho=4, deslocamento=22, extra=4):
+        return b"\x00\x00\x01\x00\x01\x00" + bytes(8) + struct.pack("<II", tamanho, deslocamento) + bytes(extra)
+
+    def test_a_valid_ico_has_no_problem(self):
+        assert problemas_ico(self.ico()) == []
+
+    def test_a_truncated_image_is_reported(self):
+        assert problemas_ico(self.ico(tamanho=40)) == ["imagem 0 fora do arquivo"]
+
+    def test_a_missing_header_or_directory_is_reported(self):
+        assert problemas_ico(b"nada") and problemas_ico(b"\x00\x00\x01\x00\x02\x00" + bytes(16))
 
 
 class TestVerificador:
@@ -290,7 +327,7 @@ class TestAssets:
     def test_there_are_images_to_check(self):
         assert len(imagens()) >= 40
 
-    @pytest.mark.parametrize("imagem", imagens(), ids=lambda p: p.name)
+    @pytest.mark.parametrize("imagem", imagens(), ids=lambda p: p.relative_to(ASSETS).as_posix())
     def test_every_image_decodes_completely(self, imagem):
         achados = VERIFICADORES[imagem.suffix.lower()](imagem.read_bytes())
 

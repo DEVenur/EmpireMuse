@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
 from typing import TYPE_CHECKING, Optional
@@ -68,10 +67,18 @@ DEFAULT_BIND_ADDRESS = "0.0.0.0"
 users_ws = {}
 bots_ws = []
 
+
+def _logo_url() -> str:
+    """URL pública do logo pequeno da marca (nunca embutido na página); vazia se o arquivo não existir, e a página sai sem o logo."""
+    try:
+        return branding.asset_url("logo-256.png")
+    except ValueError:
+        return ""
+
+
 minimal_version = version.parse("2.6.1")
 
 _status_loader_cache = None
-_logo_cache = None
 
 
 def _status_loader() -> tornado.template.Loader:
@@ -80,18 +87,6 @@ def _status_loader() -> tornado.template.Loader:
     if _status_loader_cache is None:
         _status_loader_cache = tornado.template.Loader(str(paths.PACKAGE_DIR / "templates"))
     return _status_loader_cache
-
-
-def _logo_data_uri() -> str:
-    """Logo da marca embutido (data:) para a página não depender de arquivos estáticos; vazio se o arquivo faltar."""
-    global _logo_cache
-    if _logo_cache is None:
-        try:
-            with open(paths.PROJECT_DIR / "assets" / "brand" / "logo.svg", "rb") as f:
-                _logo_cache = "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode("ascii")
-        except OSError:
-            _logo_cache = ""
-    return _logo_cache
 
 
 class IndexHandler(tornado.web.RequestHandler):
@@ -167,7 +162,7 @@ class IndexHandler(tornado.web.RequestHandler):
                 upstream_nome=branding.UPSTREAM_NAME,
                 upstream_autor=branding.UPSTREAM_AUTHOR,
                 upstream_url=branding.UPSTREAM_URL,
-                logo_src=_logo_data_uri(),
+                logo_src=_logo_url(),
             )
         )
 

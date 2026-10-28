@@ -64,7 +64,7 @@ Caso utilize o envio manual por arquivo `.zip` ou através da ferramenta de linh
    - Bancos de dados locais (`local_database/`, `.local_dbs/`) e caches temporários (`.logs/`, `__pycache__/`, `.ytdl_cache/`, etc.).
 
 > [!NOTE]
-> A pasta `assets/` **não** deve ser ignorada no deploy, pois `branding.asset_url` confere a existência física de cada arquivo localmente em tempo de execução antes de gerar URLs públicas para o player, provedores e tutoriais.
+> A pasta `assets/` **não** deve ser ignorada no deploy, pois `branding.asset_url` monta, uma vez, um índice dos arquivos das subpastas de `assets/` (`brand/`, `providers/`, `player/`, `skins/`, `ui/`, `docs/`) e confere a existência física de cada arquivo em tempo de execução antes de gerar URLs públicas para o player, provedores e tutoriais.
 
 ---
 

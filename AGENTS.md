@@ -55,8 +55,8 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/cogs/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
 - `empiremuse/cogs/server_manager.py`: Comandos administrativos para gerenciamento de servidores.
 - `empiremuse/utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
-- `assets/`: Imagens re-hospedadas (previews, skins, ícones, tutoriais) e `SHA256SUMS`.
-- `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar e banner).
+- `assets/`: Imagens em subpastas por função (`brand/`, `providers/`, `player/`, `skins/`, `ui/`, `docs/`, `emojis/`) e `SHA256SUMS` com caminhos relativos. O nome do arquivo é único entre as subpastas, e `asset_url(nome)` resolve o subcaminho. Os arquivos soltos na raiz são cópias de compatibilidade da 2.1.0 e saem numa versão futura.
+- `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar, banner, avatares alternativos e favicon).
 - `deploy/`: Composes (`docker-compose.yml` base, override do Traefik e `docker-compose.hostinger.yml` + `env.example.hostinger` da produção na VPS), egg do Pterodactyl e exemplo do `lavalink.ini`.
 - `data/`: Dados estáticos do projeto (`lavalink_servers.ini`, lista de servidores Lavalink).
 - `docs/`: Documentação técnica, guias de setup e Registros de Decisão de Arquitetura (ADRs).
