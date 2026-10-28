@@ -11,13 +11,15 @@ import tempfile
 from unittest import mock
 
 import pytest
+from tornado import httputil
+from tornado.http1connection import HTTP1Connection
 
 from empiremuse.panel.handlers import brand
 from tests.panel.test_app import PanelTestBase
 
 pytestmark = pytest.mark.critical
 
-ARQUIVOS = ["logo.svg", "avatar.png", "favicon.ico"]
+ARQUIVOS = ["logo-256.png", "logo.svg", "avatar.png", "favicon.ico"]
 
 
 def max_age(cabecalho: str) -> int | None:
@@ -115,6 +117,76 @@ class PanelBrandCacheTest(PanelTestBase):
         resposta = self.fetch("/painel/marca/logo.svg", method="HEAD", follow_redirects=False)
 
         assert resposta.code in (200, 405) and resposta.body == b""
+
+
+class PanelBrandLogoPequenoTest(PanelTestBase):
+    """O logo da interface é o ``logo-256.png`` (pequeno, da lista fechada); o SVG de 6 MB deixa de ir para a tela."""
+
+    def test_the_small_logo_is_served_as_png(self):
+        resposta = self.get_page("/painel/marca/logo-256.png")
+
+        assert resposta.code == 200 and resposta.headers["Content-Type"] == "image/png"
+        assert resposta.body.startswith(b"\x89PNG\r\n\x1a\n") and len(resposta.body) < 100 * 1024
+
+    def test_the_panel_home_references_the_small_logo_and_not_the_svg(self):
+        corpo = self.get_page("/painel/").body.decode("utf-8")
+
+        assert "/painel/marca/logo-256.png" in corpo and "logo.svg" not in corpo
+
+
+class PanelBrandWritePathTest(PanelTestBase):
+    """V-AS-L1 (seguimento): a resposta 200 não monta um ``bytes`` novo de cabeçalho+corpo por requisição.
+
+    O Tornado concatena quando o corpo vai junto do cabeçalho (``finish(data)`` sem flush prévio). O contrato: ``Content-Length`` definido, cabeçalhos
+    enviados sozinhos e o corpo em cache escrito depois. Observado no caminho de escrita da conexão (espiões), sem medir memória.
+    """
+
+    def _espiar(self, nome: str):
+        cabecalhos: list[bytes] = []
+        corpos: list[bytes] = []
+        escrever_cabecalhos, escrever = HTTP1Connection.write_headers, HTTP1Connection.write
+
+        def espia_cabecalhos(conexao, linha_inicial, headers, chunk=None):
+            if isinstance(linha_inicial, httputil.ResponseStartLine):
+                cabecalhos.append(bytes(chunk or b""))
+            return escrever_cabecalhos(conexao, linha_inicial, headers, chunk)
+
+        def espia_escrita(conexao, chunk):
+            corpos.append(chunk)
+            return escrever(conexao, chunk)
+
+        with (
+            mock.patch.object(HTTP1Connection, "write_headers", espia_cabecalhos),
+            mock.patch.object(HTTP1Connection, "write", espia_escrita),
+        ):
+            resposta = self.get_page(f"/painel/marca/{nome}")
+        return resposta, cabecalhos, corpos
+
+    def test_the_headers_leave_alone_and_the_cached_body_is_written_afterwards(self):
+        def check(nome):
+            self.get_page(f"/painel/marca/{nome}")  # aquece o cache
+            resposta, cabecalhos, corpos = self._espiar(nome)
+            em_cache = brand._cache[nome][0]
+
+            assert resposta.code == 200 and cabecalhos == [b""], "o corpo não pode ir junto do cabeçalho"
+            assert any(c is em_cache for c in corpos), "o corpo escrito deve ser o próprio objeto em cache"
+
+        self.assert_all(ARQUIVOS, check)
+
+    def test_the_response_is_not_chunked_and_declares_the_exact_length(self):
+        def check(nome):
+            resposta, _, _ = self._espiar(nome)
+
+            assert resposta.headers.get("Transfer-Encoding") is None
+            assert resposta.headers.get("Content-Length") == str(len(resposta.body))
+
+        self.assert_all(ARQUIVOS, check)
+
+    def test_the_304_path_carries_no_body_at_all(self):
+        etag = self.get_page("/painel/marca/logo.svg").headers["Etag"]
+        resposta = self.fetch("/painel/marca/logo.svg", headers={"If-None-Match": etag}, follow_redirects=False)
+
+        assert resposta.code == 304 and resposta.body == b""
 
 
 class PanelBrandSymlinkTest(PanelTestBase):

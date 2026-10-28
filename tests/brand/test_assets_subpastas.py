@@ -428,12 +428,20 @@ class TestSomasDeIntegridade:
     def test_the_subfolder_entries_use_the_relative_path(self):
         assert any("/" in nome for nome in somas())
 
-    def test_the_emojis_folder_has_only_128_by_128_pngs(self):
+    def test_the_emojis_folder_has_only_128_by_128_pngs_and_the_one_animated_gif(self):
         pasta = ASSETS / "emojis"
         if not pasta.is_dir():
             pytest.skip("assets/emojis/ ainda não existe (vem da feature de emojis)")
 
+        gifs = []
         for arquivo in pasta.iterdir():
             dados = arquivo.read_bytes()
-            assert arquivo.suffix == ".png" and dados.startswith(b"\x89PNG\r\n\x1a\n")
+            if arquivo.suffix == ".gif":
+                gifs.append(arquivo.name)
+                assert dados.startswith(b"GIF89a") and struct.unpack("<HH", dados[6:10]) == (128, 128), arquivo.name
+                assert len(dados) <= 256 * 1024, arquivo.name
+                continue
+            assert arquivo.suffix == ".png" and dados.startswith(b"\x89PNG\r\n\x1a\n"), arquivo.name
             assert struct.unpack(">II", dados[16:24]) == (128, 128), arquivo.name
+
+        assert gifs in ([], ["headset.gif"]), gifs
