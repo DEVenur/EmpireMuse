@@ -134,6 +134,7 @@ class BotDeVoz:
         self.config: dict[str, Any] = {}
         self.dispatch = MagicMock()
         self.documentos: dict[int, dict[str, Any]] = {}
+        self.leituras = 0  # quantas vezes o global do servidor foi lido
 
     async def edit_voice_channel_status(
         self, status: str | None, *, channel_id: int, reason: str | None = None
@@ -147,6 +148,7 @@ class BotDeVoz:
             raise self.erros.pop(0)
 
     async def get_global_data(self, guild_id: int, *, db_name: Any = None) -> dict[str, Any]:
+        self.leituras += 1
         return self.documentos.setdefault(guild_id, {})
 
     @property
