@@ -359,7 +359,8 @@ def _he_is_youtube_failure(self, event, track) -> bool:
 
 
 def _he_is_youtube_plugin_cause(event) -> bool:
-    return YOUTUBE_PLUGIN_CAUSE_MARKER in str(event.cause or "")
+    """A marca do plugin do YouTube aparece na causa ou na mensagem (a identificação independe de haver outro nó)."""
+    return _he_cause_has(event, (YOUTUBE_PLUGIN_CAUSE_MARKER,))
 
 
 async def _he_track_exception(self, event) -> None:
@@ -386,25 +387,30 @@ async def _he_track_exception(self, event) -> None:
     start_position = 0
 
     if _he_take_same_track_retry(self, event, track):
+        resume_position = get_start_pos(self, track)  # antes da espera, para não contar os segundos parados
         self.queue.appendleft(track)
         await asyncio.sleep(SAME_TRACK_RETRY_DELAY)
         self.locked = False
-        await self.process_next(start_position=get_start_pos(self, track))
+        await self.process_next(start_position=resume_position)
         return
 
-    youtube_plugin_failure = _he_is_youtube_plugin_cause(event) and _he_is_youtube_failure(self, event, track)
-    if youtube_plugin_failure and _he_take_once(self, "youtube_recoveries", track):
-        await _he_recover_from_youtube(self, track, send_report)
+    # Falha do plugin do YouTube: nunca vai ao retry geral. Troca de nó (uma vez por faixa) quando é possível; senão relata e pula.
+    youtube_plugin_cause = _he_is_youtube_plugin_cause(event)
+    youtube_failure = _he_is_youtube_failure(self, event, track)
+    if youtube_plugin_cause and youtube_failure and _he_take_once(self, "youtube_recoveries", track):
+        await _he_recover_from_youtube(self, track, send_report, get_start_pos(self, track))
         return
 
-    # Falha do plugin do YouTube com a troca de nó já usada: relata e pula (sem o retry geral nem outra troca).
-    if ignore_error_log := (not youtube_plugin_failure and _he_cause_has(event, RETRYABLE_ERROR_CAUSES)):
+    if ignore_error_log := (not youtube_plugin_cause and _he_cause_has(event, RETRYABLE_ERROR_CAUSES)):
         outcome = _he_retry_after_general_error(self, track)
         if outcome == "wait":
             return
 
         if outcome == "retry":
             start_position = get_start_pos(self, track)
+        else:
+            # Faixa abandonada: o usuário recebe o aviso da falha (como na via comum).
+            ignore_error_log = False
         cooldown = 4
 
     elif event.cause == "java.lang.InterruptedException":
@@ -413,12 +419,8 @@ async def _he_track_exception(self, event) -> None:
         await send_report()
         return
 
-    elif (
-        not youtube_plugin_failure
-        and _he_is_youtube_failure(self, event, track)
-        and _he_take_once(self, "youtube_recoveries", track)
-    ):
-        await _he_recover_from_youtube(self, track, send_report)
+    elif not youtube_plugin_cause and youtube_failure and _he_take_once(self, "youtube_recoveries", track):
+        await _he_recover_from_youtube(self, track, send_report, get_start_pos(self, track))
         return
 
     elif not track.track_loops:
@@ -466,6 +468,8 @@ def _he_retry_after_general_error(self, track) -> str:
         if self.node.is_available:
             self.queue.popleft()
             self.failed_tracks.append(track)
+            # O orçamento geral é do episódio: ao abandonar a faixa ele recomeça para a próxima.
+            del self.retries_general_errors
             return "skip"
         _he_spawn_new_node_task(self, ignore_node=self.node)
         return "wait"
@@ -484,7 +488,7 @@ def _he_retry_after_general_error(self, track) -> str:
     return "retry"
 
 
-async def _he_recover_from_youtube(self, track, send_report) -> None:
+async def _he_recover_from_youtube(self, track, send_report, start_position: int | float = 0) -> None:
     self.current = None
     self.current_encoded = None
     self.native_yt = False
@@ -500,7 +504,7 @@ async def _he_recover_from_youtube(self, track, send_report) -> None:
         new_node = None
 
     if new_node:
-        await _he_move_to_native_youtube(self, new_node)
+        await _he_move_to_native_youtube(self, new_node, start_position)
         await send_report()
         return
 
@@ -508,10 +512,10 @@ async def _he_recover_from_youtube(self, track, send_report) -> None:
         await _he_warn_youtube_fallback(self, send_report)
 
     self.locked = False
-    await self.process_next(start_position=self.position)
+    await self.process_next(start_position=start_position)
 
 
-async def _he_move_to_native_youtube(self, new_node) -> None:
+async def _he_move_to_native_youtube(self, new_node, start_position: int | float = 0) -> None:
     self.native_yt = True
     txt = f"Devido a restrições do youtube no servidor {md_code(self.node.identifier)} o player foi movido para o servidor {md_code(new_node.identifier)}."
     if self.controller_mode:
@@ -527,7 +531,7 @@ async def _he_move_to_native_youtube(self, new_node) -> None:
     await asyncio.sleep(5)
     await self.change_node(new_node.identifier)
     self.locked = False
-    await self.process_next(start_position=self.position)
+    await self.process_next(start_position=start_position)
 
 
 async def _he_warn_youtube_fallback(self, send_report) -> None:
