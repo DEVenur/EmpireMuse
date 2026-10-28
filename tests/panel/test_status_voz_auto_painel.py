@@ -210,6 +210,30 @@ class EfeitosTest(HttpBase):
 
         assert self.db.doc("global", 200)[CAMPO_MODELO] == MODELO
 
+    def test_saving_from_the_panel_clears_the_default_notice_flag_of_every_active_player(self) -> None:
+        self.world.p800a.voice_status_saved_default = self.world.p800b.voice_status_saved_default = True
+        browser = self.logged_in()
+
+        assert (
+            self.save(browser, 800, "geral", CAMPO_PERMANENTE, **{CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}).code
+            == 200
+        )
+        self.assentar_laco()
+
+        assert (
+            self.world.p800a.voice_status_saved_default is False
+            and self.world.p800b.voice_status_saved_default is False
+        )
+
+    def test_a_rejected_save_leaves_the_default_notice_flag_alone(self) -> None:
+        self.world.p100.voice_status_saved_default = True
+        browser = self.logged_in()
+
+        assert self.save(browser, 100, "geral", CAMPO_PERMANENTE, **{CAMPO_MODELO: "sem placeholder"}).code == 422
+        self.assentar_laco()
+
+        assert self.world.p100.voice_status_saved_default is True
+
     def test_a_rejected_text_applies_nothing(self) -> None:
         browser = self.logged_in()
 
