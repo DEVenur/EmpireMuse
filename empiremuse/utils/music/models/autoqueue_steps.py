@@ -7,7 +7,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 import disnake
-from aiohttp import ClientError
+from aiohttp import ClientConnectionError, ClientError, ClientResponseError
 
 import empiremuse.wavelink as wavelink
 from empiremuse.utils.music.converters import fix_characters
@@ -38,6 +38,15 @@ from empiremuse.utils.music.models.helpers import (
 )
 
 
+def _spotify_url(obj: object) -> str:
+    """Extrai com segurança a URL do Spotify de um objeto da API."""
+    if isinstance(obj, dict):
+        urls = obj.get("external_urls")
+        if isinstance(urls, dict):
+            return urls.get("spotify") or ""
+    return ""
+
+
 async def _aq_source_tracks(self, req):
     """Busca recomendações na fonte da faixa (Spotify, Deezer ou SoundCloud)."""
     exception = req.exception
@@ -55,58 +64,91 @@ async def _aq_source_tracks(self, req):
 
         for i in range(3):
             try:
-                result = await self.bot.spotify.track_search(tracks_search[0].author, limit=100)
+                result = await self.bot.spotify.track_search(tracks_search[0].author, limit=10)
+                exception = None
                 break
             except Exception as e:
-                self.set_command_log(
-                    emoji="⚠️",
-                    text=f"Falha ao obter músicas recomendadas do spotify, tentativa {i + 1} de 3.",
-                    controller=True,
+                is_transient = (
+                    isinstance(e, (ClientConnectionError, asyncio.TimeoutError))
+                    or (isinstance(e, ClientResponseError) and (not e.status or e.status >= 500))
+                    or (isinstance(e, ClientError) and not isinstance(e, ClientResponseError))
                 )
-                self.update = True
-                logger.exception("Falha em _aq_source_tracks")
+                logger.warning("Falha ao obter músicas recomendadas do Spotify (%s).", type(e).__name__)
+                logger.debug("Detalhe da falha no Spotify:", exc_info=True)
                 exception = e
-                await asyncio.sleep(5)
+                if is_transient:
+                    self.set_command_log(
+                        emoji="⚠️",
+                        text=f"Falha ao obter músicas recomendadas do spotify, tentativa {i + 1} de 3.",
+                        controller=True,
+                    )
+                    self.update = True
+                    if i < 2:
+                        await asyncio.sleep(5)
+                else:
+                    break
 
         if result:
             tracks = []
+            items = (result.get("tracks") if isinstance(result, dict) else {}) or {}
+            if isinstance(items, dict):
+                items = items.get("items") or []
+            if not isinstance(items, list):
+                items = []
 
-            for t in result["tracks"]:
+            for t in items:
+                if not isinstance(t, dict):
+                    continue
+
+                uri = _spotify_url(t)
+                identifier = t.get("id") or ""
+                if not uri or not identifier:
+                    continue
+
+                album = t.get("album") or {}
                 try:
-                    thumb = t["album"]["images"][0]["url"]
-                except IndexError, KeyError:
+                    images = album.get("images") if isinstance(album, dict) else []
+                    thumb = images[0]["url"] if images and isinstance(images[0], dict) else ""
+                except IndexError, KeyError, TypeError, AttributeError:
                     thumb = ""
 
+                artists = t.get("artists") or []
+                first_artist = (
+                    artists[0].get("name") if artists and isinstance(artists[0], dict) else None
+                ) or "Unknown Artist"
+
                 partial_track = PartialTrack(
-                    uri=t["external_urls"]["spotify"],
-                    author=t["artists"][0]["name"] or "Unknown Artist",
-                    title=t["name"],
+                    uri=uri,
+                    author=first_artist,
+                    title=t.get("name") or "",
                     thumb=thumb,
-                    duration=t["duration_ms"],
+                    duration=t.get("duration_ms") or 0,
                     source_name="spotify",
-                    identifier=t["id"],
+                    identifier=identifier,
                     requester=self.bot.user.id,
                     autoplay=True,
                 )
 
                 partial_track.info["extra"]["authors"] = [
                     fix_characters(i["name"])
-                    for i in t["artists"]
-                    if f"feat. {i['name'].lower()}" not in t["name"].lower()
+                    for i in artists
+                    if isinstance(i, dict)
+                    and i.get("name")
+                    and f"feat. {i['name'].lower()}" not in (t.get("name") or "").lower()
                 ]
 
-                partial_track.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in t["artists"]
-                )
+                authors_md = [
+                    f"[`{fix_characters(a['name'])}`]({_spotify_url(a)})"
+                    for a in artists
+                    if isinstance(a, dict) and a.get("name")
+                ]
+                partial_track.info["extra"]["authors_md"] = ", ".join(authors_md)
 
-                try:
-                    if t["album"]["name"] != t["name"]:
-                        partial_track.info["extra"]["album"] = {
-                            "name": t["album"]["name"],
-                            "url": t["album"]["external_urls"]["spotify"],
-                        }
-                except AttributeError, KeyError:
-                    pass
+                if isinstance(album, dict) and album.get("name") and album.get("name") != t.get("name"):
+                    partial_track.info["extra"]["album"] = {
+                        "name": album["name"],
+                        "url": _spotify_url(album),
+                    }
 
                 tracks.append(partial_track)
 
@@ -141,10 +183,15 @@ async def _aq_source_tracks(self, req):
                     partial_track.info["isrc"] = t.get("isrc")
                     artists = t.get("contributors") or [t["artist"]]
 
-                    partial_track.info["extra"]["authors"] = [a["name"] for a in artists]
-                    partial_track.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})" for a in artists
-                    )
+                    partial_track.info["extra"]["authors"] = [
+                        fix_characters(a["name"]) for a in artists if isinstance(a, dict) and a.get("name")
+                    ]
+                    authors_md = [
+                        f"[`{fix_characters(a['name'])}`](https://www.deezer.com/artist/{a['id']})"
+                        for a in artists
+                        if isinstance(a, dict) and a.get("name") and a.get("id")
+                    ]
+                    partial_track.info["extra"]["authors_md"] = ", ".join(authors_md)
                     partial_track.info["extra"]["artist_id"] = t["artist"]["id"]
 
                     if t["title"] != t["album"]["title"]:
@@ -271,6 +318,9 @@ async def _aq_lastfm_tracks(self, req):
                     autoplay=True,
                     requester=self.bot.user.id,
                 )
+            except wavelink.TrackNotFound as e:
+                logger.debug("Autoplay: sem faixas para %s: %s", query, e)
+                continue
             except Exception as e:
                 if [
                     err for err in ("Could not find tracks from mix", "Could not read mix page") if err in str(e)

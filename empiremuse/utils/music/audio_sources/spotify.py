@@ -288,8 +288,9 @@ class SpotifyClient:
 
         return await self.request(path="recommendations", params={"seed_tracks": track_ids, "limit": limit})
 
-    async def track_search(self, query: str):
-        return await self.request(path="search", params={"q": query, "type": "track", "limit": 10})
+    async def track_search(self, query: str, limit: int = 10):
+        clamped_limit = max(1, min(10, int(limit)))
+        return await self.request(path="search", params={"q": query, "type": "track", "limit": clamped_limit})
 
     async def get_access_token(self):
         if self.token_refresh:
@@ -413,7 +414,7 @@ class SpotifyClient:
                         pass
 
                     t.info["extra"]["authors_md"] = ", ".join(
-                        f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                        f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in result["artists"]
                     )
 
                     try:
@@ -468,7 +469,7 @@ class SpotifyClient:
             ]
 
             t.info["extra"]["authors_md"] = ", ".join(
-                f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in result["artists"]
+                f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in result["artists"]
             )
 
             try:
@@ -535,7 +536,7 @@ class SpotifyClient:
                 ]
 
                 t.info["extra"]["authors_md"] = ", ".join(
-                    f"[`{a['name']}`]({a['external_urls']['spotify']})" for a in track["artists"]
+                    f"[`{fix_characters(a['name'])}`]({a['external_urls']['spotify']})" for a in track["artists"]
                 )
 
                 try:
