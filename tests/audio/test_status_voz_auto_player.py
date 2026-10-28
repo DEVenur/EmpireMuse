@@ -631,12 +631,12 @@ class TestTextoSeguro:
 # ============================================================================ VP12b — o balde esgotado não prende quem chama (condição D5 do Vigil)
 
 
-def jogadores_do_mesmo_bot(n: int, bot: BotDeVoz) -> list[JogadorDeVoz]:
+def jogadores_do_mesmo_bot(n: int, bot: BotDeVoz, *, inicio: int = 0) -> list[JogadorDeVoz]:
     return [
         JogadorDeVoz(
             servidor(canal_de_voz(1000 + i), id_=5000 + i), bot, atual=faixa(f"M{i}"), template="{track.title}"
         )
-        for i in range(n)
+        for i in range(inicio, inicio + n)
     ]
 
 
@@ -898,3 +898,98 @@ class TestPutEmVooEDesligar:
         await relogio.avancar(10)
 
         assert bot.puts == []
+
+
+# ============================================================================ V-145-3 — player fechando não escreve nem cria tarefa
+
+
+class TestPlayerFechando:
+    async def test_applying_the_permanent_to_a_closing_player_sends_nothing_and_starts_no_reapplication(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        player.is_closing = True
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(3 * regras().VOICE_STATUS_REAPPLY_INTERVAL)
+
+        assert bot.textos == []
+        tarefa = player.voice_status_reapply
+        assert tarefa is None or tarefa.done()
+
+    async def test_a_save_of_the_permanent_during_the_destroy_does_not_write_after_the_clear(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await relogio.avancar(6)
+
+        await player.process_destroy()
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="Outro {track.title}")))
+        await relogio.avancar(3 * regras().VOICE_STATUS_REAPPLY_INTERVAL)
+
+        assert bot.textos == ["Musica"]
+
+    async def test_a_track_change_on_a_closing_player_sends_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        player.stage_title_event = True
+        player.is_closing = True
+
+        await executar(relogio, player.update_stage_topic())
+        await relogio.avancar(60)
+
+        assert bot.puts == []
+        tarefa = player.voice_status_reapply
+        assert tarefa is None or tarefa.done()
+
+
+# ============================================================================ V-145-4 — modelo que cola placeholders não reconstrói token
+
+
+class TestModeloQueColaValores:
+    @pytest.mark.parametrize(
+        ("modelo", "titulo", "autor"),
+        [
+            ("{track.title}:{track.author}", "x<a", "b:123456789012345678>"),
+            ("{track.title}{track.author}", "x<", "@&123456789012345678>"),
+            ("{track.title}{track.author}", "x@", "everyone"),
+        ],
+    )
+    async def test_the_published_status_has_no_token_rebuilt_from_two_values(
+        self, relogio: RelogioFalso, modelo: str, titulo: str, autor: str
+    ) -> None:
+        player, bot = jogador(atual=faixa(titulo=titulo, autor=autor))
+
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo=modelo)))
+
+        (texto,) = bot.textos
+        assert "<" not in texto and "@" not in texto, texto
+
+
+# ============================================================================ Info A — a reaplicação não troca o texto novo pelo antigo
+
+
+class TestReaplicacaoComPendente:
+    async def test_a_due_reapplication_does_not_replace_a_newer_pending_text(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        player = jogadores_do_mesmo_bot(1, bot)[0]
+        player.current = player.last_track = faixa("Antiga")
+        await executar(relogio, player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        assert bot.textos == ["Antiga"]
+        await relogio.avancar(regras().VOICE_STATUS_REAPPLY_INTERVAL - 0.5)
+        outros = jogadores_do_mesmo_bot(8, bot, inicio=100)
+        for outro in outros:
+            outro.stage_title_event = True
+        gastando = [asyncio.ensure_future(o.update_stage_topic()) for o in outros]
+        await assentar()  # o balde do bot esgotou
+        com_troca_de_faixa(player, 7)  # "Musica 7"
+        troca = asyncio.ensure_future(player.update_stage_topic())
+        await assentar()
+        assert troca.done() and "Musica 7" not in bot.textos  # sem ficha: ficou pendente
+
+        await relogio.avancar(1)  # a reaplicação vence enquanto o texto novo espera
+        await relogio.avancar(30)
+        await asyncio.gather(troca, *gastando)
+
+        daquele = [p.status for p in bot.puts if p.canal == player.guild.me.voice.channel.id]
+        assert daquele == ["Antiga", "Musica 7"], daquele

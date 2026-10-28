@@ -291,7 +291,11 @@ class TestMoverDeCanal:
 
 
 async def retomar_com(
-    monkeypatch: pytest.MonkeyPatch, saida: dict[str, Any], doc: dict[str, Any], *, portao: asyncio.Event | None = None
+    monkeypatch: pytest.MonkeyPatch,
+    saida: dict[str, Any],
+    doc: dict[str, Any],
+    *,
+    portao: asyncio.Event | None = None,
 ) -> SimpleNamespace:
     """Retoma a sessão com o ``resume_player`` REAL; com ``portao``, o apply de cada player fica preso nele até o teste soltar."""
     from tests.persistence.test_sessao_retomada_sem_voice_state import JogadorRetomado
@@ -520,3 +524,58 @@ class TestMoverComPutEmVoo:
         )
         assert [p.status for p in bot.puts if p.canal == novo.id] == ["Musica"]
         assert player.last_stage_title == "Musica" and player.stage_title_event is True
+
+
+# ============================================================================ V-145-2 — voice_state do próprio bot no MESMO canal não mexe na sessão
+
+
+async def mesmo_canal(
+    relogio: RelogioFalso, *, canal: Any, sessao_ligada: bool, doc: dict[str, Any]
+) -> SimpleNamespace:
+    """Mute/deafen de servidor, self_deaf ou suppress: o ``on_voice_state_update`` do bot com ``before.channel is after.channel``."""
+    bot = BotDeVoz()
+    guilda = servidor(canal)
+    guilda.voice_client = SimpleNamespace(channel=canal)
+    player = JogadorDeVoz(guilda, bot, atual=faixa(), template="escolha da sessão {track.title}")
+    player.last_channel = canal
+    player.start_members_timeout = lambda **_k: None
+    player.stage_title_event = sessao_ligada
+    bot.documentos[SERVIDOR] = copy.deepcopy(doc)
+    bot.music = SimpleNamespace(players={SERVIDOR: player})
+    cog = _Lifecycle()
+    cog.bot = bot
+    membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+    await executar(
+        relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=canal), SimpleNamespace(channel=canal))
+    )
+    await relogio.avancar(10)
+    return SimpleNamespace(player=player, bot=bot)
+
+
+DOC_LIGADO = {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+
+
+class TestMesmoCanal:
+    async def test_a_session_turned_off_in_a_voice_channel_stays_off(self, relogio: RelogioFalso) -> None:
+        r = await mesmo_canal(relogio, canal=canal_de_voz(1001), sessao_ligada=False, doc=DOC_LIGADO)
+
+        assert r.player.stage_title_event is False and r.bot.puts == []
+        assert r.player.stage_title_template == "escolha da sessão {track.title}"
+        assert r.bot.leituras == 0, "releu o documento global a cada voice_state do mesmo canal"
+
+    async def test_a_session_on_in_a_voice_channel_keeps_its_own_template(self, relogio: RelogioFalso) -> None:
+        r = await mesmo_canal(relogio, canal=canal_de_voz(1001), sessao_ligada=True, doc=DOC_LIGADO)
+
+        assert r.player.stage_title_event is True and r.player.stage_title_template == "escolha da sessão {track.title}"
+        assert r.bot.puts == [] and r.bot.leituras == 0
+
+    async def test_a_manual_stage_session_is_not_broken_by_a_suppress_event(self, relogio: RelogioFalso) -> None:
+        r = await mesmo_canal(relogio, canal=palco(), sessao_ligada=True, doc=DOC_LIGADO)
+
+        assert r.player.stage_title_event is True and r.player.stage_title_template == "escolha da sessão {track.title}"
+        assert r.bot.puts == [] and r.bot.leituras == 0
+
+    async def test_entering_still_applies_the_permanent(self, relogio: RelogioFalso) -> None:
+        r = await entrar(relogio, agendada=False, ja_ligado=False)
+
+        assert r.player.stage_title_event is True and r.bot.leituras >= 1
