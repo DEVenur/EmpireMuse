@@ -68,6 +68,26 @@ class ContextFilter(logging.Filter):
         return True
 
 
+class VoiceDependencyNoiseFilter(logging.Filter):
+    """Descarta só o aviso do ``Client.__init__`` do disnake de que PyNaCl e/ou dave.py faltam (a voz toca pelo Lavalink).
+
+    Casa pelo logger exato ``disnake.client``, nível WARNING e o fim da mensagem; o resto dos avisos do disnake segue.
+    """
+
+    LOGGER = "disnake.client"
+    SUFFIX = "not installed, voice will NOT be supported"
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            return not (
+                record.name == self.LOGGER
+                and record.levelno == logging.WARNING
+                and record.getMessage().endswith(self.SUFFIX)
+            )
+        except Exception:
+            return True  # na dúvida o registro segue, como no LevelGate
+
+
 class LevelGate(logging.Filter):
     """Abaixo de ``level`` só passa o DEBUG de um logger nosso, no contexto de um servidor em ``debug_guilds``.
 
