@@ -90,4 +90,5 @@ class VoiceStatusForm(SettingsForm):
         for bot in ctx.pool.get_guild_bots(ctx.guild_id):
             player = active_player(bot, ctx.guild_id)
             if player is not None:
+                player.voice_status_saved_default = False  # há uma escolha salva: o aviso de padrão não vale mais
                 schedule_permanent_voice_status(player, cfg)  # não espera: o POST responde sem aguardar o Discord
