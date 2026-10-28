@@ -9,6 +9,7 @@ interações são dublês (``tests/support/canal_de_pedidos.py``) e os valores f
 import pytest
 
 from empiremuse.utils.music.interactions import ViewMode
+from tests.cogs.test_canal_de_pedidos_setup_reset import Scenario, configured
 from tests.support.modais import (
     URL_BASE,
     ModalBot,
@@ -17,6 +18,61 @@ from tests.support.modais import (
 )
 
 pytestmark = pytest.mark.regression
+
+
+@pytest.fixture
+def world(monkeypatch):
+    return Scenario(monkeypatch)
+
+
+def run_reset(world, **kwargs):
+    """Executa o ``/reset`` e devolve a exceção levantada (ou ``None``): o teste decide o que esperar dela."""
+    try:
+        world.reset(**kwargs)
+    except Exception as erro:  # noqa: BLE001 — o contrato da falha é justamente o que os testes medem
+        return erro
+    return None
+
+
+# ============================================================================ KI-36 — /reset × falha no Discord
+
+
+class TestKI36ResetFalhaNoDiscord:
+    """Hoje o ``/reset`` limpa o banco ANTES de mexer no Discord: se a edição da mensagem ou a exclusão do canal
+    falha, o canal continua de pé e o banco fica desconfigurado (e o aviso diz que o reset "foi feito na base")."""
+
+    def forum_com_post(self, world):
+        post = world.forum.add_post(900, "post de pedidos")
+        world.bot.channels[900] = post
+        world.db.doc["player_controller"].update({"channel": "900", "message_id": "900"})
+        return post
+
+    # ---- guardas: o caminho feliz e as chamadas ao Discord não podem mudar
+
+    # ---- RED: a falha no Discord preserva a configuração
+
+    def test_falha_ao_editar_a_mensagem_preserva_a_configuracao_no_banco(self, world):
+        configured(world).fail_edit = RuntimeError("falha simulada")
+        run_reset(world)
+        assert (world.saved["channel"], world.saved["message_id"]) == ("22", "555"), (
+            "KI-36: o Discord falhou, o canal continua de pé e o banco foi desconfigurado"
+        )
+
+    # ---- RED: ordem definida (Discord, banco, aviso, player), erro genérico e detalhe só no log
+
+    def provocar(self, world, falha):
+        """Configura a falha pedida e devolve o ``delete`` do ``/reset`` que a exercita."""
+        if falha == "apagar_post":
+            self.forum_com_post(world).fail_delete = RuntimeError("falha simulada")
+            return None
+        mensagem = configured(world)
+        if falha == "editar_mensagem":
+            mensagem.fail_edit = RuntimeError("falha simulada")
+            return None
+        world.text.fail_delete = RuntimeError("falha simulada")
+        return "sim"
+
+    FALHAS = ["editar_mensagem", "apagar_canal", "apagar_post"]
 
 
 # ============================================================================ KI-39 / KI-40 / KI-41 — modais de favoritos e integrações

@@ -7,12 +7,12 @@ import logging
 from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
 from typing import Any, Self
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import aiohttp
 import pytest
 
-from empiremuse.cogs.lastfm import LastFmCog
+from empiremuse.cogs.lastfm import LastFmCog, LastFMView
 from empiremuse.utils.music import lastfm_tools
 from empiremuse.utils.music.lastfm_tools import LastFM
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
@@ -86,6 +86,24 @@ async def test_the_post_request_uses_https_and_sends_the_credentials_in_the_body
     assert metodo == "POST" and url.startswith("https://ws.audioscrobbler.com/2.0/")
     assert kwargs["data"]["sk"] == SEGREDO and kwargs["data"]["api_sig"] == "SIG" and kwargs["data"]["format"] == "json"
     assert not kwargs.get("params")
+
+
+# ============================================================================ (2) link de autorização do usuário
+
+
+async def test_the_auth_link_sent_to_the_user_is_https() -> None:
+    visao = LastFMView.__new__(LastFMView)
+    visao.auth_url, visao.last_timestamp, visao.check_session_loop = None, None, Mock()
+    bot = SimpleNamespace(
+        loop=SimpleNamespace(create_task=Mock()),
+        last_fm=SimpleNamespace(api_key="AK", get_token=AsyncMock(return_value="TK")),
+    )
+    visao.ctx = SimpleNamespace(bot=bot)
+    interacao = SimpleNamespace(send=AsyncMock())
+
+    await visao.send_authurl_callback(interacao)
+
+    assert visao.auth_url.startswith("https://www.last.fm/api/auth/")
 
 
 # ============================================================================ (3) logs sem a URL com as credenciais

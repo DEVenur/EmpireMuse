@@ -11,6 +11,7 @@ correções; os demais falham hoje pelo motivo descrito na docstring.
 import asyncio
 import logging
 import os
+import re
 import secrets
 import stat
 import tempfile
@@ -460,3 +461,53 @@ async def test_cache_do_token_e_criado_com_permissao_0600(cache_isolado, rede, m
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Cache do token: gravação segura e leitura tolerante
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+async def _cache_gravado(cache_isolado, rede):
+    """Obtém um token (gravando o cache) e devolve (cliente, arquivo do cache, rede falsa, tokens emitidos)."""
+    ao_post, emitidos = _emissor_de_tokens()
+    falsa = rede(ao_post=ao_post)
+    cliente = _cliente(cache_isolado)
+    await cliente.get_access_token()
+    return cliente, _arquivo_do_cache(cache_isolado), falsa, emitidos
+
+
+def _avisos(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING and r.name == spotify.__name__]
+
+
+@pytest.mark.asyncio
+async def test_cache_do_token_falha_na_gravacao_so_gera_aviso_e_nao_deixa_temporario(cache_isolado, rede, caplog):
+    """Não consegue gravar (o destino virou um diretório): só um aviso com o nome da exceção; o token segue em memória."""
+    cliente, arquivo, _, emitidos = await _cache_gravado(cache_isolado, rede)
+    arquivo.unlink()
+    arquivo.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        await cliente.get_access_token()
+
+    assert cliente.spotify_cache["access_token"] == emitidos[1]
+    assert _arquivos(cache_isolado.runtime, cache_isolado.sistema, cache_isolado.cwd) == [], "sobrou arquivo temporário"
+    assert any("Spotify" in a and re.search(r"\b\w+Error\b", a) for a in _avisos(caplog)), _avisos(caplog)
+    for sensivel in (str(arquivo), emitidos[0], emitidos[1]):
+        assert sensivel not in caplog.text, "o aviso expõe caminho ou token"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "modelo",
+    ["[]", '{"access_token": "SEGREDO'],
+    ids=["lista", "json-truncado"],
+)
+async def test_cache_do_token_com_conteudo_invalido_e_ignorado(cache_isolado, rede, caplog, modelo):
+    _, arquivo, falsa, emitidos = await _cache_gravado(cache_isolado, rede)
+    segredo = _valor_falso("segredo")
+    arquivo.write_text(modelo.replace("SEGREDO", segredo), "utf-8")
+
+    with caplog.at_level(logging.WARNING, logger=spotify.__name__):
+        novo = _cliente(cache_isolado)
+        obtido = await novo.get_valid_access_token()
+
+    assert obtido == emitidos[1] and len(falsa.posts) == 2, "devia ignorar o arquivo e pedir um token novo"
+    assert segredo not in caplog.text
