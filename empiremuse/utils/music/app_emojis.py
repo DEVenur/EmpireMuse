@@ -132,12 +132,13 @@ def _index_remote(remote: object) -> dict[str, str]:
     return found
 
 
-def _read_sums(emojis_dir: Path) -> dict[str, str] | None:
+def _read_sums(emojis_dir: Path) -> dict[str, str]:
+    """Linhas do ``SHA256SUMS``; arquivo ausente, ilegível ou que não é arquivo dá ``{}`` (nada é enviado: falha fechada)."""
     sums_file = emojis_dir.parent / _SUMS_NAME
 
     try:
         if not sums_file.is_file():
-            return None
+            return {}
 
         pairs = (line.split(None, 1) for line in sums_file.read_text(encoding="utf-8").splitlines() if line.strip())
         return {path.strip().lstrip("*"): digest for digest, path in (p for p in pairs if len(p) == 2)}
@@ -155,8 +156,11 @@ def _header_size(header: bytes) -> tuple[int, int] | None:
     return None
 
 
-def _load_image(emojis_dir: Path, name: str, sums: dict[str, str] | None) -> tuple[bytes | None, str]:
+def _load_image(emojis_dir: Path, name: str, sums: dict[str, str]) -> tuple[bytes | None, str]:
     """``(bytes, "")`` do arquivo do emoji, ou ``(None, motivo)``. Valida tudo ANTES de ler o arquivo inteiro."""
+    if not any(key.startswith("emojis/") for key in sums):
+        return None, "SHA256SUMS ausente"
+
     candidates = [emojis_dir / f"{name}.{ext}" for ext in _EXTENSIONS]
     path = next((p for p in candidates if p.is_symlink() or p.exists()), None)
 
@@ -188,11 +192,16 @@ def _load_image(emojis_dir: Path, name: str, sums: dict[str, str] | None) -> tup
     except OSError:
         return None, "erro de leitura"
 
-    if sums is not None:
-        expected = sums.get(f"emojis/{path.name}")
+    if len(data) > MAX_FILE_BYTES:
+        return None, "tamanho inválido"
 
-        if expected is None or expected.lower() != hashlib.sha256(data).hexdigest():
-            return None, "SHA256SUMS diverge"
+    expected = sums.get(f"emojis/{path.name}")
+
+    if expected is None:
+        return None, "sem linha no SHA256SUMS"
+
+    if expected.lower() != hashlib.sha256(data).hexdigest():
+        return None, "SHA256SUMS diverge"
 
     return data, ""
 
@@ -255,7 +264,7 @@ async def sync_app_emojis(
     refetch_left = True
     emojis_dir = Path(emojis_dir)
     folder_ok = not emojis_dir.is_symlink() and emojis_dir.is_dir()
-    sums = _read_sums(emojis_dir) if folder_ok else None
+    sums = _read_sums(emojis_dir) if folder_ok else {}
 
     for name in APP_EMOJIS:
         if name in mapping or stopped:

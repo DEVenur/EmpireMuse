@@ -30,7 +30,6 @@ class AppEmojis(commands.Cog):
         self.bot = bot
         if not hasattr(bot, "app_emojis"):
             bot.app_emojis = {}
-        self._started = False
         self._task: asyncio.Task | None = None
 
     def _should_sync(self) -> bool:
@@ -41,10 +40,11 @@ class AppEmojis(commands.Cog):
 
     @commands.Cog.listener("on_ready")
     async def on_ready(self):
-        if self._started:
+        # a flag fica no bot: recarregar a cog e reconectar não refaz o sync
+        if getattr(self.bot, "_app_emojis_started", False):
             return
 
-        self._started = True
+        self.bot._app_emojis_started = True
 
         if not self._should_sync():
             return
