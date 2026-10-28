@@ -8,6 +8,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Unreleased]
 
 ### Corrigido
+- **Seletor de skin do `/change_skin`**: as listas "Modo Normal" e "Modo Fixo (Song-Request)" passam a mostrar cada skin como um link embutido em que só o nome clica (até 4 por linha), com títulos legíveis, também nas linhas de resumo depois da seleção. Antes a lista do Modo Normal aparecia como texto cru no Discord desktop.
 - **ID do OAuth do painel no log**: o `PANEL_OAUTH_CLIENT_ID` (ID público do bot 1, um número de 17 a 20 dígitos) deixa de ser mascarado no log, nos relatórios de erro e no shell do dono. Nenhum segredo muda: `PANEL_OAUTH_CLIENT_SECRET`, os demais `*_CLIENT_ID` (como `SPOTIFY_CLIENT_ID`) e as chaves do Last.fm continuam mascarados.
 - **Aviso de PyNaCl e dave.py no console**: o console deixa de mostrar, a cada subida, o aviso da biblioteca de que o suporte a voz não está instalado (`... not installed, voice will NOT be supported`). Os demais avisos da biblioteca continuam aparecendo.
 
