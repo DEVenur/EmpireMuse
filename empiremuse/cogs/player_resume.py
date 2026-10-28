@@ -612,13 +612,15 @@ class PlayerSession(commands.Cog):
                 player.lastfm_artists = data.get("lastfm_artists")
                 # O reinício é uma saída do canal: a sessão volta ao permanente do servidor (o flag e o modelo salvos não valem).
                 # Agendado como tarefa do player, com jitter, para a retomada de muitas sessões não estourar o limite do bot.
+                # Falha de leitura fecha: o padrão ligado (D1) vale para quem nunca salvou, não para quem não deu para ler; um erro
+                # de banco passageiro não pode sobrepor o desligado do dono. Fica sem status até o próximo entrar/mover.
                 try:
                     global_data = await self.bot.get_global_data(guild.id, db_name=DBModel.guilds)
                 except Exception:
                     logger.exception("Falha ao ler o status permanente do canal", extra=guild_extra(guild.id))
-                    global_data = {}
-                player.voice_status_saved_default = global_data.get("voice_status_permanent") is None
-                schedule_permanent_voice_status(player, resolve_voice_status(global_data), jitter=True)
+                else:
+                    player.voice_status_saved_default = global_data.get("voice_status_permanent") is None
+                    schedule_permanent_voice_status(player, resolve_voice_status(global_data), jitter=True)
                 player.listen_along_invite = data.pop("listen_along_invite", "")
                 player.command_log_list.extend(data.pop("command_log_list", []))
 
