@@ -13,7 +13,7 @@ import empiremuse.wavelink as wavelink
 from empiremuse.logs.context import log_context
 from empiremuse.rules.error_code import safe_error_code
 from empiremuse.rules.text import plain_snippet
-from empiremuse.utils.music.converters import fix_characters, time_format
+from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.errors import code_suffix
 from empiremuse.utils.music.models.helpers import (
     LAVALINK_LOG_LIMIT,
@@ -205,7 +205,7 @@ async def _he_track_stuck(self) -> None:
 
     try:
         self.set_command_log(
-            text=f"A música [{fix_characters(self.current.single_title, 25)}](<{self.current.uri}>) travou.",
+            text=f"A música {md_link(self.current.single_title, self.current.uri, code=False, limit=25)} travou.",
             emoji="⚠️",
             controller=True,
         )
@@ -249,15 +249,15 @@ def _he_log_exception(self, event, track) -> str:
 
 def _he_exception_embed(self, event, track):
     node_info = (
-        f"`{event.node.identifier}`"
+        md_code(event.node.identifier)
         if event.node.identifier == self.node.identifier
         else f"`{self.node.identifier} | {event.node.identifier}`"
     )
     error_code = _he_log_exception(self, event, track)
     embed = disnake.Embed(
-        description=f"**Falha ao reproduzir música{' (parcial)' if isinstance(track, PartialTrack) else ''}:\n[{track.title}]({track.uri or track.search_uri})**\n"
+        description=f"**Falha ao reproduzir música{' (parcial)' if isinstance(track, PartialTrack) else ''}:\n{md_link(track.title, track.uri or track.search_uri, code=False)}**\n"
         f"**Motivo:** {lavalink_text(event.message)}\n"
-        f"**Nível:** `{event.severity}`\n"
+        f"**Nível:** {md_code(event.severity)}\n"
         f"**Servidor de música:** {node_info}{code_suffix(error_code)}",
         color=disnake.Colour.red(),
     )
@@ -266,7 +266,7 @@ def _he_exception_embed(self, event, track):
 
 def _he_log_retry_while_locked(self, event, track, error_code) -> None:
     self.set_command_log(
-        text=f"A reprodução da música falhou (tentando tocar novamente): [`{fix_characters(track.title, 15)}`](<{track.uri or track.search_uri}>). **Motivo:** `{plain_snippet(event.message, 50)}`{code_suffix(error_code)}",
+        text=f"A reprodução da música falhou (tentando tocar novamente): {md_link(track.title, track.uri or track.search_uri, limit=15)}. **Motivo:** `{plain_snippet(event.message, 50)}`{code_suffix(error_code)}",
         controller=True,
     )
     self.update = True
@@ -274,7 +274,7 @@ def _he_log_retry_while_locked(self, event, track, error_code) -> None:
 
 def _he_mirror_not_found_embed(self, track):
     return disnake.Embed(
-        description=f"`Ignorando a música` [`{track.title}`](<{track.url}>)`. Pois não houve resultados em outras plataformas de música.`",
+        description=f"`Ignorando a música` {md_link(track.title, track.url)}`. Pois não houve resultados em outras plataformas de música.`",
         color=self.bot.get_color(self.guild.me),
     ).set_thumbnail(track.thumb)
 
@@ -414,7 +414,7 @@ async def _he_recover_from_youtube(self, track, send_report) -> None:
 
 async def _he_move_to_native_youtube(self, new_node) -> None:
     self.native_yt = True
-    txt = f"Devido a restrições do youtube no servidor `{self.node.identifier}` o player foi movido para o servidor `{new_node.identifier}`."
+    txt = f"Devido a restrições do youtube no servidor {md_code(self.node.identifier)} o player foi movido para o servidor {md_code(new_node.identifier)}."
     if self.controller_mode:
         self.set_command_log(txt, emoji="⚠️", controller=True)
     elif self.text_channel:
@@ -433,7 +433,7 @@ async def _he_move_to_native_youtube(self, new_node) -> None:
 
 async def _he_warn_youtube_fallback(self, send_report) -> None:
     txt = (
-        f"Devido a restrições do youtube no servidor `{self.node.identifier}`. Durante a sessão atual "
+        f"Devido a restrições do youtube no servidor {md_code(self.node.identifier)}. Durante a sessão atual "
         "será feito uma tentativa de obter a mesma música em outras plataformas de música usando o nome "
         "das músicas do youtube que estão na fila (talvez a música tocada seja diferente do esperado "
         "ou até mesmo ignoradas caso não retorne resultados)."

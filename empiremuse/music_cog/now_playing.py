@@ -11,11 +11,7 @@ from empiremuse.utils.music.checks import (
     has_source,
     is_dj,
 )
-from empiremuse.utils.music.converters import (
-    time_format,
-    fix_characters,
-    music_source_image,
-)
+from empiremuse.utils.music.converters import time_format, music_source_image, md_link
 from empiremuse.utils.music.errors import (
     GenericError,
 )
@@ -34,6 +30,7 @@ from empiremuse.utils.others import (
 from empiremuse.music_cog.shared import (
     DESC_PREFIX as desc_prefix,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class NowPlayingMixin:
@@ -116,7 +113,7 @@ class NowPlayingMixin:
         if player.current.info["sourceName"] == "youtube":
             url += f"&t={int(player.position / 1000)}s"
 
-        txt = f"### [{player.current.title}](<{url}>)\n"
+        txt = f"### {md_link(player.current.title, url, code=False)}\n"
 
         footer_kw = {}
 
@@ -133,19 +130,21 @@ class NowPlayingMixin:
         txt += f"> 👤 **⠂Uploader:** {player.current.authors_md}\n"
 
         if player.current.album_name:
-            txt += f"> 💽 **⠂Álbum:** [`{fix_characters(player.current.album_name, limit=20)}`]({player.current.album_url})\n"
+            txt += f"> 💽 **⠂Álbum:** {md_link(player.current.album_name, player.current.album_url, limit=20)}\n"
 
         if not player.current.autoplay:
             txt += f"> ✋ **⠂Solicitado por:** <@{player.current.requester}>\n"
         else:
             try:
-                mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendação', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendação`"
             txt += f"> 👍 **⠂Adicionado via:** {mode}\n"
 
         if player.current.playlist_name:
-            txt += f"> 📑 **⠂Playlist:** [`{fix_characters(player.current.playlist_name, limit=20)}`]({player.current.playlist_url})\n"
+            txt += (
+                f"> 📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}\n"
+            )
 
         try:
             txt += f"> *️⃣ **⠂Canal de voz:** {player.guild.me.voice.channel.jump_url}\n"
@@ -198,7 +197,7 @@ class NowPlayingMixin:
                 txt += f"### 🎶 ⠂Próximas músicas ({(qsize := len(player.queue + player.queue_autoplay))}):\n" + (
                     "\n"
                 ).join(
-                    f"> `{n + 1})` [`{fix_characters(t.title, limit=28)}`](<{t.uri}>)\n"
+                    f"> `{n + 1})` {md_link(t.title, t.uri, limit=28)}\n"
                     f"> `⏲️ {time_format(t.duration) if not t.is_stream else '🔴 Ao vivo'}`"
                     + (f" - `Repetições: {t.track_loops}`" if t.track_loops else "")
                     + f" **|** "
@@ -208,7 +207,11 @@ class NowPlayingMixin:
 
                 if qsize > 3:
                     components.append(
-                        disnake.ui.Button(custom_id=PlayerControls.queue, label="Ver lista completa", emoji="📑")
+                        disnake.ui.Button(
+                            custom_id=PlayerControls.queue,
+                            label="Ver lista completa",
+                            emoji=app_emoji(inter.bot, "music_queue"),
+                        )
                     )
 
             elif player.queue:
@@ -301,7 +304,7 @@ class NowPlayingMixin:
         if player.has_thread:
             raise GenericError(
                 "**Esse comando não pode ser usado com uma conversa ativa na "
-                f"[mensagem]({player.message.jump_url}) do player.**"
+                f"{md_link('mensagem', player.message.jump_url, code=False)} do player.**"
             )
 
         if not inter.response.is_done():

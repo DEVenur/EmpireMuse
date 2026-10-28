@@ -4,9 +4,10 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, get_button_style, music_source_image
+from empiremuse.utils.music.converters import get_button_style, music_source_image, md_bracketed, md_link, md_code
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class MiniPlayer:
@@ -33,8 +34,8 @@ class MiniPlayer:
 
         embed = disnake.Embed(
             color=embed_color,
-            description=f"-# [{fix_characters(player.current.single_title, 48)}]({player.current.uri or player.current.search_uri})\n"
-            f"-# **Uploader:** `{fix_characters(player.current.author, 17)}`\n",
+            description=f"-# {md_link(player.current.single_title, player.current.uri or player.current.search_uri, code=False, limit=48)}\n"
+            f"-# **Uploader:** {md_code(player.current.author, limit=17)}\n",
         )
 
         if player.current.thumb:
@@ -44,9 +45,7 @@ class MiniPlayer:
             embed.description += f"-# **Pedido por:** <@{player.current.requester}>\n"
         else:
             try:
-                embed.description += (
-                    f"-# **Adicionado via:** [`[Recomendação]`]({player.current.info['extra']['related']['uri']})\n"
-                )
+                embed.description += f"-# **Adicionado via:** {md_bracketed(md_link('Recomendação', player.current.info['extra']['related']['uri']))}\n"
             except Exception:
                 embed.description += "-# **Adicionado via:** `[Recomendação]`\n"
 
@@ -63,10 +62,16 @@ class MiniPlayer:
         data["embeds"].append(embed)
 
         data["components"] = [
-            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop, style=disnake.ButtonStyle.red),
-            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "playpause"),
+                custom_id=PlayerControls.pause_resume,
+                style=get_button_style(player.paused),
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop, style=disnake.ButtonStyle.red
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
             disnake.ui.Button(emoji="🤍", custom_id=PlayerControls.add_favorite),
         ]
 

@@ -5,9 +5,17 @@ from os.path import basename
 import disnake
 
 from empiremuse.utils.branding import asset_url
-from empiremuse.utils.music.converters import fix_characters, time_format, get_button_style, music_source_image
+from empiremuse.utils.music.converters import (
+    fix_characters,
+    time_format,
+    get_button_style,
+    music_source_image,
+    md_link,
+    md_code,
+)
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class ClassicStaticSkin:
@@ -31,7 +39,9 @@ class ClassicStaticSkin:
 
         queue_txt = ""
 
-        embed.description = f"[**{player.current.title}**]({player.current.uri or player.current.search_uri})\n\n"
+        embed.description = (
+            f"**{md_link(player.current.title, player.current.uri or player.current.search_uri, code=False)}**\n\n"
+        )
         embed.set_image(url=player.current.thumb)
         embed_top = None
 
@@ -47,19 +57,19 @@ class ClassicStaticSkin:
         else:
             duration = f"⏰ **⠂Duração:** `{time_format(player.current.duration)}`"
 
-        txt = f"{duration}\n💠 **⠂Uploader:** `{player.current.author}`\n"
+        txt = f"{duration}\n💠 **⠂Uploader:** {md_code(player.current.author)}\n"
 
         if not player.current.autoplay:
             f"🎧 **⠂Pedido por:** <@{player.current.requester}>\n"
         else:
             try:
-                mode = f" [`Recomendação`]({player.current.info['extra']['related']['uri']})"
+                mode = f" {md_link('Recomendação', player.current.info['extra']['related']['uri'])}"
             except Exception:
                 mode = "`Recomendação`"
             txt += f"👍 **⠂Adicionado via:** {mode}\n"
 
         if player.current.playlist_name:
-            txt += f"📑 **⠂Playlist:** [`{fix_characters(player.current.playlist_name, limit=20)}`]({player.current.playlist_url})\n"
+            txt += f"📑 **⠂Playlist:** {md_link(player.current.playlist_name, player.current.playlist_url, limit=20)}\n"
 
         if qsize := len(player.queue):
             data["content"] = "**Músicas na fila:**\n```ansi\n" + "\n".join(
@@ -95,12 +105,18 @@ class ClassicStaticSkin:
         data["embeds"] = [embed_top, embed] if embed_top else [embed]
 
         data["components"] = [
-            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
             disnake.ui.Button(
-                emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)
+                emoji=app_emoji(player.bot, "playpause"),
+                custom_id=PlayerControls.pause_resume,
+                style=get_button_style(player.paused),
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "music_queue"),
+                custom_id=PlayerControls.queue,
+                disabled=not (player.queue or player.queue_autoplay),
             ),
             disnake.ui.Select(
                 placeholder="Mais opções:",
@@ -111,7 +127,7 @@ class ClassicStaticSkin:
                 options=[
                     disnake.SelectOption(
                         label="Adicionar música",
-                        emoji="➕",
+                        emoji=app_emoji(player.bot, "add_music"),
                         value=PlayerControls.add_song,
                         description="Adicionar uma música/playlist na fila.",
                     ),
