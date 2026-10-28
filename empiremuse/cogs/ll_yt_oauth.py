@@ -295,14 +295,40 @@ class YtOauthLL(commands.Cog):
 
         txts.append("Evite mostrar esse token publicamente!")
 
+        # S-32: o refresh token só vai por DM a quem executou o comando; a mensagem do canal nunca o leva (nem o nome e o email
+        # da conta) e uma DM que falha nunca cai de volta no canal.
+        try:
+            await ctx.author.send(
+                embed=disnake.Embed(
+                    color=color,
+                    description=f"### refreshToken da conta do google obtido com sucesso!\n```{refresh_token}``` "
+                    f"**Usuário autorizado:**  ```ansi\n[34;1m{name}[0m``` "
+                    f"**Email:** ```ansi\n[34;1m{data['email']}[0m``` "
+                    f"**Nota{'s'[: len(txts) ^ 1]}:**\n" + "\n".join(f"* {t}" for t in txts),
+                ).set_thumbnail(data["picture"]),
+            )
+        except disnake.Forbidden:
+            channel_text = (
+                "### Conta do google vinculada, mas não consegui enviar o refreshToken por DM\n"
+                "Abra suas mensagens diretas (DM) para os membros do servidor e execute o comando de novo.\n"
+            )
+        except Exception as e:
+            code = log_unexpected_error(logger, e, "enviar o refreshToken por DM")
+            channel_text = (
+                "### Conta do google vinculada, mas não consegui enviar o refreshToken por DM\n"
+                f"Veja o log do servidor{code_suffix(code)}.\n"
+            )
+        else:
+            channel_text = (
+                "### refreshToken da conta do google obtido com sucesso!\n"
+                "Enviei o refreshToken por mensagem direta (DM).\n"
+            )
+
         await func(
             embed=disnake.Embed(
                 color=color,
-                description=f"### refreshToken da conta do google obtido com sucesso!\n```{refresh_token}``` "
-                f"**Usuário autorizado:**  ```ansi\n[34;1m{name}[0m``` "
-                f"**Email:** ```ansi\n[34;1m{data['email']}[0m``` "
-                f"**Nota{'s'[: len(txts) ^ 1]}:**\n" + "\n".join(f"* {t}" for t in txts),
-            ).set_thumbnail(data["picture"]),
+                description=channel_text + f"**Nota{'s'[: len(txts) ^ 1]}:**\n" + "\n".join(f"* {t}" for t in txts),
+            ),
             view=None,
         )
 
