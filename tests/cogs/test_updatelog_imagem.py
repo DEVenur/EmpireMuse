@@ -113,9 +113,11 @@ class Rede:
         self.texto = CHANGELOG
         self.erro: Exception | None = None
         self.portao: asyncio.Event | None = None
+        self.iniciou = asyncio.Event()
 
     async def fetch(self, session: object, tag: str) -> str:
         self.consultas.append(tag)
+        self.iniciou.set()
         if self.portao is not None:
             await self.portao.wait()
         if self.erro is not None:
@@ -429,9 +431,30 @@ class TestComGit:
 # ============================================================================ VE5 — cache e single-flight (V-T1)
 
 
-async def ceder(vezes: int = 25) -> None:
-    for _ in range(vezes):
-        await asyncio.sleep(0)
+async def disparar(
+    rede: Rede, monkeypatch: pytest.MonkeyPatch, quantidade: int, cogs: list[legacy_cmds.Owner] | None = None
+) -> list[asyncio.Future]:
+    """Dispara ``quantidade`` chamadas simultâneas e só devolve quando TODAS já passaram por ``image_version`` e a consulta já está parada no portão.
+
+    Sem giros do laço: cada chamada roda até o seu primeiro ``await`` (o da consulta compartilhada) sem ser interrompida, então
+    ter passado por ``image_version`` e o evento da consulta é a sincronização, e não um palpite de quantas voltas bastam.
+    """
+    rede.portao = asyncio.Event()
+    chegaram: set[asyncio.Task] = set()
+    todas = asyncio.Event()
+    real = legacy_cmds.image_version
+
+    def espiao(*args: object, **kwargs: object) -> object:
+        chegaram.add(asyncio.current_task())
+        if len(chegaram) >= quantidade:
+            todas.set()
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(legacy_cmds, "image_version", espiao)
+    chamadas = [asyncio.ensure_future(usar(cogs[i % len(cogs)] if cogs else None)) for i in range(quantidade)]
+    await todas.wait()
+    await rede.iniciou.wait()
+    return chamadas
 
 
 class TestCacheEUmaConsultaSo:
@@ -439,11 +462,8 @@ class TestCacheEUmaConsultaSo:
         self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         com_versao(monkeypatch, "2.1.1")
-        rede.portao = asyncio.Event()
-        cogs = [novo_cog(), novo_cog()]
 
-        chamadas = [asyncio.ensure_future(usar(cogs[i % 2])) for i in range(8)]
-        await ceder()
+        chamadas = await disparar(rede, monkeypatch, 8, [novo_cog(), novo_cog()])
         rede.portao.set()
         resultados = await asyncio.gather(*chamadas)
 
@@ -483,11 +503,9 @@ class TestCacheEUmaConsultaSo:
         self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         com_versao(monkeypatch, "2.1.1")
-        rede.portao = asyncio.Event()
         rede.erro = UpdateError("falha")
 
-        chamadas = [asyncio.ensure_future(usar()) for _ in range(6)]
-        await ceder()
+        chamadas = await disparar(rede, monkeypatch, 6)
         rede.portao.set()
         resultados = await asyncio.gather(*chamadas)
 
@@ -497,12 +515,10 @@ class TestCacheEUmaConsultaSo:
         self, rede: Rede, sem_git: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         com_versao(monkeypatch, "2.1.1")
-        rede.portao = asyncio.Event()
 
-        chamadas = [asyncio.ensure_future(usar()) for _ in range(3)]
-        await ceder()
+        chamadas = await disparar(rede, monkeypatch, 3)
         chamadas[0].cancel()
-        await ceder()
+        await asyncio.wait([chamadas[0]])
         rede.portao.set()
         resultados = await asyncio.gather(*chamadas, return_exceptions=True)
 
