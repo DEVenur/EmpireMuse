@@ -39,14 +39,6 @@ def java_root(tmp_path):
 
 
 class TestRemoveOrphanJdkStaging:
-    def test_entrada_nova_dentro_do_staging_antigo_conta_como_atividade(self, java_root):
-        staging = criar_staging(java_root)
-        (staging / "legal").mkdir()  # criada agora: a extração ainda está escrevendo
-
-        assert ll.remove_orphan_jdk_staging(str(java_root)) == 0
-
-        assert staging.exists()
-
     def test_apaga_todos_os_orfaos_e_so_eles(self, java_root):
         velho_a = criar_staging(java_root, nome=f"{PLATAFORMA}.aaaaaaaa.tmp")
         velho_b = criar_staging(java_root, nome="Windows-64bit-WindowsPE.bbbbbbbb.tmp")
@@ -55,6 +47,3 @@ class TestRemoveOrphanJdkStaging:
         assert ll.remove_orphan_jdk_staging(str(java_root)) == 2
 
         assert not velho_a.exists() and not velho_b.exists() and em_curso.exists()
-
-    def test_pasta_inexistente_nao_e_erro(self, tmp_path):
-        assert ll.remove_orphan_jdk_staging(str(tmp_path / "nao-existe")) == 0

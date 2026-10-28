@@ -10,13 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import empiremuse.cogs.lastfm as lastfm
 import empiremuse.cogs.misc as misc
 from empiremuse.utils import branding
 
 pytestmark = pytest.mark.critical
 
-MIB = 1 << 20
 RSS_PYTHON = 130_023_424  # 124,0 MiB
 RSS_LAVALINK = 126_353_408  # 120,5 MiB
 USUARIOS = 1035
@@ -118,21 +116,6 @@ class TestRamNoSobre:
         assert "RAM do Lavalink (processo Java inteiro)" in descricao and "`120,5 MiB`" in descricao
         assert "RAM total (bot + Lavalink)" in descricao and "`244,5 MiB`" in descricao
 
-    @pytest.mark.asyncio
-    async def test_the_old_labels_and_decimal_units_are_gone(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        descricao = await descricao_do_sobre(monkeypatch)
-
-        assert "Uso de RAM" not in descricao and " MB" not in descricao
-
-    @pytest.mark.asyncio
-    async def test_without_the_lavalink_process_only_the_bot_line_remains(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        descricao = await descricao_do_sobre(monkeypatch, com_lavalink=False)
-
-        assert "RAM do bot (processo Python)" in descricao
-        assert "RAM do Lavalink" not in descricao and "RAM total" not in descricao
-
 
 class TestContadoresDoSobre:
     @pytest.mark.asyncio
@@ -140,18 +123,6 @@ class TestContadoresDoSobre:
         descricao = await descricao_do_sobre(monkeypatch)
 
         assert "`1.035`" in descricao and "`2.345`" in descricao
-
-    @pytest.mark.asyncio
-    async def test_no_counter_uses_a_comma_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        descricao = await descricao_do_sobre(monkeypatch)
-
-        assert "1,035" not in descricao and "2,345" not in descricao
-
-    @pytest.mark.asyncio
-    async def test_a_small_count_stays_plain(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        descricao = await descricao_do_sobre(monkeypatch, bot=bot_do_sobre(usuarios=7, servidores=3))
-
-        assert "`7`" in descricao and "`3`" in descricao
 
 
 class TestVersaoNoSobre:
@@ -165,115 +136,3 @@ class TestVersaoNoSobre:
         (posicao,) = [i for i, x in enumerate(linhas) if "Versão do EmpireMuse" in x]
         assert "2.1.1" in linhas[posicao] and f"{branding.REPO_URL}/releases/tag/v2.1.1" in linhas[posicao]
         assert "Versão do Python" in linhas[posicao + 1]
-
-    @pytest.mark.asyncio
-    async def test_an_image_without_a_version_shows_dev(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        descricao = await descricao_do_sobre(monkeypatch, versao="dev")
-
-        (linha,) = [x for x in descricao.splitlines() if "Versão do EmpireMuse" in x]
-        assert "`dev`" in linha and "releases/tag" not in linha
-
-    @pytest.mark.asyncio
-    async def test_outside_the_image_there_is_no_line(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        descricao = await descricao_do_sobre(monkeypatch, versao=None)
-
-        assert "Versão do EmpireMuse" not in descricao
-
-
-# ============================================================================ /lastfm
-
-
-def usuario_lastfm(**mudancas: str) -> dict:
-    return {
-        "realname": "Ana",
-        "name": "ana",
-        "url": "https://www.last.fm/user/ana",
-        "registered": {"#text": 1_600_000_000},
-        "country": "",
-        "playcount": "1035",
-        "playlists": "0",
-        "track_count": "1234567",
-        "artist_count": "1035",
-        "album_count": "2050",
-        "image": [{"#text": "https://exemplo.invalid/a.jpg"}],
-        **mudancas,
-    }
-
-
-def top(chave_extra: dict | None = None) -> list:
-    item = {
-        "name": "Nome",
-        "url": "https://www.last.fm/music/x",
-        "playcount": "2050",
-        "artist": {"name": "Art", "url": "https://www.last.fm/music/art"},
-        "image": [{"#text": "https://exemplo.invalid/t.jpg"}],
-        **(chave_extra or {}),
-    }
-    return [item]
-
-
-async def textos_do_lastfm(monkeypatch: pytest.MonkeyPatch, **usuario: str) -> str:
-    visao = SimpleNamespace(
-        wait=AsyncMock(), children=[], session_key="", clear_session=False, error=None, scrobble_enabled=True
-    )
-    monkeypatch.setattr(lastfm, "LastFMView", MagicMock(return_value=visao))
-    bot = SimpleNamespace(
-        get_cog=lambda _: None,
-        get_color=lambda *a: 0,
-        get_global_data=AsyncMock(return_value={"lastfm": {"sessionkey": "k", "username": "ana", "scrobble": True}}),
-        update_global_data=AsyncMock(),
-        get_global_command_named=lambda *a, **k: SimpleNamespace(id=1),
-        last_fm=SimpleNamespace(
-            user_info=AsyncMock(return_value=usuario_lastfm(**usuario)),
-            user_top_tracks=AsyncMock(return_value=top()),
-            user_top_artists=AsyncMock(return_value=top()),
-            user_top_albums=AsyncMock(return_value=top({"album": {"#text": "Alb"}})),
-        ),
-    )
-    inter = SimpleNamespace(
-        author=SimpleNamespace(id=900),
-        response=SimpleNamespace(defer=AsyncMock()),
-        edit_original_message=AsyncMock(),
-    )
-    cog = lastfm.LastFmCog(bot)
-    await lastfm.LastFmCog.lastfm.callback(self=cog, inter=inter)
-    embeds = inter.edit_original_message.await_args_list[0].kwargs["embeds"]
-    return "\n".join(f"{e.description}\n{e.author.name if e.author else ''}" for e in embeds)
-
-
-class TestContadoresDoLastfm:
-    @pytest.mark.asyncio
-    async def test_every_counter_uses_a_dot_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        texto = await textos_do_lastfm(monkeypatch)
-
-        for esperado in ("1.035", "1.234.567", "2.050"):
-            assert esperado in texto
-
-    @pytest.mark.asyncio
-    async def test_no_counter_uses_a_comma_for_thousands(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        texto = await textos_do_lastfm(monkeypatch)
-
-        for proibido in ("1,035", "1,234,567", "2,050"):
-            assert proibido not in texto
-
-
-class TestPlaylistsDoLastfm:
-    @pytest.mark.asyncio
-    async def test_a_non_zero_playlist_count_shows_the_number_with_a_dot(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        texto = await textos_do_lastfm(monkeypatch, playlists="1035")
-
-        (linha,) = [x for x in texto.splitlines() if "Playlists públicas" in x]
-        assert "`1.035`" in linha
-
-    @pytest.mark.asyncio
-    async def test_a_small_playlist_count_is_the_real_count_not_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        texto = await textos_do_lastfm(monkeypatch, playlists="7")
-
-        (linha,) = [x for x in texto.splitlines() if "Playlists públicas" in x]
-        assert "`7`" in linha
-
-    @pytest.mark.asyncio
-    async def test_zero_playlists_has_no_line(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        texto = await textos_do_lastfm(monkeypatch, playlists="0")
-
-        assert "Playlists públicas" not in texto

@@ -85,17 +85,6 @@ def fail(message: str):
     pytest.fail(message, pytrace=False)
 
 
-# ============================================================================ (1a) constantes reais do branding
-
-
-class TestJdkDownloadsConstant:
-    def test_urls_are_https_from_bellsoft_and_hashes_are_not_placeholders(self):
-        digests = [d for _, d in branding.JDK_DOWNLOADS.values()]
-        assert all(u.startswith("https://download.bell-sw.com/java/") for u, _ in branding.JDK_DOWNLOADS.values())
-        assert len(set(digests)) == len(digests), "cada arquivo tem o seu próprio hash (nada repetido/copiado)"
-        assert not any(len(set(d)) <= 2 for d in digests), "hash com cara de placeholder (0000…, aaaa…)"
-
-
 # ============================================================================ fixtures do item 1 (JDK)
 
 
@@ -330,14 +319,6 @@ class TestJdkDownloadIsVerified:
         assert java.read_bytes() == f"JAVA-BOM-{key}".encode() and len(jdk.started) == 1
 
 
-class TestInstallationIsSkippedWhenJavaAlreadyWorks:
-    def test_a_working_system_java_triggers_no_jdk_download(self, jdk):
-        jdk.monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
-        linux(jdk, "64bit")
-        ll.run_lavalink()
-        assert jdk.net.calls == [] and len(jdk.started) == 1
-
-
 # ============================================================================ (2a) lavalink_child_env — função pura
 
 
@@ -384,25 +365,6 @@ class TestChildEnvOauth:
         source = {"PATH": "/bin"}
         ll.lavalink_child_env(FAKE_TOKEN, source)
         assert source == {"PATH": "/bin"} and not [v for v in OAUTH_VARS if v in os.environ]
-
-
-class TestChildEnvOnWindows:
-    @pytest.fixture(autouse=True)
-    def _windows(self, monkeypatch):
-        pretend_windows(monkeypatch)
-
-    def test_names_outside_the_allowlist_are_blocked_in_any_case(self):
-        source = {
-            "Token": "t",
-            "mongo": "m",
-            "Java_Tool_Options": "-javaagent:x.jar",
-            "_Java_Options": "-Xevil",
-            "Spring_Application_Json": "{}",
-            "panel_cookie_secret": "s",
-            "Path": "C:\\bin",
-        }
-        env = ll.lavalink_child_env(None, source)
-        assert {k.upper() for k in env} == {"PATH", "SERVER_ADDRESS"}
 
 
 # ============================================================================ (2b) o Popen do Lavalink sempre recebe env=

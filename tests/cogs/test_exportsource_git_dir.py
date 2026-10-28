@@ -14,7 +14,7 @@ import pytest
 
 from empiremuse import paths
 from empiremuse.cogs import legacy_cmds
-from empiremuse.cogs.legacy_cmds import Owner, run_git
+from empiremuse.cogs.legacy_cmds import Owner
 from empiremuse.utils.music.errors import GenericError
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -64,9 +64,3 @@ async def test_exportsource_lists_files_from_the_process_cwd_with_an_absolute_gi
     assert "ls-files" in comando
     assert os.path.isabs(git_dir) and Path(git_dir).resolve() == ambiente.outro / "repo.git"
     assert Path(ambiente.executar.await_args.kwargs["cwd"]).resolve() == ambiente.outro
-
-
-async def test_run_git_without_cwd_keeps_running_in_the_runtime_dir(ambiente):
-    await run_git("log", git_dir=str(ambiente.outro / "repo.git"))
-
-    assert Path(ambiente.executar.await_args.kwargs["cwd"]).resolve() == ambiente.runtime

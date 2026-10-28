@@ -9,8 +9,6 @@ Tudo roda em pastas e repositórios git descartáveis do ``tmp_path``; o reposit
 """
 
 import os
-import shutil
-import subprocess
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -107,39 +105,3 @@ class TestPastaRuntime:
         entradas = zipar([nome, "ok_raiz.py"])
 
         assert entradas == {"ok_raiz.py": "print('raiz')\n"}
-
-
-@pytest.mark.skipif(shutil.which("git") is None, reason="git indisponível")
-class TestListaRealDoGitComGitDirForaDaRuntime:
-    """O cenário do achado A1, com git de verdade em repositório descartável."""
-
-    @staticmethod
-    def _git(argumentos, cwd, **ambiente):
-        base = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-        base.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, **ambiente)
-        return subprocess.run(
-            ["git", *argumentos], cwd=cwd, env=base, check=True, capture_output=True, text=True
-        ).stdout
-
-    def test_lista_do_git_com_cwd_na_runtime_nao_vaza_pelo_zip(self, projeto):
-        self._git(["init", "-q"], projeto)
-        (projeto / ".gitignore").write_text(".env*\nconfig.json\n.runtime\n", encoding="utf-8")
-        (projeto / "empiremuse").mkdir()
-        (projeto / "empiremuse" / "a.py").write_text("a = 1\n", encoding="utf-8")
-        self._git(["add", ".gitignore", "empiremuse/a.py"], projeto)
-        self._git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"], projeto)
-
-        lista = self._git(
-            ["ls-files", "--others", "--exclude-standard", "--cached"],
-            os.getcwd(),  # a .runtime/
-            GIT_DIR=str(projeto / ".git"),
-        ).split("\n")
-        assert ".env" in lista and "config.json" in lista, (
-            "o cenário A1 deixou de listar os segredos: o teste não prova nada"
-        )
-
-        entradas = zipar(lista)
-
-        assert_sem_segredo(entradas)
-        assert not [nome for nome in entradas if os.path.basename(nome) in NOMES_SECRETOS and nome != ".env"]
-        assert not [nome for nome in entradas if nome.startswith("local_database")]

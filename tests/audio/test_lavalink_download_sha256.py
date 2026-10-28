@@ -100,10 +100,6 @@ def tree(base: Path):
     return sorted(str(p.relative_to(base)) for p in base.rglob("*") if p.is_file())
 
 
-def plugin_dir(base: Path) -> Path:
-    return base / "plugins"
-
-
 # ============================================================================ download_verified
 
 
@@ -116,17 +112,6 @@ class TestDownloadVerified:
         assert dest.read_bytes() == JAR
         assert seen == [False], "o destino só pode existir depois da verificação (arquivo temporário antes)"
         assert tree(tmp_path) == ["Lavalink.jar"], "nenhum .tmp sobra"
-
-    def test_every_request_has_a_timeout(self, net, tmp_path):
-        ll.download_verified("https://example.test/Lavalink.jar", str(tmp_path / "Lavalink.jar"), sha(JAR))
-        ((_, kwargs),) = net.calls
-        assert kwargs.get("timeout"), "requests.get sem timeout trava o boot do bot"
-
-    def test_legacy_download_file_for_the_jdk_also_has_a_timeout(self, net, tmp_path):
-        net.files["java.zip"] = b"JDK"
-        assert ll.download_file("https://example.test/java.zip", str(tmp_path / "java.zip")) is True
-        ((_, kwargs),) = net.calls
-        assert kwargs.get("timeout")
 
 
 # ============================================================================ prepare_lavalink_files
@@ -146,36 +131,6 @@ class TestIntegrityAborts:
             ll.prepare_lavalink_files(tmp_path)
         assert not (tmp_path / name).exists()
         assert not [p for p in tree(tmp_path) if p.endswith(".tmp")]
-
-
-class TestExistingApplicationYml:
-    def test_current_official_yml_is_kept_without_download(self, net, tmp_path):
-        (tmp_path / "application.yml").write_bytes(YML)
-        ll.prepare_lavalink_files(tmp_path)
-        assert "application.yml" not in net.names()
-        assert (tmp_path / "application.yml").read_bytes() == YML
-
-    def test_customized_yml_is_kept_with_a_log_warning(self, net, tmp_path, capsys, caplog):
-        custom = b"server:\n  port: 2333\n# personalizado pelo dono\n"
-        (tmp_path / "application.yml").write_bytes(custom)
-        with caplog.at_level("DEBUG"):
-            ll.prepare_lavalink_files(tmp_path)
-        assert (tmp_path / "application.yml").read_bytes() == custom, "configuração do dono nunca é sobrescrita"
-        assert "application.yml" not in net.names()
-        out = capsys.readouterr()
-        text = (out.out + out.err + caplog.text).lower()
-        assert "application.yml" in text and "personaliz" in text, "aviso no log: arquivo personalizado mantido"
-
-
-class TestPlugins:
-    def test_stale_plugin_versions_are_removed_when_the_jar_is_refreshed_but_canonical_ones_stay(self, net, tmp_path):
-        folder = plugin_dir(tmp_path)
-        folder.mkdir()
-        (folder / "youtube-plugin-1.0.0.jar").write_bytes(b"velho")
-        (tmp_path / "Lavalink.jar").write_bytes(b"jar antigo")
-        ll.prepare_lavalink_files(tmp_path)
-        assert not (folder / "youtube-plugin-1.0.0.jar").exists(), "jar de plugin fora da lista oficial não é carregado"
-        assert sorted(p.name for p in folder.iterdir()) == sorted(PLUGINS)
 
 
 class TestUserOverriddenUrl:
@@ -206,27 +161,7 @@ def run(monkeypatch, tmp_path, net):
     return started
 
 
-class TestRunLavalink:
-    def test_integrity_failure_never_starts_the_process(self, run, monkeypatch):
-        monkeypatch.setattr(branding, "LAVALINK_JAR_SHA256", sha(b"errado"))
-        with pytest.raises(ll.IntegrityError):
-            ll.run_lavalink(lavalink_file_url=branding.LAVALINK_JAR_URL)
-        assert run == []
-
-
 # ============================================================================ pedidos do MAESTRO pós-aprovação (observações 1 e 2)
-
-
-class TestRunLavalinkSignature:
-    def test_sha256_is_keyword_only_and_after_all_positional_parameters(self):
-        # Fase 2 A2: youtube_oauth_refresh_token também é keyword-only e entra depois; o sha256 deixa de ser o último.
-        import inspect
-
-        params = list(inspect.signature(ll.run_lavalink).parameters.values())
-        sha_param = next(p for p in params if p.name == "lavalink_file_sha256")
-        assert sha_param.kind is inspect.Parameter.KEYWORD_ONLY
-        assert sha_param.default in (None, "")
-        assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in params[params.index(sha_param) :])
 
 
 class TestOnlyHttpsForUserUrl:

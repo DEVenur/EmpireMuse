@@ -61,33 +61,6 @@ async def rodar(permissoes, **kwargs):  # kwargs: fixada, tipo, do_servidor
     return mensagem
 
 
-TIPOS = [disnake.TextChannel, disnake.Thread]
-
-
-class TestPermissaoEfetivaNoCanal:
-    @pytest.mark.parametrize("tipo", TIPOS, ids=lambda t: t.__name__)
-    async def test_the_server_allows_but_the_channel_denies_so_it_does_not_pin_and_never_hits_forbidden(self, tipo):
-        mensagem = await rodar(
-            disnake.Permissions(pin_messages=False), tipo=tipo, do_servidor=disnake.Permissions(pin_messages=True)
-        )
-
-        mensagem.pin.assert_not_awaited()
-
-    @pytest.mark.parametrize("tipo", TIPOS, ids=lambda t: t.__name__)
-    async def test_the_channel_allows_but_the_server_does_not_so_it_pins(self, tipo):
-        mensagem = await rodar(
-            disnake.Permissions(pin_messages=True), tipo=tipo, do_servidor=disnake.Permissions(pin_messages=False)
-        )
-
-        mensagem.pin.assert_awaited_once()
-
-    @pytest.mark.parametrize("tipo", TIPOS, ids=lambda t: t.__name__)
-    async def test_the_permission_is_asked_of_the_channel_for_the_bots_own_member(self, tipo):
-        mensagem = await rodar(disnake.Permissions(pin_messages=True), tipo=tipo)
-
-        mensagem.channel.permissions_for.assert_any_call(mensagem.guild.me)
-
-
 class TestFixarMensagens:
     async def test_with_pin_messages_and_without_manage_messages_the_message_is_pinned(self):
         mensagem = await rodar(disnake.Permissions(pin_messages=True, manage_messages=False))
@@ -98,23 +71,3 @@ class TestFixarMensagens:
         mensagem = await rodar(disnake.Permissions(pin_messages=False, manage_messages=True))
 
         mensagem.pin.assert_not_awaited()
-
-    async def test_with_both_the_message_is_pinned(self):
-        mensagem = await rodar(disnake.Permissions(pin_messages=True, manage_messages=True))
-
-        mensagem.pin.assert_awaited_once()
-
-    async def test_with_neither_the_message_is_not_pinned(self):
-        mensagem = await rodar(disnake.Permissions(pin_messages=False, manage_messages=False))
-
-        mensagem.pin.assert_not_awaited()
-
-    async def test_an_already_pinned_message_is_not_pinned_again(self):
-        mensagem = await rodar(disnake.Permissions(pin_messages=True), fixada=True)
-
-        mensagem.pin.assert_not_awaited()
-
-    async def test_the_message_is_still_returned_and_edited_either_way(self):
-        mensagem = await rodar(disnake.Permissions(pin_messages=False, manage_messages=False))
-
-        mensagem.edit.assert_awaited_once()

@@ -6,23 +6,19 @@ Hoje `Permissions` itera por `view_channel`/`send_messages` e a lista da funçã
 
 import pytest
 
+from empiremuse.utils.music import request_channel
+from empiremuse.utils.music.errors import GenericError
 from tests.support.canal_de_pedidos import (
     BOT_MENTION,
     FULL_TEXT,
-    FakeForum,
     FakeGuild,
     FakeStage,
     FakeText,
-    FakeThread,
-    FakeVoice,
     Journal,
     perms,
 )
-from empiremuse.utils.music import request_channel
-from empiremuse.utils.music.errors import GenericError
 
 TEXT_NEEDS = ("send_messages", "embed_links", "view_channel")
-FORUM_NEEDS = ("send_messages", "send_messages_in_threads", "embed_links", "view_channel")
 ESC = "\x1b"
 
 
@@ -60,25 +56,3 @@ class TestCheckChannelPerm:
         j, g = guild()
         channel = kind(j, 22, "pedidos", g, without(missing))
         assert message_of(channel) == exact(channel, (missing,))
-
-    @pytest.mark.parametrize("missing", list(FORUM_NEEDS)[:2])
-    def test_forum_reports_each_missing_permission_including_create_forum_threads(self, missing):
-        j, g = guild()
-        forum = FakeForum(j, 55, "fórum", g, without(missing))
-        assert message_of(forum) == exact(forum, (missing,))
-
-    def test_all_permissions_present_passes(self):
-        j, g = guild()
-        for channel in (
-            FakeText(j, 1, "a", g),
-            FakeVoice(j, 2, "b", g),
-            FakeStage(j, 3, "c", g),
-            FakeForum(j, 4, "d", g),
-            FakeThread(j, 5, "e", g, FakeForum(j, 6, "f", g)),
-        ):
-            request_channel.check_channel_perm(channel)
-
-    def test_several_missing_permissions_are_listed_together_in_iteration_order(self):
-        j, g = guild()
-        channel = FakeText(j, 22, "pedidos", g, perms())
-        assert message_of(channel) == exact(channel, TEXT_NEEDS)

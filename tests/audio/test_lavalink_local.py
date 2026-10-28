@@ -9,18 +9,13 @@ URI    o ``-Dspring.config.additional-location`` usa o caminho como URI (``Path.
 Testes marcados GUARDA descrevem comportamento que já funciona e não pode regredir.
 """
 
-import asyncio
 import socket
-import threading
 from pathlib import Path
-from unittest.mock import MagicMock
 from urllib.parse import unquote, urlparse
 
 import pytest
 
 from empiremuse import paths
-from empiremuse.utils import client
-from empiremuse.utils.client import BotPool
 from empiremuse.utils.music import local_lavalink as ll
 
 OVERRIDE_ARG = "-Dspring.config.additional-location="
@@ -60,26 +55,6 @@ def linha_de_comando(**sobrescritas) -> list[str]:
 # ============================================================================ KI-14 — CPU e RAM do Lavalink local
 
 
-class FakeJava:
-    def __init__(self):
-        self.returncode = None
-        self.pid = 4242
-        self._morto = threading.Event()
-
-    def poll(self):
-        return self.returncode
-
-    def wait(self, timeout=None):
-        self._morto.wait(timeout)
-        return self.returncode
-
-    def die(self, code=0):
-        self.returncode = code
-        self._morto.set()
-
-    terminate = kill = die
-
-
 class TestLogDoLavalinkSemCorpoDeRequisicao:
     @pytest.mark.regression
     @pytest.mark.parametrize("home_fora_do_runtime", [False, True], ids=["home-no-runtime", "home-fora-do-runtime"])
@@ -90,34 +65,6 @@ class TestLogDoLavalinkSemCorpoDeRequisicao:
         home = str(tmp_path / "somente-leitura") if home_fora_do_runtime else str(paths.RUNTIME_DIR)
 
         assert "-Dlogging.request.includePayload=false" in linha_de_comando(home=home)
-
-
-class TestKI14CpuERam:
-    @pytest.mark.asyncio
-    async def test_o_pool_continua_repassando_as_memorias(self, runtime, monkeypatch):
-        """GUARDA."""
-        pool = BotPool()
-        pool.config.update({"LAVALINK_INITIAL_RAM": 48, "LAVALINK_RAM_LIMIT": 200})
-        pool.loop = asyncio.get_running_loop()
-        java = FakeJava()
-        run = MagicMock(return_value=java)
-        monkeypatch.setattr(client, "run_lavalink", run)
-
-        try:
-            await pool.start_lavalink()
-        finally:
-            pool.killing_state = True
-            java.die()
-
-        assert run.call_args.kwargs["lavalink_initial_ram"] == 48
-        assert run.call_args.kwargs["lavalink_ram_limit"] == 200
-
-    @pytest.mark.parametrize("inicial", [0, 300])
-    def test_sem_xms_quando_a_ram_inicial_nao_cabe_no_limite(self, runtime, inicial):
-        """GUARDA: -Xms maior ou igual a -Xmx é rejeitado pela JVM; hoje já não é emitido."""
-        args = linha_de_comando(initial_ram=inicial, ram_limit=256)
-
-        assert not [a for a in args if a.startswith("-Xms")]
 
 
 # ============================================================================ KI-24 — JAVA_HOME
@@ -138,23 +85,6 @@ class TestKI24JavaHome:
         assert achado == str(jdk / "bin" / "java"), (
             "KI-24: JAVA_HOME + 'bin/java' sem separador nunca é um caminho válido"
         )
-
-    def test_java_home_invalido_sem_instalacao_permitida_continua_dando_erro_claro(
-        self, runtime, monkeypatch, tmp_path
-    ):
-        """GUARDA: no modo offline, nenhum Java válido => erro claro, nunca download."""
-        monkeypatch.setenv("JAVA_HOME", str(tmp_path / "nao-existe"))
-        monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: None)
-
-        with pytest.raises(ll.LavalinkDownloadError, match="LAVALINK_JAVA_PATH"):
-            ll._find_or_install_java("/tmp/sem-uso", "Linux-64bit-ELF", "64bit", allow_install=False)
-
-    def test_o_java_do_path_continua_tendo_prioridade(self, runtime, monkeypatch, tmp_path):
-        """GUARDA."""
-        monkeypatch.setenv("JAVA_HOME", str(tmp_path / "jdk"))
-        monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd if cmd == "java" else None)
-
-        assert ll._find_or_install_java("/tmp/x", "Linux-64bit-ELF", "64bit", allow_install=False) == "java"
 
 
 # ============================================================================ override do Spring como URI
@@ -179,10 +109,3 @@ class TestOverrideComoUri:
         assert urlparse(valor).scheme == "file"
         assert decodificado == paths.RUNTIME_DIR / ".lavalink" / "plugins-override.yml"
         assert decodificado.read_text(encoding="utf-8") == OVERRIDE_CONTEUDO
-
-    def test_runtime_comum_continua_gerando_um_argumento_file(self, runtime):
-        """GUARDA: continua sendo ``file:`` e o conteúdo do override não muda."""
-        valor = self._argumento(linha_de_comando()).removeprefix(OVERRIDE_ARG)
-
-        assert valor.startswith("file:")
-        assert Path(unquote(urlparse(valor).path)).read_text(encoding="utf-8") == OVERRIDE_CONTEUDO

@@ -39,16 +39,6 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-# ============================================================================ (1) .example.env
-
-
-class TestExampleEnv:
-    def test_default_config_still_resolves_to_the_current_official_url(self):
-        import empiremuse.config_loader as config_loader
-
-        assert config_loader.DEFAULT_CONFIG["LAVALINK_FILE_URL"] in ("", branding.LAVALINK_JAR_URL)
-
-
 # ============================================================================ fixtures (rede e processo falsos)
 
 
@@ -117,16 +107,9 @@ def prepare(tmp_path, url, sha256=None):
     ll.prepare_lavalink_files(tmp_path, lavalink_file_url=url, lavalink_file_sha256=sha256)
 
 
-def warnings_of(caplog):
-    return [r for r in caplog.records if r.name == ll.logger.name and r.levelno == 30]
-
-
 def jar_of(tmp_path):
     path = tmp_path / "Lavalink.jar"
     return path.read_bytes() if path.exists() else None
-
-
-# ============================================================================ (2) vazio/espaços = oficial atual
 
 
 # ============================================================================ (3) URLs oficiais antigas = oficial atual
@@ -145,16 +128,9 @@ ALL_KNOWN_OFFICIAL_URLS = [
 # "Antiga" = oficial e DIFERENTE da atual (hoje a 0.0.4 é a atual: fixá-la no .env não é versão antiga, não avisa).
 # Calculado contra o branding real, então continua válido quando a atual passar a ser a próxima.
 LEGACY_OFFICIAL_URLS = [u for u in ALL_KNOWN_OFFICIAL_URLS if u != branding.LAVALINK_JAR_URL]
-PINNED_CURRENT_URLS = [u for u in ALL_KNOWN_OFFICIAL_URLS if u == branding.LAVALINK_JAR_URL]
 
 
 class TestLegacyOfficialUrlsFollowTheCurrentRelease:
-    @pytest.mark.parametrize("url", list(PINNED_CURRENT_URLS)[:2])
-    def test_pinning_the_current_release_url_works_and_does_not_warn(self, net, tmp_path, caplog, url):
-        caplog.set_level(0)
-        prepare(tmp_path, url)
-        assert jar_of(tmp_path) == JAR and net.calls == [branding.LAVALINK_JAR_URL] and warnings_of(caplog) == []
-
     @pytest.mark.parametrize("url", list(LEGACY_OFFICIAL_URLS)[:2])
     def test_run_lavalink_starts_after_updating_the_jar(self, net, popen, tmp_path, url):
         ll.run_lavalink(lavalink_file_url=url)

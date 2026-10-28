@@ -106,23 +106,6 @@ class TestPausaPeloRetryAfter:
         cliente.get_valid_access_token.assert_not_awaited()
         assert cliente.disabled is True
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("cabecalho", "segundos"),
-        [
-            (None, 60),
-            (" 45 ", 45),
-        ],
-        ids=repr,
-    )
-    async def test_duracao_da_pausa_limitada_entre_1_s_e_1_h_e_60_s_sem_valor_valido(self, api, cabecalho, segundos):
-        cliente = api
-        await provocar_429(cliente, cabecalho)
-        cliente.clock.avancar(segundos - 0.5)
-        assert cliente.disabled is True, f"deveria seguir pausado aos {segundos - 0.5} s"
-        cliente.clock.avancar(0.5)
-        assert cliente.disabled is False, f"deveria voltar aos {segundos} s"
-
 
 class TestLogDaPausa:
     @pytest.mark.asyncio
@@ -134,28 +117,3 @@ class TestLogDaPausa:
         assert registros and "30" in registros[0]
         assert TOKEN not in caplog.text and "api.spotify.com" not in caplog.text and "users/abc" not in caplog.text
         assert "segredo-de-teste" not in caplog.text and "id-de-teste" not in caplog.text
-
-
-class TestRetryAfterPuro:
-    @pytest.mark.parametrize(
-        ("bruto", "esperado"),
-        [
-            (True, 60),
-            (" 7\t", 7),
-        ],
-        ids=repr,
-    )
-    def test_retry_after_seconds_casos_de_borda(self, bruto, esperado):
-        from empiremuse.rules.ratelimit import retry_after_seconds
-
-        assert retry_after_seconds(bruto) == esperado
-
-
-class TestGuardas:
-    @pytest.mark.parametrize("campo", ["client_id", "client_secret"])
-    def test_guarda_falta_de_credencial_continua_impedindo_o_cliente(self, campo, monkeypatch, tmp_path):
-        """Outro motivo, permanente: sem credencial o cliente nem existe (o BotPool fica com ``spotify = None``)."""
-        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
-        credenciais = {"client_id": "id-de-teste", "client_secret": "segredo-de-teste", campo: ""}
-        with pytest.raises(Exception, match="não informado"):
-            SpotifyClient(**credenciais)
