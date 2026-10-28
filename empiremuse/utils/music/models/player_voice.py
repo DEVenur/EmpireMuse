@@ -556,7 +556,7 @@ class PlayerVoiceMixin:
             await self._push_voice_status(text)
             return
         self._voice_status_pending_text = text
-        self.voice_status_pending = self.bot.loop.create_task(self._flush_voice_status())
+        self.voice_status_pending = asyncio.get_running_loop().create_task(self._flush_voice_status())
 
     async def _flush_voice_status(self) -> None:
         """A espera do throttle e do bucket mora aqui, nunca no caminho de quem chamou ``update_stage_topic``."""
@@ -586,7 +586,7 @@ class PlayerVoiceMixin:
             return
         task = self.voice_status_reapply
         if task is None or task.done():
-            self.voice_status_reapply = self.bot.loop.create_task(self._voice_status_reapply_loop())
+            self.voice_status_reapply = asyncio.get_running_loop().create_task(self._voice_status_reapply_loop())
 
     async def _voice_status_reapply_loop(self) -> None:
         """Reenvia o status a cada ``VOICE_STATUS_REAPPLY_INTERVAL`` s sem envio (edição manual do canal); uma tarefa por player."""

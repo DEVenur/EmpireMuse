@@ -117,7 +117,9 @@ class LavalinkPlayer(
         self.stage_title_event = False
         self.stage_title_template: str = kwargs.pop("stage_title_template", None) or DEFAULT_VOICE_TEMPLATE
         self.last_stage_title = ""
-        self.voice_status_permanent = True  # cópia do permanente do servidor; o ``apply_permanent_voice_status`` a atualiza
+        self.voice_status_permanent = (
+            True  # cópia do permanente do servidor; o ``apply_permanent_voice_status`` a atualiza
+        )
         self.voice_status_pending: asyncio.Task | None = None  # o envio guardado do throttle (ver ``player_voice``)
 
         self.channel_purged = False
