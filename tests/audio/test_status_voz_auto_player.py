@@ -834,3 +834,67 @@ class TestPalcoEmSessao:
         await executar(relogio, player.update_stage_topic())
 
         canal.create_instance.assert_not_awaited()
+
+
+# ============================================================================ V-145-1 — desligar ou mover durante o 1º PUT em voo não deixa o status preso
+
+
+def put_de(bot: BotDeVoz, canal: int) -> list[str | None]:
+    return [p.status for p in bot.puts if p.canal == canal]
+
+
+class TestPutEmVooEDesligar:
+    async def test_turning_it_off_while_the_first_put_is_in_flight_clears_the_channel_when_it_lands(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+        bot.reter_canal = ID_DO_CANAL
+        envio = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await assentar()
+        assert put_de(bot, ID_DO_CANAL) == ["Musica"] and not envio.done()  # o texto está no ar, preso
+
+        await executar(relogio, player.disable_voice_status())
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        assert put_de(bot, ID_DO_CANAL) == ["Musica", None], "o status ficou preso no canal"
+        assert player.last_stage_title == "" and player.stage_title_event is False
+
+    async def test_a_second_disable_after_it_landed_adds_nothing(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        bot.reter_canal = ID_DO_CANAL
+        envio = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await assentar()
+        await executar(relogio, player.disable_voice_status())
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        await executar(relogio, player.disable_voice_status())
+        await relogio.avancar(10)
+
+        assert put_de(bot, ID_DO_CANAL) == ["Musica", None]
+
+    async def test_without_turning_it_off_the_normal_flow_is_unchanged(self, relogio: RelogioFalso) -> None:
+        player, bot = jogador()
+        bot.reter_canal = ID_DO_CANAL
+        envio = asyncio.ensure_future(player.apply_permanent_voice_status(cfg(modelo="{track.title}")))
+        await assentar()
+
+        bot.porta_texto.set()
+        await envio
+        await relogio.avancar(10)
+
+        assert put_de(bot, ID_DO_CANAL) == ["Musica"]
+        assert player.last_stage_title == "Musica" and player.stage_title_event is True
+
+    async def test_turning_it_off_for_a_channel_that_never_got_a_text_sends_nothing(
+        self, relogio: RelogioFalso
+    ) -> None:
+        player, bot = jogador()
+
+        await executar(relogio, player.disable_voice_status())
+        await relogio.avancar(10)
+
+        assert bot.puts == []
