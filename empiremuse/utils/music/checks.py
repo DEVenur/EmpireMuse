@@ -804,6 +804,33 @@ def can_connect(
         raise GenericError(f"**Há outro bot conectado no canal:** <#{channel.id}>")
 
 
+# O disnake 2.12 não tem o flag nomeado de "Definir status do canal de voz".
+SET_VOICE_CHANNEL_STATUS = 1 << 48
+VOICE_STATUS_PERMISSION = "`Definir status do canal de voz`"
+MAX_CHANNELS_IN_NOTICE = 5
+
+
+def can_set_voice_status(perms: disnake.Permissions) -> bool:
+    return perms.administrator or bool(perms.value & SET_VOICE_CHANNEL_STATUS)
+
+
+def voice_status_blocked_channel(guild: disnake.Guild) -> Optional[disnake.VoiceChannel]:
+    """O canal de voz do bot em ``guild`` quando ele não pode definir o status ali (override do canal incluso); o palco não conta."""
+    me = guild.me
+    channel = me.voice.channel if me and me.voice else None
+    if isinstance(channel, disnake.VoiceChannel) and not can_set_voice_status(channel.permissions_for(me)):
+        return channel
+    return None
+
+
+def mention_channels(channels: list[disnake.abc.GuildChannel]) -> str:
+    """Menções sem repetição, até ``MAX_CHANNELS_IN_NOTICE``; o resto vira "e mais N"."""
+    unique = list(dict.fromkeys(c.mention for c in channels))
+    shown = ", ".join(unique[:MAX_CHANNELS_IN_NOTICE])
+    rest = len(unique) - MAX_CHANNELS_IN_NOTICE
+    return f"{shown} e mais {rest}" if rest > 0 else shown
+
+
 async def check_deafen(me: disnake.Member = None):
     if me.voice.deaf:
         return True

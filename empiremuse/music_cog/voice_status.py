@@ -10,6 +10,7 @@ from empiremuse.utils.music.errors import (
     DiffVoiceChannel,
     NoPlayer,
 )
+from empiremuse.utils.music.checks import VOICE_STATUS_PERMISSION, voice_status_blocked_channel
 from empiremuse.utils.music.interactions import (
     SetStageTitle,
 )
@@ -105,6 +106,12 @@ class VoiceStatusMixin:
 
             if author.id not in guild.me.voice.channel.voice_states:
                 raise DiffVoiceChannel()
+
+            if blocked := voice_status_blocked_channel(player.guild):
+                raise GenericError(
+                    f"**Não tenho a permissão {VOICE_STATUS_PERMISSION} em {blocked.mention}.** "
+                    "Peça a um administrador para liberá-la."
+                )
 
             await inter.response.defer()
 
