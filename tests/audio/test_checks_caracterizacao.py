@@ -236,6 +236,12 @@ class TestCheckYtCooldown:
 
 
 class TestCheckStageTopic:
+    @pytest.fixture(autouse=True)
+    def _relogio_congelado(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``started_ago(2)`` contra a trava de 5 s: sem congelar o relógio, uma pausa do runner passa dos 5 s e o teste vira flaky."""
+        agora = disnake.utils.utcnow()
+        monkeypatch.setattr(disnake.utils, "utcnow", lambda: agora)
+
     def stage_player(self, channel_spec, **kwargs):
         channel = MagicMock(spec=channel_spec)
         me = SimpleNamespace(voice=SimpleNamespace(channel=channel))
