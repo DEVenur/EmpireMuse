@@ -12,21 +12,36 @@ import threading
 import time
 from collections.abc import Callable
 
+from empiremuse.logs.redact import redact, sanitize_value
 from empiremuse.rules.error_code import ERROR_CODE_RE
 
 AGGREGATE_WINDOW = 60.0
 MAX_KEYS = 500
 MAX_TEMPLATE_KEY_CHARS = 256
 MAX_CODED_REPEATS = 50
+MAX_AGGREGATE_KEY_CHARS = 64
+MAX_AGGREGATE_KEY_INPUT_CHARS = 1024  # só limita o custo de redigir; a chave guardada tem MAX_AGGREGATE_KEY_CHARS
 MAX_EXC_SUMMARY_CHARS = 300
 
-type _AggregateKey = tuple[str, int, str, str | None, str | None, str | None]
+type _AggregateKey = tuple[str, int, str, str | None, str | None, str | None, str | None]
 
 
 def _normalize_template(raw: object) -> str:
     if isinstance(raw, str):
         return raw[:MAX_TEMPLATE_KEY_CHARS]
     return f"<{type(raw).__qualname__}>"
+
+
+def _normalize_aggregate_key(raw: object) -> str | None:
+    """Chave opcional que o produtor passa em ``extra={"aggregate_key": ...}`` para separar problemas de mesmo template.
+
+    Só ``str`` não vazia (saneada, redigida e só então cortada); outro tipo vale como ausente. Como a chave de um registro nunca pode
+    guardar segredo cru, a redação vem ANTES do corte (um segredo que atravessa o limite não deixa fragmento). Só dado de baixa
+    cardinalidade (identificador de nó, código), nunca ID de servidor, canal ou usuário. Nunca é emitida.
+    """
+    if isinstance(raw, str) and raw:
+        return redact(sanitize_value(raw[:MAX_AGGREGATE_KEY_INPUT_CHARS]))[:MAX_AGGREGATE_KEY_CHARS]
+    return None
 
 
 def _last_exc_line(exc_text: object) -> str:
@@ -120,6 +135,7 @@ class RepeatAggregator(logging.Filter):
             exc_text = getattr(record, "exc_text", None)
             tb_fp = getattr(record, "empiremuse_tb_fp", None)
             template_fp = getattr(record, "empiremuse_template_fp", None)
+            aggregate_key = _normalize_aggregate_key(getattr(record, "aggregate_key", None))
             error_code = _valid_error_code(record)
             key: _AggregateKey = (
                 record.name,
@@ -128,6 +144,7 @@ class RepeatAggregator(logging.Filter):
                 getattr(record, "empiremuse_exc_type", None),
                 tb_fp if isinstance(tb_fp, str) else None,
                 template_fp if isinstance(template_fp, str) else None,
+                aggregate_key,
             )
             to_emit: list[logging.LogRecord] = []
             with self._lock:

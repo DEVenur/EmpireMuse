@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
+from empiremuse.logs.context import guild_extra
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.skin_store import load_custom_skins
@@ -129,7 +130,7 @@ class PlayerLifecycleMixin:
             except disnake.NotFound:
                 invite = None
             except Exception:
-                logger.exception("Falha em create_player")
+                logger.exception("Falha em create_player", extra=guild_extra(vc.guild.id if vc else None))
             else:
                 try:
                     if invite.channel.id != vc.id:
@@ -147,6 +148,7 @@ class PlayerLifecycleMixin:
                     "Removendo invite: %s%s",
                     invite,
                     f" (servidor {vc.guild.id}, canal {vc.id})" if vc else "",
+                    extra=guild_extra(vc.guild.id if vc else None),
                 )
                 await self.bot.update_global_data(inter.guild_id, global_data, db_name=DBModel.guilds)
 
@@ -242,7 +244,7 @@ class PlayerLifecycleMixin:
             except TypeError:
                 player.message = None
             except Exception:
-                logger.exception("Falha em create_player")
+                logger.exception("Falha em create_player", extra=guild_extra(getattr(player, "guild_id", None)))
                 if (
                     hasattr(player.text_channel, "parent")
                     and isinstance(player.text_channel.parent, disnake.ForumChannel)
