@@ -28,9 +28,6 @@ _ELLIPSIS = "..."
 _CUSTOM_EMOJI = re.compile(r"<a?:\w+:\d+>")
 _PLACEHOLDER = re.compile("|".join(re.escape(placeholder) for placeholder in VOICE_PLACEHOLDERS))
 _LINE_BREAK = re.compile(r"\r\n|[\r\n  ]")
-_DISCORD_TOKEN_OPEN = re.compile(r"<(?=[@#/]|[A-Za-z]*:)")  # <@…> <@&…> <#…> </cmd:…> <:e:…> <a:e:…> <t:…> <id:…>
-_AT_IN_TOKEN = re.compile(r"(?<=‹)@")
-_AT_MASS_MENTION = re.compile(r"@(?=everyone|here)")
 _MARKDOWN = re.compile(r"[_\\~|*`\[]")
 
 
@@ -68,11 +65,11 @@ def voice_status_value(raw: object) -> str:
         return ""
     text = _LINE_BREAK.sub(" ", raw)
     text = "".join(char for char in text if not has_control_or_format(char))
-    text = _DISCORD_TOKEN_OPEN.sub("‹", text)  # U+2060 seria Cf; o "‹" e o "＠" são texto comum
-    text = _AT_IN_TOKEN.sub("＠", text)
-    text = _AT_MASS_MENTION.sub("＠", text)
+    # Todo "<" e todo "@" (não só os de tokens completos): os valores são colados por um modelo de admin e dois pedaços
+    # inertes não podem formar um token (``<@&1>``, ``<a:n:id>``, ``@everyone``) na junção. U+2060 seria Cf; "‹" e "＠" são texto.
+    text = text.replace("<", "‹").replace("@", "＠")
     text = _MARKDOWN.sub(lambda match: "\\" + match.group(), text)
-    return text.replace("://", ":／／")  # o escape de markdown não pega uma URL nua (https://discord.gift/…)
+    return text.replace("//", "／／")  # o escape de markdown não pega uma URL nua, nem "https:" + "//x" colados
 
 
 def render_voice_status(template: str, values: Mapping[str, str]) -> str:
