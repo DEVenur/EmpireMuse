@@ -302,6 +302,8 @@ class PlayerVoiceMixin:
         try:
             await request
         except disnake.Forbidden as e:
+            if not self.stage_title_event:
+                return False  # outro envio simultâneo já desligou e avisou
             self.stage_title_event = False
             self.set_command_log(
                 emoji="❌",
