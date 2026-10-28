@@ -293,11 +293,14 @@ class TestMoverDeCanal:
 async def retomar_com(
     monkeypatch: pytest.MonkeyPatch,
     saida: dict[str, Any],
-    doc: dict[str, Any],
+    doc: dict[str, Any] | Exception,
     *,
     portao: asyncio.Event | None = None,
 ) -> SimpleNamespace:
-    """Retoma a sessão com o ``resume_player`` REAL; com ``portao``, o apply de cada player fica preso nele até o teste soltar."""
+    """Retoma a sessão com o ``resume_player`` REAL; com ``portao``, o apply de cada player fica preso nele até o teste soltar.
+
+    ``doc`` exceção: a leitura do banco (``get_global_data``) levanta essa exceção.
+    """
     from tests.persistence.test_sessao_retomada_sem_voice_state import JogadorRetomado
 
     chamadas: list[tuple[Any, bool]] = []
@@ -313,6 +316,8 @@ async def retomar_com(
     cog, _no, criados = montar(4)
 
     async def get_global_data(*_a: Any, **_k: Any) -> dict[str, Any]:
+        if isinstance(doc, Exception):
+            raise doc
         return doc
 
     cog.bot.get_global_data = get_global_data
@@ -364,6 +369,37 @@ class TestRetomada:
 
         ((cfg, jitter),) = r.chamadas
         assert cfg.permanent is True and jitter is True
+
+
+class TestRetomadaComBancoFora:
+    """Leitura do permanente falhou: a retomada segue, mas não finge que o servidor escolheu o padrão (nada é aplicado nem avisado)."""
+
+    async def test_the_resume_goes_on_but_applies_nothing_and_keeps_the_default_flag_off(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        dados = await sessao_gravada()
+        falha = RuntimeError("banco fora")
+
+        with caplog.at_level("ERROR"):
+            r = await retomar_com(monkeypatch, dados, falha)
+
+        assert r.terminou and r.jogador is not None, "a retomada não pode parar por causa do banco"
+        assert r.jogador.loop == dados["loop"], "a retomada parou antes de restaurar o resto da sessão"
+        assert r.chamadas == [], "aplicou o status com o padrão sem ter lido o banco"
+        assert getattr(r.jogador, "voice_status_apply", None) is None
+        assert getattr(r.jogador, "voice_status_saved_default", False) is False, (
+            "o aviso de padrão ligado seria mostrado"
+        )
+        assert any(rec.exc_info and rec.exc_info[1] is falha for rec in caplog.records), "a falha não foi logada"
+
+    async def test_with_the_read_ok_the_resume_still_applies_the_permanent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        r = await retomar_com(monkeypatch, await sessao_gravada(), {})
+
+        ((cfg, jitter),) = r.chamadas
+        assert cfg.permanent is True and jitter is True
+        assert r.jogador.voice_status_saved_default is True
 
 
 class TestApplyNaoPrendeAQuemChama:
