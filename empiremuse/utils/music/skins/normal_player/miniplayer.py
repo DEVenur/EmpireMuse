@@ -7,6 +7,7 @@ from empiremuse.utils.branding import asset_url
 from empiremuse.utils.music.converters import get_button_style, music_source_image, md_bracketed, md_link, md_code
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class MiniPlayer:
@@ -61,10 +62,16 @@ class MiniPlayer:
         data["embeds"].append(embed)
 
         data["components"] = [
-            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop, style=disnake.ButtonStyle.red),
-            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "playpause"),
+                custom_id=PlayerControls.pause_resume,
+                style=get_button_style(player.paused),
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop, style=disnake.ButtonStyle.red
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
             disnake.ui.Button(emoji="🤍", custom_id=PlayerControls.add_favorite),
         ]
 

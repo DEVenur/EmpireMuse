@@ -15,6 +15,7 @@ from empiremuse.utils.music.converters import (
 )
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class MiniSkin:
@@ -109,12 +110,18 @@ class MiniSkin:
         data["embeds"] = [embed_queue, embed] if embed_queue else [embed]
 
         data["components"] = [
-            disnake.ui.Button(emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)),
-            disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-            disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-            disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
             disnake.ui.Button(
-                emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)
+                emoji=app_emoji(player.bot, "playpause"),
+                custom_id=PlayerControls.pause_resume,
+                style=get_button_style(player.paused),
+            ),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop),
+            disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
+            disnake.ui.Button(
+                emoji=app_emoji(player.bot, "music_queue"),
+                custom_id=PlayerControls.queue,
+                disabled=not (player.queue or player.queue_autoplay),
             ),
             disnake.ui.Select(
                 placeholder="Mais opções:",
@@ -125,7 +132,7 @@ class MiniSkin:
                 options=[
                     disnake.SelectOption(
                         label="Adicionar música",
-                        emoji="➕",
+                        emoji=app_emoji(player.bot, "add_music"),
                         value=PlayerControls.add_song,
                         description="Adicionar uma música/playlist na fila.",
                     ),
@@ -207,7 +214,7 @@ class MiniSkin:
             data["components"][5].options.append(
                 disnake.SelectOption(
                     label="Mini-fila do player",
-                    emoji="📑",
+                    emoji=app_emoji(player.bot, "music_queue"),
                     value=PlayerControls.miniqueue,
                     description="Ativar/Desativar a mini-fila do player.",
                 )

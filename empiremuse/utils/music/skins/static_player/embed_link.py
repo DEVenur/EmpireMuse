@@ -9,6 +9,7 @@ from empiremuse.utils.branding import asset_url
 from empiremuse.utils.music.converters import time_format, fix_characters, get_button_style, md_link, md_bracketed
 from empiremuse.utils.music.models import LavalinkPlayer
 from empiremuse.utils.others import PlayerControls
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class EmbedLinkStaticSkin:
@@ -36,11 +37,7 @@ class EmbedLinkStaticSkin:
         else:
             duration_txt = f"\n> -# ⏰ **⠂Duração:** `{time_format(player.current.duration)}`"
 
-        title = (
-            fix_characters(player.current.title)
-            if not player.current.uri
-            else md_link(player.current.title, player.current.uri, code=False)
-        )
+        title = md_link(player.current.title, player.current.uri, code=False)
 
         if player.paused:
             txt += f"\n> ### ⏸️ ⠂Em Pausa: {title}\n{duration_txt}"
@@ -111,13 +108,17 @@ class EmbedLinkStaticSkin:
             "embeds": [],
             "components": [
                 disnake.ui.Button(
-                    emoji="⏯️", custom_id=PlayerControls.pause_resume, style=get_button_style(player.paused)
+                    emoji=app_emoji(player.bot, "playpause"),
+                    custom_id=PlayerControls.pause_resume,
+                    style=get_button_style(player.paused),
                 ),
-                disnake.ui.Button(emoji="⏮️", custom_id=PlayerControls.back),
-                disnake.ui.Button(emoji="⏹️", custom_id=PlayerControls.stop),
-                disnake.ui.Button(emoji="⏭️", custom_id=PlayerControls.skip),
+                disnake.ui.Button(emoji=app_emoji(player.bot, "backward"), custom_id=PlayerControls.back),
+                disnake.ui.Button(emoji=app_emoji(player.bot, "stop"), custom_id=PlayerControls.stop),
+                disnake.ui.Button(emoji=app_emoji(player.bot, "skip"), custom_id=PlayerControls.skip),
                 disnake.ui.Button(
-                    emoji="📑", custom_id=PlayerControls.queue, disabled=not (player.queue or player.queue_autoplay)
+                    emoji=app_emoji(player.bot, "music_queue"),
+                    custom_id=PlayerControls.queue,
+                    disabled=not (player.queue or player.queue_autoplay),
                 ),
                 disnake.ui.Select(
                     placeholder="Mais opções:",
@@ -128,7 +129,7 @@ class EmbedLinkStaticSkin:
                     options=[
                         disnake.SelectOption(
                             label="Adicionar música",
-                            emoji="➕",
+                            emoji=app_emoji(player.bot, "add_music"),
                             value=PlayerControls.add_song,
                             description="Adicionar uma música/playlist na fila.",
                         ),

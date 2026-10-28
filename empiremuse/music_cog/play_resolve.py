@@ -220,7 +220,7 @@ class PlayResolveMixin:
                 query = info["entries"][0]["url"]
 
             else:
-                emoji, platform = music_source_emoji_url(query)
+                emoji, platform = music_source_emoji_url(query, self.bot)
 
                 view = SelectInteraction(
                     user=inter.author,
@@ -448,7 +448,7 @@ class PlayResolveMixin:
             user=inter.author,
             timeout=45,
             buttons=[
-                disnake.ui.Button(label=ms.title(), custom_id=ms, emoji=music_source_emoji(ms))
+                disnake.ui.Button(label=ms.title(), custom_id=ms, emoji=music_source_emoji(ms, self.bot))
                 for ms in sorted(music_sources)
             ],
         )

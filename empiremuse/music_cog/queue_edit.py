@@ -30,6 +30,7 @@ from empiremuse.music_cog.shared import (
     queue_manipulation_cd,
     remove_mc,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class QueueEditMixin:
@@ -236,7 +237,11 @@ class QueueEditMixin:
                 txt,
                 emoji="🔃",
                 components=[
-                    disnake.ui.Button(emoji="▶️", label="Tocar agora", custom_id=PlayerControls.embed_forceplay),
+                    disnake.ui.Button(
+                        emoji=app_emoji(inter.bot, "play"),
+                        label="Tocar agora",
+                        custom_id=PlayerControls.embed_forceplay,
+                    ),
                 ],
             )
 

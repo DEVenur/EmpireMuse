@@ -22,6 +22,7 @@ from empiremuse.utils.others import (
     song_request_buttons,
     get_source_emoji_cfg,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,9 @@ class PlayMenusMixin:
             )
             opts.append(
                 disnake.SelectOption(
-                    label="Adicionar música recente", value=">> [📑 Músicas recentes 📑] <<", emoji="📑"
+                    label="Adicionar música recente",
+                    value=">> [📑 Músicas recentes 📑] <<",
+                    emoji=app_emoji(self.bot, "music_queue"),
                 )
             )
 
@@ -220,7 +223,7 @@ class PlayMenusMixin:
                 if update:
                     await self.bot.update_global_data(inter.author.id, user_data, db_name=DBModel.users)
 
-                emoji, platform = music_source_emoji_url(v["url"])
+                emoji, platform = music_source_emoji_url(v["url"], self.bot)
 
                 fav_opts.append(
                     {
@@ -238,7 +241,7 @@ class PlayMenusMixin:
             query = ""
             menu = "favs"
             for k, v in user_data["fav_links"].items():
-                emoji, platform = music_source_emoji_url(v)
+                emoji, platform = music_source_emoji_url(v, self.bot)
                 fav_opts.append(
                     {
                         "url": v,
@@ -261,7 +264,7 @@ class PlayMenusMixin:
             query = ""
             menu = "latest"
             for i, d in enumerate(user_data["last_tracks"]):
-                emoji, platform = music_source_emoji_url(d["url"])
+                emoji, platform = music_source_emoji_url(d["url"], self.bot)
                 fav_opts.append(
                     {
                         "url": d["url"],
@@ -291,7 +294,7 @@ class PlayMenusMixin:
                             label=fix_characters(name, 45),
                             value=f"> pin: {name}",
                             description="[📌 Favorito do servidor 📌]",
-                            emoji=music_source_emoji_url(v["url"])[0],
+                            emoji=music_source_emoji_url(v["url"], self.bot)[0],
                         ),
                     }
                 )

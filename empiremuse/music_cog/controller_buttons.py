@@ -44,7 +44,7 @@ def _pc_modal_fav_options(self, req):
         fav_opts = []
 
         for k, v in list(user_data["fav_links"].items())[:25]:
-            emoji, platform = music_source_emoji_url(v)
+            emoji, platform = music_source_emoji_url(v, self.bot)
             fav_opts.append(
                 disnake.SelectOption(
                     label=fix_characters(k, 35),
@@ -81,7 +81,7 @@ async def _pc_modal_integration_options(self, req):
                 user_data["integration_links"][k] = v
                 update = True
 
-            emoji, platform = music_source_emoji_url(v["url"])
+            emoji, platform = music_source_emoji_url(v["url"], self.bot)
 
             integration_opts.append(
                 disnake.SelectOption(

@@ -39,6 +39,7 @@ from empiremuse.music_cog.shared import (
     remove_mc,
     queue_manipulation_cd,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 def _qm_filters(self, req):
@@ -342,7 +343,9 @@ async def _qm_move(self, req):
     txt = req.txt
 
     components = [
-        disnake.ui.Button(emoji="▶️", label="Tocar agora", custom_id=PlayerControls.embed_forceplay),
+        disnake.ui.Button(
+            emoji=app_emoji(inter.bot, "play"), label="Tocar agora", custom_id=PlayerControls.embed_forceplay
+        ),
     ]
 
     if indexes:

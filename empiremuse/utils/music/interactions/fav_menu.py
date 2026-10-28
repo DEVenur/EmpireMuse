@@ -189,7 +189,8 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         elif self.mode == ViewMode.guild_fav_manager:
             try:
-                url = md_link(self.current, self.guild_data["player_controller"]["fav_links"][self.current])
+                item = self.guild_data["player_controller"]["fav_links"][self.current]
+                url = md_link(self.current, item["url"] if isinstance(item, dict) else item)
                 del self.guild_data["player_controller"]["fav_links"][self.current]
             except KeyError:
                 try:
@@ -213,7 +214,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
         elif self.mode == ViewMode.integrations_manager:
             item = self.data["integration_links"][self.current]
 
-            if isinstance(inter, dict):
+            if isinstance(item, dict):
                 item = item["url"]
 
             try:

@@ -28,6 +28,7 @@ from empiremuse.utils.others import (
     PlayerControls,
     update_inter,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -633,12 +634,14 @@ class PlayEnqueueMixin:
                 components = [
                     disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
                     disnake.ui.Button(
-                        emoji="▶️",
+                        emoji=app_emoji(self.bot, "play"),
                         label="Tocar" + (" agora" if (player.current and player.current.autoplay) else ""),
                         custom_id=PlayerControls.embed_forceplay,
                     ),
                     disnake.ui.Button(
-                        emoji="➕", label="Adicionar na fila", custom_id=PlayerControls.embed_enqueue_track
+                        emoji=app_emoji(self.bot, "add_music"),
+                        label="Adicionar na fila",
+                        custom_id=PlayerControls.embed_enqueue_track,
                     ),
                 ]
 
@@ -650,7 +653,9 @@ class PlayEnqueueMixin:
                 components = [
                     disnake.ui.Button(emoji="💗", label="Favoritar", custom_id=PlayerControls.embed_add_fav),
                     disnake.ui.Button(
-                        emoji="➕", label="Adicionar na fila", custom_id=PlayerControls.embed_enqueue_playlist
+                        emoji=app_emoji(self.bot, "add_music"),
+                        label="Adicionar na fila",
+                        custom_id=PlayerControls.embed_enqueue_playlist,
                     ),
                 ]
             else:

@@ -41,6 +41,7 @@ from empiremuse.utils.music.models.playback_steps import (
     _pn_start,
 )
 from empiremuse.utils.music.models.step_state import ProcessNextState
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class PlayerPlaybackMixin:
@@ -203,7 +204,7 @@ class PlayerPlaybackMixin:
     async def process_idle_message(self):
         controller_opts = [
             disnake.SelectOption(
-                emoji="➕",
+                emoji=app_emoji(self.bot, "add_music"),
                 value=PlayerControls.add_song,
                 label="Adicionar música",
                 description=f"Tocar nova música/playlist.",
@@ -219,7 +220,7 @@ class PlayerPlaybackMixin:
             controller_opts.extend(
                 [
                     disnake.SelectOption(
-                        emoji="⏮️",
+                        emoji=app_emoji(self.bot, "backward"),
                         value=PlayerControls.back,
                         label="Voltar",
                         description=f"Ouvir novamente: {play_txt[:31]}",

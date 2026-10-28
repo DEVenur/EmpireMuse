@@ -49,6 +49,7 @@ from empiremuse.utils.music.request_channel import (
     find_request_channel,
     reset_request_channel,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -512,7 +513,7 @@ class MusicSettings(commands.Cog):
                     disnake.ui.Button(
                         label="Criar canal de palco",
                         custom_id=f"stage_channel_{id_}",
-                        emoji="🎙️",
+                        emoji=app_emoji(interaction.bot, "stagechannel"),
                         disabled=not guild.me.guild_permissions.manage_channels,
                     ),
                 )

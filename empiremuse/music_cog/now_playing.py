@@ -30,6 +30,7 @@ from empiremuse.utils.others import (
 from empiremuse.music_cog.shared import (
     DESC_PREFIX as desc_prefix,
 )
+from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
 
 class NowPlayingMixin:
@@ -206,7 +207,11 @@ class NowPlayingMixin:
 
                 if qsize > 3:
                     components.append(
-                        disnake.ui.Button(custom_id=PlayerControls.queue, label="Ver lista completa", emoji="📑")
+                        disnake.ui.Button(
+                            custom_id=PlayerControls.queue,
+                            label="Ver lista completa",
+                            emoji=app_emoji(inter.bot, "music_queue"),
+                        )
                     )
 
             elif player.queue:
