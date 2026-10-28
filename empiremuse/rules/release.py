@@ -131,6 +131,19 @@ def changelog_sections(text: str, current: Version, target: Version, max_chars: 
     return result
 
 
+def changelog_section(text: str, version: Version, max_chars: int) -> str:
+    """O bloco da ``version`` no changelog (``""`` se não houver), cortado em fim de linha com ``…`` acima de ``max_chars``."""
+    body = next((block for found, block in _changelog_blocks(text) if found == version), "")
+    if len(body) <= max_chars:
+        return body
+    if max_chars <= len(ELLIPSIS):
+        return ELLIPSIS[:max_chars]
+    kept = body[: max_chars - len(ELLIPSIS)]
+    if body[len(kept)] != "\n":
+        kept = kept.rpartition("\n")[0]
+    return kept.rstrip() + ELLIPSIS
+
+
 def parse_update_target(text: str) -> tuple[Version, str] | None:
     """``X.Y.Z@sha256:<64hex>`` estrito → ``(versão, digest)``; qualquer outra coisa → ``None``."""
     match = _UPDATE_TARGET.fullmatch(text)

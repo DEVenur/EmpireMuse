@@ -26,7 +26,7 @@ from empiremuse.config_loader import DEFAULT_CONFIG, load_config
 from empiremuse.rules.errors import RuleError
 from empiremuse.rules.git_remote import sanitized_repo_url
 from empiremuse.rules.owner_shell import build_shell_env, collect_secret_values, mask_secrets
-from empiremuse.rules.release import Version, changelog_sections
+from empiremuse.rules.release import Version, changelog_section, changelog_sections
 from empiremuse.rules.settings import validate_prefix
 from empiremuse.updater.git_flow import (
     EXIT_RESTART,
@@ -77,6 +77,16 @@ MAX_GIT_READ_OUTPUT = 4 * 1024 * 1024
 GIT_READ_TIMEOUT = 60
 # Janela do "o que mudou" mostrada quando o bot não se atualiza sozinho (cabe com folga num embed).
 MANUAL_CHANGELOG_CHARS = 1500
+
+# ``!updatelog`` sem ``.git`` (imagem Docker): a seção do CHANGELOG da versão em execução é buscada uma vez por versão e por
+# processo (o cog ``Owner`` existe uma vez por bot). Todo 200 fica em cache; uma falha só é tentada de novo depois de
+# ``CHANGELOG_FAILURE_SECONDS``; chamadas simultâneas esperam a mesma consulta (padrão ``_cache``/``_loading`` do painel).
+CHANGELOG_FAILURE_SECONDS = 60
+_changelog_cache: dict[str, str] = {}
+_changelog_failed_at: dict[str, float] = {}
+_changelog_loading: dict[str, "asyncio.Task[str]"] = {}
+# Já avisou que não há ``.git`` (na imagem isso é o normal: um aviso por processo, as demais vezes em debug).
+_warned_no_git = False
 
 # Segredos que o exportsource nunca grava no .env do source.zip (a chave sai vazia), venham de onde vierem.
 EXPORT_MASKED_KEYS = ("YOUTUBE_OAUTH_REFRESH_TOKEN",)
@@ -205,6 +215,47 @@ class ShellResult:
         self.status = status
         self.stdout = stdout.decode(encoding="utf-8", errors="replace") if stdout is not None else None
         self.stderr = stderr.decode(encoding="utf-8", errors="replace") if stderr is not None else None
+
+
+def _log_missing_git(git_dir: str) -> None:
+    global _warned_no_git
+    if _warned_no_git:
+        logger.debug("updatelog: não há repositório git em %s.", git_dir)
+        return
+    _warned_no_git = True
+    logger.warning("updatelog: não há repositório git em %s.", git_dir)  # o caminho fica só no log
+
+
+async def _load_running_section(version: Version) -> str:
+    key = str(version)
+    try:
+        async with ClientSession() as session:
+            raw = await fetch_changelog(session, f"v{key}")
+    except UpdateError:
+        _changelog_failed_at[key] = time.monotonic()
+        logger.warning("updatelog: não consegui obter o CHANGELOG da versão %s.", key)
+        return ""
+    finally:
+        _changelog_loading.pop(key, None)
+    section = changelog_section(raw, version, MANUAL_CHANGELOG_CHARS)
+    _changelog_cache[key] = section
+    return section
+
+
+async def _running_version_section(version: Version) -> str:
+    """Seção do CHANGELOG da versão em execução (``""`` se a consulta falhou ou a seção não existe), com cache e uma consulta só."""
+    key = str(version)
+    if key in _changelog_cache:
+        return _changelog_cache[key]
+    failed_at = _changelog_failed_at.get(key)
+    if failed_at is not None:
+        if time.monotonic() - failed_at < CHANGELOG_FAILURE_SECONDS:
+            return ""
+        del _changelog_failed_at[key]
+    task = _changelog_loading.get(key)
+    if task is None:
+        task = _changelog_loading[key] = asyncio.ensure_future(_load_running_section(version))
+    return await asyncio.shield(task)
 
 
 class Owner(commands.Cog):
@@ -764,14 +815,21 @@ class Owner(commands.Cog):
     )
     async def updatelog(self, ctx: Union[CustomContext, disnake.MessageInteraction], amount: int = 10):
         git_dir = os.environ.get("GIT_DIR") or str(paths.RUNTIME_DIR / ".git")
-        if not os.path.isdir(git_dir):
-            logger.warning("updatelog: não há repositório git em %s.", git_dir)  # o caminho fica só no log
-            raise GenericError(
-                "**Não há repositório git iniciado no diretório do bot, então não há histórico de atualizações para "
-                "mostrar.**\nEm ambiente de desenvolvimento isso é esperado: consulte o histórico direto no clone do "
-                "projeto."
-            )
+        if os.path.isdir(git_dir):
+            txt = await self._git_updatelog(git_dir, amount)
+        else:
+            _log_missing_git(git_dir)
+            txt = await self._image_updatelog()
 
+        if isinstance(ctx, CustomContext):
+            embed = disnake.Embed(description=txt, color=self.bot.get_color(ctx.guild.me))
+
+            await ctx.send(embed=embed)
+
+        else:
+            return txt
+
+    async def _git_updatelog(self, git_dir: str, amount: int) -> str:
         if not self.bot.pool.remote_git_url:
             self.bot.pool.remote_git_url = sanitized_repo_url(self.bot.config["SOURCE_REPO"], branding.REPO_URL)
 
@@ -782,18 +840,24 @@ class Owner(commands.Cog):
 
         git_log += format_git_log(data)
 
-        txt = (
+        return (
             f"🔰 ** | {md_link('Atualizações recentes:', f'{self.bot.pool.remote_git_url}/commits/main', code=False)}**\n\n"
             + self.format_log(git_log)
         )
 
-        if isinstance(ctx, CustomContext):
-            embed = disnake.Embed(description=txt, color=self.bot.get_color(ctx.guild.me))
-
-            await ctx.send(embed=embed)
-
-        else:
-            return txt
+    async def _image_updatelog(self) -> str:
+        """Sem ``.git``: na imagem, as novidades da versão em execução; sem versão, só o caminho para as releases."""
+        version = image_version()
+        if version is None:
+            return "**Não há histórico de atualizações neste bot.**\n" + md_link(
+                "Versões publicadas", f"{branding.REPO_URL}/releases", code=False
+            )
+        parts = [
+            f"📈 **Novidades da versão {version} (em execução)**",
+            md_link("Notas da versão", f"{branding.REPO_URL}/releases/tag/v{version}", code=False),
+            await _running_version_section(version),
+        ]
+        return "\n\n".join(part for part in parts if part)
 
     @commands.is_owner()
     @commands.command(hidden=True, aliases=["menu"])
