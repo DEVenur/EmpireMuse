@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Corrigido
+- **ID do OAuth do painel no log**: o `PANEL_OAUTH_CLIENT_ID` (ID público do bot 1, um número de 17 a 20 dígitos) deixa de ser mascarado no log, nos relatórios de erro e no shell do dono. Nenhum segredo muda: `PANEL_OAUTH_CLIENT_SECRET`, os demais `*_CLIENT_ID` (como `SPOTIFY_CLIENT_ID`) e as chaves do Last.fm continuam mascarados.
+
 ## [2.1.1] - 2026-10-28
 
 Log centralizado com redação de segredos, `assets/` em subpastas e arte nova da marca, emojis de aplicação, novas permissões do convite e correções do teste em produção.
