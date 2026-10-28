@@ -400,7 +400,7 @@ class TestRetomadaNoPalco:
     async def test_a_voice_session_that_falls_back_to_a_stage_never_becomes_a_stage_topic(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """VP4f: o canal salvo era de voz e o final é um palco (``last_voice_channel_id``): a sessão de voz não vira tópico de palco."""
+        """VP4d inverso: o canal salvo era de voz e o final é um palco (``last_voice_channel_id``): a sessão de voz não vira tópico de palco."""
         dados = await sessao_gravada(stage_title_event=True, stage_title_template=MODELO_DA_SESSAO)
         dados["last_voice_channel_id"] = CANAL_RESERVA
         canais = {
@@ -421,6 +421,68 @@ class TestRetomadaNoPalco:
         assert len(r.leituras) == 1, "o caminho de voz lê o permanente (que no palco só grava o flag)"
         ((cfg, jitter),) = r.chamadas
         assert cfg.permanent is True and jitter is True
+
+
+# ============================================================================ VP4f — sair, salvar sem canal, voltar
+
+
+class TestSairSalvarSemCanalEVoltar:
+    """Sequência do contrato: sai do canal (limpa), salva o permanente DESLIGADO sem canal (só grava o flag), volta a um canal de voz."""
+
+    @staticmethod
+    async def sair_salvar_e_voltar(relogio: RelogioFalso, *, permanente_ao_voltar: bool) -> SimpleNamespace:
+        bot = BotDeVoz()
+        antigo, novo = canal_de_voz(1001), canal_de_voz(1002)
+        guilda = servidor(antigo)
+        jogador = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+        jogador.last_channel = antigo
+        jogador.start_members_timeout = lambda **_k: None
+        bot.music = SimpleNamespace(players={guilda.id: jogador})
+        cog = _Lifecycle()
+        cog.bot = bot
+        membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+        await executar(relogio, jogador.apply_permanent_voice_status(cfg_de(True)))
+        assert jogador.stage_title_event is True and bot.textos, "preparo: o status ligou no canal de voz"
+        await relogio.avancar(regras().VOICE_STATUS_MIN_INTERVAL + 1)
+
+        guilda.me.voice = None  # sai do canal
+        await executar(
+            relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=antigo), SimpleNamespace(channel=None))
+        )
+        saiu = len(bot.puts)
+
+        bot.documentos[guilda.id] = {
+            "voice_status_permanent": permanente_ao_voltar,
+            "voice_channel_status": MODELO_PERMANENTE,
+        }
+        await jogador.apply_permanent_voice_status(cfg_de(permanente_ao_voltar))  # o save, sem canal
+
+        guilda.me.voice = SimpleNamespace(channel=novo)  # volta a um canal de voz
+        jogador.last_channel = novo
+        await executar(
+            relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=None), SimpleNamespace(channel=novo))
+        )
+        await assentar()
+        return SimpleNamespace(player=jogador, bot=bot, saiu=saiu)
+
+    async def test_a_permanent_saved_off_while_out_of_the_channel_sends_nothing_on_the_way_back(
+        self, relogio: RelogioFalso
+    ) -> None:
+        r = await self.sair_salvar_e_voltar(relogio, permanente_ao_voltar=False)
+
+        assert [p.status for p in r.bot.puts[r.saiu :]] == [], (
+            "voltou ao canal e enviou algo com o permanente desligado"
+        )
+        assert r.player.stage_title_event is False and r.player.voice_status_permanent is False
+        assert r.bot.limpezas and r.bot.limpezas[0].canal == 1001, "a saída do canal antigo devia ter limpado o status"
+
+    async def test_the_control_with_the_permanent_on_turns_the_status_on_in_the_new_channel(
+        self, relogio: RelogioFalso
+    ) -> None:
+        r = await self.sair_salvar_e_voltar(relogio, permanente_ao_voltar=True)
+
+        assert r.player.stage_title_event is True
+        assert r.bot.puts[-1].canal == 1002 and r.bot.puts[-1].status is not None
 
 
 # ============================================================================ VP4e — desligar no palco
