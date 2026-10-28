@@ -389,3 +389,93 @@ class TestApplyNaoPrendeAQuemChama:
         finally:
             portao.set()
             await assentar()
+
+
+# ============================================================================ I4/V-S2 — a entrada do bot não reaplica por cima da aplicação agendada
+
+
+async def entrar(
+    relogio: RelogioFalso, *, agendada: bool, ja_ligado: bool, doc: dict[str, Any] | None = None
+) -> SimpleNamespace:
+    """O bot (já com o player) entra no canal: ``on_voice_state_update`` REAL com ``before.channel`` ``None``.
+
+    ``agendada``: a retomada deixou ``player.voice_status_apply`` pendente (aplicação com jitter). ``ja_ligado``: a criação já aplicou.
+    """
+    bot = BotDeVoz()
+    canal = canal_de_voz(1001)
+    guilda = servidor(canal)
+    guilda.voice_client = SimpleNamespace(channel=canal)
+    player = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+    player.start_members_timeout = lambda **_k: None
+    cfg = regras().VoiceStatusConfig(True, "{track.title}")
+    bot.documentos[SERVIDOR] = copy.deepcopy(
+        doc or {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+    )
+    bot.music = SimpleNamespace(players={SERVIDOR: player})
+    if ja_ligado:
+        await executar(relogio, player.apply_permanent_voice_status(cfg))
+    if agendada:
+        player.voice_status_apply = asyncio.ensure_future(player.apply_permanent_voice_status(cfg, jitter=True))
+        await assentar()  # preso no jitter
+    cog = _Lifecycle()
+    cog.bot = bot
+    membro = SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda)
+    antes = len(bot.puts)
+    await executar(
+        relogio, cog.player_vc_disconnect(membro, SimpleNamespace(channel=None), SimpleNamespace(channel=canal))
+    )
+    return SimpleNamespace(player=player, bot=bot, antes=antes)
+
+
+class TestEntradaComAplicacaoAgendada:
+    async def test_the_entry_does_not_apply_on_the_spot_over_the_scheduled_apply(self, relogio: RelogioFalso) -> None:
+        r = await entrar(relogio, agendada=True, ja_ligado=False)
+
+        assert r.bot.puts == [], "a entrada aplicou na hora, sem o jitter da retomada"
+        assert not r.player.voice_status_apply.done()
+
+    async def test_the_scheduled_apply_sends_once_after_the_jitter_and_nothing_doubles(
+        self, relogio: RelogioFalso
+    ) -> None:
+        r = await entrar(relogio, agendada=True, ja_ligado=False)
+
+        await relogio.avancar(regras().VOICE_STATUS_RESUME_JITTER + 1)
+        assert r.bot.textos == ["Musica"]
+        await relogio.avancar(60)
+
+        assert r.bot.textos == ["Musica"], "a sessão enviou duas vezes (entrada + agendada)"
+        assert r.player.stage_title_event is True
+
+    async def test_with_the_status_already_on_from_the_creation_the_entry_adds_nothing(
+        self, relogio: RelogioFalso
+    ) -> None:
+        r = await entrar(relogio, agendada=False, ja_ligado=True)
+        await relogio.avancar(60)
+
+        assert len(r.bot.puts) == r.antes == 1
+
+    async def test_a_finished_scheduled_apply_does_not_count_as_pending(self, relogio: RelogioFalso) -> None:
+        bot = BotDeVoz()
+        canal = canal_de_voz(1001)
+        guilda = servidor(canal)
+        player = JogadorDeVoz(guilda, bot, atual=faixa(), template="{track.title}")
+        player.start_members_timeout = lambda **_k: None
+        await executar(relogio, player.apply_permanent_voice_status(regras().VoiceStatusConfig(True, "{track.title}")))
+        player.voice_status_apply = asyncio.ensure_future(asyncio.sleep(0))
+        await assentar()
+        bot.documentos[SERVIDOR] = {"voice_status_permanent": True, "voice_channel_status": "{track.title}"}
+        bot.music = SimpleNamespace(players={SERVIDOR: player})
+        cog = _Lifecycle()
+        cog.bot = bot
+
+        await executar(
+            relogio,
+            cog.player_vc_disconnect(
+                SimpleNamespace(id=ID_DO_BOT, bot=True, guild=guilda),
+                SimpleNamespace(channel=None),
+                SimpleNamespace(channel=canal),
+            ),
+        )
+        await relogio.avancar(60)
+
+        assert len(bot.puts) == 1  # o ligado pela criação continua valendo; a tarefa terminada não é "pendente"
