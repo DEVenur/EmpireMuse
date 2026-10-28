@@ -183,7 +183,7 @@ class TestVersaoNoSobre:
 # ============================================================================ /lastfm
 
 
-def usuario_lastfm() -> dict:
+def usuario_lastfm(**mudancas: str) -> dict:
     return {
         "realname": "Ana",
         "name": "ana",
@@ -196,6 +196,7 @@ def usuario_lastfm() -> dict:
         "artist_count": "1035",
         "album_count": "2050",
         "image": [{"#text": "https://exemplo.invalid/a.jpg"}],
+        **mudancas,
     }
 
 
@@ -211,7 +212,7 @@ def top(chave_extra: dict | None = None) -> list:
     return [item]
 
 
-async def textos_do_lastfm(monkeypatch: pytest.MonkeyPatch) -> str:
+async def textos_do_lastfm(monkeypatch: pytest.MonkeyPatch, **usuario: str) -> str:
     visao = SimpleNamespace(
         wait=AsyncMock(), children=[], session_key="", clear_session=False, error=None, scrobble_enabled=True
     )
@@ -223,7 +224,7 @@ async def textos_do_lastfm(monkeypatch: pytest.MonkeyPatch) -> str:
         update_global_data=AsyncMock(),
         get_global_command_named=lambda *a, **k: SimpleNamespace(id=1),
         last_fm=SimpleNamespace(
-            user_info=AsyncMock(return_value=usuario_lastfm()),
+            user_info=AsyncMock(return_value=usuario_lastfm(**usuario)),
             user_top_tracks=AsyncMock(return_value=top()),
             user_top_artists=AsyncMock(return_value=top()),
             user_top_albums=AsyncMock(return_value=top({"album": {"#text": "Alb"}})),
@@ -254,3 +255,25 @@ class TestContadoresDoLastfm:
 
         for proibido in ("1,035", "1,234,567", "2,050"):
             assert proibido not in texto
+
+
+class TestPlaylistsDoLastfm:
+    @pytest.mark.asyncio
+    async def test_a_non_zero_playlist_count_shows_the_number_with_a_dot(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        texto = await textos_do_lastfm(monkeypatch, playlists="1035")
+
+        (linha,) = [x for x in texto.splitlines() if "Playlists públicas" in x]
+        assert "`1.035`" in linha
+
+    @pytest.mark.asyncio
+    async def test_a_small_playlist_count_is_the_real_count_not_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        texto = await textos_do_lastfm(monkeypatch, playlists="7")
+
+        (linha,) = [x for x in texto.splitlines() if "Playlists públicas" in x]
+        assert "`7`" in linha
+
+    @pytest.mark.asyncio
+    async def test_zero_playlists_has_no_line(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        texto = await textos_do_lastfm(monkeypatch, playlists="0")
+
+        assert "Playlists públicas" not in texto
