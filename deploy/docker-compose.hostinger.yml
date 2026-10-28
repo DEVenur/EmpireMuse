@@ -14,7 +14,7 @@ name: empiremuse
 services:
   bot:
     container_name: empiremuse
-    image: or4cu1o/empiremuse:2.1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: or4cu1o/empiremuse:2.1.1@sha256:0000000000000000000000000000000000000000000000000000000000000000
     pull_policy: missing
     restart: unless-stopped
     stop_grace_period: 30s

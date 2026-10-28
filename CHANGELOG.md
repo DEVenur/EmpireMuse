@@ -7,6 +7,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-28
+
+Log centralizado com redação de segredos, `assets/` em subpastas e arte nova da marca, emojis de aplicação, novas permissões do convite e correções do teste em produção.
+
+**Ao atualizar:**
+- Quem fixa `INVITE_PERMISSIONS` no compose ou no `.env` (como o compose de produção da VPS) deve trocar o valor para `2533601240804560` e recriar o container para o convite novo valer; sem isso, vale o valor antigo. Os servidores onde o bot já está só ganham as permissões novas (Ler o Histórico de Mensagens, Definir o Status do Canal de Voz, Fixar Mensagens) se um administrador as conceder ao cargo do bot ou o bot for convidado de novo.
+- O `update` do Docker troca só a imagem do bot. A imagem do `updater-proxy` não muda nesta versão (`proxy.py` e o `Dockerfile` ficam como na 2.1.0), então o digest dela no compose não precisa ser trocado.
+- O console passa a mostrar só problemas e um resumo periódico em `INFO`; as chaves novas de log têm padrão seguro e são opcionais (`docs/guides/logs.md`).
+
 ### Adicionado
 - **Emojis de aplicação (ícones originais de volta em botões e menus)**: cada bot principal envia, ao ficar pronto, os emojis de `assets/emojis/` para a própria aplicação no Discord (só os que faltam; nunca apaga nem altera os existentes), e botões, menus e mensagens passam a usá-los. Sem o emoji, vale a reserva em Unicode; o `emojis.json` do dono continua tendo precedência. Chave nova `APP_EMOJIS_GUILD_BOTS` (padrão `false`): com `true`, os bots de servidor do `guild_bots.json` também enviam os emojis. Guia em `docs/guides/emojis.md`.
 - **Log centralizado com a biblioteca padrão (item 7, fase P1)**: o pacote `empiremuse/logs/` configura o `logging` do processo num ponto só. Console com cor por severidade (nunca no arquivo), contexto de bot e servidor em cada linha e arquivo de log opcional. Chaves novas no `.example.env`:
@@ -581,7 +590,8 @@ O **EmpireMuse** é uma obra derivada e evolução contínua do projeto [MuseHea
 - **Ponto de partida do fork/bifurcação**: Commit upstream [`32f227e9`](https://github.com/zRitsu/MuseHeart-MusicBot/commit/32f227e96bca59d5e54f58f56f5fb7e804704b32) de 02/03/2026 (implementação do suporte ao protocolo DAVE com envio de `channelId` no payload de voz).
 - **Histórico anterior**: O histórico completo de commits, versões e contribuições anteriores a esse ponto de partida permanece preservado no repositório original do upstream.
 
-[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/EmpireCommunity/EmpireMuse/compare/v2.0.0...v2.0.1
