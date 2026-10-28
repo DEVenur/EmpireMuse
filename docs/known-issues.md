@@ -15,7 +15,7 @@ Nenhum (2026-10-26).
 
 | ID | Local | Decisão |
 |---|---|---|
-| KI-35 | `empiremuse/utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Assets e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com` da branch `main`. `branding.py` é o ponto único que um fork ajusta para apontar para os próprios. |
+| KI-35 | `empiremuse/utils/branding.py`, `assets/`, `data/lavalink_servers.ini` | Os assets (organizados em subpastas de `assets/`) e a lista de servidores Lavalink são servidos via `raw.githubusercontent.com`: os assets pela tag da versão quando o bot roda numa imagem com `EMPIREMUSE_VERSION` (uma versão publicada não perde as próprias imagens) e pela `main` em um checkout git; a lista de servidores, sempre pela `main`. `branding.py` é o ponto único que um fork ajusta para apontar para os próprios. |
 
 ## Histórico
 

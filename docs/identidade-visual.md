@@ -22,9 +22,14 @@ A identidade visual do EmpireMuse adota o conceito cósmico **Nebulosa**, combin
 
 Todas as peças foram concebidas como arte original do EmpireMuse, sem dependência de ativos de terceiros ou logotipos do upstream.
 
-- **`assets/brand/logo.svg`**: Emblema vetorial autocontido utilizado no cabeçalho do `README.md`. Possui fundo transparente fora do emblema e não contém scripts, estilos externos ou elementos dinâmicos.
-- **`assets/brand/avatar.png`**: Ícone em formato PNG com resolução de **1024×1024** pixels (máximo 2 MB). A arte é uma garota chibi de fones de ouvido, com coroa e asas, sobre um campo de estrelas violeta, com o logotipo "EmpireMuse 1" na base. O emblema ocupa o centro do quadro, o que mantém a legibilidade em tamanhos reduzidos (32–40 px).
-- **`assets/brand/banner.png`**: Banner panorâmico em formato PNG com resolução de **1500×600** pixels (proporção 5:2, máximo 4 MB), desenvolvido para personalização de perfil no Discord.
+- **`assets/brand/logo-256.png`**: Logo em PNG de **256×256** pixels (cerca de 31 KB, sem metadados), derivado do `avatar.png`. É o logo usado na interface: cabeçalho do `README.md`, páginas do painel (servido em `/painel/marca/logo-256.png`) e página pública de status (via `branding.asset_url`). Leve de propósito, para não pesar a cada visita.
+- **`assets/brand/logo.svg`**: Emblema vetorial, **arquivo-fonte** da marca (não é mais usado na interface). Não contém scripts, estilos externos ou elementos dinâmicos. É um traçado vetorizado detalhado e pesado (cerca de 6 MB), por isso não serve de favicon nem de logo de página.
+- **`assets/brand/avatar.png`**: Ícone em formato PNG com resolução de **1326×1326** pixels (cerca de 2,5 MB), usado como avatar do bot e fonte do `logo-256.png`. O emblema ocupa o centro do quadro, o que mantém a legibilidade em tamanhos reduzidos (32–40 px).
+- **`assets/brand/banner.png`**: Banner panorâmico em formato PNG com resolução de **2738×959** pixels (cerca de 2,4 MB), para a personalização do perfil no Discord. O Discord exibe o banner reduzido e recortado: mantenha o conteúdo importante no centro.
+- **`assets/brand/avatares/`**: Avatares alternativos para trocar a foto do bot: `Avatar-EmpireMuse_1.png` (1600×1600, PNG) e `Avatar-EmpireMuse_2.jpg` a `Avatar-EmpireMuse_5.jpg`.
+- **`assets/brand/favicon.ico`**: Ícone do navegador, com 9 tamanhos (de 16 a 256 px), usado pelo painel web.
+
+As demais imagens do bot ficam em `assets/providers/` (ícones das plataformas), `assets/player/`, `assets/skins/` (prévias das skins), `assets/ui/` (ícones da interface e tutoriais), `assets/docs/` (imagens do README) e `assets/emojis/` (emojis de aplicação). O nome de cada arquivo é único entre as subpastas.
 
 ---
 

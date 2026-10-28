@@ -8,7 +8,7 @@
   <meta name="xsrf-token" content="{{ handler.xsrf_token.decode('ascii') }}">
   <meta name="htmx-config" content='{"allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true, "includeIndicatorStyles": false}'>
   <title>{% block titulo %}Painel{% end %} · EmpireMuse</title>
-  <link rel="icon" type="image/svg+xml" href="/painel/marca/logo.svg">
+  <link rel="icon" href="/painel/marca/favicon.ico" sizes="any">
   <link rel="stylesheet" href="{{ static_url('vendor/pico.min.css') }}">
   <link rel="stylesheet" href="{{ static_url('css/nebulosa.css') }}">
   <script src="{{ static_url('vendor/htmx.min.js') }}" defer></script>
@@ -19,7 +19,7 @@
   <header class="topo">
     <div class="container topo-conteudo">
       <a class="marca" href="/painel/" aria-label="EmpireMuse — página inicial do painel">
-        <img src="/painel/marca/logo.svg" alt="" width="40" height="40">
+        <img src="/painel/marca/logo-256.png" alt="" width="40" height="40">
         <span class="marca-nome">EmpireMuse</span>
         <span class="marca-selo">Painel</span>
       </a>
