@@ -54,7 +54,8 @@ def _rest_of_prefix_command(ctx: object) -> str | None:
     if not isinstance(content, str):
         return None
     content = content[len(getattr(ctx, "prefix", "") or "") :].strip()
-    return content.split(None, 1)[1] if " " in content else ""
+    parts = content.split(None, 1)
+    return parts[1] if len(parts) > 1 else ""
 
 
 def _summarize(name: str, value: object, *, reveal: bool, budget: int) -> str:
