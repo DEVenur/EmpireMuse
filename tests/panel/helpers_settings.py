@@ -100,6 +100,18 @@ class FakeDB:
 # ============================================================================ players, bots, pool, servidores
 
 
+async def assentar() -> None:
+    """Cede ao laço até que toda outra tarefa espere um futuro ainda não resolvido (ou tenha terminado): sem relógio, sem adivinhar voltas."""
+    import asyncio
+
+    for _ in range(2000):
+        outras = [t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()]
+        if all((w := getattr(t, "_fut_waiter", None)) is not None and not w.done() for t in outras):
+            return
+        await asyncio.sleep(0)
+    raise AssertionError("as tarefas de fundo nunca ficaram ociosas")
+
+
 class FakePlayer:
     def __init__(self, events, label, static=False, skin="default", skin_static="default", voice_channel_id=None):
         self.events, self.label, self.static = events, label, static
@@ -135,6 +147,13 @@ class FakePlayer:
 
     async def update_stage_topic(self, reconnect=True, clear=False):
         self._note("update_stage_topic", clear=clear)
+
+    portao = None  # um asyncio.Event: com ele, o apply fica preso até o teste soltar
+
+    async def apply_permanent_voice_status(self, cfg, *, jitter=False):
+        self._note("apply_permanent_voice_status", cfg=cfg, jitter=jitter)
+        if self.portao is not None:
+            await self.portao.wait()
 
     def setup_features(self):
         self._note("setup_features")
