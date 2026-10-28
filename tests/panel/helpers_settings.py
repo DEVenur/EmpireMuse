@@ -15,6 +15,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import tornado.web
 
+from empiremuse.rules.voice_status import VoiceStatusConfig
 from tests.panel.helpers import XSRF_META_RE, require
 from tests.panel.helpers_login import make_fake_oauth
 from tests.panel.helpers_servers import FakeBot, FakeGuild, FakePool, raw_guild, USER_ID
@@ -150,7 +151,7 @@ class FakePlayer:
 
     portao = None  # um asyncio.Event: com ele, o apply fica preso até o teste soltar
 
-    async def apply_permanent_voice_status(self, cfg, *, jitter=False):
+    async def apply_permanent_voice_status(self, cfg: VoiceStatusConfig, *, jitter: bool = False) -> None:
         self._note("apply_permanent_voice_status", cfg=cfg, jitter=jitter)
         if self.portao is not None:
             await self.portao.wait()
