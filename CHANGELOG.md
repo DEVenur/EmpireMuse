@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Removido
+- **Aviso periódico de servidores sem o dono ou a equipe**: o bot deixa de registrar, a cada atualização das informações da aplicação, o aviso de servidores onde o dono ou a equipe não está presente ou não tem a permissão Gerenciar Servidor (o bloco só calculava e registrava, sem sair do servidor nem avisar ninguém). A chave `SILENT_PUBLICBOT_WARNING` deixa de existir; se ainda estiver no seu `.env`, pode apagá-la.
+
 ## [2.1.1] - 2026-10-28
 
 Log centralizado com redação de segredos, `assets/` em subpastas e arte nova da marca, emojis de aplicação, novas permissões do convite e correções do teste em produção.
