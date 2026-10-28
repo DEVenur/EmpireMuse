@@ -17,8 +17,9 @@ BRAND_FILES = {
     "logo.svg": "image/svg+xml",
     "avatar.png": "image/png",
     "favicon.ico": "image/x-icon",
+    "logo-256.png": "image/png",
 }
-BRAND_ROUTE = r"/painel/marca/(logo\.svg|avatar\.png|favicon\.ico)"
+BRAND_ROUTE = r"/painel/marca/(logo\.svg|avatar\.png|favicon\.ico|logo-256\.png)"
 BRAND_CACHE_CONTROL = "public, max-age=86400"
 ETAG_HEX_LENGTH = 32
 

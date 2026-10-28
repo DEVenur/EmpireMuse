@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/logo.svg" alt="Logo do EmpireMuse" width="160">
+  <img src="assets/brand/logo-256.png" alt="Logo do EmpireMuse" width="160">
 </p>
 
 <h1 align="center">EmpireMuse</h1>
