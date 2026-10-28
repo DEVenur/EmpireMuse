@@ -293,7 +293,7 @@ class TestBaseDasUrlsPorVersao:
         assert url == f"https://raw.githubusercontent.com/{REPO}/v2.1.1-rc.1/assets"
 
     def test_no_version_points_at_main_as_today(self):
-        assert branding.ASSETS_BASE_URL == f"https://raw.githubusercontent.com/{REPO}/main/assets"
+        assert branding.assets_base_url(None) == f"https://raw.githubusercontent.com/{REPO}/main/assets"
 
     def test_the_repo_comes_from_github_repo(self):
         assert f"/{branding.GITHUB_REPO}/" in branding.assets_base_url(parse_current_version("2.1.1"))
