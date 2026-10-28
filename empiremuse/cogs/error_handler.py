@@ -35,9 +35,10 @@ def _safe_text(text: object) -> str:
     """Nome de servidor, canal ou autor para o embed do relatório.
 
     O saneamento e o redator vêm antes de ``fix_characters`` (que troca ``_``, ``*`` e ``[`` e esconderia um segredo
-    registrado do redator); as quebras de linha viram ``⏎`` para o nome não forjar uma linha ``ID:`` no bloco de código.
+    registrado do redator) e de novo depois dele, para conferir o nome na forma final; as quebras de linha viram ``⏎``
+    para o nome não forjar uma linha ``ID:`` no bloco de código.
     """
-    return fix_characters(scrub(sanitize_value(str(text)), NAME_LIMIT))[:NAME_LIMIT]
+    return scrub(fix_characters(scrub(sanitize_value(str(text)), NAME_LIMIT)), NAME_LIMIT)[:NAME_LIMIT]
 
 
 class ErrorHandler(commands.Cog):
