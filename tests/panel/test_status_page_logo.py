@@ -8,16 +8,11 @@ import re
 
 import pytest
 
-from empiremuse import paths, web_app
+from empiremuse import web_app
+from empiremuse.utils import branding
 from tests.panel.test_status_page import READY, get_index, page
 
 pytestmark = pytest.mark.critical
-
-
-@pytest.fixture(autouse=True)
-def logo_sem_cache_de_outro_teste(monkeypatch):
-    """O logo foi guardado em memória por um teste anterior (implementação antiga): cada teste começa sem esse resíduo."""
-    monkeypatch.setattr(web_app, "_logo_cache", None, raising=False)
 
 
 LIMITE_DA_PAGINA = 200_000  # a página sem logo tem poucas dezenas de KB; o logo embutido passa de 8 MB
@@ -30,16 +25,6 @@ def src_do_logo(corpo: str) -> str | None:
 
 
 class TestLogoPorUrl:
-    def test_a_same_origin_logo_url_is_served_by_the_same_server(self, monkeypatch):
-        src = src_do_logo(page(monkeypatch, bots=READY, PANEL_ENABLED=True))
-
-        if src is None or not src.startswith("/"):
-            pytest.skip("logo hospedado fora (URL absoluta): nada a servir aqui")
-
-        resposta = get_index(monkeypatch, bots=READY, PANEL_ENABLED=True, path=src)
-
-        assert resposta.code == 200 and resposta.headers["Content-Type"] == "image/png"
-
     def test_the_page_stays_small_and_embeds_no_data_uri(self, monkeypatch):
         resposta = get_index(monkeypatch, bots=READY)
 
@@ -48,32 +33,23 @@ class TestLogoPorUrl:
         corpo = resposta.body.decode()
         assert "base64," not in corpo and "data:image" not in corpo
 
-    def test_the_logo_is_referenced_by_a_url_not_by_content(self, monkeypatch):
+    def test_the_logo_is_the_public_raw_url_of_the_small_png_and_never_under_painel(self, monkeypatch):
         corpo = page(monkeypatch, bots=READY)
 
         src = src_do_logo(corpo)
 
-        assert src and not src.startswith("data:") and len(src) < 300
-        assert src.endswith("/logo-256.png"), src  # o PNG pequeno, nunca o logo.svg de 6 MB
-        assert src.startswith("/") or src.startswith(("https://",)), src
+        assert src == branding.asset_url("logo-256.png")
+        assert src.startswith("https://raw.githubusercontent.com/") and src.endswith("/assets/brand/logo-256.png")
+        assert "/painel" not in src and "logo.svg" not in corpo
 
-    def test_the_page_still_renders_when_the_logo_file_is_missing(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(paths, "PROJECT_DIR", tmp_path)
+    def test_the_page_still_renders_without_the_logo_when_asset_url_fails(self, monkeypatch):
+        def falha(nome):
+            raise ValueError(nome)
+
+        monkeypatch.setattr(web_app.branding, "asset_url", falha)
 
         resposta = get_index(monkeypatch, bots=READY)
 
+        corpo = resposta.body.decode()
         assert resposta.code == 200 and len(resposta.body) < LIMITE_DA_PAGINA
-        assert b"data:image" not in resposta.body and b"Bot Um" in resposta.body
-
-    def test_the_page_size_does_not_depend_on_the_logo_size(self, monkeypatch, tmp_path):
-        normal = len(get_index(monkeypatch, bots=READY).body)
-        pasta = tmp_path / "assets" / "brand"
-        pasta.mkdir(parents=True)
-        (pasta / "logo.svg").write_bytes(
-            b"<svg xmlns='http://www.w3.org/2000/svg'>" + b"<!--x-->" * 400_000 + b"</svg>"
-        )
-        monkeypatch.setattr(paths, "PROJECT_DIR", tmp_path)
-
-        com_logo_grande = len(get_index(monkeypatch, bots=READY).body)
-
-        assert abs(com_logo_grande - normal) < 2_000
+        assert '<img class="logo"' not in corpo and "data:image" not in corpo and "Bot Um" in corpo
