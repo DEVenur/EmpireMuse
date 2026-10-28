@@ -26,7 +26,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Corrigido
 - **Autoplay a partir de uma faixa do Spotify**: deixa de falhar com `TypeError` e de esperar 15 s toda vez que a fila acaba.
-- **Recomendações do Spotify por artista**: voltam a funcionar (a busca pede até 10 resultados, o máximo da API). Só erros de rede são repetidos, e "sem resultados" de um provedor deixa de imprimir um traceback.
+- **Recomendações do Spotify por artista**: voltam a funcionar (a busca pede até 10 resultados, o máximo da API). Só erros transitórios são repetidos (falhas de conexão, timeouts e HTTP 5xx); 4xx, 429 e erros de código falham uma vez, sem espera. "Sem resultados" de um provedor deixa de imprimir um traceback.
 - **Fixar a mensagem do player**: a checagem passa a exigir Fixar Mensagens, em vez de Gerenciar Mensagens.
 
 ### Segurança
