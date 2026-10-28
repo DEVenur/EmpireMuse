@@ -146,7 +146,7 @@ async def _he_track_end(self, event) -> None:
 
     if event.reason == "FINISHED":
         # Só o progresso real devolve a nova tentativa: o TrackStart sai antes de o Lavalink abrir o stream.
-        getattr(self, "same_track_retries", set()).clear()
+        _he_reset_retry_budget(self)
 
     if self.locked:
         return
@@ -317,18 +317,27 @@ def _he_retry_key(track) -> str:
     return str(getattr(track, "uri", None) or getattr(track, "search_uri", None) or id(track))
 
 
-def _he_take_same_track_retry(self, event, track) -> bool:
-    """Concede (uma vez por faixa, até alguma faixa terminar de verdade) a nova tentativa da mesma faixa nas falhas de download do YouTube."""
-    if not _he_cause_has(event, SAME_TRACK_RETRY_MARKERS):
-        return False
-    used = getattr(self, "same_track_retries", None)
+def _he_take_once(self, attr: str, track) -> bool:
+    """Concede UMA vez por faixa (conjunto `attr` do player) até alguma faixa terminar de verdade."""
+    used = getattr(self, attr, None)
     if used is None:
-        used = self.same_track_retries = set()
+        used = set()
+        setattr(self, attr, used)
     key = _he_retry_key(track)
     if key in used:
         return False
     used.add(key)
     return True
+
+
+def _he_reset_retry_budget(self) -> None:
+    for attr in ("same_track_retries", "youtube_recoveries"):
+        getattr(self, attr, set()).clear()
+
+
+def _he_take_same_track_retry(self, event, track) -> bool:
+    """A nova tentativa da mesma faixa nas falhas de download do YouTube (uma vez por faixa)."""
+    return _he_cause_has(event, SAME_TRACK_RETRY_MARKERS) and _he_take_once(self, "same_track_retries", track)
 
 
 def _he_other_youtube_node(self):
@@ -383,11 +392,13 @@ async def _he_track_exception(self, event) -> None:
         await self.process_next(start_position=get_start_pos(self, track))
         return
 
-    if _he_is_youtube_plugin_cause(event) and _he_is_youtube_failure(self, event, track):
+    youtube_plugin_failure = _he_is_youtube_plugin_cause(event) and _he_is_youtube_failure(self, event, track)
+    if youtube_plugin_failure and _he_take_once(self, "youtube_recoveries", track):
         await _he_recover_from_youtube(self, track, send_report)
         return
 
-    if ignore_error_log := _he_cause_has(event, RETRYABLE_ERROR_CAUSES):
+    # Falha do plugin do YouTube com a troca de nó já usada: relata e pula (sem o retry geral nem outra troca).
+    if ignore_error_log := (not youtube_plugin_failure and _he_cause_has(event, RETRYABLE_ERROR_CAUSES)):
         outcome = _he_retry_after_general_error(self, track)
         if outcome == "wait":
             return
@@ -402,7 +413,11 @@ async def _he_track_exception(self, event) -> None:
         await send_report()
         return
 
-    elif _he_is_youtube_failure(self, event, track):
+    elif (
+        not youtube_plugin_failure
+        and _he_is_youtube_failure(self, event, track)
+        and _he_take_once(self, "youtube_recoveries", track)
+    ):
         await _he_recover_from_youtube(self, track, send_report)
         return
 

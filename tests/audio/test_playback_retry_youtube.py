@@ -255,3 +255,35 @@ async def test_a_spotify_track_mirrored_to_youtube_recovers_via_native_youtube_n
     await _he_dispatch(player, fail(player, ALL_CLIENTS))
 
     player.change_node.assert_awaited_once_with("N2")
+
+
+async def test_a_mirrored_track_failing_on_every_node_switches_once_and_then_is_skipped():
+    track = make_track()
+    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
+    player = make_player(track, nodes=[other])
+    player.bot.music.nodes = {"N1": player.node, "N2": other}
+
+    for _ in range(4):
+        player.queue.clear()
+        player.current = track
+        await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
+
+    assert player.change_node.await_count <= 1
+    assert track in player.failed_tracks
+    assert track not in player.queue
+    assert player.locked is False
+
+
+async def test_a_youtube_source_track_switches_node_once_per_budget():
+    track = make_track(source="youtube", uri="https://www.youtube.com/watch?v=x")
+    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
+    player = make_player(track, nodes=[other])
+    player.bot.music.nodes = {"N1": player.node, "N2": other}
+
+    for _ in range(4):
+        player.queue.clear()
+        player.current = track
+        await _he_dispatch(player, fail(player, OTHER))
+
+    assert player.change_node.await_count == 1
+    assert track in player.failed_tracks
