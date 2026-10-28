@@ -40,6 +40,7 @@ class TestRegiaoDoNo:
             memory_used=1,
             memory_allocated=3,
             memory_free=2,
+            memory_reservable=4,
             cpu_cores=2,
             lavalink_load=0.1,
             players=0,
@@ -47,7 +48,14 @@ class TestRegiaoDoNo:
             uptime=1000,
         )
         no = SimpleNamespace(
-            identifier="no-1", stats=stats, is_available=True, players={}, region=regiao, version=versao, website=None
+            identifier="no-1",
+            stats=stats,
+            is_available=True,
+            players={},
+            region=regiao,
+            region_label=regiao,
+            version=versao,
+            website=None,
         )
         bot = MagicMock()
         bot.music.nodes = {"no-1": no}
