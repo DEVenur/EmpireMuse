@@ -229,7 +229,7 @@ class LastFmCog(commands.Cog):
             if playcount := lastfm_user["playcount"]:
                 txt += f"> `🔊` **⠂Total de músicas reproduzidas:** {md_link(format_int(int(playcount)), f'https://www.last.fm/user/{lastfm_user["name"]}/library')}\n"
 
-            if playlists := lastfm_user["playlists"] != "0":
+            if (playlists := lastfm_user["playlists"]) != "0":
                 txt += f"> `📄` **⠂Playlists públicas:** {md_link(format_int(int(playlists)), f'https://www.last.fm/user/{lastfm_user["name"]}/playlists')}\n"
 
             try:
