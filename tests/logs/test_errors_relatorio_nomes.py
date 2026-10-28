@@ -1,7 +1,7 @@
 """Item 7, P4 (CodeRabbit #133, F1, privacidade) — nomes no embed do relatório do webhook: servidor, canais e rodapé do autor.
 
 Nome de servidor, canal de texto, canal de voz (usuário e bot) e o nome do autor no rodapé são texto de terceiros que sai do host pelo webhook de
-erro: segredo registrado sai mascarado, ESC/RLO saem limpos e o tamanho tem teto (o mesmo que o texto do conteúdo, ``MAX_MESSAGE_CHARS``).
+erro: segredo registrado sai mascarado, ESC/RLO saem limpos e o nome tem teto de 100 caracteres (R3 do Vigil; os limites do embed estão em ``test_errors_relatorio_limites.py``).
 """
 
 from types import SimpleNamespace
@@ -22,6 +22,7 @@ pytestmark = pytest.mark.critical
 
 SEGREDO_NO_NOME = "".join(["segredo-no-nome-", "do-relatorio-F1x"])
 ESC, RLO = "\x1b", "‮"
+LIMITE_DO_NOME = 100
 GIGANTE = "n" * (MAX_MESSAGE_CHARS * 3)
 
 
@@ -65,10 +66,10 @@ class TestNomesNoEmbed:
 
         assert ESC not in valor and RLO not in valor
 
-    def test_the_name_is_capped(self, campo, fabrica):
-        assert (
-            len(self.valor(campo, fabrica)) <= MAX_MESSAGE_CHARS + 100
-        )  # o teto vale para o nome; sobra o ID e as cercas
+    def test_the_name_is_capped_at_100_characters(self, campo, fabrica):
+        valor = self.valor(campo, fabrica)
+
+        assert len(valor.removeprefix("```\n").split("\nID: ")[0]) <= LIMITE_DO_NOME
 
 
 class TestRodapeDoAutor:
@@ -86,7 +87,7 @@ class TestRodapeDoAutor:
 
         assert ESC not in rodape and RLO not in rodape
 
-    def test_the_footer_is_capped_and_keeps_the_author_id(self):
+    def test_the_author_name_is_capped_at_100_characters_and_the_id_stays(self):
         rodape = self.rodape()
 
-        assert len(rodape) <= MAX_MESSAGE_CHARS + 100 and f"[{prefixo('x').author.id}]" in rodape
+        assert len(rodape.rsplit(" [", 1)[0]) <= LIMITE_DO_NOME and rodape.endswith(f"[{prefixo('x').author.id}]")
