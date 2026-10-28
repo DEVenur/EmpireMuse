@@ -5,12 +5,18 @@
   <input type="hidden" name="versao" value="{{ form.versao }}">
   <h2 class="subtitulo">Status do canal de voz</h2>
   {% include "_mensagem_form.html" %}
+  <label>
+    <input type="checkbox" name="voice_status_permanent" value="on"{% if form.valores.get("voice_status_permanent") %} checked{% end %}>
+    Status permanente (aplicar sempre que o bot entrar num canal de voz)
+  </label>
   <label for="campo-status-voz">Texto do status</label>
   <textarea id="campo-status-voz" name="voice_channel_status" rows="3" maxlength="496" spellcheck="false"{% if erros.get("voice_channel_status") %} aria-invalid="true" aria-describedby="erro-status-voz ajuda-status-voz"{% else %} aria-describedby="ajuda-status-voz"{% end %}>{{ form.valores.get("voice_channel_status") or "" }}</textarea>
   {% if erros.get("voice_channel_status") %}<small id="erro-status-voz" class="erro-campo">{{ erros["voice_channel_status"] }}</small>{% end %}
   <small id="ajuda-status-voz">
     Use pelo menos um dos marcadores abaixo; eles são trocados pelas informações da música que está tocando.
-    Deixe vazio para desligar o status.
+    Deixe vazio para usar o modelo padrão: <code>{{ modelo_padrao }}</code>.
+    Atenção: <code>{requester.name}</code> e <code>{requester.id}</code> ficam públicos no status do canal.
+    Desligar o status só na sessão do Discord volta a ligar quando o bot muda de canal ou reinicia; para desligar de vez, desmarque o status permanente.
   </small>
   <ul class="placeholders" role="list" aria-label="Marcadores disponíveis">
     {% for marcador in placeholders %}
