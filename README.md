@@ -43,7 +43,7 @@ Participe do nosso servidor oficial [Discord EmpireHUB](https://discord.gg/KgtyN
 
 - **Player Controller**: Modo normal com mini-player e suporte a RPC (Rich Presence):
 
-[![](assets/readme_preview_player_default.png)](assets/readme_preview_player_default.png)
+[![](assets/docs/readme_preview_player_default.png)](assets/docs/readme_preview_player_default.png)
 
 <details>
 <summary><strong>Ver mais capturas de tela e recursos visuais:</strong></summary>
@@ -51,21 +51,21 @@ Participe do nosso servidor oficial [Discord EmpireHUB](https://discord.gg/KgtyN
 
 - **Comandos de Barra / Slash Commands**:
 
-[![](assets/readme_preview_slashcommands.png)](assets/readme_preview_slashcommands.png)
+[![](assets/docs/readme_preview_slashcommands.png)](assets/docs/readme_preview_slashcommands.png)
 
 - **Integração com o Last.fm** para scrobbles em tempo real:
 
-[![](assets/readme_preview_lastfm.png)](assets/readme_preview_lastfm.png)
+[![](assets/docs/readme_preview_lastfm.png)](assets/docs/readme_preview_lastfm.png)
 
 - **Player Controller Estendido**: Modo de canal fixo de pedidos com conversa e fila interativa (`/setup`):
 
-[![](assets/readme_preview_player_setup.png)](assets/readme_preview_player_setup.png)
+[![](assets/docs/readme_preview_player_setup.png)](assets/docs/readme_preview_player_setup.png)
 
 - **Canal de Pedidos em Fórum**: Tópicos dedicados com atualização dinâmica de status no canal de voz e palco:
 
-[![](assets/readme_preview_controller_forum.png)](assets/readme_preview_controller_forum.png)
+[![](assets/docs/readme_preview_controller_forum.png)](assets/docs/readme_preview_controller_forum.png)
 
-> As imagens de preview foram preservadas temporariamente do projeto original e estão hospedadas em [`assets/`](assets/). A substituição gradual por artes exclusivas da identidade visual Nebulosa está planejada (veja [CREDITS.md](CREDITS.md)).
+> As imagens de preview foram preservadas temporariamente do projeto original e estão hospedadas em [`assets/docs/`](assets/docs/). A substituição gradual por artes exclusivas da identidade visual Nebulosa está planejada (veja [CREDITS.md](CREDITS.md)).
 
 </details>
 
