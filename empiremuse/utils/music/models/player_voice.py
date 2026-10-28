@@ -531,10 +531,18 @@ class PlayerVoiceMixin:
         if not isinstance(channel, disnake.VoiceChannel):
             return
         self._voice_status_last_put = time.monotonic()
-        if await self._send_voice_status(
+        if not await self._send_voice_status(
             self.bot.edit_voice_channel_status(status=text, channel_id=channel.id), channel_id=channel.id
         ):
-            self.last_stage_title = text or ""
+            return
+        current = self._voice_status_channel()
+        if text is not None and (not self.stage_title_event or getattr(current, "id", None) != channel.id):
+            # Desligou ou mudou de canal com este envio em voo: o ``disable_voice_status`` não viu texto para limpar (V-145-1).
+            await self._send_voice_status(
+                self.bot.edit_voice_channel_status(status=None, channel_id=channel.id), channel_id=channel.id
+            )
+            return
+        self.last_stage_title = text or ""
 
     async def _queue_voice_status(self, text: str | None, *, force: bool) -> None:
         """Decide e volta: envia já se há janela do player e ficha do bot; senão guarda UM pendente (o último vence)."""
