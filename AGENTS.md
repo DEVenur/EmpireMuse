@@ -54,6 +54,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/cogs/help_cog.py`: Sistema interativo de ajuda.
 - `empiremuse/cogs/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
 - `empiremuse/cogs/server_manager.py`: Comandos administrativos para gerenciamento de servidores (listar, remover, ver uso, banir e desbanir; só o dono).
+- `empiremuse/rules/bot_roles.py`: regras puras dos papéis principal/reserva (ordem dos convites, quem avisa num servidor sem o principal, textos fixos); o papel de cada bot (`is_main`, `is_reserve`, `pool.main_bot`) fica em `empiremuse/utils/client.py`.
 - `empiremuse/utils/servers.py` e `empiremuse/rules/servers.py`: configuração única por servidor (documento `servers` do banco global, trava por servidor, migração do bot principal, fachada `get_data` no formato antigo) e as regras puras dela.
 - `empiremuse/cogs/usage_tracker.py`, `empiremuse/utils/usage.py`, `empiremuse/utils/guild_ban.py` e `empiremuse/rules/usage.py`: registro de uso (buffer e gravação em lote), lista global de servidores banidos e as regras puras de ambos.
 - `empiremuse/utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).

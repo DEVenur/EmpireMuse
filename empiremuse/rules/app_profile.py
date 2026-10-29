@@ -1,7 +1,7 @@
 """Regras puras do perfil da aplicação no Discord (descrição e tags): modelo, validação e diferença para o valor atual.
 
-A descrição vem de um modelo com ``{prefix}``, ``{bots}``, ``{panel_url}`` e ``{support_url}``: a linha cujo marcador resolve
-vazio sai inteira. ``APP_DESCRIPTION``/``APP_TAGS`` vazios = não mexer no campo. Aqui só há texto; o envio é de ``utils/app_profile``.
+A descrição vem de um modelo com ``{prefix}``, ``{bots}``, ``{panel_url}``, ``{support_url}`` e ``{main}`` (nome do bot principal):
+a linha cujo marcador resolve vazio sai inteira. ``APP_DESCRIPTION``/``APP_TAGS`` vazios = não mexer no campo. Aqui só há texto; o envio é de ``utils/app_profile``.
 """
 
 from __future__ import annotations
@@ -21,7 +21,15 @@ DEFAULT_DESCRIPTION = "\n".join(
     (
         "🎵 Bot de música da comunidade EmpireHub: YouTube, Spotify e Deezer.",
         "▶️ Comece com /play ou {prefix}play <nome ou link>. Ajuda: {prefix}help",
-        "🤖 Somos {bots} bots: com mais de um no servidor, cada call pode ter o seu.",
+        "🤖 Somos {bots} bots: se eu estiver ocupado, uma reserva entra na sua call.",
+        "⚙️ Painel: {panel_url}",
+        "💬 Suporte: {support_url}",
+    )
+)
+DEFAULT_RESERVE_DESCRIPTION = "\n".join(
+    (
+        "🎵 Reserva do {main}: entro na call quando o {main} está ocupado.",
+        "▶️ Comandos de barra ficam no {main}; aqui use {prefix}play. Ajuda: {prefix}help",
         "⚙️ Painel: {panel_url}",
         "💬 Suporte: {support_url}",
     )
@@ -29,7 +37,7 @@ DEFAULT_DESCRIPTION = "\n".join(
 DEFAULT_TAGS = "música,music,player,spotify,youtube"
 
 _ELLIPSIS = "…"
-_PLACEHOLDER = re.compile(r"\{(prefix|bots|panel_url|support_url)\}")
+_PLACEHOLDER = re.compile(r"\{(prefix|bots|panel_url|support_url|main)\}")
 
 
 @dataclass(frozen=True)
@@ -81,12 +89,12 @@ def truncate_description(text: str, limit: int = DESCRIPTION_LIMIT) -> str:
 
 
 def render_description(
-    template: object, *, prefix: object, bots: int, panel_url: object, support_url: object
+    template: object, *, prefix: object, bots: int, panel_url: object, support_url: object, main: object = ""
 ) -> tuple[str, bool]:
     """A descrição pronta e se foi preciso encurtá-la. Vazia = não há nada a gravar.
 
     ``\\n`` escrito à mão no modelo vale quebra de linha (o ``.env`` e o ``docker-compose`` guardam o valor em uma linha só).
-    ``{bots}`` fica vazio com um bot só (a linha sai).
+    ``{bots}`` fica vazio com um bot só (a linha sai) e ``{main}`` sem o principal logado (as linhas dele saem).
     """
     if not isinstance(template, str):
         return "", False
@@ -95,6 +103,7 @@ def render_description(
         "bots": str(bots) if bots > 1 else "",
         "panel_url": _clean_value(panel_url),
         "support_url": _clean_value(support_url),
+        "main": _clean_value(main),
     }
     raw = template.replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
     lines = [rendered for line in raw.split("\n") if (rendered := _render_line(line.rstrip(), values)) is not None]
@@ -131,14 +140,21 @@ def parse_tags(raw: object) -> tuple[tuple[str, ...], tuple[str, ...]]:
 
 
 def build_profile(
-    *, description: object, tags: object, prefix: object, bots: int, panel_url: object, support_url: object
+    *,
+    description: object,
+    tags: object,
+    prefix: object,
+    bots: int,
+    panel_url: object,
+    support_url: object,
+    main: object = "",
 ) -> DesiredProfile:
     """O perfil desejado a partir da configuração. Vazio (ou sem nada válido) deixa o campo como está no Discord."""
     warnings: list[str] = []
     desired_description = None
     if isinstance(description, str) and description.strip():
         text, truncated = render_description(
-            description, prefix=prefix, bots=bots, panel_url=panel_url, support_url=support_url
+            description, prefix=prefix, bots=bots, panel_url=panel_url, support_url=support_url, main=main
         )
         if truncated:
             warnings.append(f"descrição passou de {DESCRIPTION_LIMIT} caracteres e foi encurtada")

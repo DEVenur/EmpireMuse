@@ -81,6 +81,7 @@ def welcome(channel):
         get_command=lambda name: None,
         default_prefix="!",
         user=SimpleNamespace(id=9),
+        is_reserve=False,
         config={"SUPPORT_SERVER": "", "INTERACTION_COMMAND_ONLY": True, "MULTIVOICE_VIDEO_DEMO_URL": ""},
         get_color=lambda: 0x8B5CF6,
     )

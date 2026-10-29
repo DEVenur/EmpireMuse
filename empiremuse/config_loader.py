@@ -8,7 +8,7 @@ import disnake
 from dotenv import dotenv_values
 
 from empiremuse import paths
-from empiremuse.rules.app_profile import DEFAULT_DESCRIPTION, DEFAULT_TAGS
+from empiremuse.rules.app_profile import DEFAULT_DESCRIPTION, DEFAULT_RESERVE_DESCRIPTION, DEFAULT_TAGS
 from empiremuse.rules.usage import clamp_retention_days
 from empiremuse.utils import branding
 
@@ -55,6 +55,7 @@ DEFAULT_CONFIG = {
     # Perfil da aplicação no Discord, gravado por cada bot ao iniciar. Vazio = não mexer no campo. A descrição aceita {prefix},
     # {bots}, {panel_url} e {support_url} (linha cujo marcador fica vazio sai) e \n escrito à mão como quebra de linha.
     "APP_DESCRIPTION": DEFAULT_DESCRIPTION,
+    "APP_DESCRIPTION_RESERVE": DEFAULT_RESERVE_DESCRIPTION,  # só o bot reserva; vazio = não mexer
     "APP_TAGS": DEFAULT_TAGS,
     "INVITE_PERMISSIONS": 2533601240804560,
     "APP_EMOJIS_GUILD_BOTS": False,

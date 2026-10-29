@@ -48,8 +48,10 @@ from empiremuse.logs.context import guild_extra
 from empiremuse.logs.errors import command_context, install_exception_handlers
 from empiremuse.logs.metrics import SUMMARY_PREFIX, MetricsCollector, NodeSample, format_summary
 from empiremuse.logs.metrics import process_stats as metrics_process_stats
+from empiremuse.rules.bot_roles import NOTICE_WINDOW_SECONDS, main_missing_hint
 from empiremuse.rules.git_remote import parse_remote_web_url, sanitized_repo_url
 from empiremuse.rules.owner_shell import collect_secret_values
+from empiremuse.rules.servers import is_main_identifier
 from empiremuse.updater.notice import on_pool_ready
 from empiremuse.updater.state import read_pending
 from empiremuse.utils import branding
@@ -85,6 +87,10 @@ from empiremuse.utils.owner_panel import PanelView
 from empiremuse.web_app import WSClient, start
 
 logger = logging.getLogger(__name__)
+
+MAIN_PREFIX_WAIT = (
+    5.0  # s que a reserva espera o principal assumir o comando de prefixo antes de ignorá-lo (ele pode ir ao banco)
+)
 node_logger = logging.getLogger("empiremuse.wavelink")
 commands_logger = logging.getLogger("empiremuse.commands")
 
@@ -188,6 +194,8 @@ class BotPool:
     update_watch_task: Optional[asyncio.Task] = None
     usage: Optional[UsageRecorder] = None
     guild_bans: Optional[GuildBans] = None
+    servers: Optional[ServerStore] = None
+    join_notices: Optional[TTLCache] = None
     logs_task: Optional[asyncio.Task] = None
     version_check_task: Optional[asyncio.Task] = None
     helper_watch_tasks: tuple[asyncio.Task, ...] | set[asyncio.Task] = ()
@@ -256,6 +264,8 @@ class BotPool:
         self.usage = UsageRecorder(self)
         self.guild_bans = GuildBans(self)
         self.servers = ServerStore(self)
+        # servidor -> aviso de "sem o principal" já enviado; a validade de 24 h é o limitador único (um aviso por servidor no pool)
+        self.join_notices = TTLCache(maxsize=5000, ttl=NOTICE_WINDOW_SECONDS)
         self.logs_task: Optional[asyncio.Task] = None
         self.helper_watch_tasks: set[asyncio.Task] = set()  # referências fortes das tarefas do watch_helper
         # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
@@ -454,6 +464,45 @@ class BotPool:
 
     def get_guild_bots(self, guild_id: int) -> list:
         return self.bots + self.guild_bots.get(str(guild_id), [])
+
+    @property
+    def main_configured(self) -> bool:
+        """Há um token principal configurado (logado, logando ou que falhou)? Sem ele ninguém é reserva: todos agem como sempre."""
+        return any(is_main_identifier(bot.identifier) for bot in self.bots) or any(
+            is_main_identifier(identifier) for identifier in getattr(self, "failed_bots", {})
+        )
+
+    @property
+    def main_bot(self) -> Optional[BotCore]:
+        """O bot principal (token principal, logado) ou ``None``. Os bots exclusivos de servidor ficam fora."""
+        return self.servers.main_bot() if self.servers is not None else None
+
+    def main_can_serve(self, guild_id: int, channel_id: Optional[int] = None) -> bool:
+        """O principal está no servidor (e, com ``channel_id``, enxerga e escreve no canal) e pronto para responder?"""
+        main = self.main_bot
+        if main is None or not main.bot_ready or main.is_closed():
+            return False
+        guild = main.get_guild(guild_id)
+        if guild is None:
+            return False
+        if channel_id is None:
+            return True
+        channel = guild.get_channel_or_thread(channel_id)
+        if channel is None:
+            return False
+        if isinstance(channel, disnake.Thread):
+            return channel.parent.permissions_for(guild.me).send_messages_in_threads
+        return channel.permissions_for(guild.me).send_messages
+
+    async def wait_main_outcome(self, timeout: float = 120.0) -> bool:
+        """Espera o principal logar (``True``) ou falhar/não existir (``False``); o fim do prazo conta como ``False``."""
+        deadline = self.loop.time() + timeout
+        while self.main_bot is None:
+            still_logging_in = any(is_main_identifier(bot.identifier) for bot in self.bots)
+            if not still_logging_in or self.loop.time() >= deadline:
+                return False
+            await asyncio.sleep(1)
+        return True
 
     def get_all_bots(self) -> list:
         allbots = set()
@@ -1152,6 +1201,10 @@ class BotPool:
 
                 @bot.check
                 async def check_commands(ctx: CustomContext):
+                    # reserva num canal onde o principal não atende: não há comando de barra por perto, o prefixo é o único caminho
+                    if bot.is_reserve and ctx.guild and not self.main_can_serve(ctx.guild.id, ctx.channel.id):
+                        return True
+
                     if not (await bot.is_owner(ctx.author)):
                         raise GenericError(
                             "**Os comandos de texto estão desativados!\nUse os comandos de barra /**",
@@ -1433,6 +1486,7 @@ class BotCore(commands.AutoShardedBot):
         self.music: wavelink.Client = music_mode(self)
         self.interaction_id: Optional[int] = None
         self.wavelink_node_reconnect_tasks = {}
+        self._clear_commands_task: Optional[asyncio.Task] = None
 
         self.env_owner_ids.update(parse_owner_ids(self.config["OWNER_IDS"]))
 
@@ -1478,6 +1532,35 @@ class BotCore(commands.AutoShardedBot):
     def ws_client(self):
         return self.pool.ws_client
 
+    @property
+    def is_main(self) -> bool:
+        """O bot principal (token principal), nunca um bot exclusivo de servidor."""
+        return is_main_identifier(self.identifier) and not self.exclusive_guild_id
+
+    @property
+    def is_reserve(self) -> bool:
+        """Reserva: do pool, não é o principal, não é exclusivo de servidor e há um token principal configurado."""
+        return not self.exclusive_guild_id and not is_main_identifier(self.identifier) and self.pool.main_configured
+
+    def main_invite_url(self) -> Optional[str]:
+        """Convite do principal montado aqui (nunca de texto de fora); ``None`` se ele não existe ou não é público."""
+        main = self.pool.main_bot
+        if main is None or main.appinfo is None or not main.appinfo.bot_public:
+            return None
+        return disnake.utils.oauth_url(
+            main.user.id, permissions=disnake.Permissions(main.config["INVITE_PERMISSIONS"]), scopes=("bot",)
+        )
+
+    def slash_commands_line(self, guild_id: int) -> Optional[str]:
+        """Para uma reserva: uma linha dizendo onde estão os comandos de barra (ela não os tem). ``None`` para os outros bots."""
+        main = self.pool.main_bot
+        if not self.is_reserve or main is None:
+            return None
+        if main.get_guild(guild_id) is not None:
+            return f"Os comandos de barra (/) ficam no {main.user.mention}."
+        url = self.main_invite_url()
+        return main_missing_hint(main.user.name, url) if url else None
+
     async def get_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users]):
         if db_name == DBModel.guilds:  # configuração do servidor: documento único, devolvido no formato antigo
             return await self.pool.servers.legacy_doc(self, id_)
@@ -1506,8 +1589,65 @@ class BotCore(commands.AutoShardedBot):
 
         return await super().is_owner(user)
 
+    async def _clear_remote_commands(self) -> None:
+        """Reserva: apaga do Discord os comandos globais (e os de ``TEST_GUILDS_*``) da aplicação, uma vez (marca ``[]`` no arquivo de sync).
+
+        Só com o principal logado: sem ele a reserva não mexe em nada (fica com o que tinha). Falha vira aviso e repete no próximo boot.
+        """
+        if not await self.pool.wait_main_outcome():
+            logger.error(
+                "Principal não logou: a reserva %s mantém os comandos de barra que já tinha na aplicação",
+                self.identifier,
+            )
+            return
+
+        sync_file = paths.RUNTIME_DIR / ".app_commands_sync_data" / f"{self.user.id}.json"
+        try:
+            with open(sync_file) as f:
+                if await self.loop.run_in_executor(None, lambda: json.load(f)) == []:
+                    return
+        except FileNotFoundError, ValueError:
+            pass
+
+        try:
+            await self.http.bulk_upsert_global_commands(self.application_id, [])
+            for guild_id in self._test_guilds or ():
+                await self.http.bulk_upsert_guild_commands(self.application_id, guild_id, [])
+        except Exception as exc:  # noqa: BLE001 - vira aviso; o próximo boot tenta de novo
+            logger.warning(
+                "Reserva %s: comandos de barra da aplicação %s não removidos (%s)",
+                self.identifier,
+                self.application_id,
+                type(exc).__name__,
+            )
+            return
+
+        logger.warning(
+            "Reserva %s: comandos de barra removidos da aplicação %s (eles ficam no principal)",
+            self.identifier,
+            self.application_id,
+        )
+        try:
+            sync_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(sync_file, "w", encoding="utf-8") as f:
+                await self.loop.run_in_executor(None, lambda: json.dump([], f))
+        except Exception:
+            logger.exception("Falha ao gravar os dados da sincronização dos comandos")
+
+    async def clear_remote_commands(self) -> None:
+        try:
+            await self._clear_remote_commands()
+        except Exception:
+            logger.exception("Falha ao remover os comandos de barra da reserva %s", self.identifier)
+
     async def sync_app_commands(self, force=False):
         await self.wait_until_ready()
+
+        if self.is_reserve:  # só o principal sincroniza comandos; a reserva fica sem nenhum no Discord
+            if self._clear_commands_task is None or self._clear_commands_task.done():
+                # em tarefa de fundo: esperar o principal logar nunca atrasa a reserva ficar pronta
+                self._clear_commands_task = self.loop.create_task(self.clear_remote_commands())
+            return
 
         if not self.command_sync_flags.sync_commands and not force:
             return
@@ -1657,7 +1797,11 @@ class BotCore(commands.AutoShardedBot):
                     f"Pra ver todos os meus comandos use **{prefix}help**"
                 )
 
-            embed.description += "\n\n**Pra ver todos os meus comandos use: /**"
+            if self.is_reserve:
+                if line := self.slash_commands_line(message.guild.id):
+                    embed.description += f"\n\n{line}"
+            else:
+                embed.description += "\n\n**Pra ver todos os meus comandos use: /**"
 
             kwargs = {
                 "components": [
@@ -1724,6 +1868,17 @@ class BotCore(commands.AutoShardedBot):
         if not await self.can_send_message(message):
             return
 
+        if (
+            self.is_reserve
+            and not message.content.startswith(tuple(self.pool.bot_mentions))  # citada pelo nome, a reserva atende
+            and self.pool.main_can_serve(message.guild.id, message.channel.id)
+            and not self._owns_forum_post(
+                message.channel
+            )  # no post de fórum dela só ela atende (o principal recusa em check_forum)
+            and not await self._main_took_prefix(ctx)
+        ):
+            return  # com o principal atendendo aqui, quem recebe o comando de prefixo é ele (S-V6)
+
         try:
             kwargs = {
                 "only_voiced": ctx.command.pool_only_voiced,
@@ -1740,6 +1895,22 @@ class BotCore(commands.AutoShardedBot):
             return
 
         await self.invoke(ctx)
+
+    def _owns_forum_post(self, channel) -> bool:
+        return (
+            not self.check_bot_forum_post(channel, raise_error=False)
+            and getattr(channel, "owner_id", None) == self.user.id
+        )
+
+    async def _main_took_prefix(self, ctx: CustomContext) -> bool:
+        """A reserva espera o principal assumir o comando (a entrada dele em ``pool.message_ids``); sem ela no prazo, ignora."""
+        msg_id = f"{ctx.guild_id}-{ctx.channel.id}-{ctx.message.id}"
+        deadline = self.loop.time() + MAIN_PREFIX_WAIT
+        while msg_id not in self.pool.message_ids:
+            if self.loop.time() >= deadline:
+                return False
+            await asyncio.sleep(0.05)
+        return True
 
     def check_bot_forum_post(
         self,
