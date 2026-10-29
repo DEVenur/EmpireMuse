@@ -23,6 +23,7 @@ from empiremuse.panel.handlers.servers import (
 from empiremuse.panel.services.appearance import SkinsGlobalForm, SkinsServerForm
 from empiremuse.panel.services.base import (
     DBModel,
+    CONFLICT_TEXT,
     DIGITS,
     KIND_ERROR,
     ForbiddenAction,
@@ -35,6 +36,7 @@ from empiremuse.panel.services.links import LinksForm
 from empiremuse.panel.services.listen_along import ListenAlongForm
 from empiremuse.panel.services.player import DjForm, PlayerForm
 from empiremuse.panel.services.service import Outcome, SettingsService
+from empiremuse.utils.servers import ServerConfigConflict
 from empiremuse.utils.usage import record_panel_action
 
 logger = logging.getLogger(__name__)
@@ -98,6 +100,9 @@ class SettingsHandler(AuthenticatedHandler):
         except ForbiddenAction:
             state = await self.service.read(form, ctx, action, message=_MSG_FORBIDDEN, kind=KIND_ERROR)
             outcome = Outcome(403, state)
+        except ServerConfigConflict:  # a gravação concorrente do store esgotou as tentativas: o usuário recarrega
+            state = await self.service.read(form, ctx, action, message=CONFLICT_TEXT, kind=KIND_ERROR)
+            outcome = Outcome(409, state)
         record_panel_action(ctx, f"{category}/{form.key}", outcome.status)
         await self._respond(category, access, ctx, action, form, outcome)
 

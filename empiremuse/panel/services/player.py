@@ -79,10 +79,11 @@ class DjForm(SettingsForm):
         return {"djroles": [str(role_id) for role_id in doc["djroles"]]}
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
-        doc["djroles"] = [int(role_id) for role_id in new["djroles"]]
+        doc["djroles"] = list(new["djroles"])
 
     async def store(self, ctx: FormContext, doc: dict, before: dict) -> None:
         """Cargos entram e saem um a um dentro da trava do store; nunca regrava a lista inteira lida antes (S-V3)."""
+        # ids em texto, como o banco e o resto do código gravam
         kept = set(doc["djroles"])
         for role_id in before["djroles"]:
             if role_id not in kept:
