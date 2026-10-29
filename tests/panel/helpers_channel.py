@@ -29,7 +29,8 @@ from tests.support.canal_de_pedidos import (
 from tests.panel.helpers import require
 from tests.panel.helpers_login import make_fake_oauth
 from tests.panel.helpers_servers import raw_guild
-from tests.panel.helpers_settings import FakeDB, SettingsBase, SettingsWorld, UID
+from tests.panel.helpers_settings import FakeDB, SettingsBase, SettingsWorld, UID, WorldDatabase
+from empiremuse.utils.servers import ServerStore
 
 GID = 100
 PANEL_USER = str(UID)
@@ -42,6 +43,7 @@ class PanelGuild(FakeGuild):
     def __init__(self, journal, bot_perms, features=()):
         super().__init__(journal, bot_perms, features)
         self.id, self.name, self.owner_id, self.icon = GID, "Alfa", 999, None
+        self.roles = []
         self.members = {UID: SimpleNamespace(guild_permissions=SimpleNamespace(administrator=True, manage_guild=True))}
 
     def get_member(self, user_id):
@@ -56,6 +58,7 @@ class PanelBot(FakeBot):
         super().__init__(journal, guild, None)
         self.world, self.ready = world, True
         self.application_id = BOT_ID
+        self.identifier, self.exclusive_guild_id = "TOKEN", None  # o único bot é o principal
         self.user = SimpleNamespace(
             id=BOT_ID,
             name="Bot Um",
@@ -88,6 +91,9 @@ class PanelPool:
     def get_guild_bots(self, guild_id):
         return [b for b in self.bots if b.get_guild(int(guild_id)) is not None]
 
+    def get_all_bots(self):
+        return list(self.bots)
+
     def api_calls(self):
         return 0
 
@@ -109,6 +115,7 @@ class ChannelWorld:
         self.db = FakeDB(self.j)
         self.bot = PanelBot(self.j, self.guild, self)
         self.pool = PanelPool([self.bot], self.config)
+        self.bot.pool = self.pool
         g = self.guild
         self.category = FakeCategoryChannel(self.j, 66, "Música", g)
         self.lobby = FakeText(self.j, 11, "geral", g, category=self.category)
@@ -140,6 +147,8 @@ class ChannelWorld:
         self.db.docs[(str(BOT_ID), GID)]["player_controller"].update({"channel": None, "message_id": None})
         self.db.baseline[(str(BOT_ID), GID)] = copy.deepcopy(self.db.docs[(str(BOT_ID), GID)])
         self.db.seed("global", GID, SettingsWorld.global_doc())
+        self.database = self.pool.database = WorldDatabase(self.db)  # o store real; só o banco é de mentira
+        self.pool.servers = ServerStore(self.pool)
 
     # ---- o send_idle_embed real monta embeds enormes: só registramos e devolvemos a mensagem
     async def fake_send_idle_embed(self, target, text="", *, bot, force=False, guild_data=None):
@@ -159,16 +168,30 @@ class ChannelWorld:
         self.next_message += 1
         return target.add_message(self.next_message, self.guild.me)
 
-    # ---- estado do banco
+    # ---- estado do banco: o canal de pedidos mora na seção ``request`` do documento único do servidor
     @property
-    def doc(self):
+    def bot_doc(self):
+        """O documento por bot (não é mais lido nem gravado pelo painel)."""
         return self.db.doc(str(BOT_ID), GID)
 
+    @property
+    def request_doc(self):
+        return copy.deepcopy(self.database.servers[GID]["request"])
+
+    async def premigrate(self):
+        await self.pool.servers.get(GID)
+        await self.pool.servers.request.get(GID)
+        await self.pool.servers.request.elect(GID)  # servidor já em uso: o bot do painel já foi eleito
+        self.db.reads.clear()
+        self.db.writes.clear()
+        self.j.clear()
+
     def configure(self, channel=None, message_id=None):
-        """Grava channel/message_id no banco (como o /setup deixaria)."""
-        doc = self.db.docs[(str(BOT_ID), GID)]
-        doc["player_controller"].update({"channel": channel, "message_id": message_id})
-        self.db.baseline[(str(BOT_ID), GID)] = copy.deepcopy(doc)
+        """Grava channel/message_id no documento único (como o /setup deixaria)."""
+        doc = self.database.servers[GID]
+        doc["request"].update({"channel": channel, "message_id": message_id})
+        doc["rev"] += 1
+        self.pool.servers._docs.clear()
 
     def configured_text(self, thread=True):
         message = self.text.add_message(555, self.guild.me, FakeThreadInfo(self.j, "song-requests") if thread else None)
@@ -193,6 +216,7 @@ class ChannelBase(SettingsBase):
         self.settings, self.world = settings, ChannelWorld(**self.world_kwargs)
         self.pool, self.db, self.events = self.world.pool, self.world.db, self.world.j
         self.fake = make_fake_oauth(settings, guilds=self.world.raw)
+        self.io_loop.run_sync(self.world.premigrate)
         request_channel = require("empiremuse.utils.music.request_channel")
         self.monkeypatch.setitem(
             request_channel.apply_request_channel.__kwdefaults__, "send_idle_embed", self.world.fake_send_idle_embed

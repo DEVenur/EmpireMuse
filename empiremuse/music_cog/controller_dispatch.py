@@ -9,7 +9,7 @@ from disnake.ext import commands
 from empiremuse.utils.client import BotCore
 from empiremuse.rules.usage import KIND_BUTTON
 from empiremuse.utils.db import DBModel
-from empiremuse.utils.music.checks import voice_status_lock_remaining
+from empiremuse.utils.music.checks import pick_request_bot, update_attr, voice_status_lock_remaining
 from empiremuse.utils.music.converters import (
     time_format,
 )
@@ -93,6 +93,28 @@ class ControllerDispatchMixin:
                 logger.debug("Player reconectado no canal de voz", extra=guild_extra(getattr(player.guild, "id", None)))
             except Exception:
                 logger.exception("Falha em resume_players_ready")
+
+    async def request_executor(self, inter):
+        """O cog ``Music`` do bot que atende um pedido feito no canal de pedidos ÚNICO (o do painel recebe, quem toca pode ser outro).
+
+        Define ``inter.music_bot``/``music_guild`` para o resto do fluxo agir no bot certo: o que já está na call de quem pediu, senão o
+        1º livre. Fora do canal único devolve este mesmo cog, sem mexer na interação.
+        """
+        pool = self.bot.pool
+        try:
+            config = await pool.servers.request.get(inter.guild_id)
+        except GenericError:
+            return self
+        channel = getattr(inter, "channel", None)
+        if not config.channel or config.channel not in (inter.channel_id, getattr(channel, "parent_id", None)):
+            return self
+        bot = pick_request_bot(pool, inter.guild_id, inter.author)
+        if bot is None:
+            raise GenericError(
+                "**Todos os bots de música estão em uso no momento.** Entre na call de um deles ou aguarde um ficar livre."
+            )
+        update_attr(inter, bot, bot.get_guild(inter.guild_id))
+        return self if bot is self.bot else bot.get_cog("Music")
 
     async def is_request_channel(
         self,
@@ -346,7 +368,8 @@ class ControllerDispatchMixin:
         }
 
         try:
-            await self.play.callback(self=self, inter=interaction, **kwargs)
+            cog = await self.request_executor(interaction)
+            await cog.play.callback(self=cog, inter=interaction, **kwargs)
         except Exception as e:
             self.bot.dispatch("interaction_player_error", interaction, e)
 

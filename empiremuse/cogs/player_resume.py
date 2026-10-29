@@ -13,6 +13,7 @@ from empiremuse.rules.voice_status import resolve_voice_status
 from empiremuse.serialization.schema import SchemaError
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.request_panel import fetch_panel_message
 from empiremuse.utils.music.checks import can_connect, can_send_message
 from empiremuse.utils.music.errors import PoolException
 from empiremuse.utils.music.filters import AudioFilter
@@ -483,6 +484,15 @@ class PlayerSession(commands.Cog):
                                     message = await text_channel.fetch_message(data["message_id"])
                                 except disnake.NotFound, disnake.Forbidden:
                                     pass
+
+                if data.get("static") and text_channel and controller["channel"]:
+                    # sessão estática do canal único: a mensagem é a do painel, vista pelo bot do painel (o autor); só ele a edita
+                    try:
+                        panel_message = await fetch_panel_message(self.bot.pool, guild.id)
+                    except Exception:
+                        panel_message = None
+                    if panel_message is not None:
+                        message = panel_message
 
                 message_without_thread = None
 

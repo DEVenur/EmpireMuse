@@ -298,6 +298,13 @@ class BotDoPlayer(BotDeComandos):
         self.eventos = []
         self.documento("global", "users", AUTOR)["fav_links"].update(favoritos or {})
 
+        async def sem_canal_de_pedidos(gid):
+            from empiremuse.utils.server_request import RequestConfig
+
+            return RequestConfig(None, None, None, 0)  # sem painel configurado: o clique segue pelo caminho normal
+
+        self.pool.servers = SimpleNamespace(request=SimpleNamespace(get=sem_canal_de_pedidos))
+
     def dispatch(self, nome, *args):
         self.eventos.append(nome)
 

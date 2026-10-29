@@ -56,6 +56,24 @@ def resolve_player(pool: BotPool, guild_id: int, member: disnake.Member) -> Opti
     return found.get(chosen) if chosen is not None else None
 
 
+def pick_request_bot(pool: BotPool, guild_id: int, member: disnake.Member) -> Optional[BotCore]:
+    """Quem atende um PEDIDO feito no canal único: o bot que já está na call de quem pediu; senão o 1º livre (ordem do ``identifier``).
+
+    ``None`` se todos estão ocupados em outras calls. Como o ``resolve_player``, só olha onde o bot está agora, nunca um id vindo de fora.
+    """
+    if (resolved := resolve_player(pool, guild_id, member)) is not None:
+        return resolved[0]
+    for bot in sorted(pool.get_all_bots(), key=lambda b: b.identifier):
+        if not bot.user or not bot.bot_ready or (guild := bot.get_guild(guild_id)) is None:
+            continue
+        exclusive = getattr(bot, "exclusive_guild_id", None)
+        if exclusive and exclusive != guild_id:
+            continue
+        if guild.me is not None and guild.me.voice is None:
+            return bot
+    return None
+
+
 def can_send_message(
     channel: Union[disnake.TextChannel, disnake.VoiceChannel, disnake.Thread],
     bot: Union[disnake.ClientUser, disnake.Member],

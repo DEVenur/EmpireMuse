@@ -14,6 +14,7 @@ from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import (
     can_connect,
     check_player_perm,
+    pick_request_bot,
 )
 from empiremuse.utils.music.converters import (
     time_format,
@@ -159,13 +160,24 @@ class SongRequestsMixin:
                     "force_play": "no",
                 }
 
-                await self.process_player_interaction(
+                # o modal é do painel; resolvido AGORA (S7b): trocou de call depois de abrir, vale a call atual
+                cog = await self.request_executor(inter)
+                await cog.process_player_interaction(
                     interaction=inter,
-                    command=self.bot.get_slash_command("play"),
+                    command=cog.bot.get_slash_command("play"),
                     kwargs=kwargs,
                 )
             except Exception as e:
                 self.bot.dispatch("interaction_player_error", inter, e)
+
+    async def song_request_executor(self, req):
+        """O cog ``Music`` do bot que toca o que foi digitado: o que já está na call de quem pediu, senão o 1º livre (S7)."""
+        bot = pick_request_bot(self.bot.pool, req.message.guild.id, req.message.author)
+        if bot is None:
+            raise GenericError(
+                "Todos os bots de música estão em uso no momento. Entre na call de um deles ou aguarde um ficar livre."
+            )
+        return self if bot is self.bot else bot.get_cog("Music")
 
     async def delete_message(self, message: disnake.Message, delay: int = None, ignore=False):
         if ignore:
@@ -235,7 +247,10 @@ class SongRequestsMixin:
             if await _sr_prepare_query(self, req):
                 return
 
-            await self.parse_song_request(req.message, req.text_channel, req.data, response=req.msg, source=req.source)
+            executor = await self.song_request_executor(req)
+            await executor.parse_song_request(
+                req.message, req.text_channel, req.data, response=req.msg, source=req.source
+            )
 
         except GenericError as e:
             failure = e
@@ -315,10 +330,13 @@ class SongRequestsMixin:
             await _pr_single(self, req)
 
         if not req.player.is_connected:
+            guild = self.bot.get_guild(req.message.guild.id) or req.message.guild
             await self.do_connect(
                 req.message,
-                channel=req.message.author.voice.channel,
+                channel=guild.get_channel(req.message.author.voice.channel.id) or req.message.author.voice.channel,
                 check_other_bots_in_vc=req.data["check_other_bots_in_vc"],
+                bot=self.bot,
+                me=guild.me,
             )
 
         if not req.player.current:

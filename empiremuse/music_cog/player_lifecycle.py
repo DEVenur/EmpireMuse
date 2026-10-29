@@ -12,6 +12,7 @@ from empiremuse.logs.context import guild_extra
 from empiremuse.rules.voice_status import resolve_voice_status
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.request_panel import fetch_panel_message
 from empiremuse.utils.music.skin_store import load_custom_skins
 from empiremuse.utils.music.models import (
     LavalinkPlayer,
@@ -248,7 +249,12 @@ class PlayerLifecycleMixin:
 
         if not player.message and player.text_channel:
             try:
-                player.message = await player.text_channel.fetch_message(int(static_player["message_id"]))
+                if (
+                    player.static
+                ):  # a mensagem do painel é do bot do painel: o player a recebe ligada a ele (só ele a edita)
+                    player.message = await fetch_panel_message(bot.pool, guild_id)
+                else:
+                    player.message = await player.text_channel.fetch_message(int(static_player["message_id"]))
             except TypeError:
                 player.message = None
             except Exception:

@@ -34,7 +34,10 @@ from empiremuse.utils.music.models.step_state import NpState
 
 
 class PlayerMessageMixin:
-    async def invoke_np(self, force=False, interaction=None, rpc_update=False):
+    async def invoke_np(self, force=False, interaction=None, rpc_update=False, panel_render=False):
+        if self.static and not panel_render and await self._panel_takes_over(interaction):
+            return
+
         req = NpState(force=force, interaction=interaction, rpc_update=rpc_update)
         if await _np_guards(self, req):
             return
@@ -86,6 +89,20 @@ class PlayerMessageMixin:
             self.start_message_updater_task()
 
         self.updating = False
+
+    async def _panel_takes_over(self, interaction=None) -> bool:
+        """Com 2+ players no canal de pedidos único a mensagem é o painel em lista (``RequestPanel``), não a skin deste player."""
+        panel = getattr(self.bot.pool, "request_panel", None)
+        if panel is None or not panel.takes_over(self.guild_id):
+            return False
+        if interaction is not None:
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.defer()
+            except Exception:
+                logger.exception("Falha em invoke_np")
+        await panel.refresh(self.guild_id)
+        return True
 
     async def message_updater(self):
         while True:

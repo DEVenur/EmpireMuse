@@ -210,6 +210,7 @@ def montar_pedido(monkeypatch, erro: BaseException, *, webhook=False):
         delete_message=AsyncMock(),
         parse_song_request=AsyncMock(side_effect=erro),
     )
+    self_.song_request_executor = AsyncMock(return_value=self_)  # o bot que toca é o próprio
     ctx = SimpleNamespace(command=None, guild=guilda, channel=canal, author=autor)
     return music.Music, self_, ctx, mensagem, envios, webhook_cog
 
