@@ -39,6 +39,11 @@ class GuildBans:
         self._loaded = False
         self._lock = asyncio.Lock()
 
+    @property
+    def loaded(self) -> bool:
+        """A lista veio do banco? Falso enquanto o banco falhou: ``records()`` vazio então não prova que não há banidos."""
+        return self._loaded
+
     def is_banned(self, guild_id: int) -> bool:
         return should_leave(guild_id, self._records)
 
@@ -54,7 +59,7 @@ class GuildBans:
             if self._loaded:
                 return
             try:
-                documents = await self.pool.database.query_data(DBModel.banned_guilds, BANS_DB)
+                documents = await self.pool.database.query_data(db_name=DBModel.banned_guilds, collection=BANS_DB)
                 loaded = {}
                 for document in documents:
                     if (record := ban_from_doc(document)) is not None:

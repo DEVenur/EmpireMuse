@@ -47,7 +47,7 @@ FLUSH_INTERVAL = 10.0
 FLUSH_BATCH = 500
 MAX_BUFFER = 5000
 PRUNE_INTERVAL = 3600.0
-QUERY_LIMIT = 20000
+QUERY_LIMIT = 200_000  # acima disso o resumo avisa que os totais são parciais
 STAMP_LIMIT = 1000  # quantas faixas da fila recebem o rótulo do comando que as enfileirou
 METRIC_KIND = "usage_write"
 EXTRA_KEY = "usage_cmd"
@@ -69,12 +69,29 @@ def _now_ms() -> int:
 
 
 class _Playback:
-    __slots__ = ("event_id", "started", "length")
+    __slots__ = ("event_id", "started", "length", "paused_total", "paused_since")
 
     def __init__(self, event_id: str, length: Optional[int]) -> None:
         self.event_id = event_id
         self.started = time.monotonic()
         self.length = length
+        self.paused_total = 0.0
+        self.paused_since: Optional[float] = None
+
+    def set_paused(self, paused: bool) -> None:
+        now = time.monotonic()
+        if paused and self.paused_since is None:
+            self.paused_since = now
+        elif not paused and self.paused_since is not None:
+            self.paused_total += now - self.paused_since
+            self.paused_since = None
+
+    def listened(self) -> int:
+        """Segundos tocando de fato: o tempo desde o início sem as pausas, até o tamanho da faixa (se conhecido)."""
+        now = time.monotonic()
+        paused = self.paused_total + (now - self.paused_since if self.paused_since is not None else 0.0)
+        seconds = max(0, int(now - self.started - paused))
+        return seconds if self.length is None else min(seconds, self.length)
 
 
 class _OpenCommand:
@@ -294,11 +311,13 @@ class UsageRecorder:
         except Exception as exc:  # noqa: BLE001
             self._note_failure("registrar", exc)
 
+    def playback_paused(self, bot: object, guild_id: int, paused: bool) -> None:
+        playback = self._playing.get((bot.user.id, guild_id))  # type: ignore[attr-defined]
+        if playback is not None:
+            playback.set_paused(paused)
+
     def _patch(self, playback: _Playback, reason: str) -> None:
-        listened = int(time.monotonic() - playback.started)
-        if playback.length is not None:
-            listened = min(listened, playback.length)
-        self._enqueue(("patch", (playback.event_id, {"listened": max(0, listened), "end": reason})))
+        self._enqueue(("patch", (playback.event_id, {"listened": playback.listened(), "end": reason})))
 
     # ------------------------------------------------------------------ gravação em lote
 

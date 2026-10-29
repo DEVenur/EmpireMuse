@@ -29,7 +29,7 @@ from empiremuse.rules.usage import (
 )
 from empiremuse.utils.guild_ban import bans_of
 from empiremuse.utils.music.converters import time_format
-from empiremuse.utils.usage import usage_of
+from empiremuse.utils.usage import QUERY_LIMIT, usage_of
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -126,9 +126,10 @@ async def send_usage(interaction: disnake.MessageInteraction, guild_id: int, gui
         await interaction.followup.send("Não consegui ler o registro de uso agora.", ephemeral=True)
         return
     summary = summarize(events, now_ms=int(disnake.utils.utcnow().timestamp() * MS_PER_SECOND))
-    await interaction.followup.send(
-        embed=usage_embed(guild_id, guild_name, summary, color=color), ephemeral=True, allowed_mentions=NO_MENTIONS
-    )
+    embed = usage_embed(guild_id, guild_name, summary, color=color)
+    if len(events) >= QUERY_LIMIT:
+        embed.set_footer(text="Servidor com muitos eventos: os totais cobrem só os mais recentes.")
+    await interaction.followup.send(embed=embed, ephemeral=True, allowed_mentions=NO_MENTIONS)
 
 
 # ---------------------------------------------------------------------- banimento
@@ -283,8 +284,15 @@ class BannedListView(OwnerOnlyView):
 
 
 async def send_banned(interaction: disnake.MessageInteraction, invoker_id: int, color: int) -> None:
+    await interaction.response.defer(ephemeral=True)  # a carga do banco pode passar dos 3 s
+    bans = bans_of(interaction.bot)
+    if bans is not None:
+        await bans.ensure_loaded()
+    if bans is None or not bans.loaded:
+        await interaction.followup.send("Não consegui carregar a lista de banidos agora.", ephemeral=True)
+        return
     view = BannedListView(interaction.bot, invoker_id, color)
-    await interaction.response.send_message(
+    await interaction.followup.send(
         embed=banned_embed(view.records, color=color),
         view=view if view.records else disnake.utils.MISSING,
         ephemeral=True,

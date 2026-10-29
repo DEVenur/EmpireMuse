@@ -83,6 +83,11 @@ def _he_log_track_event(self, kind: str, track) -> None:
     )
 
 
+def _he_same_node(self, event) -> bool:
+    """O evento é do nó atual do player? (os de nó antigo são descartados, e o registro de uso também os ignora)"""
+    return event.node.identifier == self.node.identifier
+
+
 async def _he_dispatch(self, event) -> None:
     """Despacha o evento do Lavalink com o contexto de log (bot e servidor) e as métricas do pool."""
     with log_context(bot=getattr(self.bot, "identifier", None), guild=self.guild.id):
@@ -90,14 +95,14 @@ async def _he_dispatch(self, event) -> None:
         if isinstance(event, wavelink.TrackEnd):
             if metrics:
                 metrics.track_ended(self.guild.id, str(getattr(event, "reason", "")))
-            if usage := usage_of(self.bot):
+            if (usage := usage_of(self.bot)) and _he_same_node(self, event):
                 usage.playback_ended(self.bot, self.guild.id, getattr(event, "reason", ""))
             _he_log_track_event(self, f"Faixa terminada ({getattr(event, 'reason', '?')})", self.last_track)
             await _he_track_end(self, event)
         elif isinstance(event, wavelink.TrackStart):
             if metrics:
                 metrics.track_started(self.guild.id)
-            if usage := usage_of(self.bot):
+            if (usage := usage_of(self.bot)) and _he_same_node(self, event):
                 usage.playback_started(self.bot, self, self.current)
             _he_log_track_event(self, "Faixa iniciada", self.current)
             await _he_track_start(self, event)
