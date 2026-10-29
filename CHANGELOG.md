@@ -15,6 +15,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Suíte de testes enxuta (pastas logs, updater, web, persistence, serialization, rules, config, runtime, deploy, brand e repo)**: saem testes obsoletos, de caracterização, de mutação, de estrutura, que liam o texto de docs/ativos e vários testes para o mesmo caminho; ficam segurança, persistência, contratos e regras puras. Sem mudança no bot.
 - **Testes**: enxugadas as suítes de `tests/audio`, `tests/cogs` e `tests/pool` (caracterização em massa, testes de mutação e testes em volta de correções já feitas) e removidos os helpers de `tests/support` que nenhum teste usa mais; ficam os testes de segurança, contratos Discord/Lavalink e um por bug real.
 
+### Documentação
+- **README e AGENTS.md**: badge do Docker Hub, bloco de links (convite do bot, Discord e página do projeto) e aviso de que não há compromisso de suporte à hospedagem própria; novo "Mapa de risco" no `AGENTS.md` ligando áreas do repositório aos níveis Baixo, Médio e Alto.
+
 ## [2.1.2] - 2026-10-28
 
 Status automático do canal de voz ligado por padrão (com a opção permanente no painel › Geral), nova tentativa quando o YouTube falha e correções de log e de seletor de skin.

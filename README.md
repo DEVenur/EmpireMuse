@@ -13,7 +13,18 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/Licen%C3%A7a-GPL--2.0-blue.svg" alt="Licença GPL-2.0"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white" alt="Python 3.14"></a>
   <a href="https://github.com/EmpireCommunity/EmpireMuse/actions/workflows/ci.yml"><img src="https://github.com/EmpireCommunity/EmpireMuse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://hub.docker.com/r/or4cu1o/empiremuse"><img src="https://img.shields.io/docker/v/or4cu1o/empiremuse?sort=semver&logo=docker&logoColor=white&label=Docker" alt="Docker Hub"></a>
 </p>
+
+---
+
+## Links
+
+- 🤖 [Convidar o EmpireMuse 1](https://discord.com/oauth2/authorize?client_id=1149485958480285756&permissions=2533601240804560&scope=bot) para o seu servidor
+- 💬 [Servidor do Discord](https://discord.gg/KgtyNg9U6H)
+- 🌐 [Página do projeto](https://muse.empirecommunity.org) (status; painel web em `/painel`)
+
+O repositório é público e mantido pela equipe para a comunidade EmpireHub, sem compromisso de suporte à hospedagem própria por terceiros.
 
 ---
 
