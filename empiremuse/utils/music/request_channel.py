@@ -350,6 +350,8 @@ async def apply_request_channel(
     # canal e mensagem juntos, no documento do servidor; se mudaram desde que o comando leu, ServerConfigConflict (nada é sobrescrito)
     await bot.pool.servers.request.set(guild.id, channel.id, message.id, expected=config.current)
 
+    await _rebind_other_players(bot, channel, message)
+
     return RequestChannelResult(channel, message)
 
 
@@ -424,6 +426,35 @@ async def find_request_channel(bot: BotCore, guild_id: int, config: RequestConfi
         )
 
     return channel
+
+
+def _other_static_players(bot: BotCore, guild_id: int):
+    """Os players estáticos dos OUTROS bots do pool: o canal é único, então eles também seguem o /setup e o /reset."""
+    panel = getattr(bot.pool, "request_panel", None)
+    return [(b, p) for b, p in panel.players(guild_id) if b is not bot] if panel else []
+
+
+async def _rebind_other_players(bot: BotCore, channel, message) -> None:
+    """Depois do /setup: os players dos outros bots passam a usar o novo canal e a mensagem do painel (que é do bot do painel)."""
+    for other, player in _other_static_players(bot, channel.guild.id):
+        try:
+            player.text_channel = other.get_channel(channel.id) or channel
+            player.message = message
+            player.setup_hints()
+            player.setup_features()
+        except Exception:
+            logger.exception("Falha ao religar o player de outro bot ao novo canal de pedidos")
+    if panel := getattr(bot.pool, "request_panel", None):
+        await panel.refresh(channel.guild.id, now=True)
+
+
+async def _reset_other_players(bot: BotCore, guild_id: int, channel_inter) -> None:
+    """Depois do /reset: os players dos outros bots deixam de ser estáticos, como o do bot do painel."""
+    for other, player in _other_static_players(bot, guild_id):
+        try:
+            await _reset_player(player, other.get_channel(channel_inter.id) or channel_inter)
+        except Exception:
+            logger.exception("Falha ao resetar o player de outro bot")
 
 
 async def _reset_player(player, channel_inter):
@@ -506,6 +537,8 @@ async def reset_request_channel(
     await bot.pool.servers.request.clear(guild.id, expected=config.current)
 
     await notify("forum_deleted" if was_forum else "reset_done")
+
+    await _reset_other_players(bot, guild.id, channel_inter)
 
     try:
         player: LavalinkPlayer = bot.music.players[guild.id]

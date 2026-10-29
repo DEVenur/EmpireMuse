@@ -80,7 +80,9 @@ class RequestPanel:
         self.pool = pool
         self._last: dict[int, int] = {}
         self._pending: dict[int, asyncio.Task] = {}
+        self._tasks: set[asyncio.Task] = set()
         self._locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
+        self._resend_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
 
     # ------------------------------------------------------------------ quem está tocando
 
@@ -107,7 +109,20 @@ class RequestPanel:
             return
         task = self._pending.get(guild_id)
         if task is None or task.done():
-            self._pending[guild_id] = asyncio.get_running_loop().create_task(self._later(guild_id, wait / 1000))
+            self._pending[guild_id] = self._spawn(self._later(guild_id, wait / 1000), guild_id)
+
+    def _spawn(self, coro, guild_id: Optional[int] = None) -> asyncio.Task:
+        """Tarefa de fundo COM referência (o laço só guarda referência fraca) e removida quando termina."""
+        task = asyncio.get_running_loop().create_task(coro)
+        self._tasks.add(task)
+
+        def done(finished: asyncio.Task) -> None:
+            self._tasks.discard(finished)
+            if guild_id is not None and self._pending.get(guild_id) is finished:
+                del self._pending[guild_id]
+
+        task.add_done_callback(done)
+        return task
 
     async def _later(self, guild_id: int, delay: float) -> None:
         await asyncio.sleep(delay)
@@ -158,14 +173,28 @@ class RequestPanel:
         """
         from empiremuse.utils.others import send_idle_embed  # tarde: utils.others importa muita coisa
 
-        request = self.pool.servers.request
-        config = await request.get(guild_id)
-        bot = await request.panel_bot(guild_id)
-        if not config.channel or bot is None:
-            return None
-        channel = bot.get_channel(config.channel) or await bot.fetch_channel(config.channel)
-        message = await send_idle_embed(channel, bot=bot, force=True)
-        await request.set(guild_id, config.channel, message.id, expected=config.current)
+        lock = self._resend_locks.get(guild_id)
+        if lock is None:
+            lock = self._resend_locks[guild_id] = asyncio.Lock()
+        async with lock:  # dois reenvios juntos mandariam dois painéis: o segundo encontra o do primeiro
+            request = self.pool.servers.request
+            config = await request.get(guild_id)
+            bot = await request.panel_bot(guild_id)
+            if not config.channel or bot is None:
+                return None
+            if replace_message_id is None:
+                try:
+                    if (existing := await fetch_panel_message(self.pool, guild_id)) is not None:
+                        return existing
+                except disnake.HTTPException:
+                    pass
+            channel = bot.get_channel(config.channel) or await bot.fetch_channel(config.channel)
+            message = await send_idle_embed(channel, bot=bot, force=True)
+            try:
+                await request.set(guild_id, config.channel, message.id, expected=config.current)
+            except Exception:
+                await message.delete()  # a configuração mudou no meio: não deixa painel órfão
+                raise
         if replace_message_id and replace_message_id != message.id:
             try:
                 await channel.get_partial_message(replace_message_id).delete()
@@ -185,6 +214,6 @@ class RequestPanel:
     def forget(self, guild_id: int) -> None:
         """Um player acabou ou saiu da call: o painel se refaz (volta ao ocioso, ou à skin do que sobrou)."""
         try:
-            asyncio.get_running_loop().create_task(self.refresh(guild_id))
+            self._spawn(self.refresh(guild_id))
         except RuntimeError:
             return

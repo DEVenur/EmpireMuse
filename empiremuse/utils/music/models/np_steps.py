@@ -434,9 +434,8 @@ async def _np_send_new(self, req):
                 await self.channel_cleanup()
         except Exception:
             logger.exception("Falha em _np_send_new")
-        if self.message:
-            req.data = data
-            return
+        req.data = data
+        return  # sem mensagem do painel o player espera a próxima atualização; um bot que não é o autor nunca manda a dele
 
     if not self.message:
         try:

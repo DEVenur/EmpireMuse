@@ -191,6 +191,10 @@ async def _pc_route_panel_click(self, req) -> bool:
     except GenericError:
         return False
 
+    if req.control == PlayerControls.help_button:
+        await _pc_help_button(self, req)  # só texto: não precisa de call nem de player
+        return True
+
     resolved = resolve_player(pool, interaction.guild_id, interaction.author)
     if resolved is None:
         from empiremuse.utils.music.interactions.request_panel import MSG_JOIN_A_CALL
@@ -201,6 +205,9 @@ async def _pc_route_panel_click(self, req) -> bool:
     if bot is self.bot:
         return False
     update_attr(interaction, bot, bot.get_guild(interaction.guild_id))
+    interaction.panel_click = (
+        True  # a mensagem é a do painel, não a do player: o outro bot não descarta o clique por isso
+    )
     await bot.get_cog("Music").player_controller(interaction, req.control)
     return True
 
@@ -220,7 +227,7 @@ async def _pc_player_checks(self, req):
         await send_idle_embed(interaction.message, bot=self.bot)
         return True
 
-    if interaction.message != player.message:
+    if interaction.message != player.message and not getattr(interaction, "panel_click", False):
         if control != PlayerControls.queue:
             return True
 

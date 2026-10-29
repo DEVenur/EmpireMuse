@@ -124,8 +124,15 @@ class ServerRequest:
     def _bot_by_id(self, bot_id: Optional[int]) -> Optional[BotCore]:
         return next((b for b in self.store.pool.get_all_bots() if b.user is not None and b.user.id == bot_id), None)
 
-    def elected_id(self, gid: int) -> Optional[int]:
-        """Quem seria o bot do painel olhando só quem está no servidor agora (sem banco)."""
+    def elected_id(self, gid: int, stored_id: Optional[int] = None) -> Optional[int]:
+        """Quem seria o bot do painel olhando só quem está no servidor agora (sem banco).
+
+        Enquanto o último bot do painel gravado ainda está subindo (não ficou pronto), ele continua valendo: no boot uma reserva fica pronta
+        antes do principal ter o servidor no cache e não pode tomar o painel, nem ficar gravada como bot do painel por isso.
+        """
+        stored = self._bot_by_id(stored_id)
+        if stored is not None and not getattr(stored, "bot_ready", True) and stored.get_guild(gid) is None:
+            return stored_id
         return elect_panel_bot(self.peers(gid))
 
     async def elect(self, gid: int) -> Election:
@@ -133,10 +140,9 @@ class ServerRequest:
         outcome: dict = {}
 
         def apply(doc: dict) -> bool:
-            elected = elect_panel_bot(
-                self.peers(gid)
-            )  # conferido aqui dentro: o que valeu fora da trava pode ter mudado
             stored = doc[SECTION_REQUEST].get("panel_bot_id")
+            # conferido aqui dentro: o que valeu fora da trava pode ter mudado
+            elected = self.elected_id(gid, _as_id(stored))
             new = None if elected is None else str(elected)
             outcome["elected"] = elected
             outcome["changed"] = stored != new
@@ -150,17 +156,23 @@ class ServerRequest:
 
     async def panel_bot(self, gid: int) -> Optional[BotCore]:
         """O bot do painel do servidor (grava a eleição se mudou). ``None`` se nenhum bot do pool está no servidor."""
-        elected = self.elected_id(gid)
+        if not self.peers(gid):
+            return None  # nenhum bot do pool vê o servidor: nada a eleger, e o banco nem é tocado
+        config = await self.get(gid)
+        elected = self.elected_id(gid, config.panel_bot_id)
         if elected is None:
             return None
-        if (await self.get(gid)).panel_bot_id != elected:
+        if config.panel_bot_id != elected:
             return (await self.elect(gid)).bot
         return self._bot_by_id(elected)
 
     async def is_panel_bot(self, gid: int, bot: BotCore) -> bool:
         """``bot`` é o bot do painel? Quem não foi eleito pela presença responde sem tocar no banco."""
-        if bot.user is None or self.elected_id(gid) != bot.user.id:
+        if bot.user is None or all(p.bot_id != bot.user.id for p in self.peers(gid)):
             return False
-        if (await self.get(gid)).panel_bot_id != bot.user.id:
+        config = await self.get(gid)
+        if self.elected_id(gid, config.panel_bot_id) != bot.user.id:
+            return False
+        if config.panel_bot_id != bot.user.id:
             await self.elect(gid)
         return True

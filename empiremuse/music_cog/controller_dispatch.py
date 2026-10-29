@@ -188,6 +188,14 @@ class ControllerDispatchMixin:
             warn_message = f"Não tenho permissão de acessar o canal <#{static_player['channel']}>, o player será usado no modo tradicional."
             static_player["channel"] = None
 
+        if (
+            channel_db
+            and channel_db.guild.id == inter.guild_id
+            and not await bot.pool.servers.request.is_panel_bot(inter.guild_id, bot)
+        ):
+            # canal único: quem toca (e não é o bot do painel) só o usa; criar post ou zerar a configuração é do bot do painel
+            return channel_db, warn_message, None
+
         if not channel_db or channel_db.guild.id != inter.guild_id:
             await self.reset_controller_db(inter.guild_id, guild_data, inter)
 
@@ -200,7 +208,7 @@ class ControllerDispatchMixin:
                             channel_db = None
 
                         else:
-                            if channel_db.owner != bot.user.id:
+                            if channel_db.owner_id != bot.user.id:
                                 if (
                                     not isinstance(channel_db.parent, disnake.ForumChannel)
                                     or not channel_db.parent.permissions_for(channel_db.guild.me).create_forum_threads
