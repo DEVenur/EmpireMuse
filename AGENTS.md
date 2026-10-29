@@ -105,6 +105,23 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 
 ---
 
+## Mapa de risco
+
+O arquivo de maior risco tocado define o nível da mudança (Baixo, Médio ou Alto).
+
+| Nível | Áreas | Caminhos |
+| :--- | :--- | :--- |
+| **Alto** | Segredos e carregamento de config | `empiremuse/config_loader.py`, `.example.env`, `empiremuse/logs/redact.py` (redação de logs) |
+| **Alto** | Autenticação e permissões | `empiremuse/panel/` (`oauth.py`, `sessions.py`, `authz.py`, cookies), `empiremuse/cogs/server_manager.py`, `empiremuse/utils/guild_ban.py`, `empiremuse/utils/owner_usage.py`, `empiremuse/utils/owner_panel.py`, `empiremuse/cogs/legacy_cmds.py` (comandos do dono, shell e jishaku) |
+| **Alto** | Atualizador e cadeia de suprimentos | `empiremuse/updater/`, `Dockerfile`, `deploy/`, `.github/workflows/`, `requirements*.txt` e locks com hashes, `assets/SHA256SUMS` |
+| **Alto** | Dados pessoais | `empiremuse/cogs/usage_tracker.py`, `empiremuse/utils/usage.py`, `empiremuse/cogs/lastfm.py`, `empiremuse/cogs/ll_yt_oauth.py` (tokens) |
+| **Alto** | Exclusão de dados | `purge_events` e `delete_data` em `empiremuse/utils/db.py` |
+| **Médio** | Player e áudio | `empiremuse/utils/music/`, `empiremuse/music_cog/`, `empiremuse/wavelink/` |
+| **Médio** | Comportamento do bot e do painel | `empiremuse/cogs/`, `empiremuse/rules/`, `empiremuse/panel/` (rotas e serviços fora de auth) |
+| **Baixo** | Conteúdo e valores | `assets/` (exceto `SHA256SUMS`), textos e traduções, `docs/`, estilos, valores padrão de config, bumps de versão |
+
+---
+
 ## 4. Protocolo Maestri
 
 O desenvolvimento cooperativo de múltiplos agentes é coordenado através do canvas **Maestri**:
