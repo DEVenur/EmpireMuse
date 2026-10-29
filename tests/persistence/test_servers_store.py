@@ -326,3 +326,26 @@ def test_migration_waits_while_the_guild_is_only_the_ready_stub_and_keeps_the_dj
     for bot in world.bots:
         bot.get_guild = loaded
     assert run(world.store.settings(GID))["djroles"] == ["10"]
+
+
+def test_migration_gives_up_if_the_guild_becomes_unavailable_while_the_old_document_is_read(world):
+    world.banco.put(DBModel.guilds, str(MAIN_ID), GID, old_doc(djroles=[10]))
+    loaded = world.bots[0].get_guild
+    real_find = world.banco.find_doc
+
+    async def find_then_lose_the_guild(*args, **kwargs):
+        doc = await real_find(*args, **kwargs)
+        if kwargs.get("db_name") == DBModel.guilds:  # só na leitura do documento antigo do principal
+            for bot in world.bots:
+                bot.get_guild = lambda gid: SimpleNamespace(roles=[], unavailable=True)
+        return doc
+
+    world.banco.find_doc = find_then_lose_the_guild
+    with pytest.raises(ServerConfigUnavailable):
+        run(world.store.settings(GID))
+    assert world.banco.servers_doc() is None  # nada gravado nem marcado como migrado
+
+    world.banco.find_doc = real_find
+    for bot in world.bots:
+        bot.get_guild = loaded
+    assert run(world.store.settings(GID))["djroles"] == ["10"]

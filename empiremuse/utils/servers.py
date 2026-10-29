@@ -205,6 +205,8 @@ class ServerStore:
         except Exception as exc:  # noqa: BLE001 - erro de leitura: nada é gravado, a seção fica pendente
             logger.warning("Documento antigo do principal no servidor [%s] não lido (%s)", gid, type(exc).__name__)
             raise ServerConfigUnavailable from exc
+        if self._loaded_guild(int(gid)) is None:  # o servidor pode ter voltado a ficar indisponível durante a leitura
+            raise ServerConfigUnavailable
         new["settings"] = migrate_settings(legacy, self._allowed(int(gid)))
         new["migrated"][SECTION_SETTINGS] = True
         logger.info(
