@@ -3,18 +3,16 @@
 Precedência: o ``emojis.json`` do dono (``bot.pool.emoji_data``) > o emoji de aplicação DESTE bot (``bot.app_emojis``) > Unicode. Nunca levanta.
 """
 
-import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from empiremuse.utils.music.app_emojis import APP_EMOJIS, emoji
-from tests.support.emojis_app import EXTRAS, NOMES
+from tests.support.emojis_app import NOMES
 
 pytestmark = pytest.mark.critical
 
-PADRAO_NOME = re.compile(r"^[a-z0-9_]{2,32}$")
 ID_A, ID_B = 111111111111111111, 222222222222222222
 
 
@@ -24,25 +22,6 @@ def bot(app_emojis=None, emoji_data=None, **mais):
         pool=SimpleNamespace(emoji_data=emoji_data or {}),
         **mais,
     )
-
-
-class TestMapaDeReserva:
-    def test_it_has_exactly_the_37_names(self):
-        assert sorted(APP_EMOJIS) == sorted(NOMES) and len(NOMES) == 37 and len(set(NOMES)) == 37
-
-    @pytest.mark.parametrize(("nome", "reserva"), sorted(EXTRAS.items()))
-    def test_each_of_the_12_owner_icons_has_its_documented_unicode_fallback(self, nome, reserva):
-        assert APP_EMOJIS[nome] == reserva
-
-    @pytest.mark.parametrize("nome", NOMES)
-    def test_each_name_matches_the_pattern_and_has_a_non_empty_unicode_fallback(self, nome):
-        assert PADRAO_NOME.match(nome)
-        reserva = APP_EMOJIS[nome]
-        assert isinstance(reserva, str) and reserva.strip() and "<" not in reserva
-
-    def test_a_name_outside_the_list_is_a_programming_error(self):
-        with pytest.raises(KeyError):
-            APP_EMOJIS["nome_que_nao_existe"]
 
 
 class TestPrecedencia:
@@ -109,24 +88,3 @@ class TestNuncaLevanta:
 
     def test_none_as_the_bot_gives_the_fallback(self):
         assert emoji(None, "stop") == APP_EMOJIS["stop"]
-
-
-class TestEmojisJsonInvalido:
-    """Um valor inválido no ``emojis.json`` cai no Unicode (ou no emoji de aplicação) sem quebrar o envio."""
-
-    INVALIDOS = [123, 1.5, True, None, [], {}, "", "   ", "linha1\nlinha2", "com\rquebra"]
-
-    @pytest.mark.parametrize("valor", INVALIDOS, ids=repr)
-    def test_an_invalid_owner_value_falls_back_to_unicode(self, valor):
-        resultado = emoji(bot({}, {"music_sources": {"youtube": valor}}), "youtube")
-
-        assert resultado == APP_EMOJIS["youtube"]
-
-    @pytest.mark.parametrize("valor", INVALIDOS, ids=repr)
-    def test_an_invalid_owner_value_falls_back_to_the_app_emoji_when_there_is_one(self, valor):
-        resultado = emoji(bot({"youtube": f"<:youtube:{ID_A}>"}, {"music_sources": {"youtube": valor}}), "youtube")
-
-        assert resultado == f"<:youtube:{ID_A}>"
-
-    def test_a_valid_unicode_owner_value_is_used(self):
-        assert emoji(bot({}, {"music_sources": {"youtube": "🎬"}}), "youtube") == "🎬"

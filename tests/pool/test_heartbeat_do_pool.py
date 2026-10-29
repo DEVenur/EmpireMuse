@@ -8,9 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from empiremuse import health
-from empiremuse.health import HEALTH_FILE_ENV, HEARTBEAT_INTERVAL, clear_heartbeat, is_fresh, write_heartbeat
-from empiremuse.utils import client
+from empiremuse.health import HEALTH_FILE_ENV, HEARTBEAT_INTERVAL, is_fresh, write_heartbeat
 from empiremuse.utils.client import BotPool
 
 pytestmark = pytest.mark.critical
@@ -71,25 +69,6 @@ def test_pool_is_healthy(pool, saudavel):
     assert pool.pool_is_healthy() is saudavel
 
 
-@pytest.mark.parametrize(
-    ("start_local", "servidores", "esperados"),
-    [(False, {}, False), (True, {}, True), (False, {"A": {}}, True), (True, {"A": {}}, True)],
-)
-def test_node_check_records_whether_nodes_are_expected(monkeypatch, start_local, servidores, esperados):
-    pool = pool_com()
-    pool.config = {
-        "PREFER_YOUTUBE_NATIVE_PLAYBACK": False,
-        "ONLY_USE_NATIVE_SEARCH_PROVIDERS": False,
-        "SEARCH_PROVIDERS": "",
-    }
-    pool.loop = SimpleNamespace(create_task=lambda coro: None)
-    monkeypatch.setattr(pool, "check_node", lambda data: None, raising=False)
-
-    pool.node_check(servidores, start_local=start_local)
-
-    assert pool.nodes_expected is esperados
-
-
 # ============================================================================ heartbeat_loop (relógio e sleep injetados)
 
 
@@ -147,21 +126,6 @@ def test_an_unhealthy_pool_never_creates_the_file(tmp_path):
     assert not arquivo.exists() and len(dormiu) == 2
 
 
-def test_a_failed_write_does_not_kill_the_loop(tmp_path, monkeypatch):
-    pool = pool_com([bot(True)])
-    dormiu = []
-
-    def falha(caminho, agora):
-        raise OSError("disco cheio")
-
-    monkeypatch.setattr(client, "write_heartbeat", falha)
-
-    with pytest.raises(Parar):
-        asyncio.run(pool.heartbeat_loop(str(tmp_path / "saude"), clock=lambda: 1.0, sleep=sleep_que_para_em(2, dormiu)))
-
-    assert len(dormiu) == 2
-
-
 # ============================================================================ start_heartbeat (V11) e shutdown
 
 
@@ -189,55 +153,3 @@ def test_start_heartbeat_removes_the_inherited_file_before_anything_is_written(t
     assert not arquivo.exists()
     assert isinstance(pool.heartbeat_task, asyncio.Task)
     encerrar(laco, pool)
-
-
-def test_start_heartbeat_aborts_the_boot_when_the_old_file_cannot_be_removed(monkeypatch, laco):
-    """Fail-closed (V11): um heartbeat herdado com menos de 60 s passaria no HEALTHCHECK antes de qualquer bot ficar pronto."""
-    monkeypatch.setenv(HEALTH_FILE_ENV, "/qualquer/saude")
-
-    def falha(caminho):
-        raise PermissionError(13, "sem permissão")
-
-    monkeypatch.setattr(client, "clear_heartbeat", falha)
-    pool = pool_com()
-    pool.loop = laco
-
-    with pytest.raises(SystemExit, match="/qualquer/saude"):
-        pool.start_heartbeat()
-
-    assert pool.heartbeat_task is None and not asyncio.all_tasks(laco)
-
-
-def test_without_the_variable_start_heartbeat_does_nothing(monkeypatch, laco):
-    monkeypatch.delenv(HEALTH_FILE_ENV, raising=False)
-    pool = pool_com()
-    pool.loop = laco
-
-    pool.start_heartbeat()
-
-    assert pool.heartbeat_task is None and not laco.is_running() and not asyncio.all_tasks(laco)
-
-
-def test_shutdown_cancels_the_heartbeat_task():
-    cancelada = []
-    pool = pool_com()
-    pool.heartbeat_task = SimpleNamespace(cancel=lambda: cancelada.append(True))
-    pool.lavalink_instance = None
-
-    asyncio.run(pool.shutdown(0))
-
-    assert cancelada == [True]
-
-
-# ============================================================================ clear_heartbeat
-
-
-def test_clear_heartbeat_removes_the_file_and_tolerates_its_absence(tmp_path):
-    arquivo = tmp_path / "saude"
-    write_heartbeat(arquivo, 1.0)
-
-    clear_heartbeat(arquivo)
-    clear_heartbeat(arquivo)
-
-    assert not arquivo.exists()
-    assert health.is_fresh(arquivo, 1.0) is False

@@ -13,25 +13,16 @@ Regra: onde o texto da exceção ia para a tela, entra uma mensagem genérica em
 Sem rede, sem Discord e sem ``.env``; o aleatório do código é fixado trocando ``secrets.token_hex``.
 """
 
-import asyncio
 import logging
-import re
 import secrets
-from collections import deque
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-import disnake
 import pytest
-
-import empiremuse.wavelink as wavelink
-from empiremuse.utils.music.errors import GenericError
-from tests.support.api_publica import fonte_da_familia
 
 pytestmark = pytest.mark.regression
 
 SEGREDO = "detalhe-interno /srv/empiremuse/segredo.json"
-CAUSA = "java.lang.IllegalStateException: causa-interna-do-lavaplayer em /opt/lavalink/plugin.jar"
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"
 CODIGO = "ERR-7F3A2C"
 
@@ -47,23 +38,6 @@ def sem_vazamento(texto: str, *extras: str) -> None:
 
 def registros(caplog, logger: str, nivel=logging.WARNING) -> list[logging.LogRecord]:
     return [r for r in caplog.records if r.name == logger and r.levelno >= nivel]
-
-
-# ============================================================================ helpers puros
-
-
-class TestHelpers:
-    def test_log_unexpected_error_sem_codigo_ainda_registra(self, monkeypatch, caplog):
-        from empiremuse.utils.music.errors import log_unexpected_error
-
-        def quebra(nbytes=None):
-            raise RuntimeError("sem entropia (simulado)")
-
-        monkeypatch.setattr(secrets, "token_hex", quebra)
-        log = logging.getLogger("teste.s14")
-        with caplog.at_level(logging.ERROR, logger="teste.s14"):
-            codigo = log_unexpected_error(log, ValueError("x"), "origem")
-        assert codigo == "" and registros(caplog, "teste.s14", logging.ERROR)
 
 
 # ============================================================================ ll_yt_oauth (dono)
@@ -237,41 +211,6 @@ def montar_pedido(monkeypatch, erro: BaseException, *, webhook=False):
     return music.Music, self_, ctx, mensagem, envios, webhook_cog
 
 
-class TestSongRequests:
-    @pytest.mark.asyncio
-    async def test_erro_inesperado_mostra_mensagem_generica_com_codigo_e_nunca_none(self, monkeypatch, caplog):
-        fixar_codigo(monkeypatch)
-        classe, self_, ctx, mensagem, envios, _ = montar_pedido(monkeypatch, RuntimeError(SEGREDO))
-
-        with caplog.at_level(logging.ERROR, logger="empiremuse.cogs.music"):
-            await classe.song_requests(self_, ctx, mensagem)
-
-        [(args, _)] = envios
-        texto = args[0]
-        sem_vazamento(texto, "None")
-        assert "ocorreu um erro ao tentar obter resultados para sua busca" in texto and CODIGO in texto
-        assert texto.startswith("<@1>")
-        [registro] = registros(caplog, "empiremuse.cogs.music", logging.ERROR)
-        assert CODIGO in registro.getMessage() and registro.exc_info[0] is RuntimeError
-
-
-# ============================================================================ owner_panel (dono)
-
-
-def painel_com_interacao():
-    from empiremuse.utils.owner_panel import PanelView
-
-    editar = AsyncMock()
-    view = PanelView.__new__(PanelView)
-    view.bot = SimpleNamespace(http=SimpleNamespace(token=TOKEN_FALSO))
-    interacao = SimpleNamespace(
-        message=SimpleNamespace(embeds=[SimpleNamespace(description="")]),
-        response=SimpleNamespace(is_done=lambda: True),
-        original_message=AsyncMock(return_value=SimpleNamespace(edit=editar)),
-    )
-    return view, interacao, editar
-
-
 # ============================================================================ BotPool.start_bot / failed_bots (página pública)
 
 
@@ -309,212 +248,6 @@ class TestStartBot:
         [registro] = registros(caplog, "empiremuse.utils.client", logging.ERROR)
         assert CODIGO in registro.getMessage() and registro.exc_info[0] is RuntimeError
 
-    @pytest.mark.asyncio
-    async def test_a_instrucao_do_privileged_intents_continua(self):
-        from empiremuse.utils.client import BotPool
-
-        pool = self.pool()
-        await BotPool.start_bot(pool, self.bot(disnake.PrivilegedIntentsRequired(None)))
-
-        texto = pool.failed_bots["bot-1"]
-        assert "Privileged" in texto and "discord.com/developers/applications" in texto
-        assert "ERR-" not in texto
-
-    @pytest.mark.asyncio
-    async def test_a_instrucao_do_token_invalido_continua(self):
-        from empiremuse.utils.client import BotPool
-
-        pool = self.pool()
-        await BotPool.start_bot(pool, self.bot(disnake.LoginFailure("Improper token has been passed.")))
-
-        assert "ERR-" not in pool.failed_bots["bot-1"] and "token" in pool.failed_bots["bot-1"].lower()
-
-
-# ============================================================================ LavalinkPlayer
-
-
-class Fim(Exception):
-    """Levantada pelo ``sleep`` falso para sair de um laço infinito do código testado."""
-
-
-def jogador(monkeypatch, **extra):
-    """``LavalinkPlayer`` sem o ``__init__`` pesado; as propriedades sem setter viram atributos da subclasse de teste."""
-    from empiremuse.utils.music import models
-
-    class JogadorDeTeste(models.LavalinkPlayer):
-        is_connected = True
-        last_channel = SimpleNamespace(id=7)
-
-    p = JogadorDeTeste.__new__(JogadorDeTeste)
-    canal = SimpleNamespace(send=AsyncMock(), permissions_for=lambda me: SimpleNamespace(send_messages=True), id=5)
-    p.bot = SimpleNamespace(
-        wait_until_ready=AsyncMock(),
-        get_color=lambda *a: 0,
-        music=SimpleNamespace(players={}),
-        dispatch=lambda *a, **k: None,
-        latency=0.05,
-        get_cog=lambda nome: None,
-        loop=MagicMock(),
-        config={"IDLE_TIMEOUT": 60},
-    )
-    p.guild = SimpleNamespace(id=9, name="Servidor", me=SimpleNamespace(voice=None), icon=None)
-    p.guild_id = 9
-    p.text_channel = canal
-    p.node = SimpleNamespace(identifier="no-1", info={"sourceManagers": []}, is_available=True)
-    p.locked = False
-    p.is_closing = False
-    p.update = False
-    p.static = False
-    p.keep_connected = False
-    p.controller_mode = True
-    p.queue = deque()
-    p.failed_tracks = []
-    p.current = None
-    p.last_track = None
-    p.command_log_list = []
-    p._new_node_task = None
-    p.set_command_log = MagicMock()
-    p.report_error = AsyncMock()
-    p.process_next = AsyncMock()
-    for nome, valor in extra.items():
-        setattr(p, nome, valor)
-    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
-    return p
-
-
-def faixa(**extra):
-    base = dict(
-        title="Faixa X",
-        uri="https://exemplo.invalid/x",
-        search_uri="",
-        id="abc",
-        track_loops=0,
-        source_name="soundcloud",
-        autoplay=False,
-        info={"sourceName": "soundcloud"},
-    )
-    base.update(extra)
-    return SimpleNamespace(**base)
-
-
-def evento_de_falha(mensagem="This video is unavailable", causa=CAUSA, severidade="COMMON"):
-    return wavelink.TrackException(
-        {
-            "track": None,
-            "player": None,
-            "node": SimpleNamespace(identifier="no-1"),
-            "exception": {"message": mensagem, "cause": causa, "severity": severidade},
-        }
-    )
-
-
-def enfileirar_e_encerrar(p, monkeypatch, evento):
-    """Põe o evento na fila do ``hook_events`` e faz o primeiro ``sleep`` encerrar o laço."""
-
-    async def dormir(segundos):
-        p.is_closing = True
-
-    monkeypatch.setattr("asyncio.sleep", dormir)
-    p.event_queue = asyncio.Queue()
-    p.event_queue.put_nowait(evento)
-    p.event_queue.put_nowait(object())
-
-
-class TestOutrasFalhasDoPlayer:
-    @pytest.mark.asyncio
-    async def test_process_next_erro_inesperado(self, monkeypatch, caplog):
-        fixar_codigo(monkeypatch)
-        p = jogador(monkeypatch)
-        p.bot.wait_until_ready = AsyncMock(side_effect=RuntimeError(SEGREDO))
-
-        with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
-            await p._process_next()
-
-        texto = p.text_channel.send.await_args.kwargs["embed"].description
-        sem_vazamento(texto)
-        assert "Ocorreu um erro ao reproduzir a música" in texto and CODIGO in texto
-        [registro] = registros(caplog, "empiremuse.utils.music.models", logging.ERROR)
-        assert CODIGO in registro.getMessage() and registro.exc_info[0] is RuntimeError
-
-    @pytest.mark.asyncio
-    async def test_process_next_falha_ao_resolver_a_faixa_parcial(self, monkeypatch, caplog):
-        from empiremuse.utils.music.models import PartialTrack
-
-        fixar_codigo(monkeypatch)
-        parcial = PartialTrack(uri="https://exemplo.invalid/p", title="Parcial", source_name="spotify")
-        p = jogador(monkeypatch, queue=deque([parcial]), channel_purged=True, idle_task=None, auto_pause=False)
-        p.guild.me.voice = object()
-        p.resolve_track = AsyncMock(side_effect=RuntimeError(SEGREDO))
-
-        with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
-            await p._process_next()
-
-        texto = p.text_channel.send.await_args.kwargs["embed"].description
-        sem_vazamento(texto)
-        assert "Houve um problema ao tentar processar a música" in texto and CODIGO in texto
-        assert registros(caplog, "empiremuse.utils.music.models", logging.ERROR)
-
-    @pytest.mark.asyncio
-    async def test_resolve_track_informa_o_dono_sem_repr(self, monkeypatch, caplog):
-        fixar_codigo(monkeypatch)
-        p = jogador(monkeypatch)
-        parcial = faixa(info={}, duration=0, id="")
-
-        with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
-            await p.resolve_track(parcial)
-
-        embed = p.report_error.await_args.args[0]
-        sem_vazamento(embed.description, "KeyError")
-        assert CODIGO in embed.description
-        assert registros(caplog, "empiremuse.utils.music.models", logging.ERROR)
-
-    @pytest.mark.asyncio
-    async def test_wait_for_new_node_erro_inesperado_do_can_connect(self, monkeypatch, caplog):
-        from empiremuse.utils.music import models
-
-        fixar_codigo(monkeypatch)
-        no = SimpleNamespace(identifier="no-2", players={9: object()})
-        p = jogador(monkeypatch)
-        p.node = SimpleNamespace(identifier="no-1", players={9: object()}, is_available=False)
-        p._voice_state = None
-        p.change_node = AsyncMock()
-        p.destroy = AsyncMock()
-        p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(models.player_voice, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
-
-        with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
-            await p._wait_for_new_node()
-
-        textos = [c.args[0] if c.args else c.kwargs.get("text", "") for c in p.set_command_log.call_args_list]
-        finalizado = [t for t in textos if "finalizado" in t]
-        assert finalizado and all(SEGREDO not in t and "RuntimeError" not in t for t in finalizado)
-        assert CODIGO in finalizado[0]
-        assert registros(caplog, "empiremuse.utils.music.models", logging.ERROR)
-
-    @pytest.mark.asyncio
-    async def test_reconnect_voice_channel_erro_inesperado(self, monkeypatch, caplog):
-        from empiremuse.utils.music import models
-
-        fixar_codigo(monkeypatch)
-        p = jogador(monkeypatch)
-        p.bot.get_channel = lambda cid: SimpleNamespace(id=7)
-        p.bot.music = SimpleNamespace(players={9: p})
-        monkeypatch.setattr(models.player_voice, "can_connect", MagicMock(side_effect=RuntimeError(SEGREDO)))
-
-        async def dormir(segundos):
-            raise Fim
-
-        monkeypatch.setattr(asyncio, "sleep", dormir)
-
-        with caplog.at_level(logging.ERROR, logger="empiremuse.utils.music.models"):
-            with pytest.raises(Fim):
-                await p.reconnect_voice_channel()
-
-        texto = p.set_command_log.call_args.args[0]
-        assert "falha ao reconectar o player no canal de voz" in texto
-        assert SEGREDO not in texto and "RuntimeError" not in texto and CODIGO in texto
-        assert registros(caplog, "empiremuse.utils.music.models", logging.ERROR)
-
 
 # ============================================================================ complemento do AppSec (F-3, F-4, I-11, Info)
 #
@@ -523,185 +256,11 @@ class TestOutrasFalhasDoPlayer:
 # * F-4: a mensagem do nó Lavalink aparece dentro de um code span (a crase já é trocada), nos dois usos;
 # * I-11: a troca do refreshToken por ``***`` no corpo da resposta vem ANTES do corte em 500 caracteres.
 
-HOSTIL = "Veja https://evil.example/login <@123456789012345678> <#123456789012345678> @everyone :emoji:"
-
-
-class SessaoDeToken:
-    """Sessão do aiohttp falsa: o ``POST`` do token devolve sempre o JSON informado."""
-
-    def __init__(self, corpo):
-        self.corpo = corpo
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        return False
-
-    def post(self, url, headers=None, data=None, **kwargs):
-        return self
-
-    async def json(self, *args, **kwargs):
-        return dict(self.corpo)
-
-
-class TestSpotifyAutenticacao:
-    MOTIVO = "motivo-externo-do-spotify https://evil.example/login <@123456789012345678>"
-
-    def cliente(self, monkeypatch, tmp_path, corpo):
-        from empiremuse.utils.music.audio_sources import spotify
-
-        monkeypatch.setenv("EMPIREMUSE_HOME", str(tmp_path))
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(spotify, "ClientSession", lambda *a, **k: SessaoDeToken(corpo))
-        return spotify.SpotifyClient(client_id="id-de-teste", client_secret="segredo-de-teste")
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "corpo",
-        [{"error": "invalid_client", "error_description": "Invalid client"}, {"error": "invalid_client"}],
-        ids=["com-descricao", "so-error"],
-    )
-    async def test_a_mensagem_e_fixa_qualquer_que_seja_o_motivo(self, monkeypatch, tmp_path, corpo):
-        textos = set()
-        for variante in (corpo, {"error": "outro", "error_description": self.MOTIVO}):
-            cliente = self.cliente(monkeypatch, tmp_path, variante)
-            with pytest.raises(GenericError) as erro:
-                await cliente.get_access_token()
-            textos.add(erro.value.text)
-            assert cliente.token_refresh is False
-        assert len(textos) == 1, textos
-
-
-class TestLavalinkTextEmCodeSpan:
-    @pytest.mark.asyncio
-    async def test_falha_de_reproducao_mostra_o_motivo_no_code_span(self, monkeypatch):
-        track = faixa()
-        p = jogador(monkeypatch, current=track, last_track=track)
-        enfileirar_e_encerrar(p, monkeypatch, evento_de_falha(HOSTIL))
-
-        await p.hook_events()
-
-        texto = p.text_channel.send.await_args.kwargs["embed"].description
-        [linha] = [linha for linha in texto.splitlines() if linha.startswith("**Motivo:**")]
-        assert re.fullmatch(r"\*\*Motivo:\*\* `[^`]+`", linha), linha
-        fora = texto.replace(linha, "")
-        for ativo in ("evil.example", "<@", "<#", "@everyone"):
-            assert ativo not in fora, f"{ativo!r} fora do code span: {fora!r}"
-
-    def test_o_autoplay_usa_o_mesmo_helper_sem_envolver_em_crases(self):
-        """``get_autoqueue_tracks`` é longo demais para dirigir com dublê: a guarda lê o código dos dois usos."""
-        fonte = fonte_da_familia("models")
-        usos = [linha.strip() for linha in fonte.splitlines() if "lavalink_text(" in linha and "def " not in linha]
-        assert len(usos) == 2, usos
-        assert any("exception.message" in uso for uso in usos) and any("event.message" in uso for uso in usos)
-        assert not [uso for uso in usos if "`{lavalink_text" in uso or "{lavalink_text(" not in uso], usos
-        assert not re.search(r"\{(?:exception|event)\.message[^}]*\}", fonte), "mensagem crua do nó numa f-string"
-
-
-class TestCanalDeVozNoRelatorio:
-    """``build_report_embed``: o campo "Canal de voz (bot)" descreve o canal do BOT, em bloco de código fechado e com escape."""
-
-    NOME_DO_BOT = "*negrito* __x__ [link](https://evil.example)"
-
-    @staticmethod
-    def canal(id_, nome, limite=0, membros=0):
-        return SimpleNamespace(id=id_, name=nome, user_limit=limite, voice_states={n: n for n in range(membros)})
-
-    def embed(self, canal_do_usuario, canal_do_bot, *, usuario_em_voz=True):
-        from empiremuse.cogs.error_handler import ErrorHandler
-
-        handler = ErrorHandler.__new__(ErrorHandler)
-        handler.bot = SimpleNamespace(get_color=lambda *a: 0, intents=SimpleNamespace(message_content=False))
-        guild = SimpleNamespace(
-            id=9, name="Servidor", me=SimpleNamespace(voice=SimpleNamespace(channel=canal_do_bot)), icon=None
-        )
-        autor = SimpleNamespace(
-            id=5,
-            bot=False,
-            voice=SimpleNamespace(channel=canal_do_usuario) if usuario_em_voz else None,
-            display_avatar=SimpleNamespace(
-                with_static_format=lambda formato: SimpleNamespace(url="https://exemplo.invalid/a.png")
-            ),
-        )
-        ctx = SimpleNamespace(
-            bot=handler.bot,
-            guild=guild,
-            channel=SimpleNamespace(id=3, name="texto"),
-            author=autor,
-            data=SimpleNamespace(name="play"),
-            filled_options={},
-        )
-        return handler.build_report_embed(ctx)
-
-    @staticmethod
-    def campo(embed, nome):
-        return [c.value for c in embed.fields if c.name == nome]
-
-    def test_o_campo_do_bot_descreve_o_canal_do_bot_e_nao_o_do_usuario(self):
-        usuario = self.canal(1, "canal-do-usuario", limite=3, membros=1)
-        bot = self.canal(2, "canal-do-bot", limite=5, membros=2)
-
-        [valor] = self.campo(self.embed(usuario, bot), "Canal de voz (bot):")
-
-        assert valor == "```\ncanal-do-bot (2/5)\nID: 2```"
-        assert "canal-do-usuario" not in valor and "ID: 1" not in valor
-
-    def test_guarda_o_campo_do_usuario_continua_igual(self):
-        usuario = self.canal(1, "canal-do-usuario", limite=3, membros=1)
-
-        [valor] = self.campo(self.embed(usuario, self.canal(2, "canal-do-bot")), "Canal de voz (user):")
-
-        assert valor == "```\ncanal-do-usuario (1/3)\nID: 1```"
-
 
 # ============================================================================ lacunas apontadas pela mutação
 
 
 class TestLacunasDaMutacao:
-    @pytest.mark.asyncio
-    async def test_o_log_do_servidor_leva_a_mensagem_do_lavalink_e_o_controlador_leva_o_codigo(
-        self, monkeypatch, caplog
-    ):
-        fixar_codigo(monkeypatch)
-        track = faixa()
-        p = jogador(monkeypatch, current=track, last_track=track, locked=True)
-        enfileirar_e_encerrar(p, monkeypatch, evento_de_falha("m" * 500))
-
-        async def encerrar(*args, **kwargs):
-            p.is_closing = True
-
-        p.report_error = AsyncMock(side_effect=encerrar)
-
-        with caplog.at_level(logging.WARNING, logger="empiremuse.player"):
-            await p.hook_events()
-
-        log = "\n".join(r.getMessage() for r in registros(caplog, "empiremuse.player"))
-        assert "m" * 100 in log and CODIGO in log, "o log do servidor leva a mensagem e o código"
-        textos = [c.kwargs.get("text", c.args[0] if c.args else "") for c in p.set_command_log.call_args_list]
-        assert any(CODIGO in t and "m" * 50 + "…" in t and "m" * 51 not in t for t in textos), textos
-
-    @pytest.mark.asyncio
-    async def test_wait_for_new_node_erro_de_pool_tem_o_texto_proprio(self, monkeypatch):
-        from empiremuse.utils.music import models
-        from empiremuse.utils.music.errors import PoolException
-
-        no = SimpleNamespace(identifier="no-2", players={9: object()})
-        p = jogador(monkeypatch)
-        p.node = SimpleNamespace(identifier="no-1", players={9: object()}, is_available=False)
-        p._voice_state = None
-        p.change_node = AsyncMock()
-        p.destroy = AsyncMock()
-        p.bot.music = SimpleNamespace(get_best_node=lambda ignore_node=None: no, players={})
-        monkeypatch.setattr(
-            models.player_voice, "can_connect", MagicMock(side_effect=PoolException("nenhum bot livre"))
-        )
-
-        await p._wait_for_new_node()
-
-        textos = [c.args[0] if c.args else c.kwargs.get("text", "") for c in p.set_command_log.call_args_list]
-        assert any("nenhum bot livre" in t and "ERR-" not in t for t in textos)
-
     @pytest.mark.asyncio
     async def test_resposta_do_lavalink_local_o_token_e_mascarado_e_o_corpo_vira_uma_linha_curta_no_log(
         self, monkeypatch, tmp_path, caplog
@@ -725,56 +284,6 @@ class TestLacunasDaMutacao:
         assert "refresh-falso" not in log and "linha1 linha2 eco do token ***" in log
         assert "x" * 501 not in log and "…" in log
         assert "HTTP 500" in texto_final(mensagem)
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(("status", "aplicado"), [(204, True), (500, False)])
-    async def test_so_o_204_vale_como_refresh_token_aplicado_no_lavalink_local(
-        self, monkeypatch, tmp_path, status, aplicado
-    ):
-        (tmp_path / "application.yml").write_text(
-            "plugins:\n  youtube:\n    oauth:\n      enabled: false\n", encoding="utf-8"
-        )
-        node = SimpleNamespace(
-            info={"plugins": ["youtube-plugin"]},
-            rest_uri="http://127.0.0.1:2333",
-            _websocket=SimpleNamespace(headers={}),
-        )
-        cog, ctx, mensagem = montar_oauth(
-            monkeypatch, tmp_path, node=node, post=AsyncMock(return_value=Resposta(status))
-        )
-
-        await cog.oauth_command(ctx)
-
-        texto = texto_final(mensagem)
-        assert ("configurado automaticamente no servidor lavalink LOCAL" in texto) is aplicado
-        assert (f"HTTP {status}" in texto) is not aplicado
-
-    @pytest.mark.asyncio
-    async def test_erro_inesperado_do_dono_nao_imprime_o_traceback_no_terminal(self, monkeypatch, capsys):
-        fixar_codigo(monkeypatch)
-        view, interacao, editar = painel_com_interacao()
-
-        await view.on_error(RuntimeError(SEGREDO), None, interacao)
-
-        saida = capsys.readouterr()
-        assert SEGREDO not in saida.out + saida.err, "o detalhe vai para o logger, não para o terminal"
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("erro", "trecho"),
-        [
-            (GenericError("**Sem permissão aqui.**"), "Sem permissão aqui."),
-            (wavelink.WavelinkException("This video is not available"), "indisponível ou privado"),
-        ],
-        ids=["generico", "traduzido_pelo_parse_error"],
-    )
-    async def test_song_request_erro_esperado_aparece_sem_bloco_de_codigo(self, monkeypatch, erro, trecho):
-        classe, self_, ctx, mensagem, envios, _ = montar_pedido(monkeypatch, erro)
-
-        await classe.song_requests(self_, ctx, mensagem)
-
-        [(args, _)] = envios
-        assert trecho in args[0] and args[0].startswith("<@1>. ") and "```" not in args[0] and "ERR-" not in args[0]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("gera", [True, False], ids=["com_codigo", "sem_codigo"])

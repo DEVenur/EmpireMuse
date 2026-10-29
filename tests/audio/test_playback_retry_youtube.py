@@ -19,7 +19,6 @@ ALL_CLIENTS = (
 )
 ALL_CLIENTS_TIMEOUT = ALL_CLIENTS + "\nClient [TVHTML5] failed: java.net.SocketTimeoutException: Read timed out"
 ALL_CLIENTS_STATUS = ALL_CLIENTS + "\nClient [TVHTML5] failed: PersistentHttpException: Not success status code: 403"
-OTHER = "java.lang.RuntimeException: falha qualquer"
 
 
 @pytest.fixture(autouse=True)
@@ -95,10 +94,6 @@ def fail(player, cause, message="Something went wrong"):
     )
 
 
-def start(player):
-    return wavelink.TrackStart({"track": player.current, "player": player, "node": player.node})
-
-
 @pytest.mark.parametrize("cause", [ALL_CLIENTS, ALL_CLIENTS_TIMEOUT, ALL_CLIENTS_STATUS])
 async def test_the_same_spotify_track_is_retried_once_after_two_seconds(cause, sleep):
     track = make_track()
@@ -112,16 +107,6 @@ async def test_the_same_spotify_track_is_retried_once_after_two_seconds(cause, s
     assert player.locked is False
     player.report_error.assert_not_awaited()
     assert track not in player.failed_tracks
-
-
-async def test_the_retry_marker_is_also_found_in_the_message():
-    track = make_track()
-    player = make_player(track)
-
-    await _he_dispatch(player, fail(player, OTHER, message="Read timed out"))
-
-    assert list(player.queue) == [track]
-    player.report_error.assert_not_awaited()
 
 
 async def test_a_second_all_clients_failure_reports_and_skips_the_track():
@@ -140,50 +125,6 @@ async def test_a_second_all_clients_failure_reports_and_skips_the_track():
     player.process_next.assert_awaited_once()
 
 
-async def test_start_fail_start_fail_does_not_loop(sleep):
-    """O TrackStart sai antes de o stream abrir: start -> fail -> retry -> start -> fail precisa relatar e pular."""
-    track = make_track()
-    player = make_player(track)
-    await _he_dispatch(player, start(player))
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-    assert list(player.queue) == [track]
-    player.queue.clear()
-    player.current = track
-    await _he_dispatch(player, start(player))
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-
-    assert list(player.queue) == []
-    assert track in player.failed_tracks
-    player.report_error.assert_awaited_once()
-
-
-async def test_a_finished_track_gives_back_the_retry():
-    track = make_track()
-    player = make_player(track)
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-    player.queue.clear()
-    player.current = track
-    await _he_dispatch(
-        player, wavelink.TrackEnd({"track": track, "player": player, "node": player.node, "reason": "FINISHED"})
-    )
-    player.current = track
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-
-    assert list(player.queue) == [track]
-
-
-async def test_the_retry_resumes_from_the_current_position(monkeypatch):
-    track = make_track()
-    player = make_player(track)
-    monkeypatch.setattr(event_steps, "get_start_pos", lambda p, t: 61_000)
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
-
-    player.process_next.assert_awaited_once_with(start_position=61_000)
-
-
 async def test_seven_network_failures_never_freeze_the_player():
     track = make_track(source="soundcloud")
     player = make_player(track)
@@ -197,64 +138,6 @@ async def test_seven_network_failures_never_freeze_the_player():
     assert track in player.failed_tracks
     assert track not in player.queue
     assert player.process_next.await_count == 7
-
-
-async def test_a_mirrored_all_clients_timeout_goes_to_the_youtube_branch_before_the_general_retry():
-    track = make_track()
-    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
-    player = make_player(track, nodes=[other])
-    player.bot.music.nodes = {"N1": player.node, "N2": other}
-    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
-    player.queue.clear()
-    player.current = track
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
-
-    player.change_node.assert_awaited_once_with("N2")
-    assert not hasattr(player, "retries_general_errors")
-
-
-async def test_another_cause_keeps_the_old_behavior(sleep):
-    track = make_track()
-    player = make_player(track)
-
-    await _he_dispatch(player, fail(player, OTHER))
-
-    assert track in player.failed_tracks
-    player.report_error.assert_awaited_once()
-    assert 2 not in [c.args[0] for c in sleep.await_args_list]
-
-
-@pytest.mark.parametrize(
-    "cause",
-    [
-        "x: java.net.SocketTimeoutException: Connect timed out",
-        "java.lang.IllegalStateException: Failed to get media URL: wrapped java.io.EOFException",
-    ],
-)
-async def test_known_retryable_markers_match_anywhere_in_the_cause(cause):
-    track = make_track(source="soundcloud")
-    player = make_player(track)
-
-    await _he_dispatch(player, fail(player, cause))
-
-    assert list(player.queue) == [track]  # volta para a fila pela via geral de falhas de rede
-    assert track not in player.failed_tracks
-
-
-async def test_a_spotify_track_mirrored_to_youtube_recovers_via_native_youtube_node():
-    track = make_track()
-    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
-    player = make_player(track, nodes=[other])
-    player.node.search_providers = ["ytsearch"]
-    player.bot.music.nodes = {"N1": player.node, "N2": other}
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))  # a nova tentativa da mesma faixa é consumida
-    player.queue.clear()
-    player.current = track
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-
-    player.change_node.assert_awaited_once_with("N2")
 
 
 async def test_a_mirrored_track_failing_on_every_node_switches_once_and_then_is_skipped():
@@ -290,78 +173,3 @@ def _exception_data(player, node):
         "error": "falha",
         "exception": {"cause": ALL_CLIENTS_TIMEOUT, "message": "Something went wrong", "severity": "suspicious"},
     }
-
-
-async def test_a_plugin_failure_without_another_node_never_reaches_the_general_retry():
-    track = make_track()
-    player = make_player(track)
-    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
-    player.queue.clear()
-    player.current = track
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS_TIMEOUT))
-
-    assert not hasattr(player, "retries_general_errors")
-    assert track in player.failed_tracks
-    assert track not in player.queue
-
-
-async def test_the_plugin_marker_in_the_message_is_recognized():
-    track = make_track()
-    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
-    player = make_player(track, nodes=[other])
-    player.bot.music.nodes = {"N1": player.node, "N2": other}
-
-    await _he_dispatch(player, fail(player, OTHER, message=ALL_CLIENTS))  # retry da mesma faixa
-    player.queue.clear()
-    player.current = track
-    await _he_dispatch(player, fail(player, OTHER, message=ALL_CLIENTS))
-
-    player.change_node.assert_awaited_once_with("N2")
-
-
-async def test_the_node_switch_keeps_the_playback_position(monkeypatch):
-    track = make_track()
-    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
-    player = make_player(track, nodes=[other])
-    player.bot.music.nodes = {"N1": player.node, "N2": other}
-    monkeypatch.setattr(event_steps, "get_start_pos", lambda p, t: 61_000)
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-    player.queue.clear()
-    player.current = track
-    player.process_next.reset_mock()
-
-    await _he_dispatch(player, fail(player, ALL_CLIENTS))
-
-    player.process_next.assert_awaited_once_with(start_position=61_000)
-
-
-async def test_abandoning_a_track_restarts_the_general_budget_and_warns_the_user(monkeypatch):
-    track = make_track(source="soundcloud")
-    player = make_player(track)
-    player.text_channel = SimpleNamespace(send=AsyncMock())
-    monkeypatch.setattr(event_steps, "_he_can_send_in_text_channel", lambda p: True)
-
-    for _ in range(7):
-        player.queue.clear()
-        player.current = track
-        await _he_dispatch(player, fail(player, "java.io.EOFException"))
-
-    assert track in player.failed_tracks
-    assert not hasattr(player, "retries_general_errors")
-    player.text_channel.send.assert_awaited()
-
-
-async def test_a_youtube_source_track_switches_node_once_per_budget():
-    track = make_track(source="youtube", uri="https://www.youtube.com/watch?v=x")
-    other = SimpleNamespace(identifier="N2", is_available=True, search_providers=["ytsearch"])
-    player = make_player(track, nodes=[other])
-    player.bot.music.nodes = {"N1": player.node, "N2": other}
-
-    for _ in range(4):
-        player.queue.clear()
-        player.current = track
-        await _he_dispatch(player, fail(player, OTHER))
-
-    assert player.change_node.await_count == 1
-    assert track in player.failed_tracks

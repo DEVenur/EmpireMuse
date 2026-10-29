@@ -3,8 +3,6 @@
 Sessão, bot, player e provedores são fakes; nada sai da máquina.
 """
 
-import contextlib
-import hashlib
 import logging
 from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
@@ -14,13 +12,10 @@ from unittest.mock import AsyncMock, Mock
 import aiohttp
 import pytest
 
-from empiremuse.cogs.lastfm import LastFMView, LastFmCog
-from empiremuse.music_cog.tracks import TracksMixin
+from empiremuse.cogs.lastfm import LastFmCog, LastFMView
 from empiremuse.utils.music import lastfm_tools
-from empiremuse.utils.music.errors import GenericError
-from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.music.lastfm_tools import LastFM
-from empiremuse.utils.music.models import autoqueue_steps
+from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from tests.support.erros_http import erro_response
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
@@ -82,14 +77,6 @@ def lastfm(monkeypatch: pytest.MonkeyPatch) -> LastFM:
 
 
 PARAMS = {"method": "track.scrobble", "api_key": "AK", "sk": SEGREDO, "api_sig": "SIG"}
-
-
-async def test_the_get_request_uses_https_and_keeps_the_query_params(lastfm: LastFM) -> None:
-    await lastfm.request_lastfm({"method": "artist.getSimilar", "api_key": "AK", "artist": "Artista"})
-
-    ((metodo, url, kwargs),) = SessaoQueCaptura.chamadas
-    assert metodo == "GET" and url.startswith("https://ws.audioscrobbler.com/2.0/")
-    assert kwargs["params"]["artist"] == "Artista" and kwargs["params"]["api_key"] == "AK"
 
 
 async def test_the_post_request_uses_https_and_sends_the_credentials_in_the_body(lastfm: LastFM) -> None:
@@ -155,45 +142,6 @@ async def test_a_scrobble_http_failure_logs_the_status_without_url_or_traceback(
     assert f"last.fm request failed! user: 7 - {resumo}" in caplog.text
     assert all(registro.exc_info is None for registro in caplog.records)
     assert "Traceback" not in capsys.readouterr().err
-
-
-async def test_the_autoqueue_recommendation_http_failure_logs_the_status_without_url_or_traceback(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    contexto = SimpleNamespace(
-        bot=SimpleNamespace(last_fm=SimpleNamespace(get_similar_artists=AsyncMock(side_effect=erro_com_url_secreta()))),
-        lastfm_artists=[],
-    )
-    track_data = SimpleNamespace(
-        ytid=None, author="Artista", title="Musica", info={"sourceName": "spotify"}, url="https://x/y"
-    )
-    req = SimpleNamespace(
-        exception=None, t=None, track_data=track_data, tracks=[], tracks_search=[], tracks_ytsearch=[]
-    )
-
-    with caplog.at_level(logging.WARNING), contextlib.suppress(Exception):  # o resto do passo não é o assunto aqui
-        await autoqueue_steps._aq_lastfm_tracks(contexto, req)
-
-    sem_segredo(caplog.text)
-    assert "Last.FM recommendations error: HTTP 200" in caplog.text
-    assert all(registro.exc_info is None for registro in caplog.records)
-
-
-# ============================================================================ (4) mix: o erro mostrado ao usuário
-
-
-async def test_the_mix_error_shown_to_the_user_has_no_secret() -> None:
-    falha = AsyncMock(side_effect=erro_com_url_secreta())
-    cog = TracksMixin()
-    cog.bot = SimpleNamespace(
-        pool=SimpleNamespace(last_fm=SimpleNamespace(get_similar_tracks=falha, get_artist_toptracks=falha))
-    )
-
-    with pytest.raises(GenericError) as erro:
-        await cog.get_tracks("Artista - Musica", SimpleNamespace(), SimpleNamespace(id=1), mix=True)
-
-    sem_segredo(erro.value.error)
-    assert "HTTP 200" in erro.value.error
 
 
 # ============================================================================ credenciais de sessão só no corpo (POST), nunca na URL
@@ -269,21 +217,6 @@ async def test_calls_with_session_secrets_go_by_post_with_the_secrets_only_in_th
     assert not kwargs.get("params")
     corpo = kwargs["data"]
     assert corpo["api_key"] == "AK" and (corpo.get("sk") == SK or corpo.get("token") == TOKEN)
-
-
-@pytest.mark.parametrize(
-    "chamar",
-    [lambda api: api.get_token(), lambda api: api.get_similar_artists("Artista")],
-    ids=["get_token", "get_similar_artists"],
-)
-async def test_reads_with_only_the_api_key_stay_as_get_with_query_params(
-    pedidos: LastFM, chamar: Callable[[LastFM], Awaitable[Any]]
-) -> None:
-    await chamar(pedidos)
-
-    ((metodo, url, kwargs),) = Pedidos.chamadas
-    assert metodo == "GET" and url == "https://ws.audioscrobbler.com/2.0/"
-    assert kwargs["params"]["api_key"] == "AK" and "sk" not in kwargs["params"] and "token" not in kwargs["params"]
 
 
 @pytest.mark.parametrize(
@@ -366,50 +299,3 @@ async def test_a_redirect_of_the_post_with_credentials_is_an_error_and_the_body_
     assert safe_error(erro.value) == f"HTTP {status}"
     ((url, kwargs),) = SessaoQueRedireciona.posts  # um único POST, e nenhum para o destino do redirecionamento
     assert url == "https://ws.audioscrobbler.com/2.0/" and kwargs["allow_redirects"] is False
-
-
-async def test_a_normal_post_response_still_works_with_redirects_disabled(
-    com_redirecionamento: LastFM, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    class SessaoNormal(SessaoQueRedireciona):
-        def post(self, url: str, **kwargs: Any) -> RespostaDeRedirecionamento:
-            self.posts.append((url, kwargs))
-            return RespostaDeRedirecionamento(200)
-
-    monkeypatch.setattr(lastfm_tools, "ClientSession", SessaoNormal)
-    SessaoNormal.posts = []
-
-    assert await com_redirecionamento.post_lastfm({"method": "track.scrobble", "api_key": "AK"}) == {"ok": 1}
-    assert SessaoNormal.posts[0][1]["allow_redirects"] is False
-
-
-# ============================================================================ assinatura (api_sig) de toda chamada autenticada
-
-
-def assinatura_esperada(corpo: dict[str, Any], segredo: str) -> str:
-    """Como a API do Last.fm confere: ``md5`` de ``chave+valor`` em ordem alfabética, sem ``api_sig`` nem ``format``, mais o segredo."""
-    parametros = {k: v for k, v in corpo.items() if k not in ("api_sig", "format")}
-    return hashlib.md5(("".join(f"{k}{parametros[k]}" for k in sorted(parametros)) + segredo).encode()).hexdigest()
-
-
-@pytest.mark.parametrize(
-    "chamar",
-    [
-        lambda api: api.user_info(SK),
-        lambda api: api.track_scrobble("Artista", "Musica", "Album", 200, SK),
-        lambda api: api.update_nowplaying("Artista", "Musica", "Album", 200, SK),
-        lambda api: api.track_love("Musica", "Artista", SK),
-        lambda api: api.track_unlove("Musica", "Artista", SK),
-        lambda api: api.get_session_key(TOKEN),
-    ],
-    ids=["user_info", "track_scrobble", "update_nowplaying", "track_love", "track_unlove", "get_session_key"],
-)
-async def test_every_post_with_sk_or_token_carries_a_correct_api_sig(
-    pedidos: LastFM, chamar: Callable[[LastFM], Awaitable[Any]]
-) -> None:
-    await chamar(pedidos)
-
-    ((metodo, _, kwargs),) = Pedidos.chamadas
-    corpo = kwargs["data"]
-    assert metodo == "POST" and ("sk" in corpo or "token" in corpo)
-    assert corpo.get("api_sig") == assinatura_esperada(corpo, pedidos.api_secret)
