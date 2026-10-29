@@ -38,10 +38,15 @@ async def _sync(bot: BotCore, bots: int) -> None:
     if appinfo is None:
         return
     config = bot.config
+    if bot.is_reserve:
+        await bot.pool.wait_main_outcome()  # o texto da reserva cita o principal: espera ele logar (ou falhar)
     main = bot.pool.main_bot
+    description = config["APP_DESCRIPTION_RESERVE"] if bot.is_reserve else config["APP_DESCRIPTION"]
+    if bot.is_reserve and main is None:
+        description = ""  # sem o principal o texto sairia sem as linhas dele: melhor deixar o que já está no Discord
     desired = build_profile(
         # a reserva tem o próprio texto (diz onde ficam os comandos de barra); o principal e os bots exclusivos usam o geral
-        description=config["APP_DESCRIPTION_RESERVE"] if bot.is_reserve else config["APP_DESCRIPTION"],
+        description=description,
         tags=config["APP_TAGS"],
         prefix=config["DEFAULT_PREFIX"],
         bots=bots,

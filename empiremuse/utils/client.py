@@ -88,7 +88,9 @@ from empiremuse.web_app import WSClient, start
 
 logger = logging.getLogger(__name__)
 
-MAIN_PREFIX_WAIT = 2.0  # s que a reserva espera o principal assumir o comando de prefixo antes de ignorá-lo
+MAIN_PREFIX_WAIT = (
+    5.0  # s que a reserva espera o principal assumir o comando de prefixo antes de ignorá-lo (ele pode ir ao banco)
+)
 node_logger = logging.getLogger("empiremuse.wavelink")
 commands_logger = logging.getLogger("empiremuse.commands")
 
@@ -462,6 +464,13 @@ class BotPool:
 
     def get_guild_bots(self, guild_id: int) -> list:
         return self.bots + self.guild_bots.get(str(guild_id), [])
+
+    @property
+    def main_configured(self) -> bool:
+        """Há um token principal configurado (logado, logando ou que falhou)? Sem ele ninguém é reserva: todos agem como sempre."""
+        return any(is_main_identifier(bot.identifier) for bot in self.bots) or any(
+            is_main_identifier(identifier) for identifier in getattr(self, "failed_bots", {})
+        )
 
     @property
     def main_bot(self) -> Optional[BotCore]:
@@ -1530,8 +1539,8 @@ class BotCore(commands.AutoShardedBot):
 
     @property
     def is_reserve(self) -> bool:
-        """Reserva: do pool, não é o principal e não é exclusivo de servidor (esses ficam fora dos papéis)."""
-        return not self.exclusive_guild_id and not is_main_identifier(self.identifier)
+        """Reserva: do pool, não é o principal, não é exclusivo de servidor e há um token principal configurado."""
+        return not self.exclusive_guild_id and not is_main_identifier(self.identifier) and self.pool.main_configured
 
     def main_invite_url(self) -> Optional[str]:
         """Convite do principal montado aqui (nunca de texto de fora); ``None`` se ele não existe ou não é público."""
@@ -1863,6 +1872,9 @@ class BotCore(commands.AutoShardedBot):
             self.is_reserve
             and not message.content.startswith(tuple(self.pool.bot_mentions))  # citada pelo nome, a reserva atende
             and self.pool.main_can_serve(message.guild.id, message.channel.id)
+            and not self._owns_forum_post(
+                message.channel
+            )  # no post de fórum dela só ela atende (o principal recusa em check_forum)
             and not await self._main_took_prefix(ctx)
         ):
             return  # com o principal atendendo aqui, quem recebe o comando de prefixo é ele (S-V6)
@@ -1883,6 +1895,12 @@ class BotCore(commands.AutoShardedBot):
             return
 
         await self.invoke(ctx)
+
+    def _owns_forum_post(self, channel) -> bool:
+        return (
+            not self.check_bot_forum_post(channel, raise_error=False)
+            and getattr(channel, "owner_id", None) == self.user.id
+        )
 
     async def _main_took_prefix(self, ctx: CustomContext) -> bool:
         """A reserva espera o principal assumir o comando (a entrada dele em ``pool.message_ids``); sem ela no prazo, ignora."""
