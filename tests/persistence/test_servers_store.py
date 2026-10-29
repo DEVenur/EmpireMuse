@@ -43,11 +43,13 @@ class Banco:
         return self.docs.get((*SERVERS, str(gid)))
 
     async def find_doc(self, id_, *, db_name, collection):
+        await asyncio.sleep(0)  # cede o laço como um banco de verdade: sem a trava as escritas se intercalam
         if self.read_error and db_name == DBModel.guilds:
             raise OSError("leitura falhou")
         return deepcopy(self.docs.get((db_name, collection, str(id_))))
 
     async def save_doc_cas(self, id_, doc, *, expected_rev, db_name, collection):
+        await asyncio.sleep(0)
         if self.write_error:
             raise OSError("gravação falhou")
         key = (db_name, collection, str(id_))
@@ -254,6 +256,18 @@ def test_legacy_writer_that_changed_settings_raises_and_the_others_are_saved(wor
     assert (
         stored["player_controller"]["channel"] == "77" and "autoplay" not in stored
     )  # settings nunca vão ao doc do bot
+
+
+def test_another_admin_changing_settings_between_read_and_write_is_not_an_error(world):
+    bot = world.bots[0]
+    doc = run(world.store.legacy_doc(bot, GID))  # o escritor lê
+    run(world.store.patch(GID, "settings", {"autoplay": True}))  # outro admin muda no meio
+    doc["player_controller"]["channel"] = "77"  # e o escritor só mexe no que é do bot
+
+    run(world.store.save_legacy(bot, GID, doc))  # não levanta
+
+    assert run(world.store.settings(GID))["autoplay"] is True  # a mudança do outro admin não se perde
+    assert world.banco.docs[(DBModel.guilds, str(MAIN_ID), str(GID))]["player_controller"]["channel"] == "77"
 
 
 def test_legacy_view_is_a_deep_copy(world):
