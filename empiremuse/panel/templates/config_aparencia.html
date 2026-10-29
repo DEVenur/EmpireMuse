@@ -8,10 +8,9 @@
 {% set caminho_categoria = "/painel/servidores/" + acesso.guild_id + "/aparencia" %}
 {% include "_topo_config.html" %}
 {% include "_nav_categorias.html" %}
-{% include "_seletor_bot.html" %}
 <div class="bloco-config">
-  {% set form = forms["skin_bot"] %}
-  {% include "form_skin_bot.html" %}
+  {% set form = forms["skin_servidor"] %}
+  {% include "form_skin_servidor.html" %}
 </div>
 <div class="bloco-config">
   {% set form = forms["skin_global"] %}

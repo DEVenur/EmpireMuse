@@ -20,9 +20,10 @@ from empiremuse.panel.handlers.servers import (
     decode_args,
     initial_of,
 )
-from empiremuse.panel.services.appearance import SkinsBotForm, SkinsGlobalForm
+from empiremuse.panel.services.appearance import SkinsGlobalForm, SkinsServerForm
 from empiremuse.panel.services.base import (
     DBModel,
+    CONFLICT_TEXT,
     DIGITS,
     KIND_ERROR,
     ForbiddenAction,
@@ -35,6 +36,7 @@ from empiremuse.panel.services.links import LinksForm
 from empiremuse.panel.services.listen_along import ListenAlongForm
 from empiremuse.panel.services.player import DjForm, PlayerForm
 from empiremuse.panel.services.service import Outcome, SettingsService
+from empiremuse.utils.servers import ServerConfigConflict, ServerConfigUnavailable
 from empiremuse.utils.usage import record_panel_action
 
 logger = logging.getLogger(__name__)
@@ -43,15 +45,16 @@ WRITE_LIMIT_PER_MINUTE = 20
 CATEGORY_FORMS: dict[str, tuple[SettingsForm, ...]] = {
     "player": (PlayerForm(),),
     "dj": (DjForm(),),
-    "aparencia": (SkinsBotForm(), SkinsGlobalForm()),
+    "aparencia": (SkinsServerForm(), SkinsGlobalForm()),
     "links": (LinksForm(),),
     "geral": (PrefixForm(), VoiceStatusForm(), ListenAlongForm()),
 }
-PER_BOT_CATEGORIES = frozenset({"player", "dj", "aparencia", "links", "canal"})
+PER_BOT_CATEGORIES = frozenset({"links", "canal"})  # player, dj e aparência são do servidor (doc único)
 CHANNEL_CATEGORY = "canal"  # tem handler próprio (panel/handlers/channel.py)
 _MSG_TOO_LARGE = ("Envio grande demais", "Os dados enviados excedem o limite permitido.")
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."
 _MSG_NO_FORM = ("Dados inválidos", "Não foi possível identificar o formulário enviado.")
+_UNAVAILABLE_TITLE = "Configuração indisponível"
 _MSG_FORBIDDEN = "Você não tem a permissão necessária no Discord para esta ação (Gerenciar Canais)."
 
 
@@ -69,6 +72,18 @@ class SettingsHandler(AuthenticatedHandler):
 
     async def get(self, guild_id: str, category: str) -> None:
         try:
+            await self._get(guild_id, category)
+        except ServerConfigUnavailable as exc:  # leitura do doc único falhou: mensagem própria, não o 500 genérico
+            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+
+    async def post(self, guild_id: str, category: str) -> None:
+        try:
+            await self._post(guild_id, category)
+        except ServerConfigUnavailable as exc:  # vale também para a releitura dos blocos de Conflict, 429 e respostas
+            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+
+    async def _get(self, guild_id: str, category: str) -> None:
+        try:
             ctx, access, action = await self._resolve(guild_id, category, fresh=False)
         except GuildAccessDenied:
             self._not_found()
@@ -76,7 +91,7 @@ class SettingsHandler(AuthenticatedHandler):
         states = {form.key: await self.service.read(form, ctx, action) for form in CATEGORY_FORMS[category]}
         self._render_full(category, access, ctx, states)
 
-    async def post(self, guild_id: str, category: str) -> None:
+    async def _post(self, guild_id: str, category: str) -> None:
         if len(self.request.body) > MAX_BODY_BYTES:
             self._reject_plain(413, *_MSG_TOO_LARGE)
             return
@@ -98,6 +113,9 @@ class SettingsHandler(AuthenticatedHandler):
         except ForbiddenAction:
             state = await self.service.read(form, ctx, action, message=_MSG_FORBIDDEN, kind=KIND_ERROR)
             outcome = Outcome(403, state)
+        except ServerConfigConflict:  # a gravação concorrente do store esgotou as tentativas: o usuário recarrega
+            state = await self.service.read(form, ctx, action, message=CONFLICT_TEXT, kind=KIND_ERROR)
+            outcome = Outcome(409, state)
         record_panel_action(ctx, f"{category}/{form.key}", outcome.status)
         await self._respond(category, access, ctx, action, form, outcome)
 

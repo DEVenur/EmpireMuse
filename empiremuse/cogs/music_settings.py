@@ -21,6 +21,7 @@ from empiremuse.rules.limits import (
     MAX_DJ_ROLES,
     VOLUMES,
 )
+from empiremuse.rules.servers import SettingError
 from empiremuse.rules.settings import add_dj_role as add_role, allowed_names
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
@@ -213,8 +214,17 @@ class PlayerSettings(disnake.ui.View):
         self.check_other_bots_in_vc = data["check_other_bots_in_vc"]
         self.enable_restrict_mode = data["enable_restrict_mode"]
         self.default_player_volume = data["default_player_volume"]
+        self._initial = self._current()  # o que a tela abriu mostrando: só o que o usuário mudar é gravado
         self.message: Optional[disnake.Message] = None
         self.load_buttons()
+
+    def _current(self) -> dict:
+        return {
+            "autoplay": self.enable_autoplay,
+            "check_other_bots_in_vc": self.check_other_bots_in_vc,
+            "enable_restrict_mode": self.enable_restrict_mode,
+            "default_player_volume": int(self.default_player_volume),
+        }
 
     def load_buttons(self):
         self.clear_items()
@@ -277,13 +287,19 @@ class PlayerSettings(disnake.ui.View):
 
     async def close_callback(self, interaction: disnake.MessageInteraction):
         try:
+            await interaction.response.defer()  # a gravação pode demorar mais que o prazo de resposta da interação
+        except disnake.HTTPException as exc:
+            logger.warning(
+                "Falha ao adiar a resposta do menu de configurações (%s); a gravação continua", type(exc).__name__
+            )
+        await self.save_data()  # grava antes de dizer "salvo": se a gravação falhar, o usuário não vê sucesso
+        try:
             if isinstance(self.ctx, CustomContext):
                 await self.message.edit(content="Alterações salvas com sucesso!", view=None, embed=None)
             else:
                 await self.ctx.edit_original_message(content="Alterações salvas com sucesso!", view=None, embed=None)
         except Exception:
             logger.exception("Falha ao salvar as alterações do menu de configurações")
-        await self.save_data()
         self.stop()
 
     async def interaction_check(self, inter: disnake.MessageInteraction) -> bool:
@@ -294,13 +310,11 @@ class PlayerSettings(disnake.ui.View):
         return False
 
     async def save_data(self):
-        guild_data = await self.bot.get_data(self.ctx.guild_id, db_name=DBModel.guilds)
-        guild_data["autoplay"] = self.enable_autoplay
-        guild_data["check_other_bots_in_vc"] = self.check_other_bots_in_vc
-        guild_data["enable_restrict_mode"] = self.enable_restrict_mode
-        guild_data["default_player_volume"] = int(self.default_player_volume)
-
-        await self.bot.update_data(self.ctx.guild_id, guild_data, db_name=DBModel.guilds)
+        now = self._current()
+        changes = {name: value for name, value in now.items() if value != self._initial[name]}
+        if changes:  # só os campos que o usuário mexeu: o resto pode ter sido alterado por outro admin ou pelo painel
+            await self.bot.pool.servers.patch(self.ctx.guild_id, "settings", changes)
+            self._initial = now
 
         try:
             player: LavalinkPlayer = self.bot.music.players[self.ctx.guild_id]
@@ -911,9 +925,15 @@ class MusicSettings(commands.Cog):
                 )
             return
 
-        guild_data["djroles"] = roles
-
-        await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
+        try:
+            await bot.pool.servers.add_djrole(guild.id, role.id)  # a lista é alterada dentro da trava do servidor
+        except SettingError:  # entre a checagem e a gravação a lista encheu ou o cargo foi apagado
+            await inter.send(
+                f"Não foi possível adicionar o cargo: a lista de DJ's pode estar com o máximo de {MAX_DJ_ROLES} cargos "
+                "ou o cargo não existe mais.",
+                ephemeral=True,
+            )
+            return
 
         await inter.send(f"O cargo {role.mention} foi adicionado à lista de DJ's.", ephemeral=True)
 
@@ -963,9 +983,7 @@ class MusicSettings(commands.Cog):
             )
             return
 
-        guild_data["djroles"].remove(str(role.id))
-
-        await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
+        await bot.pool.servers.remove_djrole(guild.id, role.id)
 
         await inter.send(f"O cargo {role.mention} foi removido da lista de DJ's.", ephemeral=True)
 
@@ -1138,9 +1156,14 @@ class MusicSettings(commands.Cog):
                     changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
         else:
-            guild_data["player_controller"]["skin"] = select_view.skin_selected
-            guild_data["player_controller"]["static_skin"] = select_view.static_skin_selected
-            await bot.update_data(inter.guild_id, guild_data, db_name=DBModel.guilds)
+            # só o que o usuário trocou: o outro campo pode ter sido alterado por outro admin enquanto a tela estava aberta
+            skin_changes = {}
+            if selected != select_view.skin_selected:
+                skin_changes["skin"] = select_view.skin_selected
+            if static_selected != select_view.static_skin_selected:
+                skin_changes["static_skin"] = select_view.static_skin_selected
+            if skin_changes:
+                await bot.pool.servers.patch(inter.guild_id, "settings", skin_changes)
 
             if selected != select_view.skin_selected:
                 try:

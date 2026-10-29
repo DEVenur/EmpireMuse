@@ -23,28 +23,33 @@ class AppearanceReadTest(HttpBase):
         assert set(form.choices("static_skin")) == {"default", "green", "blue"}
 
 
-# ============================================================================ Aparência: escrita por bot
+# ============================================================================ Aparência: escrita no servidor
 
 
-class AppearanceBotWriteTest(HttpBase):
-    def test_valid_post_writes_only_the_two_skin_keys_of_player_controller(self):
+class AppearanceServerWriteTest(HttpBase):
+    def test_valid_post_writes_only_the_two_skin_fields_of_the_server_settings(self):
         browser = self.logged_in()
-        before, global_before = self.db.doc("1", 100), self.db.doc("global", 100)
+        before, bot_before, global_before = (
+            self.world.server_settings(100),
+            self.db.doc("1", 100),
+            self.db.doc("global", 100),
+        )
         response = self.save(browser, 100, "aparencia", "skin", skin="neon", static_skin="green")
         assert response.code == 200, f"status {response.code}"
-        expected = copy.deepcopy(before)
-        expected["player_controller"].update({"skin": "neon", "static_skin": "green"})
-        assert self.db.doc("1", 100) == expected, "channel, message_id, fav_links, ver e demais campos intactos"
-        assert self.db.doc("global", 100) == global_before and self.db.writes == [("1", 100)]
+        assert self.world.server_settings(100) == before | {"skin": "neon", "static_skin": "green"}
+        assert self.db.doc("1", 100) == bot_before and self.db.doc("global", 100) == global_before
+        assert self.db.writes == [("servidor", 100)]
 
-    def test_second_bot_is_independent(self):
+    def test_the_skin_is_the_servers_and_reloads_the_players_of_every_bot(self):
         browser = self.logged_in()
-        before1 = self.db.doc("1", 800)
+        bots_before = (self.db.doc("1", 800), self.db.doc("2", 800))
         assert self.save(browser, 800, "aparencia", "skin", bot=2, skin="neon").code == 200
-        assert self.db.doc("2", 800)["player_controller"]["skin"] == "neon" and self.db.doc("1", 800) == before1
+        assert self.world.server_settings(800)["skin"] == "neon"
+        assert (self.db.doc("1", 800), self.db.doc("2", 800)) == bots_before
+        assert self.world.p800a.called("invoke_np") and self.world.p800b.called("invoke_np")
 
 
-class AppearanceBotEffectsTest(HttpBase):
+class AppearanceServerEffectsTest(HttpBase):
     def test_static_player_reloads_only_when_the_static_skin_changes(self):
         browser = self.logged_in()
         self.world.p800a.static = True

@@ -15,6 +15,6 @@ class EffectFailureTest(HttpBase):
         browser = self.logged_in()
         response = self.save(browser, 100, "player", "default_player_volume", default_player_volume="45")
         assert response.code == 200, f"status {response.code}"
-        assert self.db.doc("1", 100)["default_player_volume"] == 45
+        assert self.world.server_settings(100)["default_player_volume"] == 45
         assert "falha simulada" not in response.body.decode() and "Traceback" not in response.body.decode()
         assert "falha simulada" not in self.all_log_text(), "a mensagem da exceção não deve ir ao log"

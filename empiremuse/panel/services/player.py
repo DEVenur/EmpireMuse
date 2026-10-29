@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, NamedTuple
 
 from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, flag, first
 from empiremuse.rules import limits
 from empiremuse.rules.errors import ROLE_DUPLICATE, ROLE_LIMIT
 from empiremuse.rules.settings import check_dj_roles, order_dj_roles, parse_volume
+
+logger = logging.getLogger(__name__)
 
 MSG_VOLUME = "Escolha um volume válido: de 5 a 100 (de 5 em 5) ou de 110 a 150 (de 10 em 10)."
 MSG_ROLE_INVALID = "Selecione apenas cargos que existem neste servidor."
@@ -23,9 +26,16 @@ def active_player(bot: Any, guild_id: int) -> Any:
         return None
 
 
+def guild_players(ctx: FormContext) -> list[Any]:
+    """Players ativos do servidor em todos os bots do pool (a configuração é do servidor, não de um bot)."""
+    players = (active_player(bot, ctx.guild_id) for bot in ctx.pool.get_guild_bots(ctx.guild_id))
+    return [player for player in players if player is not None]
+
+
 class PlayerForm(SettingsForm):
     key = "player"
     category = "player"
+    scope_kind = "servidor"
     fields = ("default_player_volume", "autoplay", "check_other_bots_in_vc", "enable_restrict_mode")
     markers = fields
     _FLAGS = fields[1:]
@@ -52,9 +62,11 @@ class PlayerForm(SettingsForm):
         return ParseResult({"default_player_volume": volume, **flags}, {}, echo)
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
-        player = active_player(ctx.bot, ctx.guild_id)
-        if player is not None:
-            await player.process_save_queue()
+        for player in guild_players(ctx):
+            try:
+                await player.process_save_queue()
+            except Exception as exc:  # o dado já foi gravado: um player com falha não impede os demais
+                logger.warning("Falha ao salvar a fila do player depois da configuração (%s)", type(exc).__name__)
 
 
 class RoleOption(NamedTuple):
@@ -65,6 +77,7 @@ class RoleOption(NamedTuple):
 class DjForm(SettingsForm):
     key = "dj"
     category = "dj"
+    scope_kind = "servidor"
     fields = ("djroles",)
     markers = fields
 
@@ -73,6 +86,18 @@ class DjForm(SettingsForm):
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
         doc["djroles"] = list(new["djroles"])
+
+    async def store(self, ctx: FormContext, doc: dict, before: dict) -> None:
+        """Cargos entram e saem um a um dentro da trava do store; nunca regrava a lista inteira lida antes (S-V3)."""
+        # ids em texto, como o banco e o resto do código gravam
+        kept = set(doc["djroles"])
+        for role_id in before["djroles"]:
+            if role_id not in kept:
+                await ctx.pool.servers.remove_djrole(ctx.guild_id, role_id)
+        already = set(before["djroles"])
+        for role_id in doc["djroles"]:
+            if role_id not in already:
+                await ctx.pool.servers.add_djrole(ctx.guild_id, role_id)
 
     def _roles(self, ctx: FormContext) -> tuple[RoleOption, ...]:
         everyone = ctx.guild.default_role.id

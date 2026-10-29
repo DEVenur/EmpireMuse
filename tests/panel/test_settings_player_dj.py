@@ -2,29 +2,44 @@
 contra o código dos comandos, escopo por bot e efeitos em memória."""
 
 from tests.panel.helpers_settings import ROLE_IDS
-from tests.panel.test_settings_http import HttpBase, external_change
+from tests.panel.test_settings_http import HttpBase
 
 
 class PlayerWriteTest(HttpBase):
-    def test_post_for_the_second_bot_changes_only_that_bots_document(self):
+    def test_post_writes_the_server_document_whatever_bot_the_url_names(self):
         browser = self.logged_in()
-        before1 = self.db.doc("1", 800)
+        bots_before = (self.db.doc("1", 800), self.db.doc("2", 800))
         response = self.save(browser, 800, "player", "default_player_volume", bot=2, default_player_volume="30")
         assert response.code == 200, f"status {response.code}"
-        assert self.db.doc("2", 800)["default_player_volume"] == 30
-        assert self.db.doc("1", 800) == before1
-        assert self.db.writes == [("2", 800)]
+        assert self.world.server_settings(800)["default_player_volume"] == 30
+        assert (self.db.doc("1", 800), self.db.doc("2", 800)) == bots_before, "documentos por bot não são tocados"
+        assert self.db.writes == [("servidor", 800)]
 
-    def test_reaching_a_guild_with_no_document_yet_creates_defaults_without_raising_ver(self):
+    def test_reaching_a_guild_with_no_document_yet_creates_it_with_the_defaults_and_the_change(self):
         browser = self.logged_in()
-        self.db.docs.pop(("2", 200))
-        self.db.baseline.pop(("2", 200))
+        self.world.database.servers.pop(200)
+        self.pool.servers._docs.clear()
         response = self.save(browser, 200, "player", "default_player_volume", default_player_volume="75")
         assert response.code == 200
-        ver = self.db.doc("2", 200)["ver"]
-        from empiremuse.utils.db import DBModel, db_models
+        doc = self.world.database.servers[200]
+        assert doc["ver"] == 1.0 and doc["migrated"]["settings"] is True
+        assert doc["settings"] == self.world.server_settings(200) | {"default_player_volume": 75}
+        assert doc["settings"]["autoplay"] is False and doc["settings"]["djroles"] == []
 
-        assert ver == db_models[DBModel.guilds]["ver"], "o painel nunca sobe `ver` (KI-09)"
+    def test_panel_and_command_side_read_and_write_the_same_document(self):  # S8
+        browser = self.logged_in()
+        assert self.save(browser, 800, "player", "default_player_volume", default_player_volume="30").code == 200
+        for bot in (
+            self.world.bot1,
+            self.world.bot2,
+        ):  # o formato antigo (comandos) de qualquer bot vê a mudança do painel
+            assert (
+                self.io_loop.run_sync(lambda bot=bot: self.pool.servers.legacy_doc(bot, 800))["default_player_volume"]
+                == 30
+            )
+        self.io_loop.run_sync(lambda: self.pool.servers.patch(800, "settings", {"default_player_volume": 45}))
+        _, form, _ = self.open_form(browser, 800, "player", "default_player_volume")  # e o painel vê a do comando
+        assert form.value("default_player_volume") == "45"
 
 
 class PlayerEffectsTest(HttpBase):
@@ -32,7 +47,7 @@ class PlayerEffectsTest(HttpBase):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert self.submit(browser, url, form, default_player_volume="7").code == 422
-        external_change(self.db, "1", 100, autoplay=True)
+        self.world.external_server_change(100, autoplay=True)
         assert self.submit(browser, url, form, default_player_volume="30").code == 409
         assert self.world.p100.calls == [] and self.db.writes == []
 
@@ -42,7 +57,7 @@ class PlayerEffectsTest(HttpBase):
 
 class DjReadTest(HttpBase):
     def test_stale_ids_stored_for_deleted_roles_do_not_break_the_page(self):
-        external_change(self.db, "1", 100, djroles=["5002", "999999999999"])
+        self.world.external_server_change(100, djroles=["5002", "999999999999"])
         response = self.logged_in().get(self.url(100, "dj"))
         assert response.code == 200 and "999999999999" not in response.body.decode()
 
@@ -58,15 +73,17 @@ class DjWriteTest(HttpBase):
 
     def test_limit_is_25_per_submission(self):
         assert self.save_roles(ROLE_IDS[:25]).code == 200
-        assert len(self.db.doc("1", 100)["djroles"]) == 25
-        before = self.db.doc("1", 100)
+        assert (
+            sorted(self.world.server_settings(100)["djroles"]) == ROLE_IDS[:25]
+        )  # a ordem segue as entradas, uma a uma
+        before = self.world.server_settings(100)
         assert self.save_roles(ROLE_IDS[:26]).code == 422
-        assert self.db.doc("1", 100) == before
+        assert self.world.server_settings(100) == before
 
     def test_other_fields_in_the_post_are_ignored_and_no_player_effect_runs(self):
         browser = self.browser_cached()
         url, form, _ = self.open_form(browser, 100, "dj", "djroles")
-        before = self.db.doc("1", 100)
+        before, bot_before = self.world.server_settings(100), self.db.doc("1", 100)
         pairs = form.pairs(djroles=["5004"]) + [
             ("autoplay", "on"),
             ("default_player_volume", "5"),
@@ -74,7 +91,8 @@ class DjWriteTest(HttpBase):
             ("ver", "9.9"),
         ]
         assert self.submit(browser, url, form, pairs=pairs).code in (200, 422)
-        after = self.db.doc("1", 100)
-        for key in ("autoplay", "default_player_volume", "player_controller", "ver", "extra_flag"):
+        after = self.world.server_settings(100)
+        for key in before.keys() - {"djroles"}:
             assert after[key] == before[key], key
+        assert self.db.doc("1", 100) == bot_before
         assert self.world.p100.calls == [], "DJ não tem efeito em memória no player"

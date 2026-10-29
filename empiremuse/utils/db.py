@@ -15,6 +15,7 @@ import disnake
 from cachetools import TTLCache
 from disnake.ext import commands
 from pymongo import AsyncMongoClient
+from pymongo.errors import DuplicateKeyError
 from tinydb_serialization import Serializer, SerializationMiddleware
 from tinymongo import TinyMongoClient
 from tinymongo.serializers import DateTimeSerializer
@@ -41,6 +42,7 @@ class DBModel:
     default = "default"
     usage_events = "usage_events"
     banned_guilds = "banned_guilds"
+    servers = "servers"
 
 
 db_models = {
@@ -58,10 +60,6 @@ db_models = {
         "enable_restrict_mode": False,
         "default_player_volume": 100,
         "djroles": [],
-    },
-    DBModel.users: {
-        "ver": 1.0,
-        "fav_links": {},
     },
 }
 
@@ -257,6 +255,26 @@ class LocalDatabase(BaseDB):
     async def ensure_event_indexes(self, *, db_name: str, collection: str) -> None:
         return None
 
+    async def find_doc(self, id_, *, db_name: str, collection: str) -> Optional[dict]:
+        """O documento como está no banco: sem cache e sem criar o padrão (``None`` se não existe)."""
+        doc = self._connect[collection][db_name].find_one({"_id": str(id_)})
+        return deepcopy(doc) if doc else None
+
+    async def save_doc_cas(self, id_, doc: dict, *, expected_rev: Optional[int], db_name: str, collection: str) -> bool:
+        """Grava ``doc`` só se o ``rev`` guardado ainda é ``expected_rev`` (``None`` = o documento ainda não existe)."""
+        id_ = str(id_)
+        table = self._connect[collection][db_name]
+        stored = table.find_one({"_id": id_})
+        if expected_rev is None:
+            if stored:
+                return False
+            table.insert_one({**doc, "_id": id_})
+            return True
+        if not stored or stored.get("rev") != expected_rev:
+            return False
+        table.update_one({"_id": id_}, {"$set": {k: v for k, v in doc.items() if k != "_id"}})
+        return True
+
     async def delete_data(self, id_, db_name: str, collection: str):
         try:
             self._connect[collection][db_name].delete_one({"_id": str(id_)})
@@ -345,14 +363,15 @@ class MongoDatabase(BaseDB):
         collection: str,
         default_model: dict = None,
     ):
-        self.cache[f"{collection}:{db_name}:{id_}"] = data
-
         try:
             del data["_id"]
         except KeyError:
             pass
 
         await self._connect[collection][db_name].update_one({"_id": str(id_)}, {"$set": data}, upsert=True)
+        self.cache[f"{collection}:{db_name}:{id_}"] = (
+            data  # só depois de gravar: gravação que falha não deixa dado "salvo" no cache
+        )
         return data
 
     async def query_data(self, db_name: str, collection: str, filter: dict = None, limit: Optional[int] = None) -> list:
@@ -388,6 +407,24 @@ class MongoDatabase(BaseDB):
         events = self._connect[collection][db_name]
         await events.create_index("expire_at", expireAfterSeconds=0)
         await events.create_index([("guild", 1), ("ts", -1)])
+
+    async def find_doc(self, id_, *, db_name: str, collection: str) -> Optional[dict]:
+        """O documento como está no banco: sem cache e sem criar o padrão (``None`` se não existe)."""
+        return await self._connect[collection][db_name].find_one({"_id": str(id_)})
+
+    async def save_doc_cas(self, id_, doc: dict, *, expected_rev: Optional[int], db_name: str, collection: str) -> bool:
+        """Grava ``doc`` só se o ``rev`` guardado ainda é ``expected_rev`` (``None`` = o documento ainda não existe)."""
+        id_ = str(id_)
+        table = self._connect[collection][db_name]
+        body = {k: v for k, v in doc.items() if k != "_id"}
+        if expected_rev is None:
+            try:
+                await table.insert_one({**body, "_id": id_})
+            except DuplicateKeyError:
+                return False
+            return True
+        result = await table.update_one({"_id": id_, "rev": expected_rev}, {"$set": body})
+        return result.matched_count == 1
 
     async def delete_data(self, id_, db_name: str, collection: str):
         try:
