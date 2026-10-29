@@ -214,8 +214,17 @@ class PlayerSettings(disnake.ui.View):
         self.check_other_bots_in_vc = data["check_other_bots_in_vc"]
         self.enable_restrict_mode = data["enable_restrict_mode"]
         self.default_player_volume = data["default_player_volume"]
+        self._initial = self._current()  # o que a tela abriu mostrando: só o que o usuário mudar é gravado
         self.message: Optional[disnake.Message] = None
         self.load_buttons()
+
+    def _current(self) -> dict:
+        return {
+            "autoplay": self.enable_autoplay,
+            "check_other_bots_in_vc": self.check_other_bots_in_vc,
+            "enable_restrict_mode": self.enable_restrict_mode,
+            "default_player_volume": int(self.default_player_volume),
+        }
 
     def load_buttons(self):
         self.clear_items()
@@ -277,6 +286,7 @@ class PlayerSettings(disnake.ui.View):
         await interaction.response.edit_message(view=self)
 
     async def close_callback(self, interaction: disnake.MessageInteraction):
+        await self.save_data()  # grava antes de dizer "salvo": se a gravação falhar, o usuário não vê sucesso
         try:
             if isinstance(self.ctx, CustomContext):
                 await self.message.edit(content="Alterações salvas com sucesso!", view=None, embed=None)
@@ -284,7 +294,6 @@ class PlayerSettings(disnake.ui.View):
                 await self.ctx.edit_original_message(content="Alterações salvas com sucesso!", view=None, embed=None)
         except Exception:
             logger.exception("Falha ao salvar as alterações do menu de configurações")
-        await self.save_data()
         self.stop()
 
     async def interaction_check(self, inter: disnake.MessageInteraction) -> bool:
@@ -295,16 +304,11 @@ class PlayerSettings(disnake.ui.View):
         return False
 
     async def save_data(self):
-        await self.bot.pool.servers.patch(
-            self.ctx.guild_id,
-            "settings",
-            {
-                "autoplay": self.enable_autoplay,
-                "check_other_bots_in_vc": self.check_other_bots_in_vc,
-                "enable_restrict_mode": self.enable_restrict_mode,
-                "default_player_volume": int(self.default_player_volume),
-            },
-        )
+        now = self._current()
+        changes = {name: value for name, value in now.items() if value != self._initial[name]}
+        if changes:  # só os campos que o usuário mexeu: o resto pode ter sido alterado por outro admin ou pelo painel
+            await self.bot.pool.servers.patch(self.ctx.guild_id, "settings", changes)
+            self._initial = now
 
         try:
             player: LavalinkPlayer = self.bot.music.players[self.ctx.guild_id]
@@ -917,9 +921,10 @@ class MusicSettings(commands.Cog):
 
         try:
             await bot.pool.servers.add_djrole(guild.id, role.id)  # a lista é alterada dentro da trava do servidor
-        except SettingError:  # outra pessoa encheu a lista entre a checagem e a gravação
+        except SettingError:  # entre a checagem e a gravação a lista encheu ou o cargo foi apagado
             await inter.send(
-                f"A lista de DJ's já tem o máximo de {MAX_DJ_ROLES} cargos; remova algum para adicionar outro.",
+                f"Não foi possível adicionar o cargo: a lista de DJ's pode estar com o máximo de {MAX_DJ_ROLES} cargos "
+                "ou o cargo não existe mais.",
                 ephemeral=True,
             )
             return

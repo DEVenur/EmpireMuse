@@ -25,6 +25,7 @@ from empiremuse.rules.servers import (
     Allowed,
     SettingError,
     changed_settings,
+    MAIN_IDENTIFIERS,
     is_main_identifier,
     migrate_settings,
     new_doc,
@@ -95,16 +96,15 @@ class ServerStore:
 
     def main_bot(self) -> Optional[BotCore]:
         """O principal: o bot do token principal (nunca o primeiro por ordem); ``None`` se não logou."""
-        return next(
-            (
-                bot
-                for bot in self.pool.get_all_bots()
-                if bot.user is not None
-                and is_main_identifier(bot.identifier)
-                and getattr(bot, "exclusive_guild_id", None) is None
-            ),
-            None,
-        )
+        candidates = [
+            bot
+            for bot in self.pool.get_all_bots()
+            if bot.user is not None
+            and is_main_identifier(bot.identifier)
+            and getattr(bot, "exclusive_guild_id", None) is None
+        ]
+        # a ordem de get_all_bots() vem de um conjunto: com TOKEN e TOKEN_1 juntos, vale sempre o TOKEN
+        return min(candidates, key=lambda bot: MAIN_IDENTIFIERS.index(bot.identifier), default=None)
 
     def knows(self, gid: int) -> bool:
         return any(bot.get_guild(gid) is not None for bot in self.pool.get_all_bots())
@@ -112,7 +112,7 @@ class ServerStore:
     def _allowed(self, gid: int, settings: Optional[dict] = None) -> Allowed:
         """Skins carregadas e cargos do servidor; a skin já gravada continua valendo (como no painel)."""
         bots = self.pool.get_all_bots()
-        bot = bots[0] if bots else None
+        bot = self.main_bot() or next(iter(bots), None)
         saved = settings or {}
         skins = frozenset(getattr(bot, "player_skins", ()) or ()) | {saved.get("skin")} - {None}
         static = frozenset(getattr(bot, "player_static_skins", ()) or ()) | {saved.get("static_skin")} - {None}
@@ -163,6 +163,8 @@ class ServerStore:
                         collection=SERVERS_DB,
                     )
                 except Exception as exc:  # noqa: BLE001 - gravação que falha: cópia e migração ficam como estavam
+                    # o servidor pode ter aplicado antes do erro: a próxima leitura vai ao banco
+                    self._docs.pop(gid, None)
                     logger.warning("Documento do servidor [%s] não gravado (%s)", gid, type(exc).__name__)
                     raise ServerConfigUnavailable from exc
                 if saved:

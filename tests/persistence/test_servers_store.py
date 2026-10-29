@@ -267,3 +267,29 @@ def test_legacy_view_outside_the_pool_uses_the_bot_own_data_without_creating_a_d
     world.banco.put(DBModel.guilds, str(MAIN_ID), 999, {"_id": "999", "autoplay": True, "player_controller": {}})
     assert run(world.store.legacy_doc(world.bots[0], 999))["autoplay"] is True
     assert world.banco.servers_doc(999) is None
+
+
+# ---------------------------------------------------------------------- achados da revisão: principal determinístico, cache após erro
+
+
+@pytest.mark.parametrize("order", [("TOKEN", "TOKEN_1"), ("TOKEN_1", "TOKEN")])
+def test_main_bot_is_always_token_even_when_token_1_also_exists(world, order):
+    bots = {identifier: make_bot(i, identifier) for i, identifier in enumerate(order, start=1)}
+    world.pool.get_all_bots = lambda: [bots[identifier] for identifier in order]
+    assert world.store.main_bot() is bots["TOKEN"]
+
+
+def test_a_write_that_errors_after_being_applied_does_not_leave_the_old_copy_in_the_cache(world):
+    run(world.store.get(GID))
+    real_save = world.banco.save_doc_cas
+
+    async def applies_then_times_out(*args, **kwargs):
+        await real_save(*args, **kwargs)
+        raise OSError("timeout depois de gravar")
+
+    world.banco.save_doc_cas = applies_then_times_out
+    with pytest.raises(ServerConfigUnavailable):
+        run(world.store.patch(GID, "settings", {"autoplay": True}))
+    world.banco.save_doc_cas = real_save
+
+    assert run(world.store.settings(GID))["autoplay"] is True  # veio do banco, não da cópia velha
