@@ -312,6 +312,7 @@ def test_a_write_that_errors_after_being_applied_does_not_leave_the_old_copy_in_
 # ---------------------------------------------------------------------- V-156-1: servidor só como esboço do READY
 
 
+@pytest.mark.regression
 def test_migration_waits_while_the_guild_is_only_the_ready_stub_and_keeps_the_djs(world):
     world.banco.put(DBModel.guilds, str(MAIN_ID), GID, old_doc(djroles=[10]))
     loaded = world.bots[0].get_guild
@@ -328,6 +329,7 @@ def test_migration_waits_while_the_guild_is_only_the_ready_stub_and_keeps_the_dj
     assert run(world.store.settings(GID))["djroles"] == ["10"]
 
 
+@pytest.mark.regression
 def test_migration_gives_up_if_the_guild_becomes_unavailable_while_the_old_document_is_read(world):
     world.banco.put(DBModel.guilds, str(MAIN_ID), GID, old_doc(djroles=[10]))
     loaded = world.bots[0].get_guild
