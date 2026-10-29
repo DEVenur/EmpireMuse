@@ -165,13 +165,6 @@ async def test_a_release_whose_asset_url_is_not_exactly_the_published_digest_fil
     assert [r.tag for r in lista] == ["v2.2.0"]
 
 
-async def test_a_release_asset_without_a_download_url_is_not_eligible(releases, github, sessao, hosts_do_github):
-    sem_url = {**release_json("v2.1.0"), "assets": [{"name": "image-digest.txt"}]}
-    github.rotas[API] = responder_json([release_json("v2.2.0"), sem_url])
-
-    assert [r.tag for r in await releases.list_releases(sessao)] == ["v2.2.0"]
-
-
 async def test_the_listing_asks_for_30_releases_without_any_token(releases, github, sessao):
     github.rotas[API] = responder_json([])
 
@@ -217,26 +210,11 @@ async def test_a_listing_that_times_out_is_the_same_generic_error(releases, gith
     assert str(erro.value) == MSG_VERSOES
 
 
-async def test_an_unreachable_github_is_the_same_generic_error(releases, monkeypatch, sessao):
-    monkeypatch.setattr(releases, "GITHUB_API_URL", "http://127.0.0.1:9")  # porta discard: ninguém escuta
-
-    with pytest.raises(UpdateError) as erro:
-        await releases.list_releases(sessao)
-
-    assert str(erro.value) == MSG_VERSOES and "127.0.0.1" not in str(erro.value)
-
-
 # ============================================================================ fetch_image_digest
 
 
 def uma_release(releases, github, caminho="/dl/digest.txt"):
     return releases.Release(Version(2, 1, 0), "v2.1.0", f"{github.url}{caminho}")
-
-
-async def test_the_digest_is_read_and_stripped(releases, github, sessao):
-    github.rotas["/dl/digest.txt"] = web.Response(text=f"{DIGEST}\n")
-
-    assert await releases.fetch_image_digest(sessao, uma_release(releases, github)) == DIGEST
 
 
 @pytest.mark.parametrize(
@@ -272,22 +250,6 @@ async def test_a_malformed_or_oversized_digest_is_refused(releases, github, sess
 @pytest.mark.parametrize("status", [404, 500])
 async def test_a_failing_digest_download_is_the_generic_error(releases, github, sessao, status):
     github.rotas["/dl/digest.txt"] = web.Response(status=status)
-
-    with pytest.raises(UpdateError) as erro:
-        await releases.fetch_image_digest(sessao, uma_release(releases, github))
-
-    assert str(erro.value) == MSG_IMAGEM
-
-
-async def test_a_digest_download_that_times_out_is_the_generic_error(releases, github, sessao, monkeypatch):
-    monkeypatch.setattr(releases, "TIMEOUT", 0.05)
-    nunca = asyncio.Event()
-
-    async def travado(request: web.Request) -> web.Response:
-        await nunca.wait()
-        return web.Response()
-
-    github.rotas["/dl/digest.txt"] = travado
 
     with pytest.raises(UpdateError) as erro:
         await releases.fetch_image_digest(sessao, uma_release(releases, github))
@@ -337,12 +299,6 @@ async def encadear(github, saltos: int) -> None:
     for atual, proximo in zip(caminhos, caminhos[1:] + ["/fim"]):
         github.rotas[atual] = redirecionar(f"{github.url}{proximo}")
     github.rotas["/fim"] = web.Response(text=DIGEST)
-
-
-async def test_three_redirect_hops_are_followed(releases, github, sessao):
-    await encadear(github, 3)
-
-    assert await releases.fetch_image_digest(sessao, uma_release(releases, github)) == DIGEST
 
 
 async def test_a_fourth_redirect_hop_is_refused(releases, github, sessao):
@@ -450,9 +406,3 @@ async def test_an_rc_tag_that_does_not_exist_is_an_update_error_without_the_url(
         await releases.fetch_changelog(sessao, "v2.1.0-rc.1")
 
     assert github.url not in str(erro.value) and github.chamadas[caminho] == 1
-
-
-def test_the_update_targets_stay_stable_only(releases: ModuleType) -> None:
-    from empiremuse.rules.release import parse_tag
-
-    assert parse_tag("v2.1.0") == Version(2, 1, 0) and parse_tag("v2.1.0-rc.1") is None

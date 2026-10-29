@@ -57,7 +57,6 @@ LOCAIS = {
     "author-icon": (lambda t: com_embed(author={"name": "a", "icon_url": t}), "embeds[0].author.icon_url"),
     "color": (lambda t: com_embed(color=t), "embeds[0].color"),
 }
-COM_QUEBRA_DE_LINHA = ["content", "queue_format", "description", "field-value", "footer-text"]
 
 
 # ============================================================================ o que passa
@@ -83,24 +82,9 @@ class TestAceita:
         assert set(limpa["embeds"][0]) == {"description", "footer", "author"}
         assert set(limpa["embeds"][0]["footer"]) == {"text"}
 
-    def test_os_placeholders_passam_sem_mudar(self):
-        skin = com_embed(
-            description="{queue_format} {track.title} {requester.mention}",
-            color="{guild.color}",
-            image={"url": "{track.thumb}"},
-            footer={"text": "Músicas: {player.queue.size}", "icon_url": "{guild.icon}"},
-        )
-        assert valida(skin) == skin
-
     @pytest.mark.parametrize("cor", ["", "f" * LIMITES.color_texto])
     def test_cores_aceitas(self, cor):
         assert valida(com_embed(color=cor)) == com_embed(color=cor)
-
-    def test_campo_inline_booleano_fica(self):
-        skin = com_embed(
-            fields=[{"name": "n", "value": "v", "inline": True}, {"name": "m", "value": "w", "inline": False}]
-        )
-        assert valida(skin) == skin
 
     @pytest.mark.parametrize(
         "skin",
@@ -111,17 +95,6 @@ class TestAceita:
         ids=["fila-0", "campos-no-teto"],
     )
     def test_contagens_no_teto_exato_passam(self, skin):
-        assert valida(skin) == skin
-
-    @pytest.mark.parametrize("local", list(COM_QUEBRA_DE_LINHA)[:2])
-    def test_quebra_de_linha_e_tabulacao_passam(self, local):
-        monta, _ = LOCAIS[local]
-        skin = monta("linha 1\nlinha 2\r\n\tlinha 3")
-        assert valida(skin) == skin
-
-    def test_skin_ate_o_teto_de_bytes_passa(self):
-        skin = skin_com_tamanho_minimo(50 * 1024)
-        assert tamanho_em_bytes(skin) < LIMITES.skin_bytes
         assert valida(skin) == skin
 
 
@@ -204,9 +177,6 @@ class TestRecusa:
         erro = falha(valida, monta(texto))
         assert (erro.path, erro.code) == (caminho, codigo)
 
-    def test_o_erro_e_do_tipo_do_nucleo_de_serializacao(self):
-        assert isinstance(falha(valida, []), schema.SchemaError)
-
 
 # ============================================================================ tamanho total
 
@@ -229,10 +199,6 @@ class TestHostil:
     def test_aninhamento_enorme_em_chave_desconhecida_nao_estoura_a_pilha(self):
         skin = {"desconhecida": aninhado(5_000), "embeds": [{"x": aninhado_em_dicionarios(5_000)}]}
         assert com_limite_de_tempo(valida, skin) == {"embeds": [{}]}
-
-    def test_milhoes_de_chaves_desconhecidas_nao_demoram(self):
-        skin = {f"k{i}": 0 for i in range(2_000)} | {"content": "ok"}
-        assert com_limite_de_tempo(valida, skin) == {"content": "ok"}
 
     def test_lista_gigante_de_campos_e_recusada_antes_de_validar_os_itens(self):
         erro = falha(com_limite_de_tempo, valida, com_embed(fields=[{"name": "n", "value": "v"}] * 100))

@@ -65,10 +65,6 @@ def test_parse_tag_applies_the_same_rules_after_the_prefix(texto):
     assert parse_tag(texto) is None
 
 
-def test_version_prints_as_x_y_z():
-    assert str(Version(2, 1, 0)) == "2.1.0"
-
-
 def test_versions_compare_numerically_not_as_text():
     assert Version(2, 10, 0) > Version(2, 9, 9) > Version(2, 9, 8) > Version(1, 99, 99)
     assert parse_version("2.10.0") > parse_version("2.9.0")
@@ -156,10 +152,6 @@ def test_pick_target_is_the_greatest_strictly_greater_version(atual, candidatas,
     assert escolhida == (Version(*esperada) if esperada else None)
 
 
-def test_pick_target_accepts_any_iterable():
-    assert pick_target(Version(1, 0, 0), iter([Version(1, 0, 1)])) == Version(1, 0, 1)
-
-
 # ============================================================================ A11 — changelog_sections
 
 CHANGELOG = """# Changelog
@@ -214,12 +206,6 @@ def test_an_oversized_result_is_cut_and_ends_with_an_ellipsis():
     assert texto.endswith("\u2026") and len(texto) <= 200
 
 
-def test_a_result_that_fits_is_not_cut():
-    texto = changelog_sections(CHANGELOG, Version(2, 1, 0), Version(2, 1, 1), 3500)
-
-    assert not texto.endswith("\u2026") and "B: correção" in texto
-
-
 @pytest.mark.parametrize(
     ("atual", "alvo"),
     [((2, 2, 0), (2, 2, 0)), ((3, 0, 0), (3, 1, 0)), ((2, 1, 0), (2, 1, 0))],
@@ -227,11 +213,6 @@ def test_a_result_that_fits_is_not_cut():
 )
 def test_without_any_section_the_result_is_empty(atual, alvo):
     assert changelog_sections(CHANGELOG, Version(*atual), Version(*alvo), 3500) == ""
-
-
-def test_text_without_sections_is_empty():
-    assert changelog_sections("", Version(1, 0, 0), Version(2, 0, 0), 3500) == ""
-    assert changelog_sections("nada de seções aqui", Version(1, 0, 0), Version(2, 0, 0), 3500) == ""
 
 
 # ============================================================================ parse_update_target

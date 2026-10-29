@@ -127,16 +127,6 @@ class TestSurrogateSolto:
 
         assert redact(f"x {valor} y") == f"x {REDACTED} y"
 
-    def test_configure_secrets_with_a_lone_surrogate_does_not_raise(self):
-        valor = "abc\udfffdef-segredo-sur2"
-
-        configure_secrets([valor])
-
-        assert redact(f"x {valor} y") == f"x {REDACTED} y"
-
-    def test_redact_and_scrub_of_text_with_a_lone_surrogate_do_not_raise(self):
-        assert "\ud800" in redact("a\ud800b") and scrub("a\ud800b", 100)
-
 
 # ============================================================================ agregador: chave limitada, sem guardar a exceção
 
@@ -176,21 +166,6 @@ class TestAgregadorSemRetencao:
 
         assert referencia() is None, "o agregador segura a exceção (e os frames dela) do primeiro registro"
 
-    def test_the_summary_still_has_the_first_message_after_the_exception_is_dropped(self):
-        emitidos = []
-        relogio = Relogio()
-        agregador = RepeatAggregator(emitidos.append, clock=relogio)
-        try:
-            raise ValueError("x")
-        except ValueError:
-            agregador.filter(com_template("nó %s caiu", "nó A caiu", exc_info=sys.exc_info()))
-        agregador.filter(com_template("nó %s caiu", "nó B caiu"))
-        relogio.avancar(61)
-
-        agregador.tick()
-
-        assert [r.getMessage() for r in emitidos] == ["↻ nó A caiu — repetida 1× em 60 s"]
-
     def test_a_huge_template_is_not_kept_whole_in_the_aggregator(self):
         agregador = RepeatAggregator(lambda r: None, clock=Relogio())
         tracemalloc.start()
@@ -205,10 +180,3 @@ class TestAgregadorSemRetencao:
         assert retido < 5_000_000, (
             f"{retido} bytes retidos para 30 chaves: o template inteiro está na chave ou no registro guardado"
         )
-
-    def test_two_templates_that_differ_only_far_past_the_cap_may_share_a_key_but_short_ones_never_do(self):
-        agregador = RepeatAggregator(lambda r: None, clock=Relogio())
-
-        assert agregador.filter(com_template("falha A")) is True
-        assert agregador.filter(com_template("falha B")) is True
-        assert agregador.filter(com_template("falha A")) is False

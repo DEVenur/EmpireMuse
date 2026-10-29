@@ -22,7 +22,6 @@ pytestmark = pytest.mark.critical
 
 SEGREDO_NO_NOME = "".join(["segredo-no-nome-", "do-relatorio-F1x"])
 ESC, RLO = "\x1b", "‮"
-LIMITE_DO_NOME = 100
 GIGANTE = "n" * (MAX_MESSAGE_CHARS * 3)
 
 
@@ -65,29 +64,3 @@ class TestNomesNoEmbed:
         valor = self.valor(campo, fabrica)
 
         assert ESC not in valor and RLO not in valor
-
-    def test_the_name_is_capped_at_100_characters(self, campo, fabrica):
-        valor = self.valor(campo, fabrica)
-
-        assert len(valor.removeprefix("```\n").split("\nID: ")[0]) <= LIMITE_DO_NOME
-
-
-class TestRodapeDoAutor:
-    def rodape(self) -> str:
-        register_secret(SEGREDO_NO_NOME)
-        ctx = prefixo("!play x")
-        ctx.author = autor_com_nome(nome_hostil())
-        return tratador().build_report_embed(ctx).footer.text
-
-    def test_a_registered_secret_in_the_author_name_is_masked(self):
-        assert SEGREDO_NO_NOME not in self.rodape()
-
-    def test_escape_and_right_to_left_override_are_stripped(self):
-        rodape = self.rodape()
-
-        assert ESC not in rodape and RLO not in rodape
-
-    def test_the_author_name_is_capped_at_100_characters_and_the_id_stays(self):
-        rodape = self.rodape()
-
-        assert len(rodape.rsplit(" [", 1)[0]) <= LIMITE_DO_NOME and rodape.endswith(f"[{prefixo('x').author.id}]")

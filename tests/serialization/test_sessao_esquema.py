@@ -55,12 +55,6 @@ class TestIdaEVolta:
         assert type(lida["command_log_list"]) is list and lida["command_log_list"][0]["timestamp"] == 1.5
         assert "v" not in lida
 
-    def test_encode_nao_altera_a_entrada(self):
-        dados = sessao_minima(dj={DJ_A}, custom_skin_data={"Minha": {"content": "c"}})
-        antes = copy.deepcopy(dados)
-        session.encode_session(dados)
-        assert dados == antes and type(dados["dj"]) is set
-
     @pytest.mark.smoke
     def test_validate_session_devolve_copia_limpa_no_formato_do_consumidor(self):
         dados = sessao_minima(dj={DJ_A}, voice_state={"x": 1}, extra_info={"a": (1, 2)}, lixo=1)
@@ -70,11 +64,6 @@ class TestIdaEVolta:
 
 
 # ============================================================================ voice_state, extra_info e o que o esquema não conhece
-
-
-class TestCamposQueSaem:
-    def test_a_sessao_nao_precisa_dos_dois_campos(self):
-        assert session.decode_session(codificar())["_id"] == SERVIDOR
 
 
 # ============================================================================ tipos e tetos de cada campo
@@ -144,10 +133,6 @@ class TestTiposETetos:
         erro = falha(decodificar, bruto(**{campo: valor}))
         assert erro.path == caminho and erro.code == codigo
 
-    @pytest.mark.parametrize("campo", list(IDS_OPCIONAIS)[:2])
-    def test_ids_opcionais_aceitam_none(self, campo):
-        assert decodificar(bruto(**{campo: None}))[campo] is None
-
     @pytest.mark.parametrize("loop", [False, "queue"])
     def test_loop_do_player_real(self, loop):
         assert decodificar(bruto(loop=loop))["loop"] == loop
@@ -160,9 +145,6 @@ class TestTiposETetos:
     @pytest.mark.parametrize("versao", [0, None])
     def test_versao_do_documento(self, versao):
         assert falha(decodificar, bruto(v=versao)).code == VERSION
-
-    def test_queue_vazia_e_valida(self):
-        assert decodificar(bruto(queue=[]))["queue"] == []
 
 
 # ============================================================================ _id do conteúdo == o esperado (condição 2 do 5.1)

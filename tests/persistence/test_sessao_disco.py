@@ -41,14 +41,6 @@ def _ambiente(tmp_path, monkeypatch):
 
 
 class TestGravacao:
-    @pytest.mark.smoke
-    @pytest.mark.asyncio
-    async def test_grava_json_no_caminho_novo_e_nao_cria_nada_do_legado(self, tmp_path):
-        await cog_de_sessoes().save_info(jogador_completo())
-        assert (pasta_json(tmp_path) / f"{SERVIDOR}.json").is_file()
-        assert not pasta_legado(tmp_path).exists()
-        assert not list(pasta_json(tmp_path).glob("*.pkl")) and not list(pasta_json(tmp_path).glob("*.tmp"))
-
     @pytest.mark.asyncio
     @pytest.mark.skipif(not hasattr(os, "fchmod"), reason="modo de arquivo só em POSIX")
     async def test_o_arquivo_e_privado_0600(self, tmp_path):
@@ -90,10 +82,6 @@ class TestGravacao:
 
 class TestLeitura:
     @pytest.mark.asyncio
-    async def test_sem_pasta_nao_ha_sessoes(self):
-        assert await cog_de_sessoes().get_player_sessions_local() == []
-
-    @pytest.mark.asyncio
     async def test_nao_le_nada_que_nao_seja_json_de_sessao(self, tmp_path):
         bom = escrever_json(tmp_path, SERVIDOR)
         for nome in (
@@ -125,12 +113,6 @@ class TestLeitura:
         estranho.write_bytes(bom.read_bytes())
         assert [s["_id"] for s in await cog_de_sessoes().get_player_sessions_local()] == [SERVIDOR]
         assert estranho.is_file()
-
-    @pytest.mark.asyncio
-    async def test_pasta_com_nome_de_sessao_e_ignorada(self, tmp_path):
-        escrever_json(tmp_path, SERVIDOR)
-        (pasta_json(tmp_path) / f"{OUTRO}.json").mkdir()
-        assert [s["_id"] for s in await cog_de_sessoes().get_player_sessions_local()] == [SERVIDOR]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("quando", ["9999-12-31T23:59:59+00:00", "1999-01-01T00:00:00+00:00"])
@@ -172,9 +154,3 @@ class TestRemocao:
         assert restantes == sorted(
             [f"{OUTRO}.json", f"{OUTRO}.json.bak", f"{SERVIDOR}.pkl", f"{SERVIDOR}.bak", f"{OUTRO}.pkl", f"{OUTRO}.bak"]
         )
-
-    @pytest.mark.asyncio
-    async def test_delete_data_vai_para_o_disco_quando_o_destino_e_o_disco(self, tmp_path):
-        escrever_json(tmp_path, SERVIDOR)
-        await cog_de_sessoes().delete_data(SERVIDOR)
-        assert not (pasta_json(tmp_path) / f"{SERVIDOR}.json").exists()

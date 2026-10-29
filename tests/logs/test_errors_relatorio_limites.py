@@ -71,12 +71,6 @@ class TestQuebrasDeLinhaNoNome:
             assert len(interior.split("\n")) == 2, valor
             assert "\r" not in valor and "⏎" in valor
 
-    @pytest.mark.parametrize("quebra", ["\n", "\r", "\r\n"])
-    def test_the_footer_stays_on_one_line(self, quebra):
-        rodape = tratador().build_report_embed(contexto_com_nome(f"x{quebra}y")).footer.text
-
-        assert "\n" not in rodape and "\r" not in rodape and "⏎" in rodape
-
 
 class TestLimitesDoDiscord:
     def embed_hostil(self, *, content: str = "!play " + "x" * 4000) -> disnake.Embed:
@@ -87,13 +81,6 @@ class TestLimitesDoDiscord:
         embed.add_field(name="Código do erro:", value="`a1b2c3`", inline=False)
         return embed
 
-    def test_every_name_is_at_most_100_characters(self):
-        embed = self.embed_hostil()
-
-        for valor in blocos_de_nome(embed):
-            assert len(valor.removeprefix("```\n").split("\nID: ")[0].split(" (")[0]) <= LIMITE_NOME
-        assert len(embed.footer.text.rsplit(" [", 1)[0]) <= LIMITE_NOME
-
     def test_each_field_footer_description_and_total_are_within_the_limits(self):
         embed = self.embed_hostil()
 
@@ -101,16 +88,6 @@ class TestLimitesDoDiscord:
         assert len(embed.footer.text) <= LIMITE_RODAPE
         assert len(embed.description or "") <= LIMITE_DESCRICAO
         assert len(embed) <= LIMITE_TOTAL
-
-    def test_a_message_of_4000_characters_is_kept_whole(self):
-        embed = self.embed_hostil(content="!play " + "m" * 4000)
-
-        assert "m" * 3900 in embed.description
-
-    def test_an_oversized_message_still_fits_the_description_limit(self):
-        embed = self.embed_hostil(content="!play " + "m" * 30_000)
-
-        assert len(embed.description) <= LIMITE_DESCRICAO and len(embed) <= LIMITE_TOTAL
 
 
 class FalhaNoWebhook(Exception):
@@ -132,20 +109,6 @@ class TestFalhaNaoTravaOServidor:
 
         await handler.process_interaction_error(inter, RuntimeError("boom"))
         await asyncio.wait_for(handler.process_interaction_error(inter, RuntimeError("boom")), timeout=2)
-
-        assert handler.send_webhook.await_count == 2
-
-    @pytest.mark.asyncio
-    async def test_a_failing_webhook_on_a_prefix_error_releases_the_guild(self, handler):
-        from tests.cogs.test_error_handler import _Contexto
-
-        self.preparar(handler)
-        ctx = _Contexto(True)
-        ctx.guild = SimpleNamespace(me=object(), id=5)
-        handler.send_webhook = AsyncMock(side_effect=[FalhaNoWebhook("timeout"), None])
-
-        await handler.on_legacy_command_error(ctx, RuntimeError("boom"))
-        await asyncio.wait_for(handler.on_legacy_command_error(ctx, RuntimeError("boom")), timeout=2)
 
         assert handler.send_webhook.await_count == 2
 

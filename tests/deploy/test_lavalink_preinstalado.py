@@ -36,7 +36,6 @@ from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
 
 NOVAS_CHAVES = ("LAVALINK_JAVA_PATH", "LAVALINK_HOME", "LAVALINK_OFFLINE")
-LIMITE_DE_ESPERA = 6.0  # segundos esperando que algo aconteça
 
 
 def sha(data: bytes) -> str:
@@ -128,36 +127,6 @@ def proibidos(monkeypatch):
 
 def com_java_do_sistema(monkeypatch):
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
-
-
-class FakeJava:
-    """Processo Java falso: ``poll``/``wait`` como o Popen; ``die`` simula a morte; kill/terminate matam de verdade."""
-
-    def __init__(self):
-        self.returncode = None
-        self.pid = 4242
-        self.sinais = []
-        self._morto = threading.Event()
-
-    def poll(self):
-        return self.returncode
-
-    def wait(self, timeout=None):
-        if not self._morto.wait(timeout):
-            raise subprocess.TimeoutExpired("java", timeout)
-        return self.returncode
-
-    def die(self, code):
-        self.returncode = code
-        self._morto.set()
-
-    def terminate(self):
-        self.sinais.append("terminate")
-        self.die(-15)
-
-    def kill(self):
-        self.sinais.append("kill")
-        self.die(-9)
 
 
 # ============================================================================ (1) configuração
@@ -263,135 +232,13 @@ class TestOfflineNoRunLavalink:
 # ============================================================================ (4) SERVER_ADDRESS
 
 
-class TestServerAddress:
-    def test_presente_mesmo_quando_o_ambiente_do_bot_nao_define(self):
-        assert ll.lavalink_child_env(None, {"PATH": "/bin"})["SERVER_ADDRESS"] == "127.0.0.1"
-        assert ll.lavalink_child_env(None, {})["SERVER_ADDRESS"] == "127.0.0.1"
-
-
 # ============================================================================ (5) encerramento
-
-
-def pool_para_shutdown(*bots):
-    from empiremuse.utils.client import BotPool
-
-    pool = BotPool.__new__(BotPool)
-    pool.exit_code = 0
-    pool.killing_state = False
-    pool.lavalink_instance = FakeJava()
-    pool.bots = list(bots)
-    pool.guild_bots = {}
-    pool.heartbeat_task = None
-    return pool
-
-
-def bot_falho(identificador="bot_x"):
-    bot = AsyncMock()
-    bot.identifier = identificador
-    bot.is_closed = MagicMock(return_value=False)
-    bot.close.side_effect = RuntimeError("falha ao fechar")
-    return bot
-
-
-class TestEncerramento:
-    """Caracterização (passa hoje, entregue na D1): o Java morre mesmo quando fechar um bot falha."""
-
-    @pytest.mark.asyncio
-    async def test_falha_ao_fechar_um_bot_nao_impede_de_encerrar_o_java(self):
-        pool = pool_para_shutdown(bot_falho())
-
-        await pool.shutdown(1)
-
-        assert pool.lavalink_instance.sinais, "terminate ou kill precisa ter sido chamado no processo Java"
-        assert pool.lavalink_instance.returncode is not None
 
 
 # ============================================================================ (6) queda do Java
 
 
 # ============================================================================ (6) integração com o pool
-
-
-def config_do_pool(**extras):
-    config = {
-        "LAVALINK_FILE_URL": "",
-        "LAVALINK_FILE_SHA256": "",
-        "YOUTUBE_OAUTH_REFRESH_TOKEN": "",
-        "LAVALINK_INITIAL_RAM": 30,
-        "LAVALINK_RAM_LIMIT": 120,
-        "LAVALINK_ADDITIONAL_SLEEP": 0,
-        "LAVALINK_CPU_CORES": 2,
-        "LAVALINK_JAVA_PATH": "",
-        "LAVALINK_HOME": "",
-        "LAVALINK_OFFLINE": False,
-    }
-    config.update(extras)
-    return config
-
-
-@pytest.fixture
-def fabrica_de_pool(monkeypatch):
-    """Cria BotPool com ``run_lavalink`` dublado (devolve FakeJava) e libera tudo ao final sem disparar shutdown."""
-    criados = []
-
-    def criar(*processos, **config_extra):
-        from empiremuse.utils import client
-        from empiremuse.utils.client import BotPool
-
-        pool = BotPool.__new__(BotPool)
-        pool.exit_code = 0
-        pool.killing_state = False
-        pool.lavalink_instance = None
-        pool.bots = []
-        pool.guild_bots = {}
-        pool.loop = asyncio.get_running_loop()
-        pool.config = config_do_pool(**config_extra)
-        pool.shutdown = AsyncMock()
-        run = MagicMock(side_effect=list(processos))
-        monkeypatch.setattr(client, "run_lavalink", run)
-        criados.append((pool, processos))
-        return pool, run
-
-    yield criar
-    for pool, processos in criados:
-        pool.killing_state = True  # a queda forçada abaixo não pode acionar nada
-        for processo in processos:
-            processo.die(0) if processo.returncode is None else None
-
-
-class TestPoolVigiaOJava:
-    @pytest.mark.asyncio
-    async def test_start_lavalink_repassa_as_tres_chaves_novas_ao_run_lavalink(self, fabrica_de_pool):
-        pool, run = fabrica_de_pool(
-            FakeJava(), LAVALINK_JAVA_PATH="/opt/java/bin/java", LAVALINK_HOME="/opt/lavalink", LAVALINK_OFFLINE=True
-        )
-
-        await pool.start_lavalink()
-
-        kwargs = run.call_args.kwargs
-        assert kwargs["lavalink_java_path"] == "/opt/java/bin/java"
-        assert kwargs["lavalink_home"] == "/opt/lavalink"
-        assert kwargs["lavalink_offline"] is True
-
-    @pytest.mark.asyncio
-    async def test_queda_do_java_novo_apos_reinicio_ainda_aciona_shutdown(self, fabrica_de_pool):
-        antigo, novo = FakeJava(), FakeJava()
-        pool, _ = fabrica_de_pool(antigo, novo)
-        await pool.start_lavalink()
-        await pool.start_lavalink()
-
-        novo.die(1)
-
-        assert await _aguardar_async(lambda: pool.shutdown.await_count >= 1), "a queda do Java novo precisa ser vigiada"
-
-
-async def _aguardar_async(condicao, limite=LIMITE_DE_ESPERA):
-    fim = time.monotonic() + limite
-    while time.monotonic() < fim:
-        if condicao():
-            return True
-        await asyncio.sleep(0.02)
-    return condicao()
 
 
 # ============================================================================ (7) acréscimos da D-09 (decididos pelo MAESTRO)

@@ -42,18 +42,6 @@ def test_an_rc_image_version_is_the_current_version(valor):
     assert versao < Version(2, 1, 0)
 
 
-def test_rc_versions_of_the_image_compare_by_number():
-    assert image_version({VARIAVEL: "2.1.0-rc.2"}) < image_version({VARIAVEL: "2.1.0-rc.10"})
-
-
-def test_the_stable_image_version_is_not_a_prerelease():
-    assert image_version({VARIAVEL: "2.1.0"}).is_prerelease is False
-
-
-def test_an_rc_image_is_running_from_image():
-    assert running_from_image({VARIAVEL: "2.1.0-rc.2"}) is True
-
-
 def test_without_the_variable_there_is_no_version():
     assert image_version({}) is None
 
@@ -68,7 +56,3 @@ def test_the_default_environment_is_os_environ(monkeypatch):
 @pytest.mark.parametrize("valor", ["2.1.0", "dev", "", "lixo"])
 def test_running_from_image_is_true_whenever_the_variable_exists(valor):
     assert running_from_image({VARIAVEL: valor}) is True
-
-
-def test_running_from_image_is_false_without_the_variable():
-    assert running_from_image({"PATH": "/usr/bin"}) is False

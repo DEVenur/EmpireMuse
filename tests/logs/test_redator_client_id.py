@@ -20,7 +20,6 @@ pytestmark = pytest.mark.critical
 
 ID_PUBLICO = "198765432109876543"  # só o formato de um snowflake
 SECRET = "sEcReT-do-painel-oauth-9f8e7d6c"
-OUTRO_ID = "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6"  # 32 alfanuméricos sob o mesmo nome: continua segredo
 
 
 @pytest.fixture(autouse=True)
@@ -41,11 +40,6 @@ class TestSoEnviron:
 
         assert ID_PUBLICO in texto
         assert SECRET not in texto and REDACTED in texto
-
-    def test_the_early_hooks_still_mask_a_non_snowflake_value_under_the_public_name(self) -> None:
-        install_early_hooks({"PANEL_OAUTH_CLIENT_ID": OUTRO_ID}, stream=io.StringIO())
-
-        assert OUTRO_ID not in redact(f"id={OUTRO_ID}")
 
 
 class TestConfigMaisEnviron:

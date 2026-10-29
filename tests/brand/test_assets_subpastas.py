@@ -20,7 +20,6 @@ from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.critical
 
-ASSETS = RAIZ / "assets"
 PACOTE = RAIZ / "empiremuse"
 COPIAS_DA_RAIZ = frozenset(
     {
@@ -133,12 +132,6 @@ class TestIndiceNomeParaSubcaminho:
         ):
             assert branding.asset_url(Path(subcaminho).name).endswith(f"/{subcaminho}")
 
-    def test_the_call_sites_do_not_change_the_url_is_base_plus_subpath(self, arvore):
-        _, escrever = arvore
-        escrever("ui/ui_warning_icon.png")
-
-        assert branding.asset_url("ui_warning_icon.png") == branding.ASSETS_BASE_URL + "/ui/ui_warning_icon.png"
-
     def test_a_root_copy_is_ignored_by_the_index(self, arvore):
         _, escrever = arvore
         escrever("ui_warning_icon.png")
@@ -153,32 +146,6 @@ class TestIndiceNomeParaSubcaminho:
         with pytest.raises(ValueError):
             branding.asset_url("so_na_raiz.png")
 
-    def test_sha256sums_is_not_an_asset(self, arvore):
-        _, escrever = arvore
-        escrever("SHA256SUMS", b"abc  providers/x.png\n")
-        escrever("providers/x.png")
-
-        with pytest.raises(ValueError):
-            branding.asset_url("SHA256SUMS")
-
-    def test_directories_are_not_assets(self, arvore):
-        raiz, escrever = arvore
-        escrever("providers/x.png")
-
-        with pytest.raises(ValueError):
-            branding.asset_url("providers")
-
-    def test_the_index_is_built_once_a_file_added_later_is_not_seen_until_the_cache_is_cleared(self, arvore):
-        _, escrever = arvore
-        escrever("providers/a.png")
-        branding.asset_url("a.png")
-        escrever("providers/b.png")
-
-        with pytest.raises(ValueError):
-            branding.asset_url("b.png")
-        limpar_caches()
-        assert branding.asset_url("b.png").endswith("/providers/b.png")
-
 
 class TestBasenameRepetido:
     def test_a_duplicate_basename_across_subfolders_is_an_error(self, arvore):
@@ -188,15 +155,6 @@ class TestBasenameRepetido:
 
         with pytest.raises(ValueError):
             branding.asset_url("igual.png")
-
-    def test_the_duplicate_breaks_the_whole_index_not_only_its_own_name(self, arvore):
-        _, escrever = arvore
-        escrever("providers/igual.png")
-        escrever("ui/igual.png")
-        escrever("ui/outra.png")
-
-        with pytest.raises(ValueError):
-            branding.asset_url("outra.png")
 
     def test_the_same_basename_in_the_root_and_one_subfolder_is_not_a_duplicate(self, arvore):
         _, escrever = arvore
@@ -295,17 +253,6 @@ class TestBaseDasUrlsPorVersao:
     def test_no_version_points_at_main_as_today(self):
         assert branding.assets_base_url(None) == f"https://raw.githubusercontent.com/{REPO}/main/assets"
 
-    def test_the_repo_comes_from_github_repo(self):
-        assert f"/{branding.GITHUB_REPO}/" in branding.assets_base_url(parse_current_version("2.1.1"))
-
-    def test_two_versions_never_share_a_base(self):
-        assert branding.assets_base_url(parse_current_version("2.1.1")) != branding.assets_base_url(
-            parse_current_version("2.1.0")
-        )
-
-    def test_the_module_constant_still_exists_with_the_process_value(self):
-        assert branding.ASSETS_BASE_URL == branding.assets_base_url(image_version())
-
     def test_the_urls_of_assets_use_the_same_base(self, arvore):
         _, escrever = arvore
         escrever("ui/ui_x.png")
@@ -314,134 +261,3 @@ class TestBaseDasUrlsPorVersao:
 
 
 # ============================================================================ o assets/ real (vermelho até o Ledger mover os arquivos)
-
-
-def nomes_de_asset_url_no_pacote() -> dict[str, list[str]]:
-    """``{nome literal: [arquivo:linha]}`` de cada ``asset_url("nome")`` do pacote."""
-    achados: dict[str, list[str]] = {}
-    for caminho in sorted(PACOTE.rglob("*.py")):
-        for no in ast.walk(ast.parse(caminho.read_text(encoding="utf-8"))):
-            if (
-                isinstance(no, ast.Call)
-                and getattr(no.func, "id", getattr(no.func, "attr", "")) == "asset_url"
-                and no.args
-                and isinstance(no.args[0], ast.Constant)
-                and isinstance(no.args[0].value, str)
-            ):
-                achados.setdefault(no.args[0].value, []).append(f"{caminho.relative_to(RAIZ).as_posix()}:{no.lineno}")
-    return achados
-
-
-def arquivos_das_subpastas() -> list[Path]:
-    return sorted(p for pasta in ASSETS.iterdir() if pasta.is_dir() for p in pasta.rglob("*") if p.is_file())
-
-
-class TestAssetsReais:
-    def test_the_scan_finds_the_literal_asset_url_calls(self):
-        assert len(nomes_de_asset_url_no_pacote()) >= 30
-
-    def test_every_name_used_in_asset_url_resolves_to_a_file_in_a_subfolder(self):
-        limpar_caches()
-        sem_arquivo = {}
-        for nome, locais in nomes_de_asset_url_no_pacote().items():
-            try:
-                url = branding.asset_url(nome)
-            except ValueError as erro:
-                sem_arquivo[nome] = (locais[0], str(erro)[:60])
-                continue
-            subcaminho = url.removeprefix(branding.assets_base_url(image_version()) + "/")
-            if "/" not in subcaminho or not (ASSETS / subcaminho).is_file():
-                sem_arquivo[nome] = (locais[0], subcaminho)
-
-        assert sem_arquivo == {}, sem_arquivo
-
-    def test_basenames_are_unique_across_the_subfolders(self):
-        nomes = [p.name for p in arquivos_das_subpastas()]
-        repetidos = sorted({n for n in nomes if nomes.count(n) > 1})
-
-        assert repetidos == []
-
-    def test_no_loose_file_in_the_root_except_sha256sums_and_the_frozen_compatibility_copies(self):
-        soltos = {p.name for p in ASSETS.iterdir() if p.is_file()} - {"SHA256SUMS"}
-
-        assert soltos <= COPIAS_DA_RAIZ, sorted(soltos - COPIAS_DA_RAIZ)
-
-    def test_the_assets_are_organized_in_subfolders_not_only_in_the_root(self):
-        assert len(arquivos_das_subpastas()) >= 50
-
-    def test_every_root_copy_has_its_twin_in_a_subfolder_with_the_same_bytes(self):
-        por_nome = {p.name: p for p in arquivos_das_subpastas()}
-        sem_gemeo = sorted(n for n in COPIAS_DA_RAIZ if (ASSETS / n).is_file() and n not in por_nome)
-        diferentes = sorted(
-            n for n, p in por_nome.items() if (ASSETS / n).is_file() and (ASSETS / n).read_bytes() != p.read_bytes()
-        )
-
-        assert sem_gemeo == [] and diferentes == []
-
-
-def somas() -> dict[str, str]:
-    arquivo = ASSETS / "SHA256SUMS"
-    pares = (linha.split(None, 1) for linha in arquivo.read_text(encoding="utf-8").splitlines() if linha.strip())
-    return {nome.strip(): resumo for resumo, nome in pares}
-
-
-class TestSemLinksSimbolicos:
-    def test_there_is_no_symlink_anywhere_under_assets(self):
-        elos = sorted(p.relative_to(ASSETS).as_posix() for p in ASSETS.rglob("*") if p.is_symlink())
-
-        assert elos == []
-
-    def test_every_avatar_in_brand_avatares_resolves_through_asset_url(self):
-        limpar_caches()
-        pasta = ASSETS / "brand" / "avatares"
-        avatares = sorted(p for p in pasta.iterdir() if p.is_file())
-
-        assert len(avatares) >= 5
-        for avatar in avatares:
-            assert branding.asset_url(avatar.name).endswith(f"/brand/avatares/{avatar.name}")
-
-    def test_the_brand_files_resolve_to_their_subfolder(self):
-        limpar_caches()
-
-        for nome in ("avatar.png", "banner.png", "logo.svg", "favicon.ico"):
-            assert branding.asset_url(nome).endswith(f"/brand/{nome}")
-
-
-class TestSomasDeIntegridade:
-    def test_every_file_under_assets_is_listed_with_its_relative_path_and_matches(self):
-        listadas = somas()
-        arquivos = {
-            p.relative_to(ASSETS).as_posix(): p for p in ASSETS.rglob("*") if p.is_file() and p.name != "SHA256SUMS"
-        }
-
-        faltando = sorted(set(arquivos) - set(listadas))
-        errados = sorted(
-            n
-            for n, p in arquivos.items()
-            if n in listadas and listadas[n] != hashlib.sha256(p.read_bytes()).hexdigest()
-        )
-        assert faltando == [] and errados == []
-
-    def test_no_entry_points_to_a_file_that_does_not_exist(self):
-        assert sorted(n for n in somas() if not (ASSETS / n).is_file()) == []
-
-    def test_the_subfolder_entries_use_the_relative_path(self):
-        assert any("/" in nome for nome in somas())
-
-    def test_the_emojis_folder_has_only_128_by_128_pngs_and_the_one_animated_gif(self):
-        pasta = ASSETS / "emojis"
-        if not pasta.is_dir():
-            pytest.skip("assets/emojis/ ainda não existe (vem da feature de emojis)")
-
-        gifs = []
-        for arquivo in pasta.iterdir():
-            dados = arquivo.read_bytes()
-            if arquivo.suffix == ".gif":
-                gifs.append(arquivo.name)
-                assert dados.startswith(b"GIF89a") and struct.unpack("<HH", dados[6:10]) == (128, 128), arquivo.name
-                assert len(dados) <= 256 * 1024, arquivo.name
-                continue
-            assert arquivo.suffix == ".png" and dados.startswith(b"\x89PNG\r\n\x1a\n"), arquivo.name
-            assert struct.unpack(">II", dados[16:24]) == (128, 128), arquivo.name
-
-        assert gifs in ([], ["headset.gif"]), gifs

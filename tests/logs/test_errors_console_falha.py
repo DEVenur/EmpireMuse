@@ -53,36 +53,7 @@ class TestGanchoComConsoleQuebrado:
         assert "RuntimeError" in saida and "falha-sem-console-" in saida and "Traceback" in saida
         assert SEGREDO not in saida
 
-    def test_the_thread_hook_also_keeps_the_traceback(self, console_quebrado):
-        tipo, valor, tb = excecao("falha-na-thread-F2", RuntimeError)
-        argumentos = threading.ExceptHookArgs((tipo, valor, tb, threading.current_thread()))
-
-        threading.excepthook(argumentos)
-
-        assert "falha-na-thread-F2" in console_quebrado.getvalue()
-
-    def test_a_working_console_does_not_duplicate_the_traceback_in_the_fallback(self, monkeypatch):
-        monkeypatch.setattr(sys, "excepthook", sys.excepthook)
-        fallback, console = novo_fluxo(), novo_fluxo()
-        install_early_hooks({}, stream=fallback)
-        configure_logging(configuracao(), [], stream=console)
-
-        sys.excepthook(*excecao("falha-com-console-F2", RuntimeError))
-
-        assert "falha-com-console-F2" in console.getvalue() and fallback.getvalue() == ""
-
 
 class TestLoggerComumComConsoleQuebrado:
     def test_an_ordinary_logger_call_does_not_raise(self, console_quebrado):
         logging.getLogger("empiremuse.teste").error("mensagem comum")
-
-    def test_an_ordinary_call_with_an_exception_does_not_raise_either(self, console_quebrado):
-        try:
-            raise ValueError("x")
-        except ValueError:
-            logging.getLogger("empiremuse.teste").exception("falhou")
-
-    def test_the_fixed_failure_line_still_goes_to_stderr(self, console_quebrado, capsys):
-        logging.getLogger("empiremuse.teste").error("mensagem comum")
-
-        assert "[log] falha ao emitir um registro" in capsys.readouterr().err

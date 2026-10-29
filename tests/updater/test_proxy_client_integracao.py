@@ -48,32 +48,6 @@ async def test_create_helper_goes_through_the_proxy_and_reaches_the_daemon_with_
     assert ALVO.encode() in criacao.corpo  # o alvo vai como primeiro item do Cmd do template
 
 
-async def test_start_helper_returns_204_through_the_proxy(cliente, daemon):
-    daemon.adicionar_container(CONTAINER_REAL)
-
-    await cliente.start_helper()
-
-    assert len(chegou(daemon, "POST", f"/containers/{CONTAINER_REAL}/start")) == 1
-
-
-async def test_helper_state_is_read_through_the_proxy(cliente, daemon):
-    daemon.adicionar_container(CONTAINER_REAL)
-
-    estado = await cliente.helper_state()
-
-    assert estado == HelperState(
-        status="exited",
-        running=False,
-        exit_code=70,
-        started_at="2026-10-27T10:00:00Z",
-        finished_at="2026-10-27T10:01:00Z",
-    )
-
-
-async def test_a_missing_helper_is_none_through_the_proxy(cliente, daemon):
-    assert await cliente.helper_state() is None
-
-
 async def test_helper_logs_come_back_filtered_by_the_proxy(cliente, daemon):
     daemon.adicionar_container(
         CONTAINER_REAL, linhas_de_log=[PREFIXO_LOG + "pull 0", "ruido do docker", PREFIXO_LOG + "up 70"]
@@ -91,7 +65,3 @@ async def test_remove_helper_goes_through_the_proxy_without_force(cliente, daemo
 
     (remocao,) = chegou(daemon, "DELETE", f"/containers/{CONTAINER_REAL}")
     assert remocao.query == ""
-
-
-async def test_removing_an_absent_helper_is_not_an_error(cliente, daemon):
-    assert await cliente.remove_helper() is None

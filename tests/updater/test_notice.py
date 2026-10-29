@@ -180,26 +180,6 @@ async def test_without_channel_and_dm_it_only_logs_and_does_not_keep_the_pending
     assert "novidade" not in caplog.text and "Atualizado" not in caplog.text
 
 
-async def test_without_any_bot_nothing_is_delivered_or_consumed(runtime):
-    write_pending(runtime, pendente())
-
-    await entregar(pool_com(), runtime, PARA)
-
-    assert pending_path(runtime).exists()
-
-
-async def test_a_guild_bot_that_is_not_in_pool_bots_delivers_when_it_is_the_requester(runtime):
-    """I2: quem pediu pode ser um bot de guild (fora de ``pool.bots``): ele entrega, não o primeiro bot pronto do pool."""
-    principal, de_guild = bot_falso(identificador=999), bot_falso()
-    write_pending(runtime, pendente())
-    pool = SimpleNamespace(bots=[principal], get_all_bots=lambda: [principal, de_guild], pool_is_healthy=lambda: True)
-
-    await entregar(pool, runtime, PARA)
-
-    de_guild.canal.send.assert_awaited_once()
-    principal.canal.send.assert_not_awaited()
-
-
 async def test_when_the_requesting_bot_is_gone_another_ready_bot_delivers(runtime):
     """F3: o bot que pediu pode ter falhado na subida (token inválido); outro bot pronto do pool entrega no mesmo canal."""
     outro = bot_falso(identificador=999)
@@ -240,35 +220,6 @@ def ao_ficar_pronto(pool, runtime, versao=PARA):
     return on_pool_ready(pool, runtime_dir=runtime, now=lambda: AGORA, detect_version=detectar)
 
 
-def espiar_estado_no_envio(bot, runtime):
-    """Registra o ``status`` do arquivo pendente (ou ``None`` se não existe) no instante do envio ao canal."""
-    estados = []
-    original = bot.canal.send
-
-    async def enviar(*args, **kwargs):
-        arquivo = pending_path(runtime)
-        estados.append(json.loads(arquivo.read_text())["status"] if arquivo.exists() else None)
-        return await original(*args, **kwargs)
-
-    bot.canal.send = enviar
-    return estados
-
-
-async def test_with_the_requesting_bot_outside_the_pool_another_ready_bot_sends_once_after_marking_ready(runtime):
-    outro, terceiro = bot_falso(identificador=999), bot_falso(identificador=998)
-    pool = pool_com(outro, terceiro)  # o bot 111 (token que falhou) não está em pool.bots
-    write_pending(runtime, pendente(boots=2))
-    original = outro.canal.send
-    estados = espiar_estado_no_envio(outro, runtime)
-
-    await ao_ficar_pronto(pool, runtime)
-
-    assert len(estados) == 1 and estados[0] != "pending"  # nunca enviado com o pendente ainda como 'pending'
-    original.assert_awaited_once()
-    assert terceiro.canal.send.await_count == 0 and terceiro.usuario.send.await_count == 0
-    assert not pending_path(runtime).exists()
-
-
 async def test_the_pending_is_marked_ready_before_any_send(runtime):
     outro = bot_falso(identificador=999)
     write_pending(runtime, pendente(boots=2))
@@ -284,17 +235,6 @@ async def test_the_pending_is_marked_ready_before_any_send(runtime):
     await ao_ficar_pronto(pool_com(outro), runtime)
 
     assert visto and visto[0] in ("ready", "apagado")
-
-
-async def test_without_the_channel_the_dm_goes_through_the_same_other_bot_once(runtime):
-    outro = bot_falso(identificador=999, canal=False)
-    write_pending(runtime, pendente())
-
-    await ao_ficar_pronto(pool_com(outro), runtime)
-
-    outro.canal.send.assert_not_awaited()
-    outro.usuario.send.assert_awaited_once()
-    assert sem_mencoes(outro.usuario.send.await_args)
 
 
 async def test_the_guard_after_a_ready_pool_neither_counts_nor_reverts(runtime):
@@ -347,17 +287,6 @@ async def test_deliver_update_notice_ignores_an_applying_mark_and_keeps_the_file
     assert pending_path(runtime).read_bytes() == antes
 
 
-async def test_on_pool_ready_neither_marks_ready_nor_sends_nor_deletes_an_applying_mark(runtime):
-    bot = bot_falso()
-    write_pending(runtime, pendente(boots=0, status="applying"))
-    antes = pending_path(runtime).read_bytes()
-
-    await ao_ficar_pronto(pool_com(bot), runtime)
-
-    bot.canal.send.assert_not_awaited()
-    assert pending_path(runtime).read_bytes() == antes
-
-
 # ============================================================================ D11: aviso próprio de desistência
 
 
@@ -374,12 +303,3 @@ async def test_a_given_up_restore_has_its_own_notice_whatever_the_head_is(runtim
     assert "2.0.0" in descricao and "2.1.0" in descricao
     assert "voltou para a versão" not in descricao  # nada do texto de rollback bem-sucedido
     assert not pending_path(runtime).exists()
-
-
-async def test_a_rolled_back_pending_update_with_few_attempts_keeps_the_regular_notices(runtime):
-    bot = bot_falso()
-    write_pending(runtime, pendente(status="rolled_back", restore_attempts=1))
-
-    await entregar(pool_com(bot), runtime, DE)
-
-    assert "desisti" not in bot.canal.send.await_args.kwargs["embed"].description

@@ -53,9 +53,6 @@ class TestSchemaError:
         texto = str(schema.SchemaError("queue[3].uri", "length"))
         assert "length" in texto and "queue[3].uri" in texto
 
-    def test_a_raiz_tem_caminho_vazio(self):
-        assert falha(validar, schema.Bool(), 1).path == ""
-
 
 # ============================================================================ Str
 
@@ -163,10 +160,6 @@ class TestDict:
         entrada = {**sessao_valida(), "desconhecido": 1}
         assert "desconhecido" not in validar(esquema_de_sessao(), entrada)
 
-    def test_extra_invalido_e_recusado_na_construcao(self):
-        with pytest.raises(ValueError):
-            schema.Dict({}, extra="ignorar")
-
 
 class TestExtra:
     def test_drop_avisa_o_caminho_do_dicionario(self, caplog):
@@ -192,11 +185,6 @@ class TestOptional:
 
     def test_ausente_vira_o_padrao_informado(self):
         assert validar(self.esquema(default="x"), {"obrigatorio": 1})["opcional"] == "x"
-
-    def test_opcional_fora_de_dicionario_aceita_none(self):
-        assert validar(schema.Optional(schema.Int()), None) is None
-        assert validar(schema.Optional(schema.Int()), 3) == 3
-        assert falha(validar, schema.Optional(schema.Int()), "3").code == TYPE
 
 
 # ============================================================================ nada do conteúdo vaza

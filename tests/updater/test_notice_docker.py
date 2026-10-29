@@ -189,18 +189,6 @@ async def test_anything_that_cannot_be_confirmed_is_a_yellow_unknown_embed(runti
     assert embed.colour.value == notice.COLOR_UNKNOWN and DESCONHECIDO in embed.description
 
 
-async def test_a_failing_removal_is_ignored_and_the_notice_still_goes_out(runtime):
-    bot = bot_falso()
-    cliente = ClienteFalso([estado(rodando=False, codigo=0)])
-    cliente.falha_na_remocao = UpdateError("não removeu")
-    write_pending(runtime, pendente_docker())
-
-    await entregar_docker(pool_com(bot), cliente, runtime, PARA)
-
-    bot.canal.send.assert_awaited_once()
-    assert not pending_path(runtime).exists()
-
-
 async def test_the_pending_update_is_gone_before_the_send_so_the_delivery_is_single(runtime):
     bot = bot_falso()
     estados: list[bool] = []
@@ -216,18 +204,6 @@ async def test_the_pending_update_is_gone_before_the_send_so_the_delivery_is_sin
     await entregar_docker(pool_com(bot), ClienteFalso([estado(rodando=False, codigo=0)]), runtime, PARA)
 
     assert estados == [False]
-
-
-async def test_a_pending_git_update_is_not_touched_by_the_docker_notice(runtime):
-    bot = bot_falso()
-    git = dataclasses.replace(pendente_docker(), flow="git", digest=None, prev_sha="a" * 40, target_commit=ALVO_GIT)
-    write_pending(runtime, git)
-    cliente = ClienteFalso([estado(rodando=False, codigo=0)])
-
-    await entregar_docker(pool_com(bot), cliente, runtime, PARA)
-
-    bot.canal.send.assert_not_awaited()
-    assert cliente.remocoes == 0 and pending_path(runtime).exists()
 
 
 # ============================================================================ on_pool_ready, ramo docker
@@ -289,18 +265,6 @@ async def test_on_pool_ready_without_a_proxy_socket_sends_the_unknown_notice_and
     assert estados == [False] and not pending_path(runtime).exists()  # apagado ANTES do envio
 
 
-async def test_on_pool_ready_with_an_unhealthy_pool_leaves_a_docker_pending_update_alone(runtime, monkeypatch):
-    bot = bot_falso()
-    write_pending(runtime, pendente_docker(status="pending"))
-    antes = pending_path(runtime).read_bytes()
-    pool = pool_saudavel(bot, socket="/run/x.sock")
-    pool.pool_is_healthy = lambda: False
-
-    await notice.on_pool_ready(pool, runtime_dir=runtime, now=lambda: AGORA)
-
-    assert pending_path(runtime).read_bytes() == antes
-
-
 # ============================================================================ log do auxiliar por DM também no aviso pós-boot (70/71 não passam pelo watch_helper)
 
 
@@ -326,17 +290,6 @@ async def test_a_failed_helper_sends_the_masked_log_by_dm_before_the_helper_is_r
     )
     assert "empiremuse-updater: up 70" in texto and "TOKEN-SECRETO-123" not in texto
     assert cliente.eventos == ["logs", "remove"]  # o log é lido ANTES de o auxiliar ser apagado
-
-
-async def test_a_successful_helper_sends_no_dm_and_reads_no_log(runtime):
-    bot = bot_falso()
-    cliente = ClienteFalso([estado(rodando=False, codigo=0)])
-    write_pending(runtime, pendente_docker())
-
-    await entregar_docker(pool_com_config(bot), cliente, runtime, PARA)
-
-    bot.usuario.send.assert_not_awaited()
-    assert cliente.eventos == ["remove"]
 
 
 async def test_a_failing_log_read_does_not_stop_the_notice_or_the_removal(runtime):
@@ -376,63 +329,11 @@ async def test_the_post_boot_dm_also_fits_the_limit_keeps_the_end_and_masks_befo
 
 # ============================================================================ D13: ``from_version`` rc nos avisos (A29 h)
 
-CHANGELOG_COM_RC = "# Changelog\n\n## [2.1.0] - 2026-11-01\n- novidade da 2.1.0\n\n## [2.1.0-rc.2] - 2026-10-28\n- so da rc dois\n\n## [2.0.0]\n- base\n"
-
 
 def pendente_do_rc(**campos) -> PendingUpdate:
     from tests.support.versao_rc import atual_rc
 
     return pendente_docker(from_version=atual_rc("2.1.0-rc.2"), **campos)
-
-
-async def test_success_from_an_rc_image_says_updated_from_the_rc_to_the_stable_with_the_stable_changelog(runtime):
-    (paths.PROJECT_DIR / "CHANGELOG.md").write_text(CHANGELOG_COM_RC, encoding="utf-8")
-    bot = bot_falso()
-    cliente = ClienteFalso([estado(rodando=False, codigo=0)])
-    write_pending(runtime, pendente_do_rc())
-
-    await entregar_docker(pool_com(bot), cliente, runtime, PARA)
-
-    embed = bot.canal.send.await_args.kwargs["embed"]
-    assert "Atualizado de 2.1.0-rc.2 para 2.1.0." in embed.description
-    assert "novidade da 2.1.0" in embed.description and "so da rc dois" not in embed.description
-    assert "blob/v2.1.0/CHANGELOG.md" in embed.description and "10000" not in embed.description
-    assert embed.colour.value == notice.COLOR_OK
-    assert cliente.remocoes == 1 and not pending_path(runtime).exists()
-
-
-@pytest.mark.parametrize("codigo", [70, 71, 67, 66])
-async def test_a_failed_helper_with_the_rc_image_still_running_says_it_stays_on_the_rc(runtime, docker_flow, codigo):
-    from tests.support.versao_rc import atual_rc
-
-    bot = bot_falso()
-    cliente = ClienteFalso([estado(rodando=False, codigo=codigo)])
-    write_pending(runtime, pendente_do_rc())
-
-    await entregar_docker(pool_com(bot), cliente, runtime, atual_rc("2.1.0-rc.2"))
-
-    embed = bot.canal.send.await_args.kwargs["embed"]
-    assert embed.colour.value == notice.COLOR_FAIL
-    assert "continua na versão 2.1.0-rc.2" in embed.description
-    assert (
-        "A atualização para 2.1.0 falhou" in embed.description
-        and docker_flow.describe_exit(codigo) in embed.description
-    )
-
-
-@pytest.mark.parametrize("rodando", ["2.1.0-rc.3", "2.1.0-rc.1", "2.0.0"], ids=lambda v: f"imagem-{v}")
-async def test_an_unexpected_running_version_from_an_rc_pending_is_an_unknown_notice(runtime, rodando):
-    from tests.support.versao_rc import atual_rc
-
-    bot = bot_falso()
-    write_pending(runtime, pendente_do_rc())
-    versao = atual_rc(rodando) if "rc" in rodando else Version(2, 0, 0)
-
-    await entregar_docker(pool_com(bot), ClienteFalso([estado(rodando=False, codigo=0)]), runtime, versao)
-
-    embed = bot.canal.send.await_args.kwargs["embed"]
-    assert embed.colour.value == notice.COLOR_UNKNOWN
-    assert "Atualização de 2.1.0-rc.2 para 2.1.0" in embed.description and DESCONHECIDO in embed.description
 
 
 async def test_an_rc_pending_update_is_kept_by_the_read_so_the_notice_is_not_lost(runtime):

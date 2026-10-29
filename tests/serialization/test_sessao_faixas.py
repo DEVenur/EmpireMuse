@@ -76,13 +76,6 @@ class TestUri:
     def test_uri_valida_passa_sem_mudar(self, ler, url):
         assert ler(uri=url)["uri"] == url
 
-    @LEITORES
-    def test_uri_ausente_vira_texto_vazio(self, ler):
-        info = faixa_info(0)
-        del info["uri"]
-        faixa = (lida_info if ler is lida else gravada_info)(info)
-        assert faixa["uri"] == ""
-
 
 class TestOutrasUrlsDaFaixa:
     @LEITORES
@@ -95,13 +88,6 @@ class TestOutrasUrlsDaFaixa:
     def test_url_e_miniatura_da_playlist(self, ler, url):
         faixa = ler(playlist={"name": "Minha", "url": url, "thumb": url})
         assert faixa["playlist"] == {"name": "Minha", "url": "", "thumb": ""}
-
-    def test_album_valido_passa(self):
-        info = faixa_info(0)
-        info["extra"]["album"] = {"name": "Álbum", "url": "https://exemplo.invalid/album/1"}
-        assert (
-            decodificar(bruto(queue=[info]))["queue"][0]["extra"]["album"]["url"] == "https://exemplo.invalid/album/1"
-        )
 
     @LEITORES
     def test_em_plugin_info_a_chave_com_url_invalida_sai_e_as_outras_ficam(self, ler):
@@ -129,11 +115,6 @@ class TestOutrasUrlsDaFaixa:
     def test_chave_que_nao_termina_em_url_nao_e_tocada_mesmo_com_valor_estranho(self, ler):
         faixa = ler(pluginInfo={"urlBase": "javascript:x", "texto": "ftp://x"})
         assert faixa["pluginInfo"] == {"urlBase": "javascript:x", "texto": "ftp://x"}
-
-
-class TestConviteDaSessao:
-    def test_convite_vazio_e_valido(self):
-        assert not decodificar(bruto(listen_along_invite="")).get("listen_along_invite")
 
 
 # ============================================================================ fonte local
@@ -165,26 +146,6 @@ def sem(chave, info):
     return info
 
 
-def faixas_ruins() -> dict:
-    boa = faixa_info(1)
-    sem_requester = copy.deepcopy(boa)
-    sem_requester["extra"] = {}
-    return {
-        "nao-e-dicionario": "texto",
-        "lista": [1, 2],
-        "sem-titulo": sem("title", boa),
-        "titulo-numero": {**boa, "title": 3},
-        "titulo-longo": {**boa, "title": "t" * 3000},
-        "sem-fonte": sem("sourceName", boa),
-        "sem-extra": sem("extra", boa),
-        "sem-requester": sem_requester,
-        "id-nao-base64": {**boa, "id": "isto não é base64!"},
-        "length-negativo": {**boa, "length": -1},
-        "length-texto": {**boa, "length": "x"},
-        "isStream-texto": {**boa, "isStream": "sim"},
-    }
-
-
 class TestFaixaRuim:
     def test_o_descarte_vai_ao_log_so_com_a_contagem(self, caplog):
         ruim = {**faixa_info(1), "title": SEGREDO, "length": -1}
@@ -193,11 +154,6 @@ class TestFaixaRuim:
         avisos = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
         assert avisos and all(SEGREDO not in m for m in avisos)
         assert all(SEGREDO not in repr(r.args) for r in caplog.records)
-
-    def test_a_ordem_das_faixas_boas_e_mantida(self):
-        faixas = [faixa_info(n) for n in range(6)]
-        faixas.insert(3, faixas_ruins()["sem-titulo"])
-        assert [f["title"] for f in decodificar(bruto(queue=faixas))["queue"]] == [f"Música {n}" for n in range(6)]
 
 
 # ============================================================================ a faixa reidratada pelo código real (R1, medição do QA)

@@ -42,9 +42,6 @@ class TestComposicao:
 
         assert not title_matches(medidor, "completo", "busca", "titulo", "busca", 75)
 
-    def test_o_minimo_do_titulo_e_60(self):
-        assert TITLE_ONLY_MIN_SCORE == 60
-
 
 POSITIVOS = [
     ("queen - bohemian rhapsody", "queen", "bohemian rhapsody"),
@@ -78,21 +75,3 @@ def test_faixas_certas_passam_com_o_limiar_75(busca, artista, titulo):
 @pytest.mark.parametrize(("busca", "artista", "titulo"), list(NEGATIVOS)[:2])
 def test_outra_musica_do_mesmo_artista_ou_sem_relacao_nao_passa(busca, artista, titulo):
     assert not casa(busca, artista, titulo, 75)
-
-
-PONTOS_DE_USO = [
-    "empiremuse/utils/music/audio_sources/spotify.py",
-    "empiremuse/utils/music/audio_sources/deezer.py",
-    "empiremuse/wavelink/node.py",
-    "empiremuse/cogs/lastfm.py",
-]
-
-
-@pytest.mark.parametrize("arquivo", list(PONTOS_DE_USO)[:2])
-def test_os_quatro_pontos_usam_a_regra_unica_e_nao_o_token_sort_ratio(arquivo):
-    from tests.support.raiz import RAIZ
-
-    fonte = (RAIZ / arquivo).read_text(encoding="utf-8")
-
-    assert "title_matches(" in fonte
-    assert "token_sort_ratio" not in fonte

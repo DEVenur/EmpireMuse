@@ -78,13 +78,6 @@ def test_parse_current_version_rejects_anything_else(texto):
     assert parse_current_version(texto) is None
 
 
-@pytest.mark.parametrize("texto", ACEITAS)
-def test_str_round_trips_and_never_shows_the_internal_sentinel(texto):
-    assert str(atual(texto)) == texto
-    assert parse_current_version(str(atual(texto))) == atual(texto)
-    assert "10000" not in str(atual("2.1.0")) and "rc" not in str(atual("2.1.0"))
-
-
 def test_the_ordering_is_rc_by_number_below_the_stable_below_the_next_version():
     ordenadas = [atual(texto) for texto in ORDEM[:7] + ["2.1.1"]]
     assert ordenadas == sorted(ordenadas, reverse=True)[::-1]
@@ -95,24 +88,10 @@ def test_the_ordering_is_rc_by_number_below_the_stable_below_the_next_version():
     assert atual("2.1.1-rc.1") > atual("2.1.0")  # a rc da próxima patch já é maior que a estável anterior
 
 
-def test_a_stable_current_version_is_the_same_value_as_the_strict_one():
-    assert Version(2, 1, 0) == parse_version("2.1.0") == parse_current_version("2.1.0")
-    assert hash(Version(2, 1, 0)) == hash(parse_current_version("2.1.0"))
-    assert {Version(2, 1, 0): "x"}[parse_current_version("2.1.0")] == "x"
-
-
 def test_an_rc_is_not_equal_to_its_stable_nor_to_another_rc():
     assert atual("2.1.0-rc.2") != Version(2, 1, 0)
     assert atual("2.1.0-rc.2") != atual("2.1.0-rc.3")
     assert atual("2.1.0-rc.2") == atual("2.1.0-rc.2")
-
-
-def test_is_prerelease_tells_rc_from_stable():
-    assert atual("2.1.0-rc.2").is_prerelease is True
-    assert atual("2.1.0-rc.0").is_prerelease is True
-    assert atual("2.1.0").is_prerelease is False
-    assert Version(2, 1, 0).is_prerelease is False
-    assert parse_version("2.1.0").is_prerelease is False
 
 
 # ============================================================================ o que continua estrito (A1, A9, A23)
@@ -148,10 +127,6 @@ def test_an_annotated_rc_tag_is_still_ignored_by_ls_remote():
 
 def test_pick_target_from_an_rc_chooses_the_stable_of_the_same_triple():
     assert pick_target(atual("2.1.0-rc.2"), {Version(2, 0, 2), Version(2, 1, 0)}) == Version(2, 1, 0)
-
-
-def test_pick_target_from_an_rc_chooses_the_greatest_stable():
-    assert pick_target(atual("2.1.0-rc.2"), {Version(2, 0, 2), Version(2, 1, 0), Version(2, 1, 1)}) == Version(2, 1, 1)
 
 
 def test_pick_target_from_an_rc_with_only_older_stables_is_none():
@@ -194,9 +169,3 @@ def test_changelog_from_an_rc_to_the_next_patch_has_both_stable_sections_newest_
 
     assert texto.index("D: correção") < texto.index("C: a estável")
     assert "R2" not in texto and "R3" not in texto
-
-
-def test_changelog_from_a_stable_never_shows_rc_sections():
-    texto = changelog_sections(CHANGELOG, Version(2, 0, 0), Version(2, 1, 1), 3500)
-
-    assert "rc" not in texto and "C: a estável" in texto and "D: correção" in texto

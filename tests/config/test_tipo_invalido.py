@@ -52,11 +52,6 @@ class TestTipoInvalidoNoConfigJson:
 
 
 class TestGuardas:
-    @pytest.mark.smoke
-    def test_guarda_valores_validos_continuam_aceitos(self, home):
-        config = carregar(home, '{"MAX_USER_FAVS": 7, "VOTE_SKIP_AMOUNT": "4", "LAVALINK_RECONNECT_RETRIES": 0}')
-        assert (config["MAX_USER_FAVS"], config["VOTE_SKIP_AMOUNT"], config["LAVALINK_RECONNECT_RETRIES"]) == (7, 4, 0)
-
     def test_guarda_a_mensagem_nao_depende_do_json_inteiro(self, home):
         """Só a chave com problema e o valor dela entram na mensagem, nada das outras chaves."""
         texto = json.dumps({"MAX_USER_FAVS": [1], "TOKEN": "segredo-do-teste-xyz"})

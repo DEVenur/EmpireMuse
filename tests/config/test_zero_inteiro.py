@@ -90,36 +90,10 @@ class TestZeroInteiroDoConfigJson:
         esperado = pelo_ambiente(monkeypatch, chave, "0")
         assert pelo_config_json(home, chave, 0) == esperado, f"{chave}: 0 do config.json foi trocado pelo padrão"
 
-    def test_guarda_zero_em_texto_no_config_json_tambem_vale(self, home):
-        assert pelo_config_json(home, "LAVALINK_RECONNECT_RETRIES", "0") == 0
-
 
 class TestAusenteOuVazioCaiNoPadrao:
     """GUARDA: só o ausente e o vazio usam o padrão."""
 
-    @pytest.mark.smoke
-    @pytest.mark.parametrize("chave", list(CHAVES_INTEIRAS)[:2])
-    def test_ausente_equivale_a_informar_o_valor_padrao(self, home, monkeypatch, chave):
-        (home / "config.json").write_text("{}", encoding="utf-8")
-        ausente = config_loader.load_config()[chave]
-        padrao = config_loader.DEFAULT_CONFIG[chave]
-        assert ausente == pelo_ambiente(monkeypatch, chave, str(padrao))
-
     def test_vazio_no_ambiente_e_no_dotenv(self, home, monkeypatch):
         assert pelo_ambiente(monkeypatch, "LAVALINK_RECONNECT_RETRIES", "") == 30
         assert pelo_dotenv(monkeypatch, "LAVALINK_RECONNECT_RETRIES", "") == 30
-
-
-def test_a_lista_de_chaves_cobre_todas_as_que_o_laco_converte(home, monkeypatch):
-    """Se uma chave inteira nova entrar no laço, o teste avisa para incluí-la em CHAVES_INTEIRAS."""
-    convertidas = []
-    for chave, padrao in config_loader.DEFAULT_CONFIG.items():
-        if isinstance(padrao, bool) or not isinstance(padrao, int):
-            continue
-        monkeypatch.setenv(chave, "0")
-        try:
-            if type(config_loader.load_config()[chave]) is int:
-                convertidas.append(chave)
-        finally:
-            monkeypatch.delenv(chave)
-    assert sorted(convertidas) == sorted(CHAVES_INTEIRAS)

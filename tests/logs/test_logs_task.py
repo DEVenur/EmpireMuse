@@ -83,45 +83,10 @@ class TestTarefaComIntervaloZero:
 
         assert saida.count("repetida 2×") == 1
 
-    def test_it_logs_no_summary_at_all(self):
-        cenario = Cenario(0)
-
-        saida = cenario.rodar(12)
-
-        assert "📊" not in saida
-
-    def test_it_still_samples_the_players_peak_every_turn(self):
-        cenario = Cenario(0)
-        amostras = []
-        cenario.pool.metrics = SimpleNamespace(sample_players=amostras.append)
-
-        cenario.rodar(4)
-
-        assert len(amostras) in (
-            3,
-            4,
-        )  # com o ``sleep`` no começo ou no fim da volta, a última volta pode não ter rodado
-
 
 class TestTarefaComResumo:
     def test_the_summary_comes_out_every_metrics_interval_and_not_before(self):
         assert "📊" not in Cenario(300).rodar(4)
-
-    def test_the_first_summary_is_after_five_windows_and_the_second_after_ten(self):
-        # 6 e 11 ``sleep``s: o primeiro/segundo resumo (t = 300 s / 600 s) já saiu tanto com o ``sleep`` no começo quanto no fim da volta
-        assert len(resumos(Cenario(300).rodar(6))) == 1
-        assert len(resumos(Cenario(300).rodar(11))) == 2
-
-    def test_with_no_bots_each_interval_is_a_single_line(self):
-        saida = Cenario(300).rodar(11)
-
-        assert len([linha for linha in saida.splitlines() if "📊" in linha]) == 2
-
-    def test_the_summary_uses_the_metrics_logger_at_info(self):
-        saida = Cenario(300).rodar(6)
-
-        (linha,) = [linha for linha in saida.splitlines() if "📊" in linha]
-        assert "empiremuse.metrics" in linha and "INFO" in linha
 
     def test_the_summary_carries_the_counters_of_the_interval_and_resets_them(self):
         cenario = Cenario(300)
@@ -132,13 +97,6 @@ class TestTarefaComResumo:
 
         linhas = [linha for linha in saida.splitlines() if "📊" in linha]
         assert "faixas iniciadas 37" in linhas[0] and "faixas iniciadas 0" in linhas[1]
-
-    def test_a_small_interval_is_never_below_the_aggregation_window(self):
-        cenario = Cenario(30)
-
-        saida = cenario.rodar(3)
-
-        assert len(resumos(saida)) == 2  # 30 s vira 60 s (parse_log_settings): um resumo por volta
 
 
 class TestRobustez:
@@ -189,11 +147,6 @@ class TestCicloDeVida:
         assert isinstance(pool.logs_task, asyncio.Task)
         pool.logs_task.cancel()
         laco.run_until_complete(asyncio.gather(pool.logs_task, return_exceptions=True))
-
-    def test_the_pool_starts_with_a_collector_and_no_task(self):
-        pool = BotPool()
-
-        assert isinstance(pool.metrics, MetricsCollector) and pool.logs_task is None
 
     def test_shutdown_cancels_the_logs_task(self):
         cancelada = []

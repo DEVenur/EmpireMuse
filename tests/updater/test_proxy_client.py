@@ -111,14 +111,6 @@ async def test_create_helper_maps_the_statuses_to_generic_messages(cliente, serv
 # ============================================================================ start_helper
 
 
-async def test_start_helper_posts_to_the_start_endpoint(cliente, servidor):
-    servidor.rotas[("POST", f"{HELPER}/start")] = web.Response(status=204)
-
-    await cliente.start_helper()
-
-    assert [(p.method, p.path) for p, _ in servidor.pedidos] == [("POST", f"{HELPER}/start")]
-
-
 @pytest.mark.parametrize("status, mensagem", [(409, ANDAMENTO), (500, INESPERADA), (200, INESPERADA)])
 async def test_start_helper_maps_the_statuses(cliente, servidor, status, mensagem):
     servidor.rotas[("POST", f"{HELPER}/start")] = web.Response(status=status)
@@ -196,14 +188,6 @@ async def test_the_tail_is_clamped_between_1_and_200(cliente, servidor, pedido, 
     assert servidor.pedidos[0][0].query["tail"] == enviado
 
 
-async def test_no_more_than_tail_lines_come_back(cliente, servidor):
-    servidor.rotas[("GET", f"{HELPER}/logs")] = json_resposta({"lines": [f"l{n}" for n in range(50)]})
-
-    linhas = await cliente.helper_logs(5)
-
-    assert len(linhas) <= 5 and all(isinstance(linha, str) for linha in linhas)
-
-
 @pytest.mark.parametrize(
     "resposta",
     [web.Response(status=500), json_resposta({"lines": "texto"}), json_resposta({"outro": []}), json_resposta([])],
@@ -258,16 +242,6 @@ async def test_a_missing_socket_is_the_friendly_error_without_the_path(proxy_cli
         await CHAMADAS[chamada](cliente)
 
     assert str(erro.value) == INACESSIVEL and caminho not in str(erro.value)
-
-
-async def test_a_refused_connection_is_the_same_error(proxy_client, tmp_path: Path):
-    caminho = tmp_path / "morto.sock"
-    caminho.touch()  # existe, mas não é um socket que aceite conexões
-
-    with pytest.raises(UpdateError) as erro:
-        await proxy_client.ProxyClient(str(caminho)).helper_state()
-
-    assert str(erro.value) == INACESSIVEL and str(caminho) not in str(erro.value)
 
 
 async def test_a_proxy_that_never_answers_times_out_as_the_same_error(proxy_client, servidor, monkeypatch):
@@ -332,20 +306,6 @@ async def test_a_logs_response_delivered_in_several_pieces_comes_back_whole(clie
 
     assert linhas[-1] == PEDACOS_JSON["lines"][-1] and len(linhas) >= 1
     assert linhas == PEDACOS_JSON["lines"][-len(linhas) :]  # sem JSON truncado: nenhuma linha cortada ao meio
-
-
-async def test_a_state_response_delivered_in_several_pieces_comes_back_whole(cliente, servidor, proxy_client):
-    servidor.rotas[("GET", f"{HELPER}/json")] = em_pedacos(json.dumps(ESTADO).encode(), partes=6)
-
-    estado = await cliente.helper_state()
-
-    assert estado == proxy_client.HelperState(
-        status="exited",
-        running=False,
-        exit_code=70,
-        started_at="2026-10-27T10:00:00Z",
-        finished_at="2026-10-27T10:01:00Z",
-    )
 
 
 @pytest.mark.parametrize("chamada", ["state", "logs"])

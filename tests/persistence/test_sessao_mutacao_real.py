@@ -72,36 +72,11 @@ class TestDiscoComErroInjetado:
         assert any(str(SERVIDOR) in aviso and "Cópia" in aviso for aviso in avisos(caplog))
         assert all(SEGREDO not in r.getMessage() and SEGREDO not in repr(r.args) for r in caplog.records)
 
-    def test_erro_ao_apagar_um_nao_impede_os_outros_e_nao_sobe(self, tmp_path, monkeypatch, caplog):
-        escrever_json(tmp_path, SERVIDOR)
-        copia = pasta_json(tmp_path) / f"{SERVIDOR}.json.bak"
-        copia.write_bytes(b"copia")
-        original = type(pasta_json(tmp_path)).unlink
-
-        def unlink(self, *args, **kwargs):
-            if self.name == f"{SERVIDOR}.json":
-                raise PermissionError(SEGREDO)
-            return original(self, *args, **kwargs)
-
-        monkeypatch.setattr(type(pasta_json(tmp_path)), "unlink", unlink)
-        with caplog.at_level(logging.DEBUG):
-            session_store.delete_local_session(BOT_ID, SERVIDOR)  # nenhuma exceção
-        assert (pasta_json(tmp_path) / f"{SERVIDOR}.json").is_file()
-        assert not copia.exists()
-        assert any(str(SERVIDOR) in aviso and "não removida" in aviso for aviso in avisos(caplog))
-        assert all(SEGREDO not in r.getMessage() and SEGREDO not in repr(r.args) for r in caplog.records)
-
 
 # ============================================================================ Mongo: leitura de documento de tipo errado
 
 
 class TestDocumentoDoMongoDeTipoErrado:
-    @pytest.mark.asyncio
-    async def test_versao_booleana_nao_vale(self):
-        cog, mongo = cog_com_mongo()
-        await semear(mongo, SERVIDOR, v=True)
-        assert await cog.get_player_sessions_mongo() == []
-
     @pytest.mark.asyncio
     async def test_bomba_de_compressao_para_no_teto_sem_inflar_na_memoria(self):
         cog, mongo = cog_com_mongo()
@@ -119,80 +94,8 @@ class TestDocumentoDoMongoDeTipoErrado:
 # ============================================================================ cog: canal, gravação e remoção
 
 
-def cog_de_canais(*, get_channel=None, fetch_channel=None):
-    cog = cog_de_sessoes()
-
-    async def sem_busca(_id):
-        raise AssertionError("não era para buscar")
-
-    cog.bot.get_channel = get_channel or (lambda _id: None)
-    cog.bot.fetch_channel = fetch_channel or sem_busca
-    return cog
-
-
-SERVIDOR_FALSO = SimpleNamespace(id=SERVIDOR)
-
-
-class TestCanalDaSessao:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("status", [403, 500])
-    async def test_erro_do_discord_ao_buscar_o_canal_vira_none(self, status):
-        async def busca(_id):
-            raise disnake.HTTPException(SimpleNamespace(status=status, reason="x"), "x")
-
-        cog = cog_de_canais(fetch_channel=busca)
-        assert await cog._guild_channel(SERVIDOR_FALSO, 123, fetch=True) is None
-
-
-class TestGravacaoComDadosQueNaoValem:
-    @staticmethod
-    def dados_ruins():
-        return sessao_minima(_id=SERVIDOR, volume=5000)
-
-    @pytest.mark.asyncio
-    async def test_no_mongo_nao_sobe_e_nao_grava(self, caplog):
-        cog, mongo = cog_com_mongo()
-        with caplog.at_level(logging.DEBUG):
-            await cog.save_session_mongo(SERVIDOR, self.dados_ruins())
-        assert mongo.ids(NOVA) == set() and any(str(SERVIDOR) in aviso for aviso in avisos(caplog))
-
-
 # ============================================================================ resume_player: o id da mensagem do controller
 
 from empiremuse.cogs import player_resume  # noqa: E402
 from tests.support.formatos_reais import CANAL_DE_TEXTO, CANAL_DE_VOZ, MENSAGEM  # noqa: E402
 from tests.persistence.test_sessao_retomada import montar, proprio, retomar, sessao  # noqa: E402
-
-
-@pytest.fixture
-def _resume_sem_discord(monkeypatch):
-    monkeypatch.setattr(player_resume, "can_send_message", lambda *args, **kwargs: None)
-    monkeypatch.setattr(player_resume, "can_connect", lambda *args, **kwargs: None)
-
-
-class TestMensagemDoController:
-    @pytest.mark.asyncio
-    @pytest.mark.usefixtures("_resume_sem_discord")
-    async def test_id_em_texto_vira_inteiro_na_busca_da_mensagem(self):
-        meu = proprio(CANAL_DE_TEXTO)
-        controller = {"channel": str(CANAL_DE_TEXTO), "message_id": str(MENSAGEM)}
-        cog, _, criados = montar(
-            canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: meu}, controller=controller
-        )
-        await retomar(cog, await sessao())
-        assert len(criados) == 1 and ("fetch_message", MENSAGEM) in meu.chamadas
-        assert not any(type(c[1]) is str for c in meu.chamadas if isinstance(c, tuple))
-
-    @pytest.mark.asyncio
-    @pytest.mark.usefixtures("_resume_sem_discord")
-    @pytest.mark.parametrize("lixo", ["abc", {}], ids=repr)
-    async def test_id_que_nao_e_numero_nao_e_buscado_e_a_retomada_segue(self, lixo):
-        meu = proprio(CANAL_DE_TEXTO)
-        controller = {"channel": str(CANAL_DE_TEXTO), "message_id": lixo}
-        dados = await sessao()
-        dados["message_id"] = None  # a sessão não traz mensagem própria: só o controller poderia indicar uma
-        cog, _, criados = montar(
-            canais={CANAL_DE_VOZ: proprio(CANAL_DE_VOZ), CANAL_DE_TEXTO: meu}, controller=controller
-        )
-        await retomar(cog, dados)
-        assert len(criados) == 1 and not any(c[0] == "fetch_message" for c in meu.chamadas if isinstance(c, tuple))

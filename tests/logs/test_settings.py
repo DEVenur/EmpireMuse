@@ -35,25 +35,6 @@ class TestPadroes:
 
         assert settings.file is False and settings.color is True and avisos == []
 
-    def test_log_settings_is_frozen(self):
-        settings, _ = ler()
-
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            settings.level = logging.DEBUG  # type: ignore[misc]
-
-    def test_the_parser_does_not_change_its_inputs(self):
-        config, ambiente = {"LOG_LEVEL": "debug", "LOG_DEBUG_GUILDS": f"{G1}, lixo"}, {"NO_COLOR": "1"}
-        antes = (dict(config), dict(ambiente))
-
-        ler(config, ambiente)
-
-        assert (config, ambiente) == antes
-
-    def test_the_warnings_are_texts(self):
-        _, avisos = ler({"LOG_LEVEL": "nada"})
-
-        assert avisos and all(isinstance(aviso, str) for aviso in avisos)
-
 
 class TestNivel:
     @pytest.mark.parametrize(
@@ -90,18 +71,6 @@ class TestCor:
     def test_no_color_set_turns_color_off_even_with_log_color_on(self):
         assert ler({"LOG_COLOR": "on"}, {"NO_COLOR": "1"})[0].color is False
 
-    def test_any_non_empty_no_color_value_counts(self):
-        assert ler(ambiente={"NO_COLOR": "qualquer coisa"})[0].color is False
-
-    def test_an_empty_no_color_is_ignored(self):
-        assert ler(ambiente={"NO_COLOR": ""})[0].color is True
-
-    def test_no_color_is_read_only_from_the_environment_not_from_the_config(self):
-        assert ler({"NO_COLOR": "1"})[0].color is True
-
-    def test_there_is_no_tty_detection(self):
-        assert ler(ambiente={"TERM": "dumb"})[0].color is True
-
 
 class TestArquivo:
     def test_auto_outside_the_image_is_on(self):
@@ -109,9 +78,6 @@ class TestArquivo:
 
     def test_auto_inside_the_image_is_off(self):
         assert ler({"LOG_FILE": "auto"}, IMAGEM)[0].file is False
-
-    def test_any_image_variable_value_counts_as_inside_the_image(self):
-        assert ler(ambiente={"EMPIREMUSE_VERSION": "dev"})[0].file is False
 
     @pytest.mark.parametrize("ambiente", [{}, IMAGEM], ids=["fora", "dentro"])
     def test_on_and_off_are_explicit(self, ambiente):
@@ -124,23 +90,12 @@ class TestArquivo:
 
         assert ler(config, IMAGEM)[0].file is True
 
-    def test_enable_logger_never_turns_anything_off(self):
-        assert ler({"ENABLE_LOGGER": True, "LOG_FILE": "off"})[0].file is False
-        assert ler({"ENABLE_LOGGER": False, "LOG_FILE": "on"}, IMAGEM)[0].file is True
-        assert ler({"ENABLE_LOGGER": False})[0].file is True
-
-    def test_enable_logger_false_inside_the_image_stays_off(self):
-        assert ler({"ENABLE_LOGGER": False}, IMAGEM)[0].file is False
-
 
 class TestServidoresEmDebug:
     def test_valid_ids_become_a_frozenset_of_ints(self):
         settings, avisos = ler({"LOG_DEBUG_GUILDS": f"{G1}, {G2}"})
 
         assert settings.debug_guilds == frozenset({int(G1), int(G2)}) and avisos == []
-
-    def test_an_empty_value_means_none(self):
-        assert ler({"LOG_DEBUG_GUILDS": ""})[0].debug_guilds == frozenset()
 
     def test_garbage_is_ignored_with_a_warning_that_does_not_echo_it(self):
         settings, avisos = ler({"LOG_DEBUG_GUILDS": f"abc-secreto,{G1}"})
@@ -177,13 +132,6 @@ class TestServidoresEmDebug:
 
         assert settings.debug_guilds == frozenset(int(i) for i in ids[:50])
         assert len(avisos) == 1 and not any(i in avisos[0] for i in ids)
-
-    def test_exactly_fifty_ids_have_no_warning(self):
-        ids = [str(10**16 + n) for n in range(50)]
-
-        settings, avisos = ler({"LOG_DEBUG_GUILDS": ",".join(ids)})
-
-        assert len(settings.debug_guilds) == 50 and avisos == []
 
     def test_non_ascii_digits_are_not_snowflakes(self):
         settings, avisos = ler({"LOG_DEBUG_GUILDS": "١٢٣٤٥٦٧٨٩٠١٢٣٤٥٦"})

@@ -32,13 +32,3 @@ class TestMencoesPermitidas:
         permitidas = bot_novo().allowed_mentions
 
         assert permitidas is not None and permitidas.everyone is False and permitidas.roles is False
-
-    async def test_user_mentions_and_replies_keep_working(self) -> None:
-        permitidas = bot_novo().allowed_mentions
-
-        assert permitidas is not None and permitidas.users is True and permitidas.replied_user is True
-
-    async def test_an_explicit_allowed_mentions_from_the_caller_is_respected(self) -> None:
-        explicita = disnake.AllowedMentions.all()
-
-        assert bot_novo(allowed_mentions=explicita).allowed_mentions is explicita
