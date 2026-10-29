@@ -109,6 +109,17 @@ class ServerStore:
     def knows(self, gid: int) -> bool:
         return any(bot.get_guild(gid) is not None for bot in self.pool.get_all_bots())
 
+    def _loaded_guild(self, gid: int):
+        """O servidor como algum bot do pool o vê COM os dados carregados (``None`` se nenhum o vê ou se está só o esboço do READY)."""
+        return next(
+            (
+                g
+                for b in self.pool.get_all_bots()
+                if (g := b.get_guild(gid)) is not None and not getattr(g, "unavailable", False)
+            ),
+            None,
+        )
+
     def _allowed(self, gid: int, settings: Optional[dict] = None) -> Allowed:
         """Skins carregadas e cargos do servidor; a skin já gravada continua valendo (como no painel)."""
         bots = self.pool.get_all_bots()
@@ -116,7 +127,7 @@ class ServerStore:
         saved = settings or {}
         skins = frozenset(getattr(bot, "player_skins", ()) or ()) | {saved.get("skin")} - {None}
         static = frozenset(getattr(bot, "player_static_skins", ()) or ()) | {saved.get("static_skin")} - {None}
-        guild = next((g for b in bots if (g := b.get_guild(gid)) is not None), None)
+        guild = self._loaded_guild(gid)
         roles = frozenset(str(role.id) for role in guild.roles) if guild is not None else frozenset()
         return Allowed(skins, static, roles)
 
@@ -185,6 +196,9 @@ class ServerStore:
             return new, False
         main = self.main_bot()
         if main is None:
+            raise ServerConfigUnavailable
+        if self._loaded_guild(int(gid)) is None:
+            # esboço do READY (sem cargos): migrar agora descartaria os DJs de cargos "que não existem" e marcaria como migrado (V-156-1)
             raise ServerConfigUnavailable
         try:
             legacy = await self._database.find_doc(gid, db_name=DBModel.guilds, collection=str(main.user.id))
