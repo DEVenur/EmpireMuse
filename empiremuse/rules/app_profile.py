@@ -111,18 +111,19 @@ def parse_tags(raw: object) -> tuple[tuple[str, ...], tuple[str, ...]]:
     tags: list[str] = []
     warnings: list[str] = []
     seen: set[str] = set()
-    for item in raw.split(","):
+    for position, item in enumerate(raw.split(","), start=1):
         tag = item.strip()
         if not tag:
             continue
+        # o aviso diz o motivo e a posição, nunca o texto da tag (vai para o log)
         if utf16_length(tag) > TAG_MAX_LENGTH or has_control_or_format(tag):
             warnings.append(
-                f"tag descartada (mais de {TAG_MAX_LENGTH} caracteres ou com caractere inválido): {tag[:30]!r}"
+                f"tag {position} descartada (mais de {TAG_MAX_LENGTH} caracteres ou com caractere inválido)"
             )
         elif tag.casefold() in seen:
-            warnings.append(f"tag repetida descartada: {tag!r}")
+            warnings.append(f"tag {position} repetida descartada")
         elif len(tags) >= TAGS_MAX:
-            warnings.append(f"tag descartada (o Discord aceita no máximo {TAGS_MAX}): {tag!r}")
+            warnings.append(f"tag {position} descartada (o Discord aceita no máximo {TAGS_MAX})")
         else:
             seen.add(tag.casefold())
             tags.append(tag)
