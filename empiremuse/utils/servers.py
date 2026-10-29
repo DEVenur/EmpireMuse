@@ -294,11 +294,14 @@ class ServerStore:
                 f"update_data com settings alterado ({', '.join(sorted(changed))}): use pool.servers"
             )
         collection = str(bot.user.id)
-        stored = deepcopy(await self._database.get_data(gid, db_name=DBModel.guilds, collection=collection))
-        controller = stored.setdefault("player_controller", {})
         incoming = data.get("player_controller") or {}
-        for key in CONTROLLER_KEYS:
-            if key in incoming:
-                controller[key] = deepcopy(incoming[key])
-        await self._database.update_data(gid, stored, db_name=DBModel.guilds, collection=collection)
+        async with self._lock(
+            f"{collection}:{gid}"
+        ):  # ler-mesclar-gravar o documento do bot sem pisar em outra gravação
+            stored = deepcopy(await self._database.get_data(gid, db_name=DBModel.guilds, collection=collection))
+            controller = stored.setdefault("player_controller", {})
+            for key in CONTROLLER_KEYS:
+                if key in incoming:
+                    controller[key] = deepcopy(incoming[key])
+            await self._database.update_data(gid, stored, db_name=DBModel.guilds, collection=collection)
         return data

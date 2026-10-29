@@ -286,6 +286,10 @@ class PlayerSettings(disnake.ui.View):
         await interaction.response.edit_message(view=self)
 
     async def close_callback(self, interaction: disnake.MessageInteraction):
+        try:
+            await interaction.response.defer()  # a gravação pode demorar mais que o prazo de resposta da interação
+        except disnake.HTTPException:
+            pass
         await self.save_data()  # grava antes de dizer "salvo": se a gravação falhar, o usuário não vê sucesso
         try:
             if isinstance(self.ctx, CustomContext):
@@ -1150,11 +1154,14 @@ class MusicSettings(commands.Cog):
                     changed_skins_txt += f"Global - Song Request: `{select_view.static_skin_selected.replace(CUSTOM_SKIN_PREFIX, '[custom skin]: ')}`\n"
 
         else:
-            await bot.pool.servers.patch(
-                inter.guild_id,
-                "settings",
-                {"skin": select_view.skin_selected, "static_skin": select_view.static_skin_selected},
-            )
+            # só o que o usuário trocou: o outro campo pode ter sido alterado por outro admin enquanto a tela estava aberta
+            skin_changes = {}
+            if selected != select_view.skin_selected:
+                skin_changes["skin"] = select_view.skin_selected
+            if static_selected != select_view.static_skin_selected:
+                skin_changes["static_skin"] = select_view.static_skin_selected
+            if skin_changes:
+                await bot.pool.servers.patch(inter.guild_id, "settings", skin_changes)
 
             if selected != select_view.skin_selected:
                 try:
