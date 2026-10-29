@@ -6,23 +6,18 @@ Os valores falsos são montados em tempo de execução.
 """
 
 import copy
-import json
 from types import SimpleNamespace
 
 import disnake
-import pytest
 
 import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.cogs.music import Music
 from empiremuse.utils.others import PlayerControls
 from empiremuse.panel.services.account_base import AccountContext
-from empiremuse.panel.services.account_links import FavoritesSection, IntegrationsSection
-from empiremuse.panel.services.links import LinksForm
-from empiremuse.utils.db import DBModel, db_models, global_db_models
+from empiremuse.panel.services.account_links import FavoritesSection
+from empiremuse.utils.db import db_models, global_db_models
 from empiremuse.utils.music.errors import GenericError
-from empiremuse.utils.music import interactions
-from empiremuse.utils.music.interactions import FavModalAdd, ViewMode
-from tests.support.modais import SERVIDOR_DO_COMANDO, ModalBot, ModalInteraction, gravados, importar, modal_view
+from tests.support.modais import SERVIDOR_DO_COMANDO
 
 AUTOR = 900
 
@@ -257,161 +252,15 @@ def args_de(**campos):
     return {nome: [valor] for nome, valor in campos.items()}
 
 
-def json_de(conteudo):
-    return conteudo if isinstance(conteudo, str) else json.dumps(conteudo)
-
-
 async def painel_favoritos(bot, acao, favs, **campos):
     """``Parsed`` da seção de favoritos do painel para a ação (``favorito_adicionar``, ``favoritos_importar``…)."""
     return await FavoritesSection().parse(contexto_conta(bot), {"fav_links": dict(favs)}, acao, args_de(**campos))
 
 
-async def painel_integracoes(bot, acao, integracoes, **campos):
-    documento = {"integration_links": dict(integracoes)}
-    return await IntegrationsSection().parse(contexto_conta(bot), documento, acao, args_de(**campos))
-
-
-def painel_links(bot, acao, links, *, canal=True, **campos):
-    """``ParseResult`` do formulário de links fixos do servidor (``acao`` = adicionar, editar, remover, importar)."""
-    atual = {"fav_links": dict(links), "canal_configurado": canal}
-    return LinksForm().parse(SimpleNamespace(bot=bot), atual, args_de(acao=acao, **campos))
-
-
-async def importar_no_painel(modo, conteudo, *, bot=None, existentes=None):
-    """``(entradas guardadas, erros)`` da importação do painel no modo; ``None`` no lugar das entradas se recusou."""
-    bot = bot or BotDoPainel()
-    existentes = existentes or {}
-    if modo == ViewMode.fav_manager:
-        resultado = await painel_favoritos(bot, "favoritos_importar", existentes, dados=json_de(conteudo))
-        chave = "fav_links"
-    elif modo == ViewMode.integrations_manager:
-        resultado = await painel_integracoes(bot, "integracoes_importar", existentes, dados=json_de(conteudo))
-        chave = "integration_links"
-    else:
-        resultado = painel_links(bot, "importar", existentes, dados=json_de(conteudo))
-        chave = "fav_links"
-    return (None if resultado.errors else resultado.new[chave]), resultado.errors
-
-
 # ============================================================================ bot: importadores e modais
 
 
-async def importar_no_bot(modo, conteudo, *, bot=None, existentes=None):
-    """``(entradas guardadas, texto mostrado)`` da importação do bot no modo; ``None`` no lugar se nada foi gravado."""
-    bot = bot or ModalBot(nome_max=35, url_max=90)
-    if existentes:
-        if modo == ViewMode.fav_manager:
-            bot.user_data["fav_links"] = dict(existentes)
-        elif modo == ViewMode.integrations_manager:
-            bot.user_data["integration_links"] = dict(existentes)
-        else:
-            bot.guild_data["player_controller"]["fav_links"] = dict(existentes)
-    inter = await importar(bot, modo, conteudo)
-    gravou = bool(bot.salvos_usuario or bot.salvos_servidor)
-    return (gravados(bot, modo) if gravou else None), inter.texto
-
-
-async def adicionar_link_do_servidor(bot, nome, url, descricao="descrição", *, editando=None):
-    """Roda o modal REAL de link fixo do servidor (``FavModalAdd`` no modo ``guild_fav_manager``)."""
-    view = modal_view(bot, ViewMode.guild_fav_manager)
-    inter = ModalInteraction(guild_fav_name=nome, guild_fav_description=descricao, guild_fav_url=url)
-    await FavModalAdd(editando, None, view).callback(inter)
-    return inter
-
-
-def campos_do_modal(modo, nome=None, url=None, **kwargs):
-    """Os ``TextInput`` do modal REAL de adicionar/editar do modo, por ``custom_id`` (limites que o Discord aplica)."""
-    modal = FavModalAdd(nome, url, SimpleNamespace(mode=modo), **kwargs)
-    return {campo.custom_id: campo for linha in modal.components for campo in linha.children}
-
-
 # ============================================================================ cargos de DJ, skins, volume e status de voz
-
-
-class CargoFalso:
-    def __init__(self, id_):
-        self.id = id_
-        self.name = f"cargo{id_}"
-        self.mention = f"<@&{id_}>"
-
-
-class GuildaFalsa:
-    """Servidor com cargos: ``default_role`` é o ``@everyone`` e ``get_role`` acha por id."""
-
-    def __init__(self, cargos=(), *, id_=SERVIDOR_DO_COMANDO):
-        self.id = id_
-        self.default_role = CargoFalso(id_)
-        self.roles = [self.default_role, *cargos]
-        self.me = SimpleNamespace(voice=None)
-        self.features = []
-
-    def get_role(self, id_):
-        return next((cargo for cargo in self.roles if cargo.id == id_), None)
-
-    def get_member(self, id_):
-        return SimpleNamespace(id=id_, mention=f"<@{id_}>", guild_permissions=SimpleNamespace(manage_guild=True))
-
-
-def cargos(quantidade, *, inicio=1000):
-    return [CargoFalso(inicio + i) for i in range(quantidade)]
-
-
-async def comando_de_dj(monkeypatch, nome_do_comando, bot, guilda, cargo):
-    """Roda ``add_dj_role`` ou ``remove_dj_role`` REAIS da ``MusicSettings``; devolve a interação (texto enviado)."""
-    import empiremuse.cogs.music_settings as music_settings
-
-    inter = InteracaoFalsa(guild_id=guilda.id, guild=guilda)
-    bot.guilds[guilda.id] = guilda
-
-    async def escolher(interaction, **kwargs):
-        return interaction, bot
-
-    monkeypatch.setattr(music_settings, "select_bot_pool", escolher)
-    comando = getattr(music_settings.MusicSettings, nome_do_comando)
-    await comando.callback(self=music_settings.MusicSettings(bot), interaction=inter, role=cargo)
-    return inter
-
-
-class SkinsLidas(Exception):
-    """Levantada pelo espião do ``SkinSelector`` para encerrar o ``change_skin`` depois de montar as opções."""
-
-
-async def opcoes_do_change_skin(monkeypatch, bot, guilda):
-    """Os valores das 4 listas que o ``change_skin`` REAL oferece: (normal, estático, global, global estático)."""
-    import empiremuse.cogs.music_settings as music_settings
-
-    lidas = {}
-
-    class EspiaoDoSeletor:
-        def __init__(self, ctx, embed, normal, estatico, globais, globais_estaticas, global_mode):
-            lidas["listas"] = tuple(
-                [[o.value for o in lista] for lista in (normal, estatico, globais, globais_estaticas)]
-            )
-
-        async def wait(self):
-            raise SkinsLidas
-
-    async def escolher(interaction, **kwargs):
-        return interaction, bot
-
-    monkeypatch.setattr(music_settings, "select_bot_pool", escolher)
-    monkeypatch.setattr(music_settings, "SkinSelector", EspiaoDoSeletor)
-    bot.guilds[guilda.id] = guilda
-    inter = InteracaoFalsa(guild_id=guilda.id, guild=guilda)
-    cog = music_settings.MusicSettings(bot)
-    with pytest.raises(SkinsLidas):
-        await music_settings.MusicSettings.change_skin.callback(self=cog, interaction=inter)
-    return lidas["listas"]
-
-
-def skins_do_bot(bot, normais, estaticas, *, personalizadas=(), personalizadas_estaticas=()):
-    bot.player_skins = {nome: SimpleNamespace(preview=f"https://exemplo.invalid/{nome}.png") for nome in normais}
-    bot.player_static_skins = {
-        nome: SimpleNamespace(preview=f"https://exemplo.invalid/{nome}.png") for nome in estaticas
-    }
-    documento = bot.documento("global", DBModel.guilds, SERVIDOR_DO_COMANDO)
-    documento["custom_skins"] = {nome: "blob" for nome in personalizadas}
-    documento["custom_skins_static"] = {nome: "blob" for nome in personalizadas_estaticas}
 
 
 # ============================================================================ status de voz e volume
@@ -427,47 +276,6 @@ class ContextoDoStatus:
 
     async def edit_original_message(self, **kwargs):
         return None
-
-
-async def status_no_comando(bot, texto, *, atual=STATUS_ANTIGO):
-    """(texto gravado ou ``None``, mensagem mostrada) do modal PERMANENTE do ``SetStageTitle`` REAL."""
-    guilda = GuildaFalsa()
-    bot.guilds[guilda.id] = guilda
-    bot.pool.get_guild_bots = lambda guild_id: [bot]
-    view = interactions.SetStageTitle(ContextoDoStatus(), bot, guilda, {"voice_channel_status": atual})
-    inter = InteracaoFalsa(guild_id=guilda.id, guild=guilda, custom_id="status_voice_channel_perm")
-    inter.text_values = {"status_voice_value": texto}
-    await view.modal_handler(inter)
-    gravou = bot.ultimo_global is not None
-    return (bot.ultimo_global["voice_channel_status"] if gravou else None), inter.texto
-
-
-async def abrir_modal_do_status_permanente():
-    """O campo de texto do modal "permanente" que o ``SetStageTitle`` REAL abre (limites que o Discord aplica)."""
-    view = interactions.SetStageTitle(ContextoDoStatus(), BotDeComandos(), GuildaFalsa(), {"voice_channel_status": ""})
-    inter = InteracaoFalsa(guild_id=SERVIDOR_DO_COMANDO)
-    await view.set_status_perm(inter)
-    return inter.response.modais[0].components[0].children[0]
-
-
-def dados_do_player(volume=100):
-    return {
-        "autoplay": False,
-        "check_other_bots_in_vc": False,
-        "enable_restrict_mode": False,
-        "default_player_volume": volume,
-    }
-
-
-async def opcoes_de_volume(volume=100):
-    """Os valores (``int``) que o select do ``PlayerSettings`` REAL oferece e o que vem marcado como padrão."""
-    import empiremuse.cogs.music_settings as music_settings
-
-    view = music_settings.PlayerSettings(
-        SimpleNamespace(author=SimpleNamespace(id=AUTOR)), BotDeComandos(), dados_do_player(volume)
-    )
-    opcoes = view.children[0].options
-    return [int(o.value) for o in opcoes], [int(o.value) for o in opcoes if o.default]
 
 
 # ============================================================================ botões de favoritar do player
@@ -553,49 +361,3 @@ def gravou(bot):
 
 
 # ============================================================================ token do app de RPC
-
-
-class BotDoRpc(BotDeComandos):
-    """Registra a ORDEM entre fechar a presença e gravar o token (``eventos``)."""
-
-    def __init__(self, *, config=None, dono=False):
-        super().__init__(config=config, dono=dono)
-        self.user.display_avatar = SimpleNamespace(
-            replace=lambda **kwargs: SimpleNamespace(url="https://exemplo.invalid/bot.png")
-        )
-        self.eventos = []
-
-    async def update_global_data(self, id_, data, *, db_name):
-        self.eventos.append(("gravar", data.get("token")))
-        await super().update_global_data(id_, data, db_name=db_name)
-
-
-def montar_rpc(bot):
-    """(``RPCCog``, ``MusicSettings``) REAIS com ``close_presence`` registrando o evento ``fechar`` e delegando."""
-    import empiremuse.cogs.music_settings as music_settings
-
-    rpc = music_settings.RPCCog(bot)
-    configuracoes = music_settings.MusicSettings(bot)
-    original = rpc.close_presence
-
-    async def fechar(inter):
-        bot.eventos.append(("fechar",))
-        await original(inter)
-
-    rpc.close_presence = fechar
-    bot.cogs["RPCCog"] = rpc
-    return rpc, configuracoes
-
-
-def jogador_no_canal_de_voz(bot, usuarios, *, servidor=SERVIDOR_DO_COMANDO):
-    """Player do servidor cujo canal de voz tem ``usuarios``; ``enviados`` guarda o que ``_send_rpc_data`` recebeu."""
-    enviados = []
-
-    async def enviar(ids, dados):
-        enviados.append((ids, dados))
-
-    canal = SimpleNamespace(voice_states={usuario: object() for usuario in usuarios})
-    bot.music.players[servidor] = SimpleNamespace(
-        guild=SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(channel=canal))), _send_rpc_data=enviar
-    )
-    return enviados

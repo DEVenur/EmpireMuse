@@ -88,14 +88,6 @@ def aninhado_em_dicionarios(niveis: int, folha=0):
     return valor
 
 
-def bomba_de_compartilhamento(niveis: int, largura: int):
-    """Poucos objetos, muitas visitas: cada nível repete ``largura`` vezes a MESMA referência (``largura**niveis`` nós)."""
-    valor = [0]
-    for _ in range(niveis - 1):
-        valor = [valor] * largura
-    return valor
-
-
 def vazamentos(erro, segredo: str = SEGREDO) -> list[str]:
     """Onde o ``segredo`` aparece no erro (mensagem, representação, caminho, argumentos); lista vazia = sem vazamento."""
     achados = []

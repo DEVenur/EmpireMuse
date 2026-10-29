@@ -8,7 +8,6 @@ import copy
 import json
 from types import SimpleNamespace
 
-import empiremuse.cogs.legacy_cmds as legacy_cmds
 from empiremuse.utils.music import interactions
 from empiremuse.utils.music.interactions import FavMenuView, FavModalAdd, FavModalImport, ViewMode
 from empiremuse.utils.music.interactions import fav_menu, fav_modals
@@ -25,13 +24,6 @@ def trocar_process_idle_embed(monkeypatch, falso):
     modais: o nome importado fica preso ao módulo onde o código mora."""
     for modulo in (interactions, fav_modals, fav_menu):
         monkeypatch.setattr(modulo, "process_idle_embed", falso)
-
-
-class FakeMusicCog:
-    fav_import_export_cd = SimpleNamespace(
-        get_bucket=lambda inter: SimpleNamespace(update_rate_limit=lambda: None),
-    )
-    fav_manager = SimpleNamespace(name="fav_manager")
 
 
 class ModalBot:
@@ -180,13 +172,6 @@ class ModalInteraction:
         return "\n".join(self.enviados)
 
 
-async def adicionar_favorito(bot, nome="novo", url=f"{URL_BASE}/musica", *, editando=None):
-    view = modal_view(bot, ViewMode.fav_manager)
-    inter = ModalInteraction(user_fav_name=nome, user_fav_url=url)
-    await FavModalAdd(editando, None, view).callback(inter)
-    return inter
-
-
 async def adicionar_integracao(bot, url="https://www.deezer.com/br/profile/123456"):
     view = modal_view(bot, ViewMode.integrations_manager)
     inter = ModalInteraction(user_integration_url=url)
@@ -202,68 +187,8 @@ async def importar(bot, modo, conteudo, *, estrito=False, view=None):
     return inter
 
 
-async def exportar(bot, modo):
-    """Roda o exportador REAL (``FavMenuView.export_callback``) e devolve ``(nome do arquivo, texto enviado)``."""
-    inter = ModalInteraction()
-    espelho = SimpleNamespace(bot=bot, mode=modo, data=bot.user_data, guild_data=bot.guild_data)
-    await FavMenuView.export_callback(espelho, inter)
-    assert inter.arquivos, f"o exportador não enviou arquivo: {inter.texto!r}"
-    return inter.nomes_de_arquivo[-1], inter.arquivos[-1]
-
-
-async def exportar_integracoes(bot):
-    """O texto do arquivo que o exportador REAL de integrações envia ao usuário."""
-    return (await exportar(bot, ViewMode.integrations_manager))[1]
-
-
-def favs_cheios(quantidade):
-    return {f"fav{i}": f"{URL_BASE}/{i}" for i in range(quantidade)}
-
-
-def integracoes_cheias(quantidade):
-    return {f"【DZ】: Antiga {i}": {"url": f"{URL_BASE}/{i}"} for i in range(quantidade)}
-
-
 SERVIDOR_DO_COMANDO = 7001
 SERVIDOR_ALVO = 123456789012345678  # 18 dígitos: passa a checagem de tamanho do comando
-
-
-class OwnerBot:
-    def __init__(self):
-        self.config = {"EXTRA_HINTS": ""}
-        self.pool = SimpleNamespace(guild_prefix_cache={})
-        self.gravados = []
-
-    async def get_global_data(self, id_, *, db_name):
-        return {"prefix": ""}
-
-    async def update_global_data(self, id_, data, *, db_name):
-        self.gravados.append((id_, copy.deepcopy(data)))
-
-    def get_color(self, *args):
-        return 0
-
-
-def owner_com_contexto():
-    bot = OwnerBot()
-    enviados = []
-
-    async def enviar(*args, **kwargs):
-        enviados.append(kwargs)
-
-    ctx = SimpleNamespace(
-        bot=bot, guild=SimpleNamespace(id=SERVIDOR_DO_COMANDO, me=SimpleNamespace(), name="origem"), send=enviar
-    )
-    return legacy_cmds.Owner(bot), ctx, bot
-
-
-def arquivo_com(modo, nome, url, **extra):
-    """O JSON de um item no formato de cada importador."""
-    if modo == ViewMode.guild_fav_manager:
-        return {nome: {"url": url, "description": "descrição", **extra}}
-    if modo == ViewMode.integrations_manager and extra:
-        return {nome: {"url": url, **extra}}
-    return {nome: url}
 
 
 def gravados(bot, modo):
@@ -273,7 +198,3 @@ def gravados(bot, modo):
     if modo == ViewMode.integrations_manager:
         return bot.salvos_usuario[-1]["integration_links"] if bot.salvos_usuario else {}
     return bot.salvos_servidor[-1]["player_controller"]["fav_links"] if bot.salvos_servidor else {}
-
-
-def url_de(valor):
-    return valor["url"] if isinstance(valor, dict) else valor

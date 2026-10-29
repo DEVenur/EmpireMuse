@@ -458,18 +458,3 @@ class CommandInter(BaseInter):
     def __init__(self, journal, bot, guild, channel):
         super().__init__(journal, bot, guild, "slash", 777, channel)
         self.application_command = SimpleNamespace(reset_cooldown=lambda inter: journal.add("cooldown.reset"))
-
-
-class ComponentInter(BaseInter):
-    def __init__(self, journal, bot, guild, custom_id, values=None, id_=778):
-        super().__init__(journal, bot, guild, f"component:{custom_id}", id_)
-        self.data = SimpleNamespace(custom_id=custom_id, values=values or [])
-        self.message = SimpleNamespace(id=4242)
-
-
-class ModalInter(BaseInter):
-    def __init__(self, journal, bot, guild, custom_id, text_values, id_=779):
-        super().__init__(journal, bot, guild, "modal", id_)
-        self.data = SimpleNamespace(custom_id=custom_id)
-        self.custom_id = custom_id
-        self.text_values = text_values

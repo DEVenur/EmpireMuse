@@ -19,7 +19,6 @@ import ast
 import copy
 import importlib
 import json
-import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -88,10 +87,6 @@ def tipos_do_documento(documento: dict) -> dict:
         modo: {nome: type(valor).__name__ for nome, valor in documento[modo].items()}
         for modo in ("custom_skins", "custom_skins_static")
     }
-
-
-def avisos_com(caplog, texto: str) -> list[str]:
-    return [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING and texto in r.getMessage()]
 
 
 # ============================================================================ o helper único (achado por ``ast``)

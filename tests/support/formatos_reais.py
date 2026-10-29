@@ -48,35 +48,6 @@ def letras_sincronizadas(linhas: int = 40) -> dict:
     }
 
 
-def letras_em_texto() -> dict:
-    """Resposta do plugin de letras sem sincronia (``text``)."""
-    return {
-        "type": "text",
-        "source": "YouTube Music",
-        "track": {
-            "title": "Música de Teste",
-            "author": "Artista de Teste",
-            "album": "Álbum de Teste",
-            "albumArt": [{"url": "https://exemplo.invalid/capa.jpg", "height": 544, "width": 544}],
-        },
-        "text": "Primeira linha\nSegunda linha\nTerceira linha",
-    }
-
-
-def letras_com_plugin_por_linha(linhas: int = 20) -> dict:
-    """Variante do plugin de letras do LavaSrc: cada linha e a raiz levam um ``plugin`` (dicionário livre)."""
-    return {
-        "sourceName": "deezer",
-        "provider": "deezer",
-        "text": None,
-        "lines": [
-            {"timestamp": n * 3000, "duration": 2900, "line": f"Linha {n} da letra", "plugin": {}}
-            for n in range(linhas)
-        ],
-        "plugin": {},
-    }
-
-
 def plugin_info_de_faixa() -> dict:
     """``pluginInfo`` de faixa do LavaSrc (Spotify, Deezer, Apple Music): dicionário plano."""
     return {
@@ -86,17 +57,6 @@ def plugin_info_de_faixa() -> dict:
         "artistArtworkUrl": "https://exemplo.invalid/artista/1.jpg",
         "previewUrl": "https://exemplo.invalid/previa/1.mp3",
         "isPreview": False,
-    }
-
-
-def plugin_info_de_playlist() -> dict:
-    """``pluginInfo`` de playlist/álbum do LavaSrc: dicionário plano."""
-    return {
-        "type": "playlist",
-        "url": "https://exemplo.invalid/playlist/1",
-        "artworkUrl": "https://exemplo.invalid/playlist/1.jpg",
-        "author": "Alguém",
-        "totalTracks": 12,
     }
 
 
@@ -283,24 +243,3 @@ def cog_de_sessoes(*, mongo: MongoEmMemoria | None = None, **config) -> PlayerSe
 
 
 # ============================================================================ profundidade de um valor JSON
-
-
-def profundidade(valor) -> int:
-    """Níveis de contêiner (``dict``, ``list``, ``tuple``, ``set``, ``deque``): escalar = 0, ``{}`` = 1, ``{"a": {}}`` = 2.
-
-    Iterativa (sem recursão): o mesmo que um validador com pilha explícita faria.
-    """
-    maior = 0
-    pilha = [(valor, 0)]
-    while pilha:
-        atual, nivel = pilha.pop()
-        if isinstance(atual, dict):
-            filhos = list(atual.values())
-        elif isinstance(atual, (list, tuple, set, frozenset, deque)):
-            filhos = list(atual)
-        else:
-            maior = max(maior, nivel)
-            continue
-        maior = max(maior, nivel + 1)
-        pilha.extend((filho, nivel + 1) for filho in filhos)
-    return maior

@@ -13,21 +13,6 @@ profundidade. A proposta inicial é 8. Este arquivo MEDE o dado de verdade, com 
 Se o dado real mudar (outro plugin, outro formato de letra), as medidas falham e a conversa sobre o teto recomeça.
 """
 
-import pytest
-
-from tests.support.formatos_reais import (
-    cog_de_sessoes,
-    faixa_parcial,
-    letras_com_plugin_por_linha,
-    letras_em_texto,
-    letras_sincronizadas,
-    plugin_info_de_faixa,
-    plugin_info_de_playlist,
-    profundidade,
-)
-from tests.support.formato_sessao import gravar, jogador_completo
-from tests.persistence.test_formato_skin import skin_realista
-
 
 def nos(valor) -> int:
     """Visitas ao percorrer ``valor`` (contêineres e escalares, sem contar chaves): é o que o ``max_nodes`` limita."""
