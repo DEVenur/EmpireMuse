@@ -274,6 +274,15 @@ def test_the_fourth_boot_gives_up_marks_rolled_back_and_never_calls_the_restore(
     assert "confira o servidor" in caplog.text
 
 
+def test_the_attempts_grow_on_each_boot_until_three(mundo):
+    _, runtime, anterior, _ = mundo
+    write_pending(runtime, pendente(anterior, boots=0, status="applying"))
+
+    for esperado in (1, 2, 3):
+        assert subir(mundo, Gravador(instalacao_falha)) == EXIT_RESTART
+        assert em_disco(runtime)["restore_attempts"] == esperado and em_disco(runtime)["status"] == "applying"
+
+
 def test_a_successful_restore_on_a_later_attempt_marks_rolled_back(mundo):
     repo, runtime, anterior, _ = mundo
     write_pending(runtime, pendente(anterior, boots=0, status="applying"))
