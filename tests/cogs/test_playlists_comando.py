@@ -293,3 +293,13 @@ async def test_a_failed_attachment_download_is_a_friendly_answer_not_an_exceptio
 
     assert "anexo" in sent_text(inter)
     world.playlists.import_file.assert_not_awaited()
+
+
+@pytest.mark.regression
+def test_every_command_and_option_description_fits_the_discord_limit_of_100_characters():
+    # uma descrição maior faz o Discord recusar o registro dos comandos (HTTP 400)
+    for command in (ServerPlaylistsCog.playlists, ServerPlaylistsCog.import_, ServerPlaylistsCog.export_):
+        body = command.body
+        assert len(str(body.description)) <= 100, body.name
+        for option in body.options:
+            assert len(str(option.description)) <= 100, (body.name, option.name)

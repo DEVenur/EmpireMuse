@@ -156,7 +156,7 @@ class ServerPlaylistsCog(commands.Cog):
 
     @playlists.sub_command(
         name="importar",
-        description=f"{desc_prefix}Importar playlists de um arquivo, de um anexo ou de um texto colado (só acrescenta).",
+        description=f"{desc_prefix}Importar playlists de arquivo, anexo ou texto colado (só acrescenta).",
         cooldown=cooldown,
     )
     @commands.check(_manage_check)

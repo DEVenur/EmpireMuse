@@ -15,7 +15,7 @@ from empiremuse.rules.playlists import Playlist, filter_by_genre, genres_of, sel
 from empiremuse.utils.music.converters import fix_characters
 from empiremuse.utils.music.interactions import SelectInteraction
 
-ALL_GENRES = "__all__"
+ALL_GENRES = "all"  # os gêneros usam o índice como valor, então nenhum gênero (qualquer texto) colide com este
 MAX_GENRE_OPTIONS = 24  # "Todos" + 24 = 25, o teto de um select
 FALLBACK_DESCRIPTION = "[📌 Favorito do servidor 📌]"
 
@@ -50,7 +50,10 @@ class GuildPlaylistSelect(SelectInteraction):
                 placeholder="Filtrar por gênero:",
                 options=[
                     disnake.SelectOption(label="Todos", value=ALL_GENRES, default=self.genre is None),
-                    *(disnake.SelectOption(label=g, value=g, default=g == self.genre) for g in self.genres),
+                    *(
+                        disnake.SelectOption(label=g, value=str(index), default=g == self.genre)
+                        for index, g in enumerate(self.genres)
+                    ),
                 ],
                 row=0,
             )
@@ -88,10 +91,14 @@ class GuildPlaylistSelect(SelectInteraction):
 
     async def genre_callback(self, interaction: disnake.MessageInteraction) -> None:
         value = interaction.data.values[0]
-        if value != ALL_GENRES and value not in self.genres:
+        if value == ALL_GENRES:
+            genre = None
+        elif value.isdigit() and int(value) < len(self.genres):
+            genre = self.genres[int(value)]
+        else:
             await interaction.response.defer()  # valor que não é desta tela: ignora
             return
-        self.genre = None if value == ALL_GENRES else value
+        self.genre = genre
         self.item_pages = list(disnake.utils.as_chunks(self._options(), 25))
         self.current_page = 0
         self.max_page = len(self.item_pages) - 1
