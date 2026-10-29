@@ -12,7 +12,7 @@ from empiremuse.rules.errors import RuleError
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.checks import check_pool_bots
-from empiremuse.utils.music.converters import time_format, md_link
+from empiremuse.utils.music.converters import time_format, md_code, md_link
 from empiremuse.utils.others import (
     CustomContext,
     PlayerControls,
@@ -128,10 +128,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
         await self.load_playlists(inter.guild_id)
         await inter.edit_original_message(content=log, allowed_mentions=disnake.AllowedMentions.none())
         self.log = log
-        if not isinstance(self.ctx, CustomContext):
-            await self.ctx.edit_original_message(content=self.build_txt(), view=self)
-        elif self.message:
-            await self.message.edit(content=self.build_txt(), view=self)
+        await self._redraw()
 
     async def add_callback(self, inter: disnake.MessageInteraction):
         if self.mode == ViewMode.guild_fav_manager:
@@ -162,7 +159,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
             await self.load_playlists(inter.guild_id)
             item = playlists_ui.find_by_name(self.playlists, self.current)
             if item is None:
-                await inter.send(f"**Não há playlist com o nome:** `{self.current}`", ephemeral=True)
+                await inter.send(f"**Não há playlist com o nome:** {md_code(self.current)}", ephemeral=True)
                 return
             await inter.response.send_modal(playlists_ui.PlaylistModal(self, item))
 
@@ -271,28 +268,32 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
         await self._redraw()
 
     async def _redraw(self) -> None:
+        """Redesenha a mensagem do menu (texto com nomes de terceiros: nunca menciona ninguém)."""
+        kwargs = {"content": self.build_txt(), "view": self, "allowed_mentions": disnake.AllowedMentions.none()}
         if not isinstance(self.ctx, CustomContext):
-            await self.ctx.edit_original_message(content=self.build_txt(), view=self)
+            await self.ctx.edit_original_message(**kwargs)
         elif self.message:
-            await self.message.edit(content=self.build_txt(), view=self)
+            await self.message.edit(**kwargs)
 
     async def _remove_playlist(self, inter: disnake.MessageInteraction) -> None:
+        """Remove a playlist selecionada (o nome é re-resolvido no store); erros vão numa resposta efêmera à parte."""
         if not playlists_ui.can_manage(inter):
             await inter.send(playlists_ui.MSG_DENIED, ephemeral=True)
             return
-        await inter.response.defer(ephemeral=True)
+        await inter.response.defer()
         try:
             removed = await self.bot.pool.servers.playlists.remove(inter.guild_id, self.current)
             await self.load_playlists(inter.guild_id)
         except GenericError as exc:
-            await inter.edit_original_message(exc.text)
+            await inter.send(exc.text, ephemeral=True)
             return
+        self.current = None
         if isinstance(removed, RuleError):
-            await inter.edit_original_message(playlists_ui.error_text(removed))
+            await inter.send(playlists_ui.error_text(removed), ephemeral=True)
             await self._redraw()
             return
-        self.log = f"Playlist `{removed.name}` foi removida da lista do servidor!"
-        await inter.edit_original_message(content=self.build_txt(), view=self)
+        self.log = f"Playlist {md_link(removed.name, removed.url)} foi removida da lista do servidor!"
+        await self._redraw()
 
     async def import_callback(self, inter: disnake.MessageInteraction):
         if self.mode == ViewMode.guild_fav_manager:

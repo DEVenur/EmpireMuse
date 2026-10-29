@@ -42,7 +42,10 @@ class FavMenuComponentsMixin:
         self._add_button("Fechar", "❌", self.cancel_callback)
 
     def _can_manage_playlists(self) -> bool:
-        perms = self.ctx.author.guild_permissions
+        """Mostra o modo do servidor só a quem pode gerenciá-lo (sem dado do membro, não mostra); cada escrita rechecará."""
+        perms = getattr(self.ctx.author, "guild_permissions", None)
+        if perms is None:
+            return False
         return may_manage(self.guild.owner_id == self.ctx.author.id, perms.administrator, perms.manage_guild)
 
     def _add_button(self, label: str, emoji: str, callback, **kwargs):
@@ -117,7 +120,7 @@ class FavMenuComponentsMixin:
                     label=item.name,
                     value=item.name,
                     emoji=music_source_emoji_url(item.url, self.bot)[0],
-                    description=select_description(item) or None,
+                    description=select_description(item.description) or None,
                 )
                 for item in self.playlists[:MAX_SELECT_OPTIONS]
             ],
@@ -159,7 +162,7 @@ class FavMenuComponentsMixin:
             no_links = not self.playlists
             self._add_button("Editar", "✍️", self.edit_callback, disabled=no_links)
             self._add_button("Remover", "♻️", self.remove_callback, disabled=no_links)
-            self._add_button("Limpar favoritos", "🚮", self.clear_callback, disabled=no_links)
+            self._add_button("Limpar playlists", "🚮", self.clear_callback, disabled=no_links)
             self._add_button("Exportar", "📤", self.export_callback, disabled=no_links)
 
         elif self.mode == ViewMode.integrations_manager:

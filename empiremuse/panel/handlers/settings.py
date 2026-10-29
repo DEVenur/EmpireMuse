@@ -1,11 +1,10 @@
-"""Páginas de configuração do servidor (Player, DJ, Aparência e Geral): GET mostra, POST grava um formulário.
+"""Páginas de configuração do servidor (Player, DJ, Aparência, Playlists e Geral): GET mostra, POST grava um formulário.
 
 Só HTTP: regras, validações e efeitos ficam em ``panel/services/``. Toda escrita reautoriza com ``fresh=True``.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Optional
 from urllib.parse import urlencode
@@ -22,7 +21,6 @@ from empiremuse.panel.handlers.servers import (
 )
 from empiremuse.panel.services.appearance import SkinsGlobalForm, SkinsServerForm
 from empiremuse.panel.services.base import (
-    DBModel,
     CONFLICT_TEXT,
     DIGITS,
     KIND_ERROR,
@@ -49,7 +47,7 @@ CATEGORY_FORMS: dict[str, tuple[SettingsForm, ...]] = {
     "links": (LinksForm(),),
     "geral": (PrefixForm(), VoiceStatusForm(), ListenAlongForm()),
 }
-PER_BOT_CATEGORIES = frozenset({"links", "canal"})  # player, dj e aparência são do servidor (doc único)
+PER_BOT_CATEGORIES = frozenset({"canal"})  # player, dj, aparência e playlists (links) são do servidor (doc único)
 CHANNEL_CATEGORY = "canal"  # tem handler próprio (panel/handlers/channel.py)
 _MSG_TOO_LARGE = ("Envio grande demais", "Os dados enviados excedem o limite permitido.")
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."
@@ -194,9 +192,7 @@ class SettingsHandler(AuthenticatedHandler):
             "bot_atual": self._bot_ref(access, ctx),
         }
         if "links" in states:
-            namespace["exportar_url"] = f"{SERVERS_PATH}/{access.guild_id}/links/exportar?" + urlencode(
-                {"bot": ctx.bot_id}
-            )
+            namespace["exportar_url"] = f"{SERVERS_PATH}/{access.guild_id}/links/exportar"
         return namespace
 
     @staticmethod
@@ -225,7 +221,7 @@ class SettingsHandler(AuthenticatedHandler):
 
 
 class LinksExportHandler(SettingsHandler):
-    """``GET /painel/servidores/<gid>/links/exportar``: JSON no formato de importação, como anexo."""
+    """``GET /painel/servidores/<gid>/links/exportar``: as playlists do servidor no formato de importação, como anexo."""
 
     async def get(self, guild_id: str) -> None:  # type: ignore[override]
         try:
@@ -233,8 +229,12 @@ class LinksExportHandler(SettingsHandler):
         except GuildAccessDenied:
             self._not_found()
             return
-        doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
+        try:
+            content = await ctx.pool.servers.playlists.export_bytes(ctx.guild_id)
+        except ServerConfigUnavailable as exc:
+            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+            return
         self.set_header("Content-Type", "application/json; charset=UTF-8")
-        self.set_header("Content-Disposition", f'attachment; filename="links-{guild_id}.json"')
+        self.set_header("Content-Disposition", f'attachment; filename="playlists-{guild_id}.json"')
         self.set_header("Cache-Control", "no-store")
-        self.finish(json.dumps(doc["player_controller"]["fav_links"], ensure_ascii=False))
+        self.finish(content)

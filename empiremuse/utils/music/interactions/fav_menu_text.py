@@ -5,7 +5,7 @@ from itertools import islice
 
 import disnake
 
-from empiremuse.utils.music.converters import md_link
+from empiremuse.utils.music.converters import md_code, md_link
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import (
     get_source_emoji_cfg,
@@ -29,8 +29,9 @@ def _format_fav(bot, index, data):
 
 
 def _format_playlist(bot, item):
+    """Uma linha da lista do servidor: ordem, emoji da plataforma, nome (rótulo em code) e gêneros (texto externo em code)."""
     e = get_source_emoji_cfg(bot, item.url)
-    genres = f" · `{', '.join(g.replace('`', '') for g in item.genres)}`" if item.genres else ""
+    genres = f" · {md_code(', '.join(item.genres))}" if item.genres else ""
     label = md_link(item.name, item.url, limit=40)
     return f"` {item.order:02} ` {e} {label}{genres}" if e else f"` {item.order:02} ` {label}{genres}"
 

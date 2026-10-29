@@ -3,6 +3,7 @@
 
 O menu nunca grava no doc por bot. O servidor vem sempre de ``inter.guild_id`` e a permissão é rechecada em cada
 callback de escrita (``may_manage`` sobre o membro da interação), nunca de ``custom_id``, valor de select ou campo.
+Texto de terceiros (nome, URL) só sai em markdown via ``md_link``/``md_code`` e com ``AllowedMentions.none()``.
 """
 
 from __future__ import annotations
@@ -18,8 +19,11 @@ from empiremuse.rules import limits
 from empiremuse.rules.errors import (
     DESCRIPTION_INVALID,
     DESCRIPTION_TOO_LONG,
+    GENRES_INVALID,
     NAME_INVALID,
     NAME_TAKEN,
+    NAME_TOO_LONG,
+    ORDER_INVALID,
     PLAYLIST_NOT_FOUND,
     QUOTA_FULL,
     URL_INVALID,
@@ -28,13 +32,10 @@ from empiremuse.rules.errors import (
     RuleError,
 )
 from empiremuse.rules.playlists import Playlist, format_report, may_manage, parse_file
-from empiremuse.rules.urls import clean_url
+from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import GenericError
 
-ORDER_MAX = 9999
-
 MSG_DENIED = "**Você precisa ser o dono do servidor ou ter a permissão Administrador ou Gerenciar Servidor.**"
-MSG_ORDER = f"**A ordem deve ser um número de 1 a {ORDER_MAX}.**"
 MSG_PASTE_BIG = f"**O conteúdo colado passa de {limits.PLAYLIST_PASTE_MAX} caracteres. Use o comando com um anexo.**"
 MSG_PASTE_BAD = "**O conteúdo precisa ser um JSON válido, no formato exportado pelo bot.**"
 MSG_UNKNOWN = "**Não foi possível salvar: confira os campos.**"
@@ -47,6 +48,7 @@ _TEXTS = {
     PLAYLIST_NOT_FOUND: "**Playlist não encontrada.**",
     QUOTA_FULL: f"**A lista já tem o máximo de {limits.MAX_SERVER_PLAYLISTS} playlists; remova alguma antes.**",
     NAME_INVALID: f"**O nome deve ter de {limits.PLAYLIST_NAME_MIN} a {limits.PLAYLIST_NAME_MAX} caracteres.**",
+    NAME_TOO_LONG: f"**O nome passa de {limits.PLAYLIST_NAME_MAX} caracteres.**",
     URL_INVALID: "**Informe um endereço http(s) válido.**",
     URL_TOO_LONG: f"**O link passa de {limits.PLAYLIST_URL_MAX} caracteres.**",
     DESCRIPTION_INVALID: (
@@ -54,6 +56,11 @@ _TEXTS = {
         f"{limits.PLAYLIST_DESCRIPTION_MAX} caracteres.**"
     ),
     DESCRIPTION_TOO_LONG: f"**A descrição passa de {limits.PLAYLIST_DESCRIPTION_MAX} caracteres.**",
+    GENRES_INVALID: (
+        f"**Até {limits.PLAYLIST_GENRES_MAX} gêneros de {limits.PLAYLIST_GENRE_MIN} a {limits.PLAYLIST_GENRE_MAX} "
+        "caracteres, separados por vírgula, sem repetir.**"
+    ),
+    ORDER_INVALID: f"**A ordem deve ser um número de 1 a {limits.PLAYLIST_ORDER_MAX}.**",
 }
 
 
@@ -80,22 +87,19 @@ def find_by_name(playlists: tuple[Playlist, ...], name: str) -> Optional[Playlis
     return next((item for item in playlists if item.name.casefold() == key), None)
 
 
-def next_order(playlists: tuple[Playlist, ...]) -> int:
-    return min(max((item.order for item in playlists), default=0) + 1, ORDER_MAX)
-
-
 def parse_order(raw: str, default: int) -> Optional[int]:
+    """Ordem digitada: vazio = ``default``; senão um inteiro de 1 a ``PLAYLIST_ORDER_MAX``; ``None`` se inválida."""
     text = raw.strip()
     if not text:
         return default
     if not text.isascii() or not text.isdigit():
         return None
     value = int(text)
-    return value if 1 <= value <= ORDER_MAX else None
+    return value if 1 <= value <= limits.PLAYLIST_ORDER_MAX else None
 
 
 class PlaylistModal(disnake.ui.Modal):
-    """Adicionar (``current`` vazio) ou editar uma playlist do servidor."""
+    """Adicionar (``current`` vazio) ou editar uma playlist do servidor. A validação é do store (mesmas regras do painel)."""
 
     def __init__(self, view, current: Optional[Playlist] = None):
         self.view = view
@@ -137,7 +141,7 @@ class PlaylistModal(disnake.ui.Modal):
                 disnake.ui.TextInput(
                     label="Ordem (opcional, 1 = primeira):",
                     custom_id="pl_order",
-                    max_length=4,
+                    max_length=len(str(limits.PLAYLIST_ORDER_MAX)),
                     value=str(current.order) if current else None,
                     required=False,
                 ),
@@ -149,26 +153,20 @@ class PlaylistModal(disnake.ui.Modal):
             await inter.send(MSG_DENIED, ephemeral=True)
             return
         values = inter.text_values
-        url = clean_url(values["pl_url"].strip(), limits.PLAYLIST_URL_MAX)
-        if url is None:
-            await inter.send(_TEXTS[URL_INVALID], ephemeral=True)
+        order = parse_order(values["pl_order"], self.current.order if self.current else 0)  # 0 = no fim da lista
+        if order is None:
+            await inter.send(_TEXTS[ORDER_INVALID], ephemeral=True)
             return
+        item = Playlist(
+            order=order,
+            name=values["pl_name"].strip(),
+            description=values["pl_description"].strip(),
+            genres=split_genres(values["pl_genres"]),
+            url=values["pl_url"].strip(),
+        )
         await inter.response.defer(ephemeral=True)
         store = self.view.bot.pool.servers.playlists
         try:
-            default_order = self.current.order if self.current else next_order(await store.list(inter.guild_id))
-            order = parse_order(values["pl_order"], default_order)
-            if order is None:
-                await inter.edit_original_message(MSG_ORDER)
-                return
-            item = Playlist(
-                order=order,
-                name=values["pl_name"].strip(),
-                description=values["pl_description"].strip(),
-                genres=split_genres(values["pl_genres"]),
-                url=url,
-                icon=self.current.icon if self.current else None,
-            )
             saved = (
                 await store.edit(inter.guild_id, self.current.name, item)
                 if self.current
@@ -180,7 +178,7 @@ class PlaylistModal(disnake.ui.Modal):
         if isinstance(saved, RuleError):
             await inter.edit_original_message(error_text(saved))
             return
-        await self.view.finish_write(inter, f"Playlist `{saved.name}` salva na lista do servidor.")
+        await self.view.finish_write(inter, f"Playlist {md_link(saved.name, saved.url)} salva na lista do servidor.")
 
 
 class PlaylistImportModal(disnake.ui.Modal):
@@ -229,11 +227,11 @@ class PlaylistImportModal(disnake.ui.Modal):
 
 
 async def export_file(view, inter: disnake.MessageInteraction) -> None:
-    """Exporta no formato novo; só quem gerencia o servidor (mesma regra das escritas)."""
+    """Exporta no formato novo, numa resposta efêmera à parte; só quem gerencia o servidor (mesma regra das escritas)."""
     if not can_manage(inter):
         await inter.send(MSG_DENIED, ephemeral=True)
         return
-    await inter.response.defer(ephemeral=True)
+    await inter.response.defer(with_message=True, ephemeral=True)
     try:
         content = await view.bot.pool.servers.playlists.export_bytes(inter.guild_id)
     except GenericError as exc:
@@ -246,11 +244,11 @@ async def export_file(view, inter: disnake.MessageInteraction) -> None:
 
 
 async def clear_all(view, inter: disnake.MessageInteraction) -> bool:
-    """Entrega o backup e limpa a lista; ``False`` se nada foi limpo."""
+    """Entrega o backup (resposta efêmera à parte) e limpa a lista; ``False`` se nada foi limpo."""
     if not can_manage(inter):
         await inter.send(MSG_DENIED, ephemeral=True)
         return False
-    await inter.response.defer(ephemeral=True)
+    await inter.response.defer(with_message=True, ephemeral=True)
     store = view.bot.pool.servers.playlists
     try:
         backup = await store.export_bytes(inter.guild_id)

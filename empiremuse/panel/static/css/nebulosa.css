@@ -695,6 +695,56 @@ main:focus {
   padding: 0.75rem 1rem;
 }
 
+/* Item 17 — playlists do servidor */
+.item-link-ordem {
+  color: var(--nb-texto-suave);
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.25rem;
+}
+
+.lista-generos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+
+.chip-genero {
+  border: 1px solid var(--nb-borda);
+  border-radius: 999px;
+  color: var(--nb-texto-suave);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  list-style: none;
+  margin: 0;
+  padding: 0 0.625rem;
+}
+
+.relatorio-importacao {
+  background: var(--nb-superficie);
+  border: 1px solid var(--nb-borda);
+  border-radius: var(--pico-border-radius);
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.relatorio-importacao p {
+  margin: 0;
+}
+
+.relatorio-ignoradas {
+  color: var(--nb-texto-suave);
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.relatorio-nome {
+  overflow-wrap: anywhere;
+}
+
 /* Etapa 4c — canal de pedidos */
 .tarefa {
   background: var(--nb-superficie);
