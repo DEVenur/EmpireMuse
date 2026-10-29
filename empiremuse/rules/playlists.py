@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -35,6 +35,7 @@ from empiremuse.rules.limits import (
     MAX_SERVER_PLAYLISTS,
     PLAYLIST_DESCRIPTION_MAX,
     PLAYLIST_DESCRIPTION_MIN,
+    PLAYLIST_FILE_MAX_BYTES,
     PLAYLIST_FILE_MAX_ITEMS,
     PLAYLIST_GENRE_MAX,
     PLAYLIST_GENRE_MIN,
@@ -42,6 +43,7 @@ from empiremuse.rules.limits import (
     PLAYLIST_NAME_MAX,
     PLAYLIST_NAME_MIN,
     PLAYLIST_ORDER_MAX,
+    PLAYLIST_PASTE_MAX,
     PLAYLIST_REPORT_MAX,
     PLAYLIST_SELECT_DESCRIPTION_MAX,
     PLAYLIST_URL_MAX,
@@ -60,6 +62,7 @@ QUOTA_FULL = "quota_full"
 
 _TRACKING_PARAMS = frozenset({"si", "feature", "pp"})  # mais todo ``utm_*``
 _ICON = re.compile(r"icons/[a-z0-9-]{1,29}\.png")
+_IMPORT_FILE = re.compile(r"[a-z0-9-]{1,64}\.json")
 _ELLIPSIS = "…"
 _REASON_TEXT = {
     INVALID: "inválida",
@@ -297,6 +300,37 @@ def remove_item(existing: Sequence[Playlist], name: str) -> tuple[Playlist, ...]
         return RuleError(PLAYLIST_NOT_FOUND, key=name)
     del ordered[index]
     return renumber(ordered)
+
+
+# ---------------------------------------------------------------------- origens da importação
+
+
+def check_import_filename(name: Any, listed: Collection[str]) -> str | RuleError:
+    """Nome de um arquivo do bot (``data/playlists``): ``[a-z0-9-]{1,64}.json`` E presente na lista dos arquivos que existem.
+
+    Nada de ``/``, ``..`` ou caminho: o valor precisa ser um dos nomes da lista, nunca montado a partir do que foi digitado.
+    """
+    if not isinstance(name, str) or not _IMPORT_FILE.fullmatch(name) or name not in listed:
+        return RuleError(NAME_INVALID, value=name if isinstance(name, str) else None)
+    return name
+
+
+def check_attachment(filename: Any, size: Any) -> RuleError | None:
+    """Anexo do Discord: ``.json`` e no máximo 64 KiB, conferido pelo ``size`` informado ANTES de baixar (``None`` = pode ler)."""
+    if not isinstance(filename, str) or not filename.lower().endswith(".json"):
+        return RuleError(FILE_FORMAT)
+    if not _is_int(size) or not 0 <= size <= PLAYLIST_FILE_MAX_BYTES:
+        return RuleError(FILE_TOO_LARGE, limit=PLAYLIST_FILE_MAX_BYTES)
+    return None
+
+
+def check_paste(text: Any) -> str | RuleError:
+    """Texto colado no modal: até 4.000 caracteres (conferido de novo no servidor, o limite do modal não basta)."""
+    if not isinstance(text, str) or not text.strip():
+        return RuleError(FILE_FORMAT)
+    if len(text) > PLAYLIST_PASTE_MAX:
+        return RuleError(FILE_TOO_LARGE, limit=PLAYLIST_PASTE_MAX)
+    return text
 
 
 # ---------------------------------------------------------------------- arquivo
