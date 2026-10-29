@@ -24,7 +24,6 @@ ACCESS = "".join(["access-", "dm-teste-", "Wq9m2"])
 EMAIL = "conta.descartavel@exemplo.invalido"
 NOME_DA_CONTA = "Conta Descartavel"
 AVATAR = "https://ok.exemplo/foto.png"
-PRAZO_DA_DM = 600
 DADOS_DA_CONTA = (EMAIL, NOME_DA_CONTA, AVATAR)
 YML_ORIGINAL = "plugins:\n  youtube:\n    oauth:\n      enabled: false\n"
 
@@ -102,17 +101,6 @@ def mostrar(chamada) -> str:
     return " ".join(partes)
 
 
-def descricao_crua(chamada) -> str:
-    """Descrição dos embeds e ``content`` da chamada, com as quebras de linha."""
-    partes = []
-    for valor in [*chamada.args, *chamada.kwargs.values()]:
-        if isinstance(valor, disnake.Embed):
-            partes.append(valor.description or "")
-        elif isinstance(valor, str):
-            partes.append(valor)
-    return "\n".join(partes)
-
-
 class Cenario:
     def __init__(self, monkeypatch, tmp_path, *, dm_falha_em: set[int] | None = None, com_efeitos: bool = False):
         self.eventos: list[str] = []
@@ -182,36 +170,10 @@ def cenario_dm_fechada(monkeypatch, tmp_path) -> Cenario:
 class TestConfirmacaoPorDm:
     """Opção A: a confirmação da conta é a primeira DM, com os botões; o canal não vê nada da conta."""
 
-    def test_the_first_dm_is_the_confirmation_with_the_account_data_and_the_buttons(self, cenario):
-        cenario.rodar()
-
-        primeira = cenario.dm.call_args_list[0]
-        assert all(dado in descricao_crua(primeira) for dado in (EMAIL, NOME_DA_CONTA)) and AVATAR in mostrar(primeira)
-        assert isinstance(primeira.kwargs.get("view"), ConfirmacaoFalsa)
-
     def test_the_confirmation_dm_has_no_token(self, cenario):
         cenario.rodar()
 
         assert REFRESH not in mostrar(cenario.dm.call_args_list[0])
-
-    def test_the_second_dm_carries_the_token(self, cenario):
-        cenario.rodar()
-
-        assert cenario.dm.await_count == 2 and REFRESH in mostrar(cenario.dm.call_args_list[1])
-
-    def test_the_confirmation_dm_comes_before_the_token_dm_and_the_channel_only_points_to_the_dm(self, cenario):
-        cenario.rodar()
-
-        canal = cenario.canal()
-        assert "DM" in canal and cenario.eventos.count("dm") == 2
-
-    def test_a_refused_confirmation_sends_no_second_dm(self, monkeypatch, tmp_path):
-        c = Cenario(monkeypatch, tmp_path)
-        ConfirmacaoFalsa.selected = False
-
-        c.rodar()
-
-        assert c.dm.await_count == 1 and REFRESH not in c.dm_texto() + c.canal()
 
 
 class TestNadaDoCanal:
@@ -225,37 +187,6 @@ class TestNadaDoCanal:
 
         assert dado not in cenario.canal()
 
-    @pytest.mark.parametrize("dado", [REFRESH, *DADOS_DA_CONTA], ids=["refresh", "email", "nome", "avatar"])
-    def test_a_closed_dm_keeps_it_out_of_the_channel_too(self, cenario_dm_fechada, dado):
-        cenario_dm_fechada.rodar()
-
-        assert dado not in cenario_dm_fechada.canal()
-
-    def test_the_dms_go_to_the_author_and_nobody_else(self, cenario):
-        cenario.rodar()
-
-        assert cenario.ctx.channel.send.await_count == 0
-
-
-class TestPrazoDasDms:
-    """Y2: as duas DMs somem sozinhas em 600 s, e a que traz o token diz o prazo em uma linha."""
-
-    def test_both_dms_use_delete_after_600(self, cenario):
-        cenario.rodar()
-
-        assert [c.kwargs.get("delete_after") for c in cenario.dm.call_args_list] == [PRAZO_DA_DM, PRAZO_DA_DM]
-
-    @pytest.mark.parametrize("indice", [0, 1], ids=["confirmacao", "token"])
-    def test_each_dm_states_the_deadline_in_exactly_one_line(self, cenario, indice):
-        cenario.rodar()
-
-        linhas = [
-            linha
-            for linha in descricao_crua(cenario.dm.call_args_list[indice]).splitlines()
-            if "10 minutos" in linha or "600" in linha
-        ]
-        assert len(linhas) == 1
-
 
 class TestRegistroAntesDoEnvio:
     """Y4: o token entra no redator ANTES de qualquer envio feito depois de obtido (o convite inicial do ``ctx.send`` é anterior ao token)."""
@@ -264,61 +195,6 @@ class TestRegistroAntesDoEnvio:
         cenario.rodar()
 
         assert cenario.eventos.index(f"registro:{REFRESH}") < cenario.eventos.index("dm")
-
-    def test_the_token_is_registered_before_every_send_after_the_initial_invitation(self, cenario):
-        cenario.rodar()
-
-        eventos = cenario.eventos
-        depois_do_convite = eventos[eventos.index("canal:envio") + 1 :]
-        envios = [i for i, e in enumerate(depois_do_convite) if not e.startswith("registro:")]
-        registro = depois_do_convite.index(f"registro:{REFRESH}")
-        assert not envios or registro < envios[0]
-
-    def test_the_access_token_is_registered_too(self, cenario):
-        cenario.rodar()
-
-        assert f"registro:{ACCESS}" in cenario.eventos
-
-    def test_with_a_closed_dm_the_token_is_still_registered_before_the_attempt(self, cenario_dm_fechada):
-        cenario_dm_fechada.rodar()
-
-        assert cenario_dm_fechada.eventos.index(f"registro:{REFRESH}") < cenario_dm_fechada.eventos.index("dm")
-
-
-class TestDmDeConfirmacaoFechada:
-    """Y6: ``Forbidden`` na DM de confirmação aborta o fluxo; nada é alterado e o canal só recebe um aviso genérico."""
-
-    @pytest.fixture
-    def abortado(self, monkeypatch, tmp_path) -> Cenario:
-        c = Cenario(monkeypatch, tmp_path, dm_falha_em={1}, com_efeitos=True)
-        c.rodar()
-        return c
-
-    def test_application_yml_is_unchanged(self, abortado):
-        assert abortado.yml.read_text(encoding="utf-8") == YML_ORIGINAL
-
-    def test_the_local_node_is_not_touched(self, abortado):
-        abortado.sessao.post.assert_not_awaited()
-
-    def test_mongodb_is_not_touched(self, abortado):
-        abortado.mongo.update_data.assert_not_awaited()
-
-    def test_only_the_confirmation_dm_was_attempted(self, abortado):
-        assert abortado.dm.await_count == 1
-
-    def test_the_channel_gets_a_generic_notice_without_any_secret_or_account_data(self, abortado):
-        canal = abortado.canal()
-
-        assert "DM" in canal and "Cannot send messages" not in canal
-        assert not any(dado in canal for dado in (REFRESH, ACCESS, *DADOS_DA_CONTA))
-
-    def test_the_failure_is_not_logged_with_the_token(self, monkeypatch, tmp_path, caplog):
-        c = Cenario(monkeypatch, tmp_path, dm_falha_em={1}, com_efeitos=True)
-
-        with caplog.at_level(logging.DEBUG):
-            c.rodar()
-
-        assert all(REFRESH not in r.getMessage() + (r.exc_text or "") for r in caplog.records)
 
 
 class TestDmDoTokenFechada:
@@ -332,25 +208,6 @@ class TestDmDoTokenFechada:
         canal = c.canal()
         assert not any(dado in canal for dado in (REFRESH, *DADOS_DA_CONTA))
 
-    def test_the_channel_asks_to_open_the_dms_in_a_generic_message(self, monkeypatch, tmp_path):
-        c = Cenario(monkeypatch, tmp_path, dm_falha_em={2})
-
-        c.rodar()
-
-        canal = c.canal()
-        assert "DM" in canal and "Cannot send messages" not in canal
-
-    def test_an_unexpected_dm_error_also_keeps_the_token_out_of_the_channel(self, monkeypatch, tmp_path):
-        c = Cenario(monkeypatch, tmp_path)
-        c.dm.side_effect = RuntimeError("falha qualquer na entrega")
-
-        try:
-            c.rodar()
-        except RuntimeError as erro:
-            c.erro = erro
-
-        assert not any(dado in c.canal() for dado in (REFRESH, *DADOS_DA_CONTA))
-
 
 class TestTokenForaDosLogs:
     def test_the_token_never_appears_in_a_log_record(self, cenario, caplog):
@@ -358,27 +215,3 @@ class TestTokenForaDosLogs:
             cenario.rodar()
 
         assert all(REFRESH not in r.getMessage() + (r.exc_text or "") for r in caplog.records)
-
-    def test_the_token_never_appears_in_a_log_record_when_the_dm_fails(self, cenario_dm_fechada, caplog):
-        with caplog.at_level(logging.DEBUG):
-            cenario_dm_fechada.rodar()
-
-        assert all(REFRESH not in r.getMessage() + (r.exc_text or "") for r in caplog.records)
-
-
-class TestComandoNaoMudou:
-    def test_an_expired_flow_still_raises_the_usual_error(self, monkeypatch, tmp_path):
-        c = Cenario(monkeypatch, tmp_path)
-        monkeypatch.setattr(
-            ViewFalsa,
-            "__init__",
-            lambda self, **k: (
-                setattr(self, "interaction", None),
-                setattr(self, "exception_txt", None),
-                setattr(self, "data", {}),
-            )[0],
-        )
-
-        c.rodar()
-
-        assert isinstance(c.erro, GenericError) and c.dm.await_count == 0

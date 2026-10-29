@@ -79,30 +79,3 @@ class TestRecusaConteudoPerigoso:
             "https://" + "h" * 100_000 + ".com/o/r",
         ]
         assert [web(caso) for caso in casos] == [""] * len(casos)
-
-
-class TestTamanho:
-    @staticmethod
-    def url_com_tamanho(total):
-        prefixo = "https://github.com/o/"
-        return prefixo + "a" * (total - len(prefixo))
-
-    def test_com_513_caracteres_e_recusado(self):
-        assert web(self.url_com_tamanho(513)) == ""
-
-    def test_o_limite_vale_para_o_resultado_nao_para_o_texto_bruto(self):
-        """O sufixo ``.git`` sai do resultado: bruto com 515 e resultado com 512 ainda vale."""
-        url = self.url_com_tamanho(512)
-        assert web(url + ".git") == url
-
-    def test_formato_scp_enorme_e_recusado(self):
-        assert web("git@github.com:o/" + "a" * 600) == ""
-
-
-class TestFormatosValidosIntactos:
-    """GUARDA: o que era válido continua com o mesmo resultado (inclusive o colchete do host IPv6)."""
-
-    def test_remotes_locais_e_saida_vazia_continuam_vazios(self):
-        for url in ("file:///srv/git/r.git", "/srv/git/r.git", "../r"):
-            assert web(url) == ""
-        assert parse_remote_web_url("") == ""

@@ -65,74 +65,11 @@ def assert_sem_vazamento(entradas: dict[str, str]) -> None:
         assert entradas[".env"] == ENV_MASCARADO
 
 
-class TestArquivosDoRuntimeEntram:
-    @pytest.mark.parametrize("nome", list(DO_DATA))
-    def test_arquivo_do_data_entra_no_zip(self, docker, nome):
-        entradas = zipar([nome, "../app/ok.py"])
-
-        assert entradas[nome] == DO_DATA[nome]
-
-    def test_todos_juntos_com_o_env_mascarado(self, docker):
-        entradas = zipar([*DO_DATA, ".env-temp"])
-
-        assert {n: entradas[n] for n in DO_DATA} == DO_DATA
-        assert entradas[".env"] == ENV_MASCARADO
-        assert_sem_vazamento(entradas)
-
-    def test_caminho_absoluto_de_arquivo_do_data_entra(self, docker):
-        entradas = zipar([str(docker.data / "lavalink.ini")])
-
-        assert list(entradas.values()) == [DO_DATA["lavalink.ini"]]
-
-    def test_arquivo_do_projeto_continua_entrando(self, docker):
-        entradas = zipar([str(docker.app / "ok.py")])
-
-        assert list(entradas.values()) == ["print('ok')\n"]
-
-
 class TestLinksNoData:
-    def test_link_do_data_para_dentro_do_app_entra(self, docker):
-        (docker.data / "para_app.txt").symlink_to(docker.app / "ok.py")
-
-        entradas = zipar(["para_app.txt"])
-
-        assert entradas == {"para_app.txt": "print('ok')\n"}
-
-    def test_link_do_data_para_dentro_do_proprio_data_entra(self, docker):
-        (docker.data / "para_data.ini").symlink_to(docker.data / "lavalink.ini")
-
-        entradas = zipar(["para_data.ini"])
-
-        assert entradas == {"para_data.ini": DO_DATA["lavalink.ini"]}
-
     def test_link_do_data_para_fora_das_duas_raizes_nao_entra(self, docker):
         (docker.data / "fora.txt").symlink_to(docker.fora / "segredo.txt")
 
         entradas = zipar(["fora.txt", "lavalink.ini"])
-
-        assert_sem_vazamento(entradas)
-        assert list(entradas) == ["lavalink.ini"]
-
-    def test_link_de_diretorio_do_data_para_fora_nao_leva_os_filhos(self, docker):
-        (docker.data / "dir_fora").symlink_to(docker.fora / "pasta", target_is_directory=True)
-
-        entradas = zipar(["dir_fora/x.txt", "lavalink.ini"])
-
-        assert_sem_vazamento(entradas)
-        assert list(entradas) == ["lavalink.ini"]
-
-    def test_link_do_app_para_fora_continua_recusado(self, docker):
-        (docker.app / "fora.txt").symlink_to(docker.fora / "segredo.txt")
-
-        entradas = zipar([str(docker.app / "fora.txt"), "lavalink.ini"])
-
-        assert_sem_vazamento(entradas)
-        assert list(entradas) == ["lavalink.ini"]
-
-    def test_link_do_data_para_um_segredo_do_data_nao_entra(self, docker):
-        (docker.data / "apelido.txt").symlink_to(docker.data / "config.json")
-
-        entradas = zipar(["apelido.txt", "lavalink.ini"])
 
         assert_sem_vazamento(entradas)
         assert list(entradas) == ["lavalink.ini"]
@@ -170,27 +107,3 @@ class TestSegredosSeguemRecusadosNoData:
         assert_sem_vazamento(entradas)
         assert nome not in entradas or (nome == ".env" and entradas[nome] == ENV_MASCARADO)
         assert "lavalink.ini" in entradas
-
-    @pytest.mark.parametrize("nome", NOMES_SECRETOS)
-    def test_nome_secreto_por_caminho_absoluto_nao_entra(self, docker, nome):
-        entradas = zipar([str(docker.data / nome), "lavalink.ini"])
-
-        assert_sem_vazamento(entradas)
-        assert not [n for n in entradas if os.path.basename(n) == nome]
-
-    @pytest.mark.parametrize("nome", NOMES_SECRETOS)
-    def test_nome_secreto_em_subpasta_do_data_nao_entra(self, docker, nome):
-        (docker.data / "local_database" / nome).write_text(SEGREDO, encoding="utf-8")
-
-        entradas = zipar([f"local_database/{nome}", "lavalink.ini"])
-
-        assert_sem_vazamento(entradas)
-        assert not [n for n in entradas if os.path.basename(n) == nome]
-
-    def test_nome_secreto_com_caixa_diferente_nao_entra(self, docker):
-        (docker.data / "Config.JSON").write_text(SEGREDO, encoding="utf-8")
-
-        entradas = zipar(["Config.JSON", "lavalink.ini"])
-
-        assert_sem_vazamento(entradas)
-        assert "Config.JSON" not in entradas

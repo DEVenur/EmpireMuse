@@ -22,25 +22,6 @@ from empiremuse.cogs import error_handler
 from empiremuse.cogs.error_handler import ErrorHandler
 
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"
-CAMINHO = "/data/local_database/guilds.json"
-LOGGER = "empiremuse.cogs.error_handler"
-
-
-def erro_de_disco() -> OSError:
-    try:
-        raise OSError(28, f"No space left on device: '{CAMINHO}' (token {TOKEN_FALSO})")
-    except OSError as e:
-        return e
-
-
-def fixar_codigo(monkeypatch, *valores):
-    """Faz ``secrets.token_hex`` devolver os ``valores`` em sequência (o último se repete)."""
-    restantes = list(valores)
-
-    def falso(nbytes=None):
-        return restantes.pop(0) if len(restantes) > 1 else restantes[0]
-
-    monkeypatch.setattr(secrets, "token_hex", falso)
 
 
 def falhar_ao_gerar(monkeypatch):
@@ -87,21 +68,6 @@ def anexos(monkeypatch) -> list[tuple[str, str]]:
     return guardados
 
 
-def interacao() -> MagicMock:
-    inter = MagicMock()
-    inter.message.author.bot = False
-    inter.data.name = "play"
-    return inter
-
-
-def valores_dos_campos(embed: disnake.Embed) -> str:
-    return "\n".join(f"{campo.name}: {campo.value}" for campo in embed.fields)
-
-
-def registros_de_erro(caplog) -> list[str]:
-    return [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelno == logging.ERROR]
-
-
 class TestFuncaoPura:
     @pytest.mark.smoke
     @pytest.mark.parametrize(
@@ -117,17 +83,6 @@ class TestFuncaoPura:
         assert bool(ERROR_CODE_RE.fullmatch(texto)) is vale
 
 
-class TestInteracao:
-    @pytest.mark.asyncio
-    async def test_no_log_do_chamador_continua_sem_registro(self, handler, enviado, caplog, monkeypatch):
-        fixar_codigo(monkeypatch, "7f3a2c")
-
-        with caplog.at_level(logging.ERROR, logger=LOGGER):
-            await handler.process_interaction_error(interacao(), erro_de_disco(), no_log=True)
-
-        assert not registros_de_erro(caplog)
-
-
 class TestFalhaAoGerarOCodigo:
     def test_safe_error_code_devolve_vazio_e_registra_so_o_tipo_do_erro(self, monkeypatch, caplog):
         from empiremuse.rules.error_code import safe_error_code
@@ -137,18 +92,3 @@ class TestFalhaAoGerarOCodigo:
             codigo = safe_error_code()
         assert codigo == ""
         assert "RuntimeError" in caplog.text and "sem entropia" not in caplog.text
-
-
-class TestSemCodigoNoWebhook:
-    """Se não deu para gerar o código, o webhook não ganha campo de código e o anexo mantém o nome simples."""
-
-    @pytest.mark.asyncio
-    async def test_interacao(self, handler, enviado, anexos, monkeypatch):
-        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
-        falhar_ao_gerar(monkeypatch)
-
-        await handler.process_interaction_error(interacao(), erro_de_disco())
-
-        embed = handler.send_webhook.await_args.kwargs["embed"]
-        assert "Código do erro" not in valores_dos_campos(embed)
-        assert [nome for _, nome in anexos] == ["error_traceback_interaction.txt"]

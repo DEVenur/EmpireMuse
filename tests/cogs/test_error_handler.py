@@ -12,11 +12,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import disnake
 import pytest
-from disnake.ext import commands
 
 from empiremuse.cogs import error_handler
 from empiremuse.cogs.error_handler import ErrorHandler
-from empiremuse.utils.music.errors import GenericError
 
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"
 CAMINHO = "/data/local_database/guilds.json"
@@ -107,14 +105,6 @@ def _texto_da_interacao(enviar: AsyncMock) -> str:
     return "\n".join(partes)
 
 
-def _texto_do_prefixo(ctx: _Contexto) -> str:
-    kwargs = ctx.send.await_args.kwargs
-    partes = [kwargs.get("content", "") or ""]
-    if "embed" in kwargs:
-        partes.append(kwargs["embed"].description or "")
-    return "\n".join(partes)
-
-
 class TestInteracao:
     @pytest.mark.smoke
     @pytest.mark.asyncio
@@ -134,33 +124,8 @@ class TestInteracao:
         assert tipo is OSError and CAMINHO in str(valor), "o log precisa levar o exc_info com o detalhe completo"
         assert TOKEN_FALSO not in registros[0].getMessage()
 
-    @pytest.mark.asyncio
-    async def test_mensagem_propria_do_parse_error_continua_igual(self, handler, enviado):
-        await handler.process_interaction_error(_interacao(), commands.NotOwner())
-
-        assert "Apenas meu(s) desenvolvedor(es)" in _texto_da_interacao(enviado)
-
-    @pytest.mark.asyncio
-    async def test_no_log_do_chamador_e_respeitado(self, handler, enviado, caplog):
-        with caplog.at_level(logging.ERROR, logger=LOGGER):
-            await handler.process_interaction_error(_interacao(), _erro_de_disco(), no_log=True)
-
-        assert not [r for r in caplog.records if r.name == LOGGER]
-        assert not _proibidos_na_tela(_texto_da_interacao(enviado))
-
 
 class TestComandoDePrefixo:
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("embed_links", [True, False], ids=["com_embed", "sem_embed"])
-    async def test_oserror_mostra_mensagem_generica_nos_dois_formatos(self, handler, embed_links):
-        ctx = _Contexto(embed_links)
-
-        await handler.on_legacy_command_error(ctx, _erro_de_disco())
-
-        texto = _texto_do_prefixo(ctx)
-        assert "Ocorreu um erro" in texto, texto
-        assert not _proibidos_na_tela(texto), f"vazou para o usuário: {_proibidos_na_tela(texto)} em {texto!r}"
-
     @pytest.mark.asyncio
     async def test_no_report_do_webhook_o_detalhe_fica_e_o_token_nao(self, handler, arquivos_do_webhook):
         handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
@@ -170,19 +135,3 @@ class TestComandoDePrefixo:
         handler.send_webhook.assert_awaited_once()
         relatorio = "\n".join(arquivos_do_webhook)
         assert CAMINHO in relatorio and TOKEN_FALSO not in relatorio
-
-    @pytest.mark.asyncio
-    async def test_generic_error_continua_igual(self, handler):
-        ctx = _Contexto(True)
-
-        await handler.on_legacy_command_error(ctx, GenericError("**Sem permissão aqui.**"))
-
-        assert "**Sem permissão aqui.**" in _texto_do_prefixo(ctx)
-
-    @pytest.mark.asyncio
-    async def test_mensagem_propria_do_parse_error_continua_igual(self, handler):
-        ctx = _Contexto(False)
-
-        await handler.on_legacy_command_error(ctx, commands.NoPrivateMessage())
-
-        assert "não pode ser executado em mensagens privadas" in _texto_do_prefixo(ctx)

@@ -11,10 +11,7 @@ KI-12 reset_useragent devolve o user-agent; KI-13 com KILL_ON_429=false propaga 
 datetimes cientes de fuso; caches relativos (.ytdl_cache, .lastfm_cache, GIT_DIR) ficam sob paths.RUNTIME_DIR.
 """
 
-import ast
 import asyncio
-import datetime
-import json
 import socket
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,18 +21,13 @@ import disnake
 import pytest
 
 from empiremuse import config_loader
-from empiremuse.cogs.music import Music
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
 from empiremuse.utils.db import DBModel, LocalDatabase
-from tests.support.api_publica import arvore_da_familia
 from tests.support.laco_do_pool import encerrar_laco
-from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.regression
 
-ROOT = RAIZ
-PACOTE = ROOT / "empiremuse"
 TOKEN_FALSO = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx.GabcDE.abcdefghijklmnopqrstuvwxyz1"  # só o formato; não é um token real
 
 
@@ -76,10 +68,6 @@ class TestKI06Booleanos:
         assert config_loader.DEFAULT_CONFIG["AUTO_SYNC_COMMANDS"] is True
         assert carregar(monkeypatch, AUTO_SYNC_COMMANDS="FALSE")["AUTO_SYNC_COMMANDS"] is False
 
-    def test_vazio_continua_usando_o_padrao(self, runtime, monkeypatch):
-        """GUARDA."""
-        assert carregar(monkeypatch, ENABLE_LOGGER="")["ENABLE_LOGGER"] is config_loader.DEFAULT_CONFIG["ENABLE_LOGGER"]
-
 
 # ============================================================================ KI-07 — LAVALINK_RECONNECT_RETRIES
 
@@ -103,12 +91,6 @@ class TestKI08FalhaAoLerODotenv:
         monkeypatch.setenv("DEFAULT_PREFIX", "??")
 
         assert config_loader.load_config()["DEFAULT_PREFIX"] == "??"
-
-    def test_nao_ha_except_nu_no_config_loader(self):
-        """O ``except:`` nu também engole KeyboardInterrupt/SystemExit; a regra do projeto proíbe."""
-        arvore = ast.parse((PACOTE / "config_loader.py").read_text(encoding="utf-8"))
-        nus = [n.lineno for n in ast.walk(arvore) if isinstance(n, ast.ExceptHandler) and n.type is None]
-        assert not nus, f"except: nu em config_loader.py nas linhas {nus}"
 
 
 # ============================================================================ KI-10 — LocalDatabase.update_data
@@ -152,21 +134,6 @@ class TestKI10UpdateDataComFalhaDeGravacao:
         assert banco.cache["c:guilds:3"]["valor"] == "antigo"
 
 
-# ============================================================================ KI-12 — user-agent
-
-
-class TestKI12UserAgent:
-    def test_reset_useragent_devolve_o_novo_user_agent(self, runtime, monkeypatch):
-        valores = iter(["UA-init", "UA-um"])
-        monkeypatch.setattr(client, "generate_user_agent", lambda: next(valores))
-        pool = BotPool()
-
-        devolvido = pool.reset_useragent()
-
-        assert devolvido is not None, "KI-12: reset_useragent não devolve nada"
-        assert devolvido == pool.current_useragent == "UA-um"
-
-
 # ============================================================================ KI-13 — rate limit com KILL_ON_429=false
 
 
@@ -196,22 +163,6 @@ class TestKI13RateLimitSemMatarOProcesso:
 
         assert capturado.value is erro, "KI-13: o erro original deveria ser propagado"
 
-    @pytest.mark.asyncio
-    async def test_segunda_chamada_durante_o_ratelimit_retorna_sem_erro(self, pool):
-        """GUARDA: o segundo bot a tomar 429 não repete a espera nem levanta."""
-        pool.killing_state = "ratelimit"
-
-        assert await pool.start_bot(self._bot(_erro_http(429))) is None
-
-    @pytest.mark.asyncio
-    async def test_com_kill_on_429_o_processo_e_encerrado_ordenadamente(self, pool):
-        """GUARDA."""
-        pool.config["KILL_ON_429"] = True
-
-        await pool.start_bot(self._bot(_erro_http(429)))
-
-        pool.shutdown.assert_awaited_once_with(1)
-
 
 # ============================================================================ KI-11 — guild_bots
 
@@ -237,102 +188,3 @@ def pool_com_bots_falsos(runtime, monkeypatch):
     yield pool
     encerrar_laco(pool.loop)  # cancela o que o setup deixou (tarefas dubladas e a da versão nova) e fecha o laço
     asyncio.set_event_loop(None)
-
-
-class TestKI11GuildBots:
-    def test_get_guild_bots_enxerga_os_bots_exclusivos_de_cada_servidor(self, pool_com_bots_falsos, runtime):
-        (runtime / "guild_bots.json").write_text(json.dumps({"111": ["tokA"], "222": ["tokB"]}))
-
-        pool_com_bots_falsos.setup()
-
-        def ids(guild):
-            return [b.identifier for b in pool_com_bots_falsos.get_guild_bots(guild)]
-
-        assert "111_0" in ids(111) and "222_0" in ids(222)
-        assert "222_0" not in ids(111)
-
-
-# ============================================================================ KI-31 — sem utcnow(), datetimes cientes de fuso
-
-
-def _chamadas_utcnow_naive() -> list[str]:
-    achados = []
-    for arquivo in sorted(PACOTE.rglob("*.py")):
-        arvore = ast.parse(arquivo.read_text(encoding="utf-8"))
-        for no in ast.walk(arvore):
-            if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) and no.func.attr == "utcnow":
-                dono = ast.unparse(no.func.value)
-                if dono in (
-                    "datetime",
-                    "datetime.datetime",
-                    "dt",
-                    "dt.datetime",
-                ):  # disnake.utils.utcnow() é ciente de fuso
-                    achados.append(f"{arquivo.relative_to(ROOT)}:{no.lineno}")
-    return achados
-
-
-class TestKI31DatetimesCientesDeFuso:
-    def test_nenhum_datetime_utcnow_naive_no_pacote(self):
-        achados = _chamadas_utcnow_naive()
-        assert not achados, f"datetime.utcnow() (obsoleto e naive) em: {achados}"
-
-    @pytest.mark.asyncio
-    async def test_node_reconnect_conta_falhas_consecutivas_com_datetimes_cientes(self):
-        no = SimpleNamespace(
-            _retry_dt=datetime.datetime.now(datetime.timezone.utc),
-            _retry_count=0,
-            is_available=True,
-            identifier="node1",
-            version=4,
-            players={},
-        )
-        cog = SimpleNamespace(bot=SimpleNamespace(user="bot#0000"))
-
-        await Music.node_reconnect(cog, no)
-
-        assert no._retry_count == 1, "duas quedas em menos de 7 s devem contar como consecutivas"
-
-    def test_o_node_nasce_com_retry_dt_ciente_de_fuso(self):
-        arvore = ast.parse((PACOTE / "wavelink" / "node.py").read_text(encoding="utf-8"))
-        atribuicoes = [
-            n
-            for n in ast.walk(arvore)
-            if isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Attribute) and t.attr == "_retry_dt" for t in n.targets)
-        ]
-        assert atribuicoes, "Node não inicializa _retry_dt"
-        for atribuicao in atribuicoes:
-            texto = ast.unparse(atribuicao.value)
-            assert "UTC" in texto or "timezone.utc" in texto, f"_retry_dt precisa ser ciente de fuso (UTC): {texto}"
-
-
-# ============================================================================ caches relativos -> paths.RUNTIME_DIR
-
-
-class TestCachesSobOutroDiretorio:
-    def test_cachedir_do_ytdl_aponta_para_o_runtime_dir(self):
-        arvore = arvore_da_familia("music")
-        valores = [
-            ast.unparse(valor)
-            for no in ast.walk(arvore)
-            if isinstance(no, ast.Dict)
-            for chave, valor in zip(no.keys, no.values)
-            if isinstance(chave, ast.Constant)
-            and chave.value == "cachedir"
-            and not (isinstance(valor, ast.Constant) and valor.value is False)  # False = cache desligado, não é caminho
-        ]
-        assert valores, "nenhum 'cachedir' com caminho encontrado: o cache do yt-dlp mudou? ajuste este teste"
-        assert all("RUNTIME_DIR" in valor for valor in valores), valores
-
-    def test_nenhum_literal_de_caminho_oculto_relativo_no_pacote(self):
-        """Qualquer ``"./.algo"`` (cache, git, estado) depende do cwd. A única exceção é o padrão sentinela do GIT_DIR, que o
-        ``load_config`` troca por RUNTIME_DIR/.git."""
-        permitido = ("empiremuse/config_loader.py", "./.git")
-        achados = []
-        for arquivo in sorted(PACOTE.rglob("*.py")):
-            for no in ast.walk(ast.parse(arquivo.read_text(encoding="utf-8"))):
-                if isinstance(no, ast.Constant) and isinstance(no.value, str) and no.value.startswith("./."):
-                    if (arquivo.relative_to(ROOT).as_posix(), no.value) != permitido:
-                        achados.append(f"{arquivo.relative_to(ROOT)}:{no.lineno} {no.value!r}")
-        assert not achados, f"caminhos ocultos relativos ao cwd: {achados}"

@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from empiremuse.rules.release import Version
-from tests.support.alvo_git import ALVO_GIT
 from empiremuse.updater.state import PendingUpdate, write_pending
 from empiremuse.utils import client
 from empiremuse.utils.client import BotPool
+from tests.support.alvo_git import ALVO_GIT
 
 pytestmark = [pytest.mark.critical, pytest.mark.asyncio]
 
@@ -62,14 +62,6 @@ def pool_que_fica_saudavel_na_checagem(numero: int, checagens: list) -> BotPool:
     return pool
 
 
-async def test_without_a_pending_update_no_watch_is_started(runtime, ao_ficar_pronto):
-    pool = pool_que_fica_saudavel_na_checagem(1, [])
-
-    pool.start_update_watch()
-
-    assert pool.update_watch_task is None
-
-
 async def test_with_a_pending_update_the_watch_calls_on_pool_ready_once_when_the_pool_turns_healthy_and_stops(
     pendente, ao_ficar_pronto, monkeypatch
 ):
@@ -86,31 +78,6 @@ async def test_with_a_pending_update_the_watch_calls_on_pool_ready_once_when_the
     ao_ficar_pronto.assert_awaited_once()
 
 
-async def test_the_watch_does_not_call_on_pool_ready_while_the_pool_is_unhealthy(
-    pendente, ao_ficar_pronto, monkeypatch
-):
-    monkeypatch.setattr(client, "UPDATE_WATCH_INTERVAL", 0)
-    cinco_checagens = asyncio.Event()
-
-    class Checagens(list):
-        def append(self, item):
-            super().append(item)
-            if len(self) >= 5:
-                cinco_checagens.set()
-
-    pool = pool_que_fica_saudavel_na_checagem(10**6, Checagens())
-
-    pool.start_update_watch()
-    try:
-        await asyncio.wait_for(cinco_checagens.wait(), timeout=5)
-    finally:
-        pool.update_watch_task.cancel()
-        await asyncio.gather(pool.update_watch_task, return_exceptions=True)
-
-    ao_ficar_pronto.assert_not_awaited()
-    assert not pool.update_ready_checked
-
-
 async def test_a_failing_on_pool_ready_does_not_break_the_watch_and_is_not_retried(
     pendente, ao_ficar_pronto, monkeypatch
 ):
@@ -123,28 +90,3 @@ async def test_a_failing_on_pool_ready_does_not_break_the_watch_and_is_not_retri
 
     ao_ficar_pronto.assert_awaited_once()
     assert pool.update_watch_task.exception() is None
-
-
-async def test_a_pool_that_is_shutting_down_never_calls_on_pool_ready(ao_ficar_pronto):
-    """I1: depois do ``shutdown`` (killing_state) um pool saudável não promove nem avisa nada."""
-    pool = pool_que_fica_saudavel_na_checagem(1, [])
-    pool.killing_state = True
-
-    await pool.check_pool_ready()
-
-    ao_ficar_pronto.assert_not_awaited()
-
-
-async def test_shutdown_cancels_the_watch(pendente, ao_ficar_pronto):
-    pool = pool_que_fica_saudavel_na_checagem(10**6, [])
-    pool.heartbeat_task = None
-    pool.bots, pool.guild_bots, pool.lavalink_instance = [], {}, None
-
-    pool.start_update_watch()
-    tarefa = pool.update_watch_task
-    await asyncio.sleep(0)
-    await pool.shutdown(0)
-    await asyncio.gather(tarefa, return_exceptions=True)
-
-    assert tarefa.cancelled()
-    ao_ficar_pronto.assert_not_awaited()

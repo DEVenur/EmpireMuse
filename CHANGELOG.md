@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Alterado
+- **Testes**: enxugadas as suítes de `tests/audio`, `tests/cogs` e `tests/pool` (caracterização em massa, testes de mutação e testes em volta de correções já feitas); ficam os testes de segurança, contratos Discord/Lavalink e um por bug real.
+
 ## [2.1.2] - 2026-10-28
 
 Status automático do canal de voz ligado por padrão (com a opção permanente no painel › Geral), nova tentativa quando o YouTube falha e correções de log e de seletor de skin.

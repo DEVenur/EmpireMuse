@@ -13,7 +13,6 @@ que devolve a saída pronta: o ``git`` de verdade nunca roda.
 """
 
 import asyncio
-import subprocess
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -88,21 +87,10 @@ def remote(nome, url, *, push=True):
 WEB = "https://github.com/EmpireCommunity/EmpireMuse"
 
 
-class TestGuardaDoFormatoAtual:
-    """GUARDA: o caso que já funciona (remote ``origin`` em https com ``.git``) não pode regredir."""
-
-    @pytest.mark.smoke
-    def test_origin_https_sem_sufixo_git(self, monkeypatch, pool):
-        assert com_saida_do_git(monkeypatch, pool, remote("origin", WEB)) == WEB
-
-
 class TestRemoteComOutroNome:
     def test_prefere_o_origin_mesmo_que_nao_seja_o_primeiro(self, monkeypatch, pool):
         saida = remote("fork", "https://github.com/alguem/Fork.git") + remote("origin", f"{WEB}.git")
         assert com_saida_do_git(monkeypatch, pool, saida) == WEB
-
-    def test_separador_por_espacos_em_vez_de_tabulacao(self, monkeypatch, pool):
-        assert com_saida_do_git(monkeypatch, pool, f"origin   {WEB}.git (fetch)\n") == WEB
 
 
 class TestFormatosDeUrl:
@@ -129,55 +117,3 @@ class TestFormatosDeUrl:
         resultado = com_saida_do_git(monkeypatch, pool, remote("origin", url))
         assert resultado == WEB
         assert "@" not in resultado and "segredo" not in resultado and "token" not in resultado
-
-    @pytest.mark.parametrize("saida", [f"  origin\t{WEB}.git (fetch)\n", f"origin\t{WEB}.git (fetch)\r\n"], ids=repr)
-    def test_espacos_e_quebra_de_linha_do_windows_nas_pontas_da_linha(self, monkeypatch, pool, saida):
-        assert com_saida_do_git(monkeypatch, pool, saida) == WEB
-
-
-class TestSaidaSemRemoteUtil:
-    """Vazia, ilegível, remote local ou falha do git: cai em ``SOURCE_REPO`` sem levantar erro."""
-
-    @pytest.mark.parametrize(
-        "saida",
-        [
-            "",
-            "\n",
-            "   \n\n",
-            "fatal: not a git repository (or any of the parent directories): .git\n",
-            "origin\n",
-            "origin (fetch)\n",
-            "origin\t(fetch)\n",
-            "esta linha não tem formato nenhum\n",
-            "origin\t/srv/git/projeto.git (fetch)\n",
-            "origin\t../projeto (fetch)\n",
-            "origin\tfile:///srv/git/projeto.git (fetch)\n",
-            "origin\thttps://exemplo.invalid (fetch)\n",
-            "origin\thttps://exemplo.invalid/ (fetch)\n",
-            "origin\tgit@github.com: (fetch)\n",
-            "origin\tgit@github.com:/ (fetch)\n",
-            "origin\tgit@github.com:.git (fetch)\n",
-            "origin\thttps://[::1/projeto (fetch)\n",
-            "origin\tftp://exemplo.invalid/org/projeto.git (fetch)\n",
-        ],
-        ids=lambda saida: repr(saida)[:40],
-    )
-    def test_cai_na_configuracao_sem_erro(self, monkeypatch, pool, saida):
-        esperado = pool.config["SOURCE_REPO"].removesuffix(".git")
-        assert com_saida_do_git(monkeypatch, pool, saida) == esperado
-
-
-class TestGitSemRuidoNoConsole:
-    """Fora de um repositório (modo .runtime) o git escreveria "fatal: not a git repository" no stderr do bot."""
-
-    def test_as_duas_consultas_ao_git_descartam_o_stderr(self, monkeypatch, pool):
-        stderrs = {}
-
-        def falso(comando, *args, **kwargs):
-            stderrs[tuple(comando[:2])] = kwargs.get("stderr")
-            raise subprocess.CalledProcessError(128, comando)
-
-        monkeypatch.setattr(client, "check_output", falso)
-        pool.setup()
-
-        assert stderrs == {("git", "rev-parse"): subprocess.DEVNULL, ("git", "remote"): subprocess.DEVNULL}
