@@ -976,19 +976,7 @@ class Misc(commands.Cog):
             backup_dir.mkdir(parents=True, exist_ok=True)
 
         async with ctx.typing():
-            for bot in self.bot.pool.get_all_bots():
-                documents = bot.pool.database.iter_data(collection=str(bot.user.id), db_name=DBModel.guilds)
-
-                async for data in self._backup_each(documents, backup_dir / f"guild_favs_{bot.user.id}.json"):
-                    try:
-                        remove_blank_spaces(data["player_controller"]["fav_links"])
-                    except KeyError:
-                        continue
-                    # documento cru do bot (não o formato antigo montado do servidor): grava direto no banco
-                    await bot.pool.database.update_data(
-                        id_=data["_id"], data=data, db_name=DBModel.guilds, collection=str(bot.user.id)
-                    )
-
+            # os links fixos dos servidores agora são as playlists do documento único (item 17): só os favoritos pessoais aqui
             documents = self.bot.pool.database.iter_data(collection="global", db_name=DBModel.users)
 
             async for data in self._backup_each(documents, backup_dir / "user_favs.json"):

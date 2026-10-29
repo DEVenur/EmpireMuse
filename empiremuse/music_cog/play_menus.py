@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import disnake
 
+from empiremuse.music_cog.play_guild_menu import GuildPlaylistSelect
+from empiremuse.rules.limits import MAX_SERVER_PLAYLISTS
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import fix_characters, md_link
 from empiremuse.utils.music.errors import (
@@ -14,6 +16,7 @@ from empiremuse.utils.music.errors import (
     EmptyFavIntegration,
 )
 from empiremuse.utils.music.saved_queue import has_saved_queue
+from empiremuse.utils.server_playlists import safe_list, select_options
 from empiremuse.utils.music.interactions import (
     SelectInteraction,
 )
@@ -99,7 +102,7 @@ class PlayMenusMixin:
         if not guild_data:
             guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
 
-        if guild_data["player_controller"]["fav_links"]:
+        if await safe_list(bot, inter.guild_id):
             txt += (
                 "### `[📌] Favoritos do servidor [📌]`\n"
                 "`Usar favorito do servidor (adicionados por staffs do servidor).`\n"
@@ -281,23 +284,16 @@ class PlayMenusMixin:
             if not guild_data:
                 guild_data = await bot.get_data(guild.id, db_name=DBModel.guilds)
 
-            if not guild_data["player_controller"]["fav_links"]:
+            playlists = await safe_list(bot, guild.id)
+            if not playlists:
                 raise GenericError("**O servidor não possui links fixos/favoritos.**")
 
             menu = "guild_favs"
 
-            for name, v in guild_data["player_controller"]["fav_links"].items():
-                fav_opts.append(
-                    {
-                        "url": v["url"],
-                        "option": disnake.SelectOption(
-                            label=fix_characters(name, 45),
-                            value=f"> pin: {name}",
-                            description="[📌 Favorito do servidor 📌]",
-                            emoji=music_source_emoji_url(v["url"], self.bot)[0],
-                        ),
-                    }
-                )
+            # as 25 primeiras por ordem; o valor "> pin: <nome>" é resolvido de novo no store ao tocar
+            for playlist, option in zip(playlists, select_options(self.bot, playlists, MAX_SERVER_PLAYLISTS)):
+                option.value = f"> pin: {playlist.name}"
+                fav_opts.append({"url": playlist.url, "option": option})
 
             is_pin = False
 
@@ -384,7 +380,15 @@ class PlayMenusMixin:
                 except AttributeError:
                     pass
 
-                view = SelectInteraction(user=inter.author, timeout=75, opts=[i["option"] for i in fav_opts])
+                if menu == "guild_favs":
+                    playlists = await safe_list(
+                        bot, guild.id
+                    )  # relida: pode ter esvaziado desde que o menu foi montado
+                    if not playlists:
+                        raise GenericError("**O servidor não possui links fixos/favoritos.**")
+                    view = GuildPlaylistSelect(inter.author, bot, playlists)
+                else:
+                    view = SelectInteraction(user=inter.author, timeout=75, opts=[i["option"] for i in fav_opts])
 
                 if isinstance(inter, disnake.MessageInteraction) and not inter.response.is_done():
                     await inter.response.defer(ephemeral=ephemeral)

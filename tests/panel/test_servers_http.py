@@ -14,7 +14,7 @@ import pytest
 
 pytestmark = pytest.mark.critical
 
-CATEGORIES = ["Player", "Canal de pedidos", "DJ", "Aparência", "Links", "Geral"]
+CATEGORIES = ["Player", "Canal de pedidos", "DJ", "Aparência", "Playlists", "Geral"]
 UID = int(USER_ID)
 
 

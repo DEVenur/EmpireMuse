@@ -1,5 +1,5 @@
 {# Navegação por categorias. Variáveis: acesso, slug_atual (str|None), mostrar_seletor, bot_atual. #}
-{% set itens_nav = (("player", "Player", True), ("canal", "Canal de pedidos", True), ("dj", "DJ", True), ("aparencia", "Aparência", True), ("links", "Links", True), ("geral", "Geral", True)) %}
+{% set itens_nav = (("player", "Player", True), ("canal", "Canal de pedidos", True), ("dj", "DJ", True), ("aparencia", "Aparência", True), ("links", "Playlists", True), ("geral", "Geral", True)) %}
 <nav class="nav-categorias" aria-label="Categorias de configuração">
   <ul class="categorias" role="list">
     {% for slug, nome, pronto in itens_nav %}

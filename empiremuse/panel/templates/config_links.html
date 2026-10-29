@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 
-{% block titulo %}Links · {{ acesso.name }}{% end %}
+{% block titulo %}Playlists · {{ acesso.name }}{% end %}
 
 {% block conteudo %}
-{% set titulo_categoria = "Links" %}
+{% set titulo_categoria = "Playlists" %}
 {% set slug_atual = "links" %}
 {% set caminho_categoria = "/painel/servidores/" + acesso.guild_id + "/links" %}
 {% include "_topo_config.html" %}
 {% include "_nav_categorias.html" %}
-{% include "_seletor_bot.html" %}
 {% include "bloco_links.html" %}
 {% end %}

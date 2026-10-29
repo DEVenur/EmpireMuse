@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, Optional
 from cachetools import TTLCache
 
 from empiremuse.rules.limits import MAX_DJ_ROLES
+from empiremuse.rules.playlists import plan_migration, to_doc
 from empiremuse.rules.servers import (
+    SECTION_PLAYLISTS,
     SECTION_SETTINGS,
     Allowed,
     SettingError,
@@ -45,7 +47,10 @@ logger = logging.getLogger(__name__)
 SERVERS_DB = "global"
 CACHE_SIZE = 2000
 CACHE_TTL = 300
-CONTROLLER_KEYS = ("channel", "message_id", "fav_links")  # os únicos campos que o formato antigo ainda grava, por bot
+CONTROLLER_KEYS = (
+    "channel",
+    "message_id",
+)  # os únicos campos que o formato antigo ainda grava, por bot (os links são playlists do servidor)
 
 Plan = Callable[[Optional[dict]], Awaitable[Optional[dict]]]
 
@@ -91,6 +96,9 @@ class ServerStore:
         self.pool = pool
         self._docs: TTLCache = TTLCache(maxsize=CACHE_SIZE, ttl=CACHE_TTL)
         self._locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
+        from empiremuse.utils.server_playlists import ServerPlaylists  # aqui para não criar ciclo de importação
+
+        self.playlists = ServerPlaylists(self)
 
     # ------------------------------------------------------------------ o pool
 
@@ -186,18 +194,22 @@ class ServerStore:
 
     # ------------------------------------------------------------------ migração
 
-    async def _prepare(self, gid: str, doc: Optional[dict]) -> tuple[dict, bool]:
-        """Cópia do documento com ``settings`` migrado do principal (se ainda não foi) e se mudou.
+    async def _prepare(
+        self, gid: str, doc: Optional[dict], sections: tuple[str, ...] = (SECTION_SETTINGS,)
+    ) -> tuple[dict, bool]:
+        """Cópia do documento com as ``sections`` pedidas migradas do principal (as que ainda não foram) e se mudou.
 
         Principal fora do ar ou erro de leitura: levanta e nada é gravado (a seção fica pendente; nunca o padrão do modelo).
+        As seções migradas juntas saem na MESMA gravação.
         """
         new = deepcopy(doc) if doc is not None else new_doc()
-        if new["migrated"][SECTION_SETTINGS]:
+        pending = [section for section in sections if not new["migrated"].get(section)]
+        if not pending:
             return new, False
         main = self.main_bot()
         if main is None:
             raise ServerConfigUnavailable
-        if self._loaded_guild(int(gid)) is None:
+        if SECTION_SETTINGS in pending and self._loaded_guild(int(gid)) is None:
             # esboço do READY (sem cargos): migrar agora descartaria os DJs de cargos "que não existem" e marcaria como migrado (V-156-1)
             raise ServerConfigUnavailable
         try:
@@ -205,24 +217,38 @@ class ServerStore:
         except Exception as exc:  # noqa: BLE001 - erro de leitura: nada é gravado, a seção fica pendente
             logger.warning("Documento antigo do principal no servidor [%s] não lido (%s)", gid, type(exc).__name__)
             raise ServerConfigUnavailable from exc
-        if self._loaded_guild(int(gid)) is None:  # o servidor pode ter voltado a ficar indisponível durante a leitura
-            raise ServerConfigUnavailable
-        new["settings"] = migrate_settings(legacy, self._allowed(int(gid)))
-        new["migrated"][SECTION_SETTINGS] = True
-        logger.info(
-            "Servidor [%s] migrado: configuração antiga do principal %s", gid, "copiada" if legacy else "ausente"
-        )
+        if SECTION_SETTINGS in pending:
+            if (
+                self._loaded_guild(int(gid)) is None
+            ):  # o servidor pode ter voltado a ficar indisponível durante a leitura
+                raise ServerConfigUnavailable
+            new["settings"] = migrate_settings(legacy, self._allowed(int(gid)))
+            new["migrated"][SECTION_SETTINGS] = True
+            logger.info(
+                "Servidor [%s] migrado: configuração antiga do principal %s", gid, "copiada" if legacy else "ausente"
+            )
+        if SECTION_PLAYLISTS in pending:
+            plan = plan_migration(((legacy or {}).get("player_controller") or {}).get("fav_links"))
+            new["playlists"] = [to_doc(p) for p in plan.items]
+            new["migrated"][SECTION_PLAYLISTS] = True
+            logger.info(
+                "Servidor [%s] migrado: %d playlists copiadas, %d repetidas e %d inválidas puladas",
+                gid,
+                len(plan.items),
+                plan.skipped,
+                plan.invalid,
+            )
         return new, True
 
     # ------------------------------------------------------------------ API do store
 
-    async def get(self, gid: int) -> dict:
-        """Cópia do documento único do servidor (migra ``settings`` na primeira vez)."""
+    async def _ensure(self, gid: int, sections: tuple[str, ...]) -> dict:
+        """Cópia do documento único com as ``sections`` migradas (na primeira vez de cada uma, sob a trava)."""
         key = str(as_guild_id(gid) or "")
         if not key:
             raise UnknownGuild
         cached = self._docs.get(key)
-        if cached is not None and cached["migrated"][SECTION_SETTINGS]:
+        if cached is not None and all(cached["migrated"].get(section) for section in sections):
             return deepcopy(cached)
         if not self.knows(int(key)):  # S-V11: não cria documento de servidor fora do pool; um que já existe só se lê
             doc = await self._load(key)
@@ -231,7 +257,36 @@ class ServerStore:
             return deepcopy(doc)
 
         async def plan(doc: Optional[dict]) -> Optional[dict]:
-            new, changed = await self._prepare(key, doc)
+            new, changed = await self._prepare(key, doc, sections)
+            return new if changed else None
+
+        return deepcopy(await self._transact(key, plan))
+
+    async def get(self, gid: int) -> dict:
+        """Cópia do documento único do servidor (migra ``settings`` na primeira vez)."""
+        return await self._ensure(gid, (SECTION_SETTINGS,))
+
+    async def get_sections(self, gid: int, *sections: str) -> dict:
+        """Cópia do documento único com as seções pedidas já migradas (ex.: ``playlists``)."""
+        return await self._ensure(gid, sections)
+
+    async def mutate_doc(
+        self, gid: int, sections: tuple[str, ...], change: Callable[[dict], bool], expected_rev: Optional[int] = None
+    ) -> dict:
+        """Roda ``change`` (que altera a cópia do documento e diz se mudou) sob a trava do servidor e grava só se mudou.
+
+        ``expected_rev``: se o ``rev`` do documento já não é esse, ``ServerConfigConflict`` (conferido dentro da trava).
+        """
+        key = str(as_guild_id(gid) or "")
+        if not key or not self.knows(int(key)):
+            raise UnknownGuild
+
+        async def plan(doc: Optional[dict]) -> Optional[dict]:
+            if expected_rev is not None and (doc["rev"] if doc is not None else 0) != expected_rev:
+                raise ServerConfigConflict
+            new, changed = await self._prepare(key, doc, sections)
+            if change(new):
+                changed = True
             return new if changed else None
 
         return deepcopy(await self._transact(key, plan))

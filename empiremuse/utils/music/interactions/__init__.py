@@ -30,7 +30,6 @@ from empiremuse.utils.music.interactions.favorites_texts import (
     _invalid_link_text as _invalid_link_text,
     _invalid_name_text as _invalid_name_text,
     _url_error_text as _url_error_text,
-    _guild_link_error_text as _guild_link_error_text,
     _name_error_text as _name_error_text,
     _save_error_text as _save_error_text,
     _IMPORT_QUOTA_TEXTS as _IMPORT_QUOTA_TEXTS,

@@ -17,6 +17,7 @@ from empiremuse.rules.limits import CUSTOM_SKIN_PREFIX, MAX_DJ_ROLES, VOLUMES
 
 DOC_VERSION = 1.0
 SECTION_SETTINGS = "settings"
+SECTION_PLAYLISTS = "playlists"
 MIGRATED_SECTIONS = ("settings", "request", "playlists")
 
 SETTINGS_FIELDS = (

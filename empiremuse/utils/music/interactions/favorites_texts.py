@@ -57,26 +57,6 @@ def _url_error_text(error: RuleError, *, with_label: bool = False) -> str:
     return _invalid_link_text(error.value)
 
 
-def _guild_link_error_text(name, error: RuleError) -> str:
-    """Mensagem de um item de link do servidor recusado: formato, URL ou descrição."""
-    if error.code == ITEM_FORMAT:
-        return (
-            f"**O item `{_echo(name, 25)}` do seu arquivo está mal formatado:** cada item precisa ser um "
-            'objeto com os campos "url" e "description" em texto.'
-        )
-    if error.code == DESCRIPTION_TOO_LONG:
-        return (
-            f"**Um item de seu arquivo ultrapassa a quantidade de caracteres permitido:{error.limit}\n"
-            f"Descrição:** {_echo(error.value)}"
-        )
-    if error.code == DESCRIPTION_INVALID:
-        return (
-            "**A descrição de um item do seu arquivo deve ficar vazia ou ter de 3 a 100 caracteres, "
-            f"sem caracteres de controle:** {_echo(error.value)}"
-        )
-    return _url_error_text(error, with_label=True)
-
-
 def _name_error_text(error: RuleError, low: int, high: int) -> str:
     """Mensagem de um nome de arquivo recusado: acima do teto da configuração ou inválido/repetido."""
     if error.code == NAME_TOO_LONG:

@@ -60,7 +60,11 @@ class PlayResolveMixin:
                 is_pin = True
             if not guild_data:
                 guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
-            query = guild_data["player_controller"]["fav_links"][query[7:]]["url"]
+            # o nome vem do valor de um select: é re-resolvido no store (casefold), nunca confiado; sumiu = erro amigável
+            playlist = await bot.pool.servers.playlists.find(inter.guild_id, query[7:])
+            if playlist is None:
+                raise GenericError("**A playlist do servidor não foi encontrada (talvez tenha sido removida).**")
+            query = playlist.url
             source = False
 
         elif query.startswith("> lst: "):

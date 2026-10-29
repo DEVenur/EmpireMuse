@@ -15,19 +15,13 @@ from empiremuse.rules.errors import (
     RuleError,
 )
 from empiremuse.rules.favorites import check_import_name, name_limit
-from empiremuse.rules.guild_links import check_description, import_entry as guild_link_entry
 from empiremuse.rules.integrations import import_entry as integration_entry, save_external
 from empiremuse.rules.limits import (
     FAV_NAME_MAX,
     FAV_NAME_MIN,
     FAV_URL_MAX,
-    GUILD_LINK_DESCRIPTION_MAX,
-    GUILD_LINK_URL_MAX,
-    GUILD_LINK_NAME_MAX,
-    GUILD_LINK_NAME_MIN,
     ITG_TITLE_MAX,
     ITG_URL_MAX,
-    MAX_GUILD_LINKS,
 )
 from empiremuse.rules.text import clean_import_name
 from empiremuse.rules.urls import check_url, clean_url
@@ -44,14 +38,12 @@ from empiremuse.utils.others import (
 from empiremuse.utils.music.interactions.common import (
     ViewMode,
     logger,
-    process_idle_embed,
     soundcloud_regex,
     youtube_regex,
 )
 from empiremuse.utils.music.interactions.favorites_texts import (
     _NO_ROOM_INTEGRATION_TEXT,
     _echo,
-    _guild_link_error_text,
     _import_quota_text,
     _invalid_link_text,
     _invalid_name_text,
@@ -73,21 +65,6 @@ class FavModalImport(disnake.ui.Modal):
         if self.view.mode == ViewMode.fav_manager:
             super().__init__(
                 title="Importar Favoritos",
-                components=[
-                    disnake.ui.TextInput(
-                        style=disnake.TextInputStyle.long,
-                        label="Inserir dados (em formato json)",
-                        custom_id="json_data",
-                        min_length=20,
-                        required=True,
-                    )
-                ],
-            )
-            return
-
-        if self.view.mode == ViewMode.guild_fav_manager:
-            super().__init__(
-                title="Importar Playlists para o Servidor",
                 components=[
                     disnake.ui.TextInput(
                         style=disnake.TextInputStyle.long,
@@ -141,7 +118,6 @@ class FavModalImport(disnake.ui.Modal):
 
         importers = {
             ViewMode.fav_manager: self._import_favorites,
-            ViewMode.guild_fav_manager: self._import_guild_links,
             ViewMode.integrations_manager: self._import_integrations,
         }
 
@@ -205,57 +181,6 @@ class FavModalImport(disnake.ui.Modal):
 
         return True
 
-    async def _import_guild_links(self, inter: disnake.ModalInteraction, json_data: dict) -> bool:
-        clean_data = {}
-
-        for name, data in json_data.items():
-            entry = guild_link_entry(data)
-
-            if isinstance(entry, RuleError):
-                await inter.send(_guild_link_error_text(name, entry), ephemeral=True)
-                return False
-
-            if (clean_name := clean_import_name(name, FAV_NAME_MIN, FAV_NAME_MAX, clean_data)) is None:
-                await inter.send(_invalid_name_text(name, FAV_NAME_MIN, FAV_NAME_MAX), ephemeral=True)
-                return False
-
-            clean_data[clean_name] = entry
-
-        await inter.response.defer(ephemeral=True)
-
-        work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
-
-        if not work["player_controller"]["channel"] or not self.view.bot.get_channel(
-            int(work["player_controller"]["channel"])
-        ):
-            await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
-            return False
-
-        merged = merge_import(work["player_controller"]["fav_links"], clean_data, MAX_GUILD_LINKS)
-
-        if isinstance(merged, RuleError):
-            await inter.edit_original_message(_import_quota_text(merged, "links"))
-            return False
-
-        work["player_controller"]["fav_links"] = merged
-        self.view.guild_data = work  # só depois de todas as checagens: uma recusa não altera a tela
-
-        await self.view.bot.update_data(inter.guild_id, self.view.guild_data, db_name=DBModel.guilds)
-
-        guild = self.view.bot.get_guild(inter.guild_id)
-
-        await inter.edit_original_message(content="**Links fixos do servidor foram importados com sucesso!**")
-
-        if (s := len(clean_data)) > 1:
-            self.view.log = f"{s} links foram importados com sucesso para a lista de favoritos do servidor."
-        else:
-            name = next(iter(clean_data))
-            self.view.log = f"O link {md_link(name, clean_data[name]['url'])} foi importado com sucesso para a lista de links do servidor.."
-
-        await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
-
-        return True
-
     async def _import_integrations(self, inter: disnake.ModalInteraction, json_data: dict) -> bool:
         clean_data = {}
 
@@ -302,7 +227,7 @@ class FavModalImport(disnake.ui.Modal):
 
 
 class FavModalAdd(disnake.ui.Modal):
-    def __init__(self, name: Optional[str], url: Optional[str], view, **kwargs):
+    def __init__(self, name: Optional[str], url: Optional[str], view):
         self.view = view
         self.name = name
 
@@ -321,34 +246,6 @@ class FavModalAdd(disnake.ui.Modal):
                     ),
                     disnake.ui.TextInput(
                         label="Link/Url:", custom_id="user_fav_url", min_length=10, max_length=200, value=url or None
-                    ),
-                ],
-            )
-            return
-
-        if self.view.mode == ViewMode.guild_fav_manager:
-            super().__init__(
-                title="Adicionar/Editar playlist/favorito",
-                custom_id="guild_fav_edit",
-                timeout=180,
-                components=[
-                    disnake.ui.TextInput(
-                        label="Nome do favorito/playlist:",
-                        custom_id="guild_fav_name",
-                        min_length=2,
-                        max_length=25,
-                        value=name or None,
-                    ),
-                    disnake.ui.TextInput(
-                        label="Descrição:",
-                        custom_id="guild_fav_description",
-                        min_length=3,
-                        max_length=GUILD_LINK_DESCRIPTION_MAX,
-                        value=kwargs.get("description", None),
-                        required=False,
-                    ),
-                    disnake.ui.TextInput(
-                        label="Link/Url:", custom_id="guild_fav_url", min_length=10, max_length=250, value=url or None
                     ),
                 ],
             )
@@ -429,73 +326,6 @@ class FavModalAdd(disnake.ui.Modal):
                     color=self.view.bot.get_color(me),
                 )
             )
-
-        elif self.view.mode == ViewMode.guild_fav_manager:
-            url = inter.text_values["guild_fav_url"].strip()
-
-            if (valid_url := clean_url(url, GUILD_LINK_URL_MAX)) is None:
-                await inter.send(
-                    embed=disnake.Embed(
-                        description=f"**Nenhum link válido encontrado:** {_echo(url)}", color=disnake.Color.red()
-                    ),
-                    ephemeral=True,
-                )
-                return
-
-            description = check_description(inter.text_values["guild_fav_description"])
-
-            if isinstance(description, RuleError):
-                await inter.send(
-                    "**A descrição deve ficar vazia ou ter de 3 a 100 caracteres, sem caracteres de controle.**",
-                    ephemeral=True,
-                )
-                return
-
-            await inter.response.defer(ephemeral=True)
-
-            work = deepcopy(await self.view.bot.get_data(inter.guild_id, db_name=DBModel.guilds))
-
-            if not work["player_controller"]["channel"] or not self.view.bot.get_channel(
-                int(work["player_controller"]["channel"])
-            ):
-                await inter.edit_original_message("**Não há player configurado no servidor! Use o comando /setup**")
-                return
-
-            saved = save_entry(
-                work["player_controller"]["fav_links"],
-                self.name,
-                inter.text_values["guild_fav_name"],
-                {"url": valid_url, "description": description},
-                name_min=GUILD_LINK_NAME_MIN,
-                name_max=GUILD_LINK_NAME_MAX,
-                limit=MAX_GUILD_LINKS,
-            )
-
-            if isinstance(saved, RuleError):
-                await inter.edit_original_message(
-                    _save_error_text(
-                        saved, GUILD_LINK_NAME_MIN, GUILD_LINK_NAME_MAX, "Já existe um link com esse nome."
-                    )
-                )
-                return
-
-            work["player_controller"]["fav_links"] = saved
-            self.view.guild_data = work  # só depois de todas as checagens: uma recusa não altera a tela
-
-            await self.view.bot.update_data(inter.guild_id, self.view.guild_data, db_name=DBModel.guilds)
-
-            guild = inter.guild or self.view.bot.get_guild(inter.guild_id)
-
-            await inter.edit_original_message(
-                embed=disnake.Embed(
-                    description="**Link adicionado/atualizado com sucesso nos fixos do player!\n"
-                    "Membros podem usá-lo diretamente no player-controller quando não estiver em uso.**",
-                    color=self.view.bot.get_color(guild.me),
-                ),
-                view=None,
-            )
-
-            await process_idle_embed(self.view.bot, guild, guild_data=self.view.guild_data)
 
         elif self.view.mode == ViewMode.integrations_manager:
             if not await self._add_integration(inter):
