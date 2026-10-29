@@ -11,10 +11,8 @@ from empiremuse.utils.music.interactions import (
     FavMenuView,
     ViewMode,
 )
-from empiremuse.utils.others import (
-    CustomContext,
-    select_bot_pool,
-)
+from empiremuse.cogs.server_playlists import NOT_ALLOWED, member_may_manage
+from empiremuse.utils.others import CustomContext
 
 # O corpo da classe usa estes nomes, então eles precisam existir neste módulo.
 from empiremuse.music_cog.shared import (
@@ -63,25 +61,17 @@ class FavoritesMixin:
 
         mode = ViewMode.fav_manager
 
-        guild_data = None
         interaction = None
 
         if isinstance(inter, CustomContext):
             prefix = inter.clean_prefix
 
-            if inter.invoked_with in ("serverplaylist", "spl", "svp", "svpl") and (
-                inter.author.guild_permissions.manage_guild or await bot.is_owner(inter.author)
-            ):
-                interaction, bot = await select_bot_pool(inter, return_new=True)
-
-                if not bot:
-                    return
+            if inter.invoked_with in ("serverplaylist", "spl", "svp", "svpl"):
+                # as playlists são do servidor (não de um bot): sem escolher bot; só dono, Administrador ou Gerenciar Servidor
+                if not member_may_manage(inter.author, inter.guild):
+                    raise GenericError(NOT_ALLOWED)
 
                 mode = ViewMode.guild_fav_manager
-
-                await interaction.response.defer(ephemeral=True)
-
-                guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
 
             elif inter.invoked_with in (
                 "integrations",
@@ -118,7 +108,9 @@ class FavoritesMixin:
             mode=mode,
             is_owner=await bot.is_owner(inter.author),
         )
-        view.guild_data = guild_data
+
+        if mode == ViewMode.guild_fav_manager:
+            await view.load_playlists(inter.guild_id)
 
         txt = view.build_txt()
 

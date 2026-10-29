@@ -54,6 +54,7 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/cogs/help_cog.py`: Sistema interativo de ajuda.
 - `empiremuse/cogs/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
 - `empiremuse/cogs/server_manager.py`: Comandos administrativos para gerenciamento de servidores (listar, remover, ver uso, banir e desbanir; só o dono).
+- `empiremuse/rules/playlists.py`, `empiremuse/utils/server_playlists.py`, `empiremuse/utils/server_playlists_files.py` e `empiremuse/cogs/server_playlists.py`: playlists do servidor (seção `playlists` do documento único, importação só-acrescenta, `/playlists`) e as regras puras delas; os arquivos importáveis ficam em `data/playlists/`.
 - `empiremuse/rules/bot_roles.py`: regras puras dos papéis principal/reserva (ordem dos convites, quem avisa num servidor sem o principal, textos fixos); o papel de cada bot (`is_main`, `is_reserve`, `pool.main_bot`) fica em `empiremuse/utils/client.py`.
 - `empiremuse/utils/servers.py` e `empiremuse/rules/servers.py`: configuração única por servidor (documento `servers` do banco global, trava por servidor, migração do bot principal, fachada `get_data` no formato antigo) e as regras puras dela.
 - `empiremuse/cogs/usage_tracker.py`, `empiremuse/utils/usage.py`, `empiremuse/utils/guild_ban.py` e `empiremuse/rules/usage.py`: registro de uso (buffer e gravação em lote), lista global de servidores banidos e as regras puras de ambos.
@@ -114,7 +115,7 @@ O arquivo de maior risco tocado define o nível da mudança (Baixo, Médio ou Al
 | Nível | Áreas | Caminhos |
 | :--- | :--- | :--- |
 | **Alto** | Segredos e carregamento de config | `empiremuse/config_loader.py`, `.example.env`, `empiremuse/logs/redact.py` (redação de logs) |
-| **Alto** | Autenticação e permissões | `empiremuse/panel/` (`oauth.py`, `sessions.py`, `authz.py`, cookies), `empiremuse/cogs/server_manager.py`, `empiremuse/utils/guild_ban.py`, `empiremuse/utils/servers.py` (permissões de DJ e modo restrito), `empiremuse/utils/owner_usage.py`, `empiremuse/utils/owner_panel.py`, `empiremuse/cogs/legacy_cmds.py` (comandos do dono, shell e jishaku) |
+| **Alto** | Autenticação e permissões | `empiremuse/panel/` (`oauth.py`, `sessions.py`, `authz.py`, cookies), `empiremuse/cogs/server_manager.py`, `empiremuse/utils/guild_ban.py`, `empiremuse/utils/servers.py` (permissões de DJ e modo restrito), `empiremuse/cogs/server_playlists.py` (quem gerencia as playlists), `empiremuse/utils/owner_usage.py`, `empiremuse/utils/owner_panel.py`, `empiremuse/cogs/legacy_cmds.py` (comandos do dono, shell e jishaku) |
 | **Alto** | Atualizador e cadeia de suprimentos | `empiremuse/updater/`, `Dockerfile`, `deploy/`, `.github/workflows/`, `requirements*.txt` e locks com hashes, `assets/SHA256SUMS` |
 | **Alto** | Dados pessoais | `empiremuse/cogs/usage_tracker.py`, `empiremuse/utils/usage.py`, `empiremuse/cogs/lastfm.py`, `empiremuse/cogs/ll_yt_oauth.py` (tokens) |
 | **Alto** | Exclusão de dados | `purge_events` e `delete_data` em `empiremuse/utils/db.py` |
