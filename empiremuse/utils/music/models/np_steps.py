@@ -423,6 +423,21 @@ async def _np_send_new(self, req):
     """Envia uma mensagem nova do player e atualiza o canal de pedidos."""
     data = req.data
 
+    panel = getattr(self.bot.pool, "request_panel", None)
+    if not self.message and self.static and panel is not None:
+        # canal de pedidos único: a mensagem é do bot do painel (o autor); quem manda uma nova é ele, nunca o bot deste player
+        try:
+            message = await panel.resend(self.guild_id)
+            if message is not None:
+                await message.edit(allowed_mentions=self.allowed_mentions, **data)
+                self.message = message
+                await self.channel_cleanup()
+        except Exception:
+            logger.exception("Falha em _np_send_new")
+        if self.message:
+            req.data = data
+            return
+
     if not self.message:
         try:
             self.message = await self.text_channel.send(allowed_mentions=self.allowed_mentions, **data)
