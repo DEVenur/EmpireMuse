@@ -38,8 +38,8 @@ class SessaoDePalcoPeloPainelTest(HttpBase):
     def test_saving_from_the_panel_leaves_the_stage_session_alone(self) -> None:
         casos = (
             ("liga", {CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}, True),
-            ("desliga", {CAMPO_PERMANENTE: None, CAMPO_MODELO: MODELO}, False),
             ("so-o-modelo", {CAMPO_PERMANENTE: "on", CAMPO_MODELO: "outro {track.title}"}, True),
+            ("desliga", {CAMPO_PERMANENTE: None, CAMPO_MODELO: "outro {track.title}"}, False),
         )
         for nome, campos, permanente in casos:
             with self.subTest(nome):

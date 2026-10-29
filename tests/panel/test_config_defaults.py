@@ -17,6 +17,9 @@ def test_load_config_converts_panel_types_from_environment(monkeypatch, tmp_path
         monkeypatch.delenv(key, raising=False)
     import empiremuse.config_loader as module
 
+    padrao = module.load_config()
+    assert padrao["PANEL_TRUST_PROXY"] is False and padrao["PANEL_INSECURE_COOKIES"] is False
+
     monkeypatch.setenv("PANEL_ENABLED", "true")
     monkeypatch.setenv("PANEL_TRUST_PROXY", "true")
     monkeypatch.setenv("PANEL_INSECURE_COOKIES", "true")
