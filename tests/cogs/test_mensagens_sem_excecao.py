@@ -200,6 +200,9 @@ def montar_pedido(monkeypatch, erro: BaseException, *, webhook=False):
         http=SimpleNamespace(token=TOKEN_FALSO),
         config={"AUTO_ERROR_REPORT_WEBHOOK": "https://discord.com/api/webhooks/1/segredo" if webhook else ""},
         get_cog=lambda nome: webhook_cog,
+        pool=SimpleNamespace(
+            servers=SimpleNamespace(request=SimpleNamespace(is_panel_bot=AsyncMock(return_value=True)))
+        ),
     )
     self_ = SimpleNamespace(
         bot=bot,
