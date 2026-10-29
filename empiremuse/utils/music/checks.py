@@ -10,6 +10,7 @@ import disnake
 from disnake.ext import commands
 
 import empiremuse.wavelink as wavelink
+from empiremuse.rules.request_panel import choose_player
 from empiremuse.rules.voice_status import control_lock_seconds
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import time_format
@@ -31,6 +32,28 @@ if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore, BotPool
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_player(pool: BotPool, guild_id: int, member: disnake.Member) -> Optional[tuple[BotCore, LavalinkPlayer]]:
+    """O (bot, player) que está na call de quem apertou no painel do canal de pedidos, ou ``None`` (S-V8).
+
+    É o ÚNICO jeito de achar o player de um clique no painel: nunca vem de ``custom_id`` nem de valor de select, e nunca cai no player de
+    outra call. Quem não está em call, ou está numa call sem player, não tem player. Os bots são olhados na ordem do ``identifier``.
+    """
+    voice = getattr(member, "voice", None)
+    voice_id = voice.channel.id if voice and voice.channel else None
+    found: dict[int, tuple[BotCore, LavalinkPlayer]] = {}
+    candidates: list[tuple[int, Optional[int]]] = []
+    for bot in sorted(pool.get_all_bots(), key=lambda b: b.identifier):
+        player = bot.music.players.get(guild_id) if bot.user else None
+        channel = getattr(getattr(player, "guild", None), "me", None)
+        bot_voice = getattr(getattr(channel, "voice", None), "channel", None)
+        if player is None or bot_voice is None:
+            continue
+        found[bot.user.id] = (bot, player)
+        candidates.append((bot.user.id, bot_voice.id))
+    chosen = choose_player(candidates, voice_id)
+    return found.get(chosen) if chosen is not None else None
 
 
 def can_send_message(

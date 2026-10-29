@@ -42,6 +42,7 @@ class PanelEntry(NamedTuple):
     url: str | None
     state: str
     queue: int
+    requester: str | None = None
 
 
 def elect_panel_bot(peers: Iterable[PanelPeer]) -> int | None:
@@ -62,8 +63,9 @@ def make_entry(
     url: object,
     paused: bool,
     queue: int,
+    requester: object = None,
 ) -> PanelEntry:
-    """A entrada do painel. Call privada: sem faixa e sem link, aconteça o que acontecer com o que veio de fora."""
+    """A entrada do painel. Call privada: sem faixa, sem link e sem quem pediu, aconteça o que acontecer com o que veio de fora."""
     return PanelEntry(
         bot_name=clean_text(bot_name, NAME_LIMIT) or "bot",
         bot_id=bot_id,
@@ -73,6 +75,7 @@ def make_entry(
         url=None if private else (clean_text(url, URL_LIMIT) or None),
         state=PAUSED if paused else PLAYING,
         queue=max(0, int(queue)),
+        requester=None if private else (clean_text(requester, NAME_LIMIT) or None),
     )
 
 

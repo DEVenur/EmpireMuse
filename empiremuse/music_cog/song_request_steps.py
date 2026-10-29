@@ -260,6 +260,14 @@ async def _pr_single(self, req):
             await self.delete_message(message)
 
 
+async def _is_panel_bot(self, guild_id: int) -> bool:
+    """Este bot é o bot do painel do servidor? Store indisponível = não (melhor ignorar a mensagem que duas respostas)."""
+    try:
+        return await self.bot.pool.servers.request.is_panel_bot(guild_id, self.bot)
+    except GenericError:
+        return False
+
+
 async def _sr_validate_channel(self, req):
     """Valida o canal de pedidos, as permissões e a mensagem recebida."""
     data = req.data
@@ -294,6 +302,9 @@ async def _sr_validate_channel(self, req):
                 return True
         elif str(message.channel.id) != channel_id:
             return True
+
+        if not await _is_panel_bot(self, message.guild.id):
+            return True  # o canal é único para o pool: só o bot do painel trata o que é digitado nele
 
         try:
             text_channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))

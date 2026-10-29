@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from empiremuse.rules.request_panel import PanelPeer, elect_panel_bot
 from empiremuse.rules.servers import SECTION_REQUEST
+from empiremuse.utils.servers import ServerConfigConflict
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -30,6 +31,11 @@ class RequestConfig(NamedTuple):
     message_id: Optional[int]
     panel_bot_id: Optional[int]
     rev: int
+
+    @property
+    def current(self) -> tuple[Optional[int], Optional[int]]:
+        """``(canal, mensagem)``: o que o escritor leu, para o ``expected`` do ``set``/``clear`` (conflito = mudou no meio)."""
+        return self.channel, self.message_id
 
 
 class Election(NamedTuple):
@@ -69,21 +75,39 @@ class ServerRequest:
     # ------------------------------------------------------------------ escrita
 
     async def set(
-        self, gid: int, channel_id: Optional[int], message_id: Optional[int], *, expected_rev: Optional[int] = None
+        self,
+        gid: int,
+        channel_id: Optional[int],
+        message_id: Optional[int],
+        *,
+        expected_rev: Optional[int] = None,
+        expected: Optional[tuple[Optional[int], Optional[int]]] = None,
     ) -> RequestConfig:
-        """Grava canal e mensagem juntos (``None`` limpa) sob a trava; sem canal, sem mensagem."""
+        """Grava canal e mensagem juntos (``None`` limpa) sob a trava; sem canal, sem mensagem.
+
+        ``expected`` = ``(canal, mensagem)`` que o escritor leu: se o gravado já é outro, ``ServerConfigConflict`` (conferido DENTRO da
+        trava). Vale mais que ``expected_rev``, que também sobe com qualquer outra configuração do servidor.
+        """
         channel = str(channel_id) if channel_id else None
         message = str(message_id) if channel and message_id else None
 
         def apply(doc: dict) -> bool:
+            if expected is not None and (_config(doc).channel, _config(doc).message_id) != tuple(expected):
+                raise ServerConfigConflict
             before = dict(doc[SECTION_REQUEST])
             doc[SECTION_REQUEST].update({"channel": channel, "message_id": message})
             return doc[SECTION_REQUEST] != before
 
         return _config(await self.store.mutate_doc(gid, SECTIONS, apply, expected_rev=expected_rev))
 
-    async def clear(self, gid: int, *, expected_rev: Optional[int] = None) -> RequestConfig:
-        return await self.set(gid, None, None, expected_rev=expected_rev)
+    async def clear(
+        self,
+        gid: int,
+        *,
+        expected_rev: Optional[int] = None,
+        expected: Optional[tuple[Optional[int], Optional[int]]] = None,
+    ) -> RequestConfig:
+        return await self.set(gid, None, None, expected_rev=expected_rev, expected=expected)
 
     # ------------------------------------------------------------------ o bot do painel
 
