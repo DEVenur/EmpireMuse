@@ -105,9 +105,14 @@ class _OpenCommand:
         self.bot = bot
 
 
-def _source_key(source: object) -> Optional[int]:
-    """Identifica a interação (``id``) ou o contexto de prefixo (``id`` da mensagem) que abriu o comando."""
-    return getattr(source, "id", None) or getattr(getattr(source, "message", None), "id", None)
+def _open_key(bot: object, source: object) -> Optional[tuple[Optional[int], int]]:
+    """Chave do comando aberto: o bot que recebeu + a interação (``id``) ou a mensagem do prefixo (``id``).
+
+    O bot entra na chave porque o mapa é do pool inteiro e, no prefixo, todos os bots veem a mesma mensagem: o bot recusado pelo
+    roteamento não pode fechar o evento do bot que executa.
+    """
+    key = getattr(source, "id", None) or getattr(getattr(source, "message", None), "id", None)
+    return None if key is None else (getattr(getattr(bot, "user", None), "id", None), key)
 
 
 class UsageRecorder:
@@ -187,7 +192,7 @@ class UsageRecorder:
         """
         try:
             guild = getattr(source, "guild", None)
-            key = _source_key(source)
+            key = _open_key(bot, source)
             if guild is None or key is None or not name:
                 return
             event_id = self.record(kind, name, bot=bot, guild=guild, text_channel=getattr(source, "channel", None))
@@ -197,11 +202,12 @@ class UsageRecorder:
             self._note_failure("registrar", exc)
 
     def command_finished(
-        self, source: object, error: Optional[BaseException] = None, *, music_bot: object = None
+        self, source: object, error: Optional[BaseException] = None, *, bot: object, music_bot: object = None
     ) -> None:
-        """Fecha o evento aberto por ``command_started``: ``ok`` ou o rótulo fixo do erro, a latência e o bot que executou."""
+        """Fecha o evento aberto por ``command_started`` pelo mesmo ``bot`` que o abriu: ``ok`` ou o rótulo fixo do erro, a latência e o
+        bot que executou."""
         try:
-            opened = self._open.pop(_source_key(source), None)
+            opened = self._open.pop(_open_key(bot, source), None)
             if opened is None:
                 return
             fields: dict[str, Any] = {

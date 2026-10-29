@@ -27,7 +27,7 @@ class UsageTracker(commands.Cog):
 
     def _finish(self, source: object, error: BaseException | None = None) -> None:
         if usage := usage_of(self.bot):
-            usage.command_finished(source, error, music_bot=getattr(source, "music_bot", None))
+            usage.command_finished(source, error, bot=self.bot, music_bot=getattr(source, "music_bot", None))
 
     @commands.Cog.listener("on_slash_command_completion")
     @commands.Cog.listener("on_user_command_completion")
