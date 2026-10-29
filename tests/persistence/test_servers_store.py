@@ -252,10 +252,9 @@ def test_legacy_writer_that_changed_settings_raises_and_the_others_are_saved(wor
     doc["autoplay"] = False
     doc["player_controller"]["channel"] = "77"
     run(world.store.save_legacy(bot, GID, doc))
-    stored = world.banco.docs[(DBModel.guilds, str(MAIN_ID), str(GID))]
-    assert (
-        stored["player_controller"]["channel"] == "77" and "autoplay" not in stored
-    )  # settings nunca vão ao doc do bot
+    assert world.banco.servers_doc()["request"]["channel"] == "77"  # o canal de pedidos é do servidor, não do bot
+    stored = world.banco.docs.get((DBModel.guilds, str(MAIN_ID), str(GID)), {})
+    assert "autoplay" not in stored and "77" not in str(stored)  # nada vai ao doc do bot
 
 
 def test_another_admin_changing_settings_between_read_and_write_is_not_an_error(world):
@@ -267,7 +266,7 @@ def test_another_admin_changing_settings_between_read_and_write_is_not_an_error(
     run(world.store.save_legacy(bot, GID, doc))  # não levanta
 
     assert run(world.store.settings(GID))["autoplay"] is True  # a mudança do outro admin não se perde
-    assert world.banco.docs[(DBModel.guilds, str(MAIN_ID), str(GID))]["player_controller"]["channel"] == "77"
+    assert world.banco.servers_doc()["request"]["channel"] == "77"
 
 
 def test_legacy_view_is_a_deep_copy(world):
