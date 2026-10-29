@@ -53,63 +53,6 @@ def png(largura: int = LADO, altura: int = LADO, *, extra: int = 0) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + _bloco(b"IHDR", cabecalho) + auxiliar + _bloco(b"IDAT", dados) + _bloco(b"IEND", b"")
 
 
-def png_so_cabecalho(largura: int = LADO, altura: int = LADO) -> bytes:
-    """Só assinatura + IHDR (sem IDAT nem IEND): o validador não pode depender de decodificar a imagem."""
-    return b"\x89PNG\r\n\x1a\n" + _bloco(b"IHDR", struct.pack(">IIBBBBB", largura, altura, 8, 6, 0, 0, 0))
-
-
-def gif(largura: int = LADO, altura: int = LADO, *, versao: bytes = b"GIF89a", extra: int = 0) -> bytes:
-    tela = struct.pack("<HHBBB", largura, altura, 0, 0, 0)
-    return versao + tela + b"\x00" * extra + b"\x3b"
-
-
-def gif_animado(largura: int = LADO, altura: int = LADO, *, quadros: int = 3, versao: bytes = b"GIF89a") -> bytes:
-    """GIF com ``quadros`` imagens 1×1 (cada uma com seu bloco de controle gráfico) e a tela lógica ``largura``×``altura``."""
-    tela = struct.pack("<HHBBB", largura, altura, 0, 0, 0)
-    controle = b"\x21\xf9\x04\x00\x0a\x00\x00\x00"
-    imagem = b"\x2c" + struct.pack("<HHHH", 0, 0, 1, 1) + b"\x00" + b"\x02" + b"\x02\x44\x01" + b"\x00"
-    return versao + tela + (controle + imagem) * quadros + b"\x3b"
-
-
-def quadros_do_gif(dados: bytes) -> int:
-    """Quantas imagens o GIF tem (percorre os blocos; 0 se não for GIF ou se estiver mal formado)."""
-    if dados[:6] not in (b"GIF87a", b"GIF89a") or len(dados) < 13:
-        return 0
-    flags, pos = dados[10], 13
-    if flags & 0x80:
-        pos += 3 * 2 ** ((flags & 7) + 1)
-    quadros = 0
-    try:
-        while pos < len(dados):
-            marca = dados[pos]
-            if marca == 0x3B:
-                return quadros
-            if marca == 0x21:
-                pos += 2
-                while dados[pos]:
-                    pos += dados[pos] + 1
-                pos += 1
-            elif marca == 0x2C:
-                local = dados[pos + 9]
-                pos += 10
-                if local & 0x80:
-                    pos += 3 * 2 ** ((local & 7) + 1)
-                pos += 1
-                while dados[pos]:
-                    pos += dados[pos] + 1
-                pos += 1
-                quadros += 1
-            else:
-                return 0
-    except IndexError:
-        return 0
-    return 0
-
-
-def jpeg(largura: int = LADO, altura: int = LADO) -> bytes:
-    return b"\xff\xd8\xff\xe0" + struct.pack(">H", 16) + b"JFIF\x00" + bytes(9) + b"\xff\xd9"
-
-
 def escrever_emojis(pasta: Path, nomes=NOMES, *, conteudo=None) -> dict[str, bytes]:
     """Cria ``<nome>.png`` válidos (ou ``conteudo`` dado) em ``pasta``; devolve ``{nome: bytes}``."""
     pasta.mkdir(parents=True, exist_ok=True)

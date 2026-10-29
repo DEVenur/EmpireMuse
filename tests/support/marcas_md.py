@@ -8,7 +8,6 @@ só aparece como parte do TEXTO dos dados de entrada, nunca como destino pretend
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
 from urllib.parse import urlsplit
 
 CRASE = "`"
@@ -66,32 +65,3 @@ def links_alheios(texto: str) -> list[str]:
 def marcas_soltas(texto: str) -> int:
     """Quantos ``](`` há no texto além dos que formam um link bem-formado (um ``](`` solto é um link quebrado ou um link a mais)."""
     return texto.count("](") - len(destinos(texto))
-
-
-def textos_do_embed(embed) -> list[str]:
-    partes: list[str] = []
-    for valor in (embed.title, embed.description):
-        if valor:
-            partes.append(str(valor))
-    if embed.author and embed.author.name:
-        partes.append(str(embed.author.name))
-    if embed.footer and embed.footer.text:
-        partes.append(str(embed.footer.text))
-    for campo in embed.fields:
-        partes.extend([str(campo.name), str(campo.value)])
-    return partes
-
-
-def textos_da_saida(dados: dict) -> list[str]:
-    """Todo texto de uma saída de skin: ``content`` e os embeds."""
-    partes: list[str] = []
-    if dados.get("content"):
-        partes.append(str(dados["content"]))
-    for embed in dados.get("embeds") or []:
-        partes.extend(textos_do_embed(embed))
-    return partes
-
-
-def sem_link_alheio(textos: Iterable[str]) -> list[str]:
-    """Os destinos que apontam para o domínio alheio em qualquer dos textos (vazio = ok)."""
-    return [d for texto in textos for d in links_alheios(texto)]

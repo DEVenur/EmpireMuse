@@ -14,7 +14,6 @@ visitada) e nenhuma chamada a ``repr``, ``==``, ``hash``, ``len`` ou ``iter`` de
 Nós = contêineres + escalares (chaves de dicionário não contam), como em ``tests/serialization/test_profundidade_campos_livres.py``.
 """
 
-import time
 import tracemalloc
 from collections import OrderedDict, defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -26,18 +25,14 @@ from tests.support.serializacao_nucleo import (
     DEPTH,
     FIELD_DEPTH,
     KEY_NOT_TEXT,
-    LIMITE_DE_TEMPO,
     NODES,
     NOT_FINITE,
-    STRUCTURE_NODES,
     TYPE,
     aninhado,
     aninhado_em_dicionarios,
-    bomba_de_compartilhamento,
     falha,
     schema,
 )
-from tests.serialization.test_profundidade_campos_livres import nos
 
 pytestmark = pytest.mark.critical
 

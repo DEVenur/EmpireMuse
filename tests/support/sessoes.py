@@ -151,10 +151,6 @@ def decodificar(documento: dict, **kwargs):
     return session.decode_session(em_bytes(documento), **kwargs)
 
 
-def tamanho_do_json(dados: dict) -> int:
-    return len(session.encode_session(dados))
-
-
 # ============================================================================ disco, legado e Mongo de mentira (commit 2)
 
 import base64  # noqa: E402
