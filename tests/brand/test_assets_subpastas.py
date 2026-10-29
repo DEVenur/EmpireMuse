@@ -20,7 +20,6 @@ from tests.support.raiz import RAIZ
 
 pytestmark = pytest.mark.critical
 
-ASSETS = RAIZ / "assets"
 PACOTE = RAIZ / "empiremuse"
 COPIAS_DA_RAIZ = frozenset(
     {
@@ -262,9 +261,3 @@ class TestBaseDasUrlsPorVersao:
 
 
 # ============================================================================ o assets/ real (vermelho até o Ledger mover os arquivos)
-
-
-def somas() -> dict[str, str]:
-    arquivo = ASSETS / "SHA256SUMS"
-    pares = (linha.split(None, 1) for linha in arquivo.read_text(encoding="utf-8").splitlines() if linha.strip())
-    return {nome.strip(): resumo for resumo, nome in pares}

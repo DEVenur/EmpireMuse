@@ -129,36 +129,6 @@ def com_java_do_sistema(monkeypatch):
     monkeypatch.setattr(ll, "validate_java", lambda cmd, debug=False: cmd)
 
 
-class FakeJava:
-    """Processo Java falso: ``poll``/``wait`` como o Popen; ``die`` simula a morte; kill/terminate matam de verdade."""
-
-    def __init__(self):
-        self.returncode = None
-        self.pid = 4242
-        self.sinais = []
-        self._morto = threading.Event()
-
-    def poll(self):
-        return self.returncode
-
-    def wait(self, timeout=None):
-        if not self._morto.wait(timeout):
-            raise subprocess.TimeoutExpired("java", timeout)
-        return self.returncode
-
-    def die(self, code):
-        self.returncode = code
-        self._morto.set()
-
-    def terminate(self):
-        self.sinais.append("terminate")
-        self.die(-15)
-
-    def kill(self):
-        self.sinais.append("kill")
-        self.die(-9)
-
-
 # ============================================================================ (1) configuração
 
 
