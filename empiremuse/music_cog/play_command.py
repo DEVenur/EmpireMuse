@@ -256,7 +256,7 @@ class PlayCommandMixin(PlayMenusMixin, PlayResolveMixin, PlayEnqueueMixin):
         mix = mix == "yes" or mix is True
 
         msg = None
-        guild_data = await bot.get_data(inter.author.id, db_name=DBModel.guilds)
+        guild_data = await bot.get_data(guild.id, db_name=DBModel.guilds)  # o documento do SERVIDOR (era o id do autor)
         ephemeral = None
 
         if not inter.response.is_done():

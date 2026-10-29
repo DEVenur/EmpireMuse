@@ -58,6 +58,7 @@ from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.app_profile import sync_app_profile
 from empiremuse.utils.guild_ban import GuildBans
+from empiremuse.utils.servers import ServerStore
 from empiremuse.rules.usage import KIND_PREFIX, KIND_SLASH
 from empiremuse.utils.usage import UsageRecorder, usage_of
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
@@ -254,6 +255,7 @@ class BotPool:
         self.metrics = MetricsCollector()
         self.usage = UsageRecorder(self)
         self.guild_bans = GuildBans(self)
+        self.servers = ServerStore(self)
         self.logs_task: Optional[asyncio.Task] = None
         self.helper_watch_tasks: set[asyncio.Task] = set()  # referências fortes das tarefas do watch_helper
         # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
@@ -1477,9 +1479,13 @@ class BotCore(commands.AutoShardedBot):
         return self.pool.ws_client
 
     async def get_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users]):
+        if db_name == DBModel.guilds:  # configuração do servidor: documento único, devolvido no formato antigo
+            return await self.pool.servers.legacy_doc(self, id_)
         return await self.pool.database.get_data(id_=id_, db_name=db_name, collection=str(self.user.id))
 
     async def update_data(self, id_, data: dict, *, db_name: Union[DBModel.guilds, DBModel.users]):
+        if db_name == DBModel.guilds:  # só canal, mensagem e favoritos; settings vai por pool.servers
+            return await self.pool.servers.save_legacy(self, id_, data)
         return await self.pool.database.update_data(id_=id_, data=data, db_name=db_name, collection=str(self.user.id))
 
     async def get_global_data(self, id_: int, *, db_name: Union[DBModel.guilds, DBModel.users]):

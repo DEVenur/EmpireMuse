@@ -25,6 +25,7 @@ class BancoFalso:
     def __init__(self, guildas, usuarios):
         self.colecoes = {(DBModel.guilds, "bot"): guildas, (DBModel.users, "global"): usuarios}
         self.chamadas = []
+        self.gravados = []
 
     async def iter_data(self, db_name, collection, filter=None):
         self.chamadas.append(("iter_data", collection))
@@ -34,6 +35,9 @@ class BancoFalso:
     async def query_data(self, db_name, collection, filter=None, limit=None):
         self.chamadas.append(("query_data", collection, limit))
         return list(self.colecoes[(db_name, collection)])[:limit]
+
+    async def update_data(self, id_, data, *, db_name, collection):
+        self.gravados.append(id_)
 
 
 def favoritos_sujos(n: int) -> dict:
@@ -45,17 +49,12 @@ def montar(tmp_path, monkeypatch):
     guildas = [{"_id": str(n), "player_controller": {"fav_links": favoritos_sujos(n)}} for n in range(GUILDAS)]
     usuarios = [{"_id": str(n), "fav_links": favoritos_sujos(n)} for n in range(USUARIOS)]
     banco = BancoFalso(guildas, usuarios)
-    gravados = {"guildas": [], "usuarios": []}
-
-    async def atualizar_bot(id_, data, *, db_name):
-        gravados["guildas"].append(id_)
+    gravados = {"guildas": banco.gravados, "usuarios": []}
 
     async def atualizar_global(id_, data, *, db_name):
         gravados["usuarios"].append(id_)
 
-    bot = SimpleNamespace(
-        user=SimpleNamespace(id="bot"), pool=SimpleNamespace(database=banco), update_data=atualizar_bot
-    )
+    bot = SimpleNamespace(user=SimpleNamespace(id="bot"), pool=SimpleNamespace(database=banco))
     bot.pool.get_all_bots = lambda: [bot]
     cog = Misc.__new__(Misc)
     cog.bot = SimpleNamespace(pool=bot.pool, update_global_data=atualizar_global)

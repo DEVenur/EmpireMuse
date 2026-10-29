@@ -28,6 +28,7 @@ from empiremuse.utils.guild_ban import bans_of
 from empiremuse.utils.music.checks import check_requester_channel
 from empiremuse.utils.music.converters import time_format, URL_REG, md_bracketed, md_link, fix_characters
 from empiremuse.utils.others import select_bot_pool, CustomContext, paginator
+from empiremuse.utils.servers import CONTROLLER_KEYS
 from empiremuse.utils.usage import usage_of
 from empiremuse.version import image_version, running_from_image
 
@@ -938,7 +939,10 @@ class Misc(commands.Cog):
                         remove_blank_spaces(data["player_controller"]["fav_links"])
                     except KeyError:
                         continue
-                    await bot.update_data(id_=data["_id"], data=data, db_name=DBModel.guilds)
+                    # documento cru do bot (não o formato antigo montado do servidor): grava direto no banco
+                    await bot.pool.database.update_data(
+                        id_=data["_id"], data=data, db_name=DBModel.guilds, collection=str(bot.user.id)
+                    )
 
             documents = self.bot.pool.database.iter_data(collection="global", db_name=DBModel.users)
 
@@ -1024,9 +1028,15 @@ class GuildLog(commands.Cog):
             usage.record_guild("join", guild, bot=self.bot)
 
         try:
-            guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)
-            guild_data["player_controller"] = deepcopy(db_models[DBModel.guilds]["player_controller"])
-            await self.bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
+            # Só o documento POR BOT (canal, mensagem e favoritos voltam ao padrão): a configuração do servidor, no documento
+            # único, não é lida nem gravada aqui, então um bot que entra não mexe nela (S-V5).
+            database = self.bot.pool.database
+            collection = str(self.bot.user.id)
+            guild_data = deepcopy(await database.get_data(guild.id, db_name=DBModel.guilds, collection=collection))
+            defaults = db_models[DBModel.guilds]["player_controller"]
+            for key in CONTROLLER_KEYS:
+                guild_data["player_controller"][key] = deepcopy(defaults[key])
+            await database.update_data(guild.id, guild_data, db_name=DBModel.guilds, collection=collection)
         except Exception:
             logger.exception("Falha ao tratar a entrada do bot no servidor")
 

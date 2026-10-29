@@ -287,7 +287,11 @@ async def chamar_change_skin(monkeypatch, global_data, *, nova_skin, skin_atual=
     async def update_data(*args, **kwargs):
         return None
 
+    async def patch(*args, **kwargs):
+        return {}
+
     bot.get_data, bot.update_data = get_data, update_data
+    bot.pool.servers = SimpleNamespace(patch=patch)
     bot.get_guild = lambda guild_id: SimpleNamespace(id=guild_id, me=SimpleNamespace())
 
     class TelaDeEscolha:
