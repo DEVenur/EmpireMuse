@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import disnake
 
 from empiremuse.rules.errors import RuleError
+from empiremuse.rules.limits import MAX_SERVER_PLAYLISTS
 from empiremuse.rules.playlists import (
     ImportReport,
     ParsedFile,
@@ -28,6 +29,7 @@ from empiremuse.rules.playlists import (
     from_doc,
     plan_import,
     remove_item,
+    select_description,
     sorted_by_order,
     to_doc,
     to_export,
@@ -52,6 +54,41 @@ def _validated(item: Playlist) -> Playlist | RuleError:
     """O item revalidado: nada chega ao banco sem passar pelas regras, venha de onde vier (``icon`` só de arquivo do bot)."""
     checked = check_playlist(item._asdict(), allow_icon=False, default_order=item.order)
     return checked if isinstance(checked, RuleError) else checked._replace(order=item.order)
+
+
+def select_options(
+    bot, playlists: tuple[Playlist, ...], limit: int = MAX_SERVER_PLAYLISTS
+) -> list[disnake.SelectOption]:
+    """As primeiras ``limit`` playlists por ordem como opções de select (o Discord aceita 25): nome, descrição cortada e o emoji da plataforma.
+
+    O ``value`` é o nome; quem trata a escolha o resolve de novo no store, nunca confia no valor recebido.
+    """
+    from empiremuse.utils.others import music_source_emoji_url  # tarde: utils.others importa muita coisa
+
+    return [
+        disnake.SelectOption(
+            label=p.name,
+            value=p.name,
+            description=select_description(p.description) or None,
+            emoji=music_source_emoji_url(p.url, bot)[0],
+        )
+        for p in playlists[:limit]
+    ]
+
+
+async def safe_list(bot, gid: int) -> tuple[Playlist, ...]:
+    """As playlists do servidor para EXIBIR (embed ocioso, select, menu): store indisponível ou servidor desconhecido = lista vazia."""
+    from empiremuse.utils.servers import ServerConfigUnavailable, UnknownGuild  # tarde: servers cria o ServerPlaylists
+
+    try:
+        return await bot.pool.servers.playlists.list(gid)
+    except ServerConfigUnavailable, UnknownGuild:
+        return ()
+
+
+async def load_select_options(bot, gid: int) -> list[disnake.SelectOption]:
+    """As opções do select de playlists do servidor; sem playlists, ou com o store indisponível, a lista vazia (o select some)."""
+    return select_options(bot, await safe_list(bot, gid))
 
 
 class ServerPlaylists:

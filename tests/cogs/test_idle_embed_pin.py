@@ -44,8 +44,13 @@ def alvo(permissoes: disnake.Permissions, *, fixada: bool = False, tipo=disnake.
     return mensagem
 
 
+async def sem_playlists(gid):
+    return ()
+
+
 def bot_falso():
     return SimpleNamespace(
+        pool=SimpleNamespace(servers=SimpleNamespace(playlists=SimpleNamespace(list=sem_playlists))),
         music=SimpleNamespace(nodes={}),
         get_color=lambda *a: 0,
         get_global_command_named=lambda *a, **k: None,

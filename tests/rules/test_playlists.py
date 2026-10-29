@@ -15,6 +15,7 @@ from empiremuse.rules.playlists import (
     QUOTA_FULL,
     Playlist,
     add_item,
+    check_import_filename,
     check_playlist,
     edit_item,
     clean_stored_url,
@@ -214,6 +215,30 @@ def test_export_then_import_into_an_empty_server_gives_the_same_list_without_ico
     imported = plan_import([], parse(exported).items)
     assert imported.skipped == ()
     assert imported.added == tuple(p._replace(icon=None) for p in original)
+
+
+# ---------------------------------------------------------------------- A7: nome de arquivo do bot
+
+
+@pytest.mark.parametrize(
+    ("name", "ok"),
+    [
+        ("rock-80.json", True),
+        ("nao-listado.json", False),  # bem formado, mas fora da lista dos que existem
+        ("../rock-80.json", False),
+        ("sub/rock-80.json", False),
+        ("Rock-80.json", False),
+        ("rock-80.json ", False),
+        ("rock_80.json", False),
+        ("a" * 65 + ".json", False),
+        (".json", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_an_import_file_name_must_be_well_formed_and_one_of_the_listed_files(name, ok):
+    listed = {"rock-80.json", "../rock-80.json", "sub/rock-80.json", "Rock-80.json", "rock-80.json ", "rock_80.json"}
+    assert (check_import_filename(name, listed) == name) is ok
 
 
 # ---------------------------------------------------------------------- A6: permissão

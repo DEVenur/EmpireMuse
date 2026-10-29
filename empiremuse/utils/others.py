@@ -18,6 +18,7 @@ from empiremuse.utils.music.app_emojis import APP_EMOJIS
 from empiremuse.utils.music.app_emojis import emoji as app_emoji
 from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import GenericError, ArgumentParsingError
+from empiremuse.utils.server_playlists import load_select_options
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -423,12 +424,7 @@ async def send_idle_embed(
 
     components = []
 
-    opts = [
-        disnake.SelectOption(
-            label=k, value=k, emoji=music_source_emoji_url(v["url"], bot)[0], description=v.get("description")
-        )
-        for k, v in guild_data["player_controller"]["fav_links"].items()
-    ]
+    opts = await load_select_options(bot, guild_id)
 
     if opts:
         components.append(

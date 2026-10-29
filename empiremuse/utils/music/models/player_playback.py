@@ -17,6 +17,7 @@ from empiremuse.utils.music.errors import (
     log_unexpected_error,
 )
 from empiremuse.utils.others import PlayerControls, string_to_file
+from empiremuse.utils.server_playlists import load_select_options
 from empiremuse.wavelink import TrackStart, TrackEnd
 
 if TYPE_CHECKING:
@@ -264,12 +265,7 @@ class PlayerPlaybackMixin:
             )
         ]
 
-        guild_data = await self.bot.get_data(self.guild.id, db_name=DBModel.guilds)
-
-        opts = [
-            disnake.SelectOption(label=k, value=k, description=v["description"])
-            for k, v in guild_data["player_controller"]["fav_links"].items()
-        ]
+        opts = await load_select_options(self.bot, self.guild.id)
 
         if opts:
             components.append(

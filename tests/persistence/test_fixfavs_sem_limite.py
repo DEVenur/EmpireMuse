@@ -75,7 +75,9 @@ def montar(tmp_path, monkeypatch):
 async def test_o_comando_percorre_pelo_cursor_e_sem_limite(tmp_path, monkeypatch):
     cog, ctx, banco, _, _ = montar(tmp_path, monkeypatch)
     await Misc.fixfavs.callback(cog, ctx)
-    assert banco.chamadas == [("iter_data", "bot"), ("iter_data", "global")]
+    # os links fixos dos servidores são as playlists do documento único (item 17): o comando só percorre os favoritos pessoais
+    assert banco.chamadas == [("iter_data", "global")]
+    assert banco.gravados == []  # e nunca regrava o fav_links antigo dos documentos por bot
 
 
 @pytest.mark.asyncio
@@ -85,5 +87,5 @@ async def test_colecao_vazia_gera_backup_valido(tmp_path, monkeypatch):
     banco.colecoes[(DBModel.users, "global")].clear()
     await Misc.fixfavs.callback(cog, ctx)
     pasta = tmp_path / "local_database" / "fixfavs_backup"
-    assert json.loads((pasta / "guild_favs_bot.json").read_text(encoding="utf-8")) == []
+    assert not (pasta / "guild_favs_bot.json").exists()
     assert json.loads((pasta / "user_favs.json").read_text(encoding="utf-8")) == []

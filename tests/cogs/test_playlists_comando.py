@@ -1,0 +1,252 @@
+"""``/playlists importar`` e ``/playlists exportar`` (item 17, A6, A7, A8, A11): quem não gerencia é negado em TODO comando e modal,
+o anexo grande é recusado antes de baixar, o nome do arquivo do bot não vira caminho, o ícone só vale vindo de arquivo do bot e
+toda resposta é efêmera, sem menção e sem texto de exceção."""
+
+import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import disnake
+import pytest
+
+from empiremuse.cogs import server_playlists as cog_module
+from empiremuse.cogs.server_playlists import (
+    PasteModal,
+    ServerPlaylistsCog,
+    ensure_manage,
+    member_may_manage,
+)
+from empiremuse.rules.limits import PLAYLIST_FILE_MAX_BYTES, PLAYLIST_PASTE_MAX
+from empiremuse.rules.playlists import ImportReport
+from empiremuse.utils.music.errors import GenericError
+
+pytestmark = pytest.mark.critical
+
+GID, OWNER_ID = 111, 1
+FILE = {"playlists": [{"name": "Rock", "url": "https://exemplo.com/rock", "icon": "icons/rock.png"}]}
+
+
+def member(*, user_id=50, administrator=False, manage_guild=False):
+    return MagicMock(
+        spec=disnake.Member,
+        id=user_id,
+        guild_permissions=SimpleNamespace(administrator=administrator, manage_guild=manage_guild),
+    )
+
+
+GUILD = SimpleNamespace(id=GID, owner_id=OWNER_ID)
+ADMIN, MANAGER, OWNER = member(administrator=True), member(manage_guild=True), member(user_id=OWNER_ID)
+PLAIN = member()
+
+
+def make_inter(author, **extra):
+    return SimpleNamespace(
+        author=author,
+        guild=GUILD,
+        guild_id=GID,
+        response=SimpleNamespace(defer=AsyncMock(), send_modal=AsyncMock()),
+        edit_original_message=AsyncMock(),
+        text_values={},
+        **extra,
+    )
+
+
+@pytest.fixture
+def world():
+    playlists = SimpleNamespace(
+        import_file=AsyncMock(return_value=ImportReport((), ())),
+        list=AsyncMock(return_value=(object(),)),
+        export_bytes=AsyncMock(return_value=b"{}"),
+    )
+    bot = SimpleNamespace(pool=SimpleNamespace(servers=SimpleNamespace(playlists=playlists)))
+    return SimpleNamespace(cog=ServerPlaylistsCog(bot), playlists=playlists)
+
+
+def sent_text(inter):
+    return inter.edit_original_message.await_args.args[0]
+
+
+def assert_private_and_without_mentions(inter):
+    inter.response.defer.assert_awaited_once_with(ephemeral=True)
+    mentions = inter.edit_original_message.await_args.kwargs["allowed_mentions"]
+    assert (mentions.everyone, mentions.users, mentions.roles) == (False, False, False)
+
+
+# ---------------------------------------------------------------------- A6: permissão
+
+
+@pytest.mark.parametrize(
+    ("who", "allowed"),
+    [
+        (OWNER, True),
+        (ADMIN, True),
+        (MANAGER, True),
+        (PLAIN, False),
+        (None, False),
+        (SimpleNamespace(id=OWNER_ID), False),
+    ],
+    ids=["owner", "administrator", "manage_guild", "plain", "no_member", "no_guild_permissions"],
+)
+def test_only_the_owner_administrator_or_manage_guild_may_manage(who, allowed):
+    assert member_may_manage(who, GUILD) is allowed
+    assert member_may_manage(who, None) is False
+    if allowed:
+        ensure_manage(make_inter(who))
+    else:
+        with pytest.raises(GenericError):
+            ensure_manage(make_inter(who))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entry", ["import_", "export_", "paste_modal"])
+async def test_a_plain_member_is_denied_in_every_command_and_modal_before_anything_happens(world, entry):
+    inter = make_inter(PLAIN)
+    inter.text_values = {
+        "json_data": json.dumps(FILE)
+    }  # o modal foi aberto quando ele ainda era admin (rebaixado depois)
+
+    with pytest.raises(GenericError):
+        if entry == "paste_modal":
+            await PasteModal.callback(PasteModal(world.cog), inter)
+        elif entry == "import_":
+            await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None)
+        else:
+            await ServerPlaylistsCog.export_.callback(world.cog, inter)
+
+    inter.response.defer.assert_not_awaited()
+    inter.response.send_modal.assert_not_awaited()
+    world.playlists.import_file.assert_not_awaited()
+    world.playlists.export_bytes.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------- origens
+
+
+@pytest.mark.asyncio
+async def test_no_origin_opens_the_paste_modal_and_two_origins_are_refused(world):
+    inter = make_inter(ADMIN)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None)
+    assert isinstance(inter.response.send_modal.await_args.args[0], PasteModal)
+
+    with pytest.raises(GenericError):
+        await ServerPlaylistsCog.import_.callback(world.cog, make_inter(ADMIN), file="rock.json", attachment=object())
+    world.playlists.import_file.assert_not_awaited()
+
+
+def attachment(filename="lista.json", size=100, content=None):
+    return SimpleNamespace(
+        filename=filename, size=size, read=AsyncMock(return_value=json.dumps(content or FILE).encode())
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("filename", "size"),
+    [("lista.json", PLAYLIST_FILE_MAX_BYTES + 1), ("lista.txt", 100), ("lista.json", None)],
+    ids=["too_big", "not_json", "unknown_size"],
+)
+async def test_a_bad_attachment_is_refused_before_it_is_downloaded(world, filename, size):  # A8
+    inter, file = make_inter(ADMIN), attachment(filename, size)
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=file)
+
+    file.read.assert_not_awaited()
+    world.playlists.import_file.assert_not_awaited()
+    assert_private_and_without_mentions(inter)
+
+
+@pytest.mark.asyncio
+async def test_an_attachment_import_uses_the_interaction_guild_and_drops_any_icon(world):  # A11
+    inter = make_inter(MANAGER)
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=attachment())
+
+    (gid, parsed), _ = world.playlists.import_file.await_args
+    assert gid == GID and [p.name for p in parsed.items] == ["Rock"] and parsed.items[0].icon is None
+    assert_private_and_without_mentions(inter)
+
+
+@pytest.mark.asyncio
+async def test_a_file_that_is_not_json_changes_nothing_and_shows_no_exception_text(world):  # A1
+    inter, file = make_inter(ADMIN), attachment()
+    file.read = AsyncMock(return_value=b"\xff nao e json")
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=file)
+
+    world.playlists.import_file.assert_not_awaited()
+    assert "Traceback" not in sent_text(inter) and "Decode" not in sent_text(inter)
+
+
+# ---------------------------------------------------------------------- A7: arquivo do bot
+
+
+@pytest.fixture
+def bot_files(tmp_path, monkeypatch):
+    pasta = tmp_path / "playlists"
+    pasta.mkdir()
+    (pasta / "rock-80.json").write_text(json.dumps(FILE))
+    (tmp_path / "segredo.json").write_text(json.dumps(FILE))
+    (pasta / "atalho.json").symlink_to(tmp_path / "segredo.json")
+    monkeypatch.setattr(cog_module, "IMPORT_DIR", pasta)
+    return pasta
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "name", ["../segredo.json", "atalho.json", "nao-existe.json", "/etc/passwd", "rock-80.json/.."]
+)
+async def test_a_file_name_that_is_not_a_listed_regular_file_is_refused(world, bot_files, name):
+    inter = make_inter(ADMIN)
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=name, attachment=None)
+
+    world.playlists.import_file.assert_not_awaited()
+    assert "não está disponível" in sent_text(inter)
+
+
+@pytest.mark.asyncio
+async def test_a_bot_file_is_imported_and_only_there_the_icon_survives(world, bot_files):
+    inter = make_inter(ADMIN)
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file="rock-80.json", attachment=None)
+
+    (gid, parsed), _ = world.playlists.import_file.await_args
+    assert gid == GID and parsed.items[0].icon == "icons/rock.png"
+
+
+# ---------------------------------------------------------------------- texto colado e exportar
+
+
+@pytest.mark.asyncio
+async def test_pasted_text_is_limited_on_the_server_even_if_the_modal_limit_is_bypassed(world):
+    inter = make_inter(ADMIN)
+    inter.text_values = {"json_data": "x" * (PLAYLIST_PASTE_MAX + 1)}
+
+    await PasteModal.callback(PasteModal(world.cog), inter)
+
+    world.playlists.import_file.assert_not_awaited()
+    assert "grande demais" in sent_text(inter)
+
+
+@pytest.mark.asyncio
+async def test_pasted_playlists_are_imported_into_the_interaction_guild_and_the_report_has_no_mentions(world):
+    inter = make_inter(ADMIN)
+    inter.text_values = {"json_data": json.dumps(FILE)}
+
+    await PasteModal.callback(PasteModal(world.cog), inter)
+
+    assert world.playlists.import_file.await_args.args[0] == GID
+    assert_private_and_without_mentions(inter)
+
+
+@pytest.mark.asyncio
+async def test_export_sends_a_private_json_named_after_the_guild_and_an_empty_server_gets_a_message(world):
+    inter = make_inter(OWNER)
+    await ServerPlaylistsCog.export_.callback(world.cog, inter)
+    assert inter.edit_original_message.await_args.kwargs["file"].filename == f"playlists-{GID}.json"
+    inter.response.defer.assert_awaited_once_with(ephemeral=True)
+
+    world.playlists.list.return_value = ()
+    empty = make_inter(OWNER)
+    await ServerPlaylistsCog.export_.callback(world.cog, empty)
+    assert "ainda não tem playlists" in sent_text(empty) and "file" not in empty.edit_original_message.await_args.kwargs

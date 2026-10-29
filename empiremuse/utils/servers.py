@@ -47,7 +47,10 @@ logger = logging.getLogger(__name__)
 SERVERS_DB = "global"
 CACHE_SIZE = 2000
 CACHE_TTL = 300
-CONTROLLER_KEYS = ("channel", "message_id", "fav_links")  # os únicos campos que o formato antigo ainda grava, por bot
+CONTROLLER_KEYS = (
+    "channel",
+    "message_id",
+)  # os únicos campos que o formato antigo ainda grava, por bot (os links são playlists do servidor)
 
 Plan = Callable[[Optional[dict]], Awaitable[Optional[dict]]]
 
