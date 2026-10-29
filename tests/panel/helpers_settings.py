@@ -345,9 +345,22 @@ class SettingsWorld:
         """Estado de partida de um servidor já em uso: ``settings`` migrado do principal e contadores zerados."""
         for gid in (100, 800, 200, 600):
             await self.pool.servers.get(gid)
+            await self.pool.servers.playlists.list(gid)  # migra também as playlists (do principal)
         self.db.reads.clear()
         self.db.writes.clear()
         self.events.clear()
+
+    def server_playlists(self, gid):
+        """Nomes das playlists gravadas no documento único, por ``order``."""
+        doc = self.database.servers[gid]
+        return [p["name"] for p in sorted(doc["playlists"], key=lambda p: p["order"])]
+
+    def set_playlists(self, gid, docs):
+        """Outro escritor troca a lista (documentos crus) sem passar pelo painel."""
+        doc = self.database.servers[gid]
+        doc["playlists"] = copy.deepcopy(docs)
+        doc["rev"] += 1
+        self.pool.servers._docs.clear()
 
     def server_settings(self, gid):
         """Cópia do ``settings`` gravado no documento único."""
@@ -389,7 +402,7 @@ class SettingsWorld:
                 "message_id": "8888",
                 "skin": "default",
                 "static_skin": "default",
-                "fav_links": {"Fixo": {"url": "https://example.com/x", "description": "d"}},
+                "fav_links": {"Fixo": {"url": "https://example.com/x", "description": "descrição fixa"}},
             }
         )
         return doc
@@ -687,7 +700,7 @@ def command_prefix_max_length():
 def acao_form(body: str, acao: str, nome=None):
     """Formulário cujo campo oculto/lido `acao` vale `acao` (e `nome` igual, quando dado)."""
     for form in parse_forms(body):
-        if form.value("acao") == acao and (nome is None or form.value("nome") == nome):
+        if form.value("acao") == acao and (nome is None or nome in (form.value("nome"), form.value("alvo"))):
             return form
     return None
 

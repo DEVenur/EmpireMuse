@@ -23,7 +23,8 @@ def trocar_process_idle_embed(monkeypatch, falso):
     e o pacote ``interactions`` (o painel chama ``interactions.process_idle_embed``). Trocar só o pacote não afeta os
     modais: o nome importado fica preso ao módulo onde o código mora."""
     for modulo in (interactions, fav_modals, fav_menu):
-        monkeypatch.setattr(modulo, "process_idle_embed", falso)
+        if hasattr(modulo, "process_idle_embed"):  # as playlists do servidor atualizam o embed pelo store, não por aqui
+            monkeypatch.setattr(modulo, "process_idle_embed", falso)
 
 
 class ModalBot:

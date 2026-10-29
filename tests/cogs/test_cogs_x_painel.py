@@ -88,47 +88,6 @@ def _sem_idle_embed(monkeypatch):
     trocar_process_idle_embed(monkeypatch, nada)
 
 
-class TestKI41ImportadorDeLinksRapidosDoServidor:
-    """Itens com ``> fav:`` no nome pulam a validação da URL (``continue``) e mesmo assim são gravados."""
-
-    def item(self, url, descricao="descrição"):
-        return {"url": url, "description": descricao}
-
-    URLS_INVALIDAS = ["isto-nao-e-url", "ftp://exemplo.invalid/musica", "javascript:alert(1)", "https://", ""]
-
-    @pytest.mark.asyncio
-    async def test_item_fav_invalido_derruba_a_importacao_inteira(self):
-        bot = ModalBot()
-        conteudo = {"Bom": self.item(f"{URL_BASE}/bom"), "> fav: Ruim": self.item("isto-nao-e-url")}
-        inter = await importar(bot, ViewMode.guild_fav_manager, conteudo)
-        assert bot.salvos_servidor == [], "KI-41: nada do arquivo pode ser gravado se um item é inválido"
-        assert "link inválido" in inter.texto
-
-
-class TestKI47ItensMalFormadosNoImportadorDoServidor:
-    """Item que não é objeto, ou sem ``url``/``description``, levanta KeyError/TypeError sem aviso ao usuário."""
-
-    ITENS = {
-        "texto": "https://exemplo.invalid/a",
-        "lista": ["https://exemplo.invalid/a"],
-        "numero": 42,
-        "nulo": None,
-        "sem_url": {"description": "ddd"},
-        "sem_description": {"url": "https://exemplo.invalid/a"},
-        "url_nao_texto": {"url": 123, "description": "ddd"},
-        "description_nao_texto": {"url": "https://exemplo.invalid/a", "description": 5},
-    }
-
-    @pytest.mark.asyncio
-    async def test_item_mal_formado_com_nome_fav_tambem_e_recusado(self):
-        bot = ModalBot()
-        try:
-            inter = await importar(bot, ViewMode.guild_fav_manager, {"> fav: Item": "https://exemplo.invalid/a"})
-        except (KeyError, TypeError) as erro:
-            pytest.fail(f"KI-47: {type(erro).__name__} escapou do importador: {erro}")
-        assert bot.salvos_servidor == [] and inter.texto
-
-
 # ============================================================================ reforço pós-mutação (sobreviventes)
 
 
@@ -139,7 +98,9 @@ class TestImportadoresRecusamJsonQueNaoEObjetoOuEVazio:
     CONTEUDOS = ["[]", '"texto"', "5", "null", "{}", '[{"url": "https://exemplo.invalid/a"}]']
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("modo", list(MODOS)[:2])
+    @pytest.mark.parametrize(
+        "modo", list(MODOS)[:1]
+    )  # o do servidor é o PlaylistImportModal (tests/cogs/test_playlists_comando.py)
     @pytest.mark.parametrize("conteudo", CONTEUDOS)
     async def test_recusa_com_mensagem_e_sem_gravar(self, modo, conteudo):
         bot = ModalBot()

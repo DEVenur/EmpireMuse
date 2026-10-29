@@ -57,7 +57,6 @@ def interacao() -> MagicMock:
 
 CASOS = [
     pytest.param(ViewMode.fav_manager, URL, "usuario", id="favorito-do-usuario"),
-    pytest.param(ViewMode.guild_fav_manager, {"url": URL, "description": "d"}, "servidor", id="favorito-do-servidor"),
     pytest.param(
         ViewMode.integrations_manager, {"url": URL, "avatar": "https://ok.exemplo/a.png"}, "integracao", id="integracao"
     ),

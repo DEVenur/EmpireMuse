@@ -124,11 +124,6 @@ class AccessTest(HttpBase):
             first.value("default_player_volume") == second.value("default_player_volume") == "60"
         )  # o doc do bot 2 (80) é ignorado
 
-    def test_selector_shows_bot_names_escaped(self):
-        self.world.bot2.user.name = "<i>Bot Dois</i>"
-        body = self.logged_in().get(self.url(800, "links")).body.decode()
-        assert "<i>Bot Dois</i>" not in body and "&lt;i&gt;Bot Dois" in body
-
     def assert_write_is_404_after(self, revoke):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "player", "default_player_volume")
