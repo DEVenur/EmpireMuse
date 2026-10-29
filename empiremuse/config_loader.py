@@ -8,6 +8,7 @@ import disnake
 from dotenv import dotenv_values
 
 from empiremuse import paths
+from empiremuse.rules.app_profile import DEFAULT_DESCRIPTION, DEFAULT_TAGS
 from empiremuse.rules.usage import clamp_retention_days
 from empiremuse.utils import branding
 
@@ -51,6 +52,10 @@ DEFAULT_CONFIG = {
     "PRESENCE_INTERVAL": 900,
     "SOURCE_REPO": branding.SOURCE_REPO_GIT,
     "SUPPORT_SERVER": branding.SUPPORT_SERVER_URL,
+    # Perfil da aplicação no Discord, gravado por cada bot ao iniciar. Vazio = não mexer no campo. A descrição aceita {prefix},
+    # {bots}, {panel_url} e {support_url} (linha cujo marcador fica vazio sai) e \n escrito à mão como quebra de linha.
+    "APP_DESCRIPTION": DEFAULT_DESCRIPTION,
+    "APP_TAGS": DEFAULT_TAGS,
     "INVITE_PERMISSIONS": 2533601240804560,
     "APP_EMOJIS_GUILD_BOTS": False,
     "ENABLE_LOGGER": False,
@@ -163,7 +168,7 @@ DEFAULT_CONFIG = {
     "WATCHING_PRESENCES": "",
     "PLAYING_PRESENCES": "",
     "STREAMING_PRESENCES": "",
-    "CUSTOM_STATUS_PRESENCES": "",
+    "CUSTOM_STATUS_PRESENCES": "🎵 /play ou !play | ajuda: !help||⚙️ Painel: muse.empirecommunity.org/painel||🎧 Tocando em {players_count} calls",
     ###############
     ### Intents ###
     ###############

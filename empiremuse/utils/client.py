@@ -56,6 +56,7 @@ from empiremuse.utils import branding
 from empiremuse.version import image_version
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
+from empiremuse.utils.app_profile import sync_app_profile
 from empiremuse.utils.guild_ban import GuildBans
 from empiremuse.rules.usage import KIND_PREFIX, KIND_SLASH
 from empiremuse.utils.usage import UsageRecorder, usage_of
@@ -1318,6 +1319,9 @@ class BotPool:
                 bot.bot_ready = True
 
                 await self.check_pool_ready()
+
+                # depois do ready: não atrasa a inicialização, e a função não levanta
+                await sync_app_profile(bot, len(self.get_all_bots()))
 
             bot.loop.create_task(initial_setup())
 
