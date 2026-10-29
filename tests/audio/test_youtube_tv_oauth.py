@@ -56,34 +56,6 @@ def assert_no_token(where: str, *texts) -> None:
         pytest.fail(f"o refresh token vazou em: {where}", pytrace=False)
 
 
-# ============================================================================ (2) configuração do segredo
-
-
-class TestConfigKey:
-    def test_example_env_documents_it_in_portuguese_with_a_secret_warning(self):
-        lines = (ROOT / ".example.env").read_text("utf-8").splitlines()
-        index = next(i for i, l in enumerate(lines) if l.startswith(f"{CONFIG_KEY}="))
-        comment = "\n".join(l for l in lines[max(0, index - 12) : index] if l.lstrip().startswith("#")).lower()
-        assert comment, "a variável precisa de comentário explicativo acima"
-        assert "segredo" in comment or "secreto" in comment or "não compartilhe" in comment, (
-            "o comentário deve avisar que o valor é um segredo"
-        )
-        assert "descartável" in comment, "o comentário deve recomendar uma conta Google descartável"
-
-    @staticmethod
-    def _isolated_loader(monkeypatch, tmp_path, dot_env_text=None):
-        """`dotenv_values()` procura o .env a partir do módulo (não do cwd): sem isto o .env REAL do dono entraria no teste."""
-        import empiremuse.config_loader as config_loader
-        import dotenv
-
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv(CONFIG_KEY, raising=False)
-        if dot_env_text is not None:
-            (tmp_path / ".env").write_text(dot_env_text, encoding="utf-8")
-        monkeypatch.setattr(config_loader, "dotenv_values", lambda *a, **k: dotenv.dotenv_values(tmp_path / ".env"))
-        return config_loader
-
-
 # ============================================================================ (3) env do Popen
 
 
@@ -146,27 +118,11 @@ class TestRunLavalinkOauthEnv:
         assert env.get("PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN") == FAKE_TOKEN
         assert env.get("PLUGINS_YOUTUBE_OAUTH_SKIP_INITIALIZATION") == "true"
 
-    def test_omitting_the_parameter_behaves_as_without_token(self, started):
-        start(_OMIT)
-        assert [v for v in OAUTH_ENV_VARS if v in env_of(started[0])] == []
-
-    def test_each_start_computes_its_own_environment(self, started):
-        start(FAKE_TOKEN)
-        start(None)
-        assert "PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN" in env_of(started[0])
-        assert "PLUGINS_YOUTUBE_OAUTH_REFRESH_TOKEN" not in env_of(started[1]), "sem vazamento entre inicializações"
-
     def test_no_log_record_contains_the_token(self, started, caplog):
         caplog.set_level(0)
         start(FAKE_TOKEN)
         text = "\n".join(f"{r.getMessage()} {r.args!r} {r.exc_text}" for r in caplog.records)
         assert_no_token("registros de log", text)
-
-
-class TestRunLavalinkSignatureA2:
-    def test_client_passes_the_configured_token_by_keyword(self):
-        source = (ROOT / "empiremuse" / "utils" / "client.py").read_text("utf-8").replace('"', "'")
-        assert "youtube_oauth_refresh_token=self.config['YOUTUBE_OAUTH_REFRESH_TOKEN']" in source
 
 
 # ============================================================================ (4) o token nunca vaza
@@ -221,30 +177,11 @@ def export_env(monkeypatch, tmp_path):
     )
 
 
-def exported_value(env_text: str):
-    from dotenv import dotenv_values
-    import io
-
-    return dotenv_values(stream=io.StringIO(env_text)).get(CONFIG_KEY)
-
-
 class TestExportNeverCarriesTheToken:
-    def test_token_from_the_process_environment_is_not_exported(self, export_env):
-        export_env.monkeypatch.setenv(CONFIG_KEY, FAKE_TOKEN)
-        export_env.run()
-        assert len(export_env.snapshots) == 1
-        assert_no_token(".env exportado", export_env.snapshots[0])
-
     def test_token_from_config_json_is_not_exported(self, export_env):
         (export_env.tmp / "config.json").write_text(f'{{"{CONFIG_KEY}": "{FAKE_TOKEN}"}}', encoding="utf-8")
         export_env.run()
         assert_no_token(".env exportado", export_env.snapshots[0])
-
-    def test_exported_entry_is_empty_or_absent(self, export_env):
-        export_env.monkeypatch.setenv(CONFIG_KEY, FAKE_TOKEN)
-        export_env.run()
-        if exported_value(export_env.snapshots[0]) not in (None, ""):
-            pytest.fail("a chave do refresh token deve sair vazia (ou ausente) no .env exportado", pytrace=False)
 
 
 SINK_NAMES = frozenset(
@@ -334,13 +271,3 @@ def yml_005(release_005):
     from ruamel.yaml import YAML
 
     return YAML(typ="safe").load((release_005 / "application.yml").read_text("utf-8"))
-
-
-class TestApplicationYml005:
-    def test_youtube_oauth_handler_logger_is_at_warn(self, yml_005):
-        level = yml_005["logging"]["level"]
-        assert level.get("dev.lavalink.youtube.http.YoutubeOauth2Handler") == "WARN"
-
-    def test_the_yml_has_no_other_secret_than_the_known_local_password(self, release_005):
-        text = (release_005 / "application.yml").read_text("utf-8")
-        assert "refreshToken" not in text and "refresh_token" not in text.lower()

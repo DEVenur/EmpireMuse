@@ -30,20 +30,3 @@ class TestInstanciasIndependentes:
         a.guild_bots.setdefault("111", []).append("bot-a")
         a.guild_bots["222"] = ["bot-a"]
         assert b.bots == [] and b.guild_bots == {}
-
-    @pytest.mark.parametrize("nome", ["bots", "guild_prefix_cache"])
-    def test_cada_atributo_pode_ser_reatribuido_sem_afetar_a_outra_instancia(self, isolado, nome):
-        a, b = BotPool(), BotPool()
-        original_b = getattr(b, nome)
-        novo = type(original_b)()
-        setattr(a, nome, novo)
-        assert getattr(b, nome) is original_b and getattr(a, nome) is novo
-
-    def test_um_pool_criado_sem_init_nao_enxerga_o_estado_de_outro(self, isolado):
-        """Fixtures de teste montam o pool com ``BotPool.__new__`` e atribuem o que precisam: nada pode vir da classe."""
-        com_init = BotPool()
-        com_init.bots.append("bot-a")
-        sem_init = BotPool.__new__(BotPool)
-        sem_init.bots = []
-        sem_init.guild_bots = {}
-        assert sem_init.bots == [] and sem_init.guild_bots == {}

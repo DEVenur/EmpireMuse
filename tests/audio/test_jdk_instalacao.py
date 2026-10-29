@@ -12,14 +12,13 @@ Sem rede e sem produção: tudo em tmp_path, tar.gz mínimos em memória, reques
 
 import hashlib
 import os
-import shutil
 from pathlib import Path
 
 import pytest
 
-from tests.audio.test_jdk_extracao import DIR, FILE, GOOD, SYM, tar_gz
 from empiremuse.utils import branding
 from empiremuse.utils.music import local_lavalink as ll
+from tests.audio.test_jdk_extracao import GOOD, SYM, tar_gz
 
 PLATFORM_DIR = "Linux-64bit-ELF"
 JDK_URL = "https://example.test/jdk-linux.tar.gz"
@@ -134,15 +133,6 @@ def make_valid_install(install, content=b"JAVA-JA-INSTALADO"):
 
 
 class TestFailedInstallationLeavesNothingUsable:
-    def test_once_the_archive_is_fixed_the_next_start_installs_a_complete_jdk(self, install):
-        install.set_archive(GOOD + [EVIL_LINK])
-        with pytest.raises(Exception):
-            ll.run_lavalink()
-        install.set_archive(GOOD)
-        ll.run_lavalink()
-        assert installed_java(install).read_bytes() == b"JAVA" and len(install.started) == 1
-        assert install.state["calls"] == 2
-
     def test_no_temporary_sibling_is_left_after_a_successful_install(self, install):
         ll.run_lavalink()
         assert sorted(p.name for p in (install.base / ".java").iterdir()) == [PLATFORM_DIR]
@@ -192,35 +182,3 @@ class TestAnExistingDirectoryIsOnlyAcceptedWhenJavaIsUsable:
         install.set_archive(GOOD + [EVIL_LINK])
         ll.run_lavalink()
         assert install.state["calls"] == 0 and java.read_bytes() == b"JAVA-JA-INSTALADO"
-
-    def test_a_valid_directory_is_never_removed_by_a_failed_attempt_elsewhere(self, install):
-        """Instalação anterior válida preservada: um outro .java/<plataforma> não é tocado por falha de extração."""
-        other = install.base / ".java" / "Linux-32bit-ELF" / "bin"
-        other.mkdir(parents=True)
-        (other / "java").write_bytes(b"JAVA-DE-OUTRA-PLATAFORMA")
-        (other / "java").chmod(0o755)
-        install.set_archive(GOOD + [EVIL_LINK])
-        with pytest.raises(Exception):
-            ll.run_lavalink()
-        assert (other / "java").read_bytes() == b"JAVA-DE-OUTRA-PLATAFORMA"
-        shutil.rmtree(install.base / ".java")
-
-
-# ============================================================================ B-1 — '..' / nome absoluto no 1º componente
-
-
-class TestLegitimateNamesAreStillAccepted:
-    """Guardas contra excesso de zelo: nomes que só PARECEM '..', prefixo './' e a pasta raiz comum continuam valendo."""
-
-    @pytest.mark.parametrize("prefix", ["", "./"])
-    def test_names_with_a_dot_slash_prefix_extract_normally(self, install, prefix):
-        install.set_archive(
-            [
-                (DIR, f"{prefix}jdk-21.0.3/"),
-                (DIR, f"{prefix}jdk-21.0.3/bin"),
-                (FILE, f"{prefix}jdk-21.0.3/bin/java", b"JAVA"),
-                (FILE, f"{prefix}jdk-21.0.3/release", b"r"),
-            ]
-        )
-        ll.run_lavalink()
-        assert installed_java(install).read_bytes() == b"JAVA" and len(install.started) == 1

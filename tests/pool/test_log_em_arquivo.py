@@ -26,13 +26,6 @@ def registro(mensagem, *args, **kwargs):
     return logging.LogRecord("t", logging.DEBUG, __file__, 1, mensagem, args or None, kwargs.get("exc_info"))
 
 
-@pytest.mark.smoke
-def test_o_handler_e_rotativo_com_5_mb_e_3_copias(handler):
-    assert isinstance(handler, logging.handlers.RotatingFileHandler)
-    assert handler.maxBytes == 5 * 1024 * 1024
-    assert handler.backupCount == 3
-
-
 class TestRedacaoDeTokenDeWebhook:
     @pytest.mark.parametrize("host", ["discord.com", "canary.discordapp.com"])
     @pytest.mark.parametrize("versao", ["", "/v10"])

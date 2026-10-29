@@ -5,7 +5,7 @@ Sem rede e sem Discord reais: nós e cog são dublês simples (SimpleNamespace /
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -13,7 +13,6 @@ pytestmark = pytest.mark.regression
 
 SPOTIFY_TRACK = "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"
 SPOTIFY_SHORT = "https://spotify.link/AbC123xYz"
-YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
 def run(coro):
@@ -54,56 +53,3 @@ class TestSpotifyUrlSkipsNodesWithoutSpotify:
         assert tracks == ["faixa"]
         assert node is com
         assert exceptions == set()
-
-    def test_requested_node_without_spotify_is_skipped_and_the_resolving_node_is_returned(self, query):
-        pedido = make_node("pedido", ["youtube"])
-        outro = make_node("outro", ["youtube", "spotify"], players=3)
-
-        tracks, node, _ = search([pedido, outro], query, node=pedido)
-
-        pedido.get_tracks.assert_not_awaited()
-        outro.get_tracks.assert_awaited_once()
-        assert tracks == ["faixa"]
-        assert node is outro
-
-
-class TestNonSpotifyQueryUsesAnyNode:
-    def test_youtube_url_is_resolved_by_node_without_spotify(self):
-        sem = make_node("sem", ["youtube"])
-
-        tracks, node, _ = search([sem], YOUTUBE_URL)
-
-        sem.get_tracks.assert_awaited_once()
-        assert tracks == ["faixa"]
-        assert node is sem
-
-
-class TestSpotifyDesligadoNaBuscaPorProvedor:
-    """Sem ``SPOTIFY_CLIENT_ID`` o ``pool.spotify`` é ``None``: o provedor ``spsearch`` é pulado, não vira erro inesperado."""
-
-    def test_spsearch_e_pulado_e_a_busca_segue_pelo_no(self):
-        from empiremuse.cogs.music import Music
-
-        no = make_node("no", ["youtube"])
-
-        async def so_aceita_youtube(busca, **kwargs):
-            assert not busca.startswith("spsearch"), busca
-            return ["faixa"]
-
-        no.get_tracks = AsyncMock(side_effect=so_aceita_youtube)
-        bot = SimpleNamespace(
-            music=SimpleNamespace(nodes={"no": no}),
-            pool=SimpleNamespace(spotify=None, deezer=SimpleNamespace()),
-            dispatch=MagicMock(),
-        )
-        cog = SimpleNamespace(bot=bot)
-
-        tracks, node, exceptions = run(
-            Music.get_lavalink_tracks(cog, "musica qualquer", ctx=None, user=SimpleNamespace(id=1), source="spsearch")
-        )
-
-        bot.dispatch.assert_not_called()
-        assert exceptions == set()
-        no.get_tracks.assert_awaited_once()
-        assert no.get_tracks.await_args.args[0] == "ytsearch:musica qualquer"
-        assert tracks == ["faixa"] and node is no

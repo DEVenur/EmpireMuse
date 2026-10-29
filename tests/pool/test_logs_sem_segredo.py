@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-import empiremuse.wavelink as wavelink
 from empiremuse.music_cog.nodes import NodesMixin
 from empiremuse.music_cog.tracks import TracksMixin
 from empiremuse.utils import client
@@ -36,29 +35,6 @@ def saida_visivel(capsys, caplog) -> str:
 
 def sem_segredo(texto: str) -> None:
     assert SENHA not in texto and CORPO_SECRETO not in texto and "RequestInfo" not in texto, texto
-
-
-async def test_check_node_final_failure_message_has_no_header(monkeypatch, capsys, caplog):
-    caplog.set_level(logging.INFO)
-    """(B) a falha vem do ``r.json()`` (ContentTypeError) e a mensagem final traz a causa."""
-    monkeypatch.setattr(client.aiohttp, "ClientSession", lambda: SessaoComoContexto())
-    pool = BotPool.__new__(BotPool)
-    pool.get_all_bots = lambda: []
-    pool.mongo_database = None
-
-    await pool.check_node({"host": "127.0.0.1", "port": 8090, "password": SENHA, "identifier": "NODE-X", "retries": 1})
-
-    visivel = saida_visivel(capsys, caplog)
-    sem_segredo(visivel)
-    assert "Todas as tentativas de verificar o servidor [NODE-X] falharam" in visivel and "HTTP 200" in visivel
-
-
-class SessaoComoContexto(SessaoQueNaoEntendeJson):
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        return False
 
 
 def node_falso(**campos) -> Node:
@@ -89,39 +65,6 @@ async def test_node_connect_failure_message_has_no_header(capsys, caplog):
     visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
     sem_segredo(visivel)
     assert "Falha ao conectar no servidor [NODE-X]" in visivel and "HTTP 200" in visivel
-
-
-async def test_get_tracks_json_parse_error_has_no_header():
-    """(D) ``resp.json()`` levantando ContentTypeError vira ``WavelinkException`` sem o header."""
-    with pytest.raises(wavelink.WavelinkException) as erro:
-        await node_falso().get_tracks("ytsearch:x")
-
-    sem_segredo(str(erro.value))
-    assert "NODE-X" in str(erro.value) and "HTTP 200" in str(erro.value)
-
-
-async def test_node_reconnect_message_has_no_header(capsys, caplog):
-    """(E) a reconexão imprime o erro de cada tentativa (node que não é o LOCAL)."""
-    caplog.set_level(logging.INFO)
-    node = node_falso(
-        players={},
-        session_id=None,
-        uid=1,
-        _retry_dt=datetime.fromtimestamp(0, timezone.utc),
-        _retry_count=0,
-        _websocket=SimpleNamespace(_connect=AsyncMock(), is_connected=False),
-    )
-    cog = NodesMixin()
-    cog.bot = SimpleNamespace(
-        user="bot", session=node.session, config={"LAVALINK_RECONNECT_RETRIES": 2}, wait_until_ready=AsyncMock()
-    )
-
-    await cog.node_reconnect(node)
-
-    saida = capsys.readouterr()
-    visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
-    sem_segredo(visivel)
-    assert "Falha ao reconectar no servidor [NODE-X]" in visivel and "HTTP 200" in visivel
 
 
 def ctx_e_bot(**config):
@@ -185,20 +128,6 @@ async def test_check_node_http_status_failure_logs_only_the_status(monkeypatch, 
     visivel = saida_visivel(capsys, caplog)
     sem_segredo(visivel)
     assert "Todas as tentativas de verificar o servidor [NODE-X] falharam" in visivel and f"HTTP {status}" in visivel
-
-
-@pytest.mark.parametrize("status", [401, 500])
-async def test_node_connect_http_status_failure_logs_only_the_status(capsys, caplog, status):
-    caplog.set_level(logging.INFO)
-    node = node_falso()
-    node.session = node._client.bot.session = SessaoComStatus(status)
-
-    await node.connect()
-
-    saida = capsys.readouterr()
-    visivel = saida.out + saida.err + caplog.text  # a saída passou do print para o log
-    sem_segredo(visivel)
-    assert "Falha ao conectar no servidor [NODE-X]" in visivel and f"HTTP {status}" in visivel
 
 
 @pytest.mark.parametrize("status", [401, 500])

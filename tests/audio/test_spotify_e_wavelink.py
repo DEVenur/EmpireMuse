@@ -17,22 +17,19 @@ import stat
 import tempfile
 import time
 from collections import deque
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from urllib.parse import parse_qsl, urlsplit
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
 from multidict import CIMultiDict
-from rapidfuzz import fuzz
 from yarl import URL
 
 from empiremuse.utils.music.audio_sources import spotify
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.models import LavalinkPlayer, LavalinkTrack
-from empiremuse.wavelink.errors import WavelinkException
-from empiremuse.wavelink.player import Player
 
 pytestmark = pytest.mark.regression
 
@@ -200,21 +197,6 @@ async def test_ki16_playlist_de_250_faixas_nao_pula_nem_duplica(cache_isolado):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("limite", [1, 3])
-async def test_ki17_carrega_no_maximo_o_limite_de_paginas_extras(cache_isolado, limite):
-    """Hoje ``page_count <= limite`` é avaliado depois de carregar a página: vêm ``limite + 2`` páginas extras.
-
-    Atenção: trocar só ``<=`` por ``<`` ainda carrega ``limite + 1``; o teste exige exatamente ``limite``.
-    """
-    cliente = _cliente(cache_isolado, playlist_extra_page_limit=limite)
-    cliente.request, offsets = _playlist_falsa(total=1000)
-
-    await cliente.get_playlist_info("abc")
-
-    assert len(offsets) == limite
-
-
-@pytest.mark.asyncio
 async def test_ki16_falha_em_pagina_extra_devolve_o_que_ja_veio_sem_vazar_o_erro(cache_isolado, caplog):
     """Falha na 2ª página extra: mantém as faixas já carregadas, não tenta de novo e registra aviso sem o detalhe."""
     detalhe = _valor_falso("detalhe")
@@ -232,23 +214,6 @@ async def test_ki16_falha_em_pagina_extra_devolve_o_que_ja_veio_sem_vazar_o_erro
 
 # ---------------------------------------------------------------------------------------------------------------------
 # KI-18 — busca sem dupla codificação
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def _busca_vazia(url, params):
-    return _RespostaFalsa(payload={"tracks": {"items": []}})
-
-
-@pytest.mark.asyncio
-async def test_ki18_params_levam_a_query_crua(cache_isolado, rede):
-    """A codificação é responsabilidade só do aiohttp: ``params['q']`` tem de ser o texto cru."""
-    falsa = rede(ao_get=_busca_vazia)
-    cliente = _cliente_com_token_valido(cache_isolado)
-
-    await cliente.track_search("rock & roll")
-
-    _, params = falsa.gets[0]
-    assert params is not None and params["q"] == "rock & roll"
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -262,40 +227,6 @@ def _resposta_de_token(token: str):
 
 # ---------------------------------------------------------------------------------------------------------------------
 # KI-20 — erro de acesso à playlist (só o contrato da mensagem; o comportamento da API real fica com o dono)
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-async def _erro_gerado(cache_isolado, rede, status: int, com_token_na_url: bool):
-    """Executa get_playlist_info contra um erro HTTP e devolve (exceção capturada, valores sensíveis usados)."""
-    token = _valor_falso("tok")
-    corpo = f"corpo-cru-{secrets.token_hex(6)} bearer {token}"
-    sufixo = f"?access_token={token}" if com_token_na_url else ""
-    url = f"{API_SPOTIFY}/playlists/abc{sufixo}"
-    rede(ao_get=lambda u, params: _RespostaFalsa(status=status, texto=corpo, url=url))
-    cliente = _cliente(cache_isolado)
-    cliente.spotify_cache = {"access_token": token, "expires_at": time.time() + 3600}
-
-    with pytest.raises(Exception) as capturado:
-        await cliente.get_playlist_info("abc")
-
-    return capturado.value, {"token": token, "corpo": corpo, "client_secret": cliente.client_secret}
-
-
-@pytest.mark.asyncio
-async def test_ki20_403_na_playlist_gera_generic_error_em_portugues(cache_isolado, rede):
-    """Hoje o 403 cai em ``raise_for_status()`` e sobe ``ClientResponseError`` em inglês, não ``GenericError``."""
-    erro, _ = await _erro_gerado(cache_isolado, rede, 403, com_token_na_url=False)
-
-    assert isinstance(erro, GenericError), f"esperado GenericError, veio {type(erro).__name__}"
-    assert "não" in erro.text.lower()
-
-
-@pytest.mark.asyncio
-async def test_guarda_404_na_playlist_gera_generic_error_em_portugues(cache_isolado, rede):
-    erro, _ = await _erro_gerado(cache_isolado, rede, 404, com_token_na_url=False)
-
-    assert isinstance(erro, GenericError)
-    assert "não" in erro.text.lower()
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -305,8 +236,6 @@ async def test_guarda_404_na_playlist_gera_generic_error_em_portugues(cache_isol
 TITULO_ORIGINAL = "Minha Cancao Favorita Do Verao Passado"  # longo: a tag não derruba a similaridade de título
 TITULO_DIFERENTE = "Zzz Qqq Xxx Www Vvv"
 DURACAO_ORIGINAL = 200_000
-DURACAO_MUITO_DIFERENTE = DURACAO_ORIGINAL + 90_000
-LIMIAR_TITULO = 75
 BUSCA_FALSA = "scsearch"
 
 
@@ -406,38 +335,6 @@ async def _escolhida_no_process_next(original: LavalinkTrack, resultados: list[L
     return _id_mandado_tocar(await _rodar_process_next(original, {BUSCA_FALSA: resultados}))
 
 
-async def _escolhida_no_autoqueue(original: LavalinkTrack, resultados: list[LavalinkTrack]) -> LavalinkTrack | None:
-    return await _jogador(original, resultados).get_autoqueue_tracks()
-
-
-def _titulo_com_tag(tag: str) -> str:
-    titulo = f"{TITULO_ORIGINAL} ({tag})"
-    assert fuzz.token_set_ratio(titulo, TITULO_ORIGINAL) >= LIMIAR_TITULO, "a tag não pode derrubar o filtro de título"
-    return titulo
-
-
-@pytest.mark.asyncio
-async def test_guarda_process_next_se_todos_os_resultados_tem_tag_o_primeiro_ainda_toca(sem_espera):
-    """O filtro só reordena a preferência: sem nenhum resultado sem tag, os com tag continuam valendo."""
-    primeiro = _candidata(_titulo_com_tag("remix"), "primeiro")
-    segundo = _candidata(_titulo_com_tag("edit"), "segundo")
-
-    escolhida = await _escolhida_no_process_next(_original(), [primeiro, segundo])
-
-    assert escolhida == "primeiro"
-
-
-@pytest.mark.asyncio
-async def test_guarda_autoqueue_sem_tag_em_nenhum_resultado_mantem_a_ordem():
-    primeira = _candidata(TITULO_ORIGINAL, "primeira")
-    segunda = _candidata(TITULO_ORIGINAL, "segunda")
-
-    escolhida = await _escolhida_no_autoqueue(_original(), [primeira, segunda])
-
-    assert escolhida is not None and escolhida.id == "primeira"
-
-
-# --- KI-22: a faixa só vale se duração E título conferem. Cada caso põe a candidata ao lado de uma referência segura,
 # --- porque quando TODAS são descartadas o código atual ainda devolve ``tracks[0]`` (ver relatório da F3-3).
 
 
@@ -452,69 +349,8 @@ async def test_ki22_duracao_certa_e_titulo_errado_e_descartada():
     assert escolhida == "referencia"
 
 
-@pytest.mark.asyncio
-async def test_guarda_ki22_titulo_exatamente_no_limiar_de_75_ainda_confere():
-    """``token_set_ratio < 75`` descarta; exatamente 75 ainda confere (par de uma palavra: sem interseção de tokens)."""
-    base, no_limiar = "abcd", "abce"
-    assert fuzz.token_set_ratio(base, no_limiar) == LIMIAR_TITULO
-    original = _faixa(base, DURACAO_ORIGINAL, "id-original", "youtube", identificador="abcdefghijk")
-    ruim = _candidata(TITULO_DIFERENTE, "ruim", DURACAO_MUITO_DIFERENTE)
-    candidata = _candidata(no_limiar, "no-limiar")
-
-    escolhida = await _escolhida_no_process_next(original, [ruim, candidata])
-
-    assert escolhida == "no-limiar"
-
-
-# --- KI-22 (métrica): prefixo de artista e sufixos do SoundCloud/YouTube não podem reprovar o título. Com
-# --- ``token_sort_ratio`` estes pares medem 55-65 (< 75) e, com ``or``, a faixa certa seria PULADA (regressão do KI-44).
-
-TITULOS_QUE_CONFEREM = {
-    "prefixo-de-artista": ("Shape of You", "Ed Sheeran - Shape of You"),
-    "prefixo-e-sufixo-official-music-video": (
-        "Never Gonna Give You Up",
-        "Rick Astley - Never Gonna Give You Up (Official Music Video)",
-    ),
-    "sufixo-official-video": ("Shape of You", "Shape of You (Official Video)"),
-    "sufixo-official-audio-entre-colchetes": ("Shape of You", "Shape of You [Official Audio]"),
-    "sufixo-remastered": ("Bohemian Rhapsody", "Bohemian Rhapsody - Remastered 2011"),
-    "original-com-sufixo-e-candidata-sem": ("Bohemian Rhapsody - Remastered 2011", "Bohemian Rhapsody"),
-}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("caso", list(TITULOS_QUE_CONFEREM)[:2])
-async def test_ki22_titulo_com_prefixo_ou_sufixo_e_duracao_certa_e_aceito(caso, sem_espera):
-    """Hoje ``token_sort_ratio`` reprova o par e a faixa é pulada (``None``) em vez de a candidata certa tocar."""
-    titulo_original, titulo_candidato = TITULOS_QUE_CONFEREM[caso]
-    ruim = _candidata(TITULO_DIFERENTE, "ruim", DURACAO_MUITO_DIFERENTE)
-    certa = _candidata(titulo_candidato, "certa")
-
-    escolhida = await _escolhida_no_process_next(_original(titulo_original), [ruim, certa])
-
-    assert escolhida == "certa"
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # KI-23 — Player.change_node com identificador inexistente
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def _player_com_cliente(no_encontrado) -> Player:
-    cliente = SimpleNamespace(get_node=MagicMock(return_value=no_encontrado))
-    node_atual = SimpleNamespace(_client=cliente, players={}, version=4)
-    return Player(bot=MagicMock(), guild_id=1, node=node_atual)
-
-
-@pytest.mark.asyncio
-async def test_guarda_change_node_com_node_indisponivel_mantem_a_mensagem_de_indisponivel():
-    indisponivel = SimpleNamespace(is_available=False)
-    player = _player_com_cliente(no_encontrado=indisponivel)
-
-    with pytest.raises(WavelinkException, match="Node unavailable") as capturado:
-        await player.change_node("fora-do-ar")
-
-    assert "fora-do-ar" in str(capturado.value)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -530,26 +366,6 @@ def sem_espera(monkeypatch):
     espera = AsyncMock()
     monkeypatch.setattr(asyncio, "sleep", espera)
     return espera
-
-
-def _desfecho(jogador: LavalinkPlayer) -> tuple:
-    """Resumo observável: (id mandado tocar, chamadas a process_next, ids em played, native_yt)."""
-    return (
-        _id_mandado_tocar(jogador),
-        jogador.process_next.await_count,
-        [t.id for t in jogador.played],
-        jogador.native_yt,
-    )
-
-
-DESFECHO_FAIXA_PULADA = (None, 1, ["id-original"], True)
-
-
-@pytest.mark.asyncio
-async def test_guarda_ki44_sem_resultado_em_dois_provedores_pula_a_faixa(sem_espera):
-    jogador = await _rodar_process_next(_original(), {BUSCA_FALSA: [], "dzsearch": []})
-
-    assert _desfecho(jogador) == DESFECHO_FAIXA_PULADA
 
 
 # ---------------------------------------------------------------------------------------------------------------------

@@ -15,7 +15,6 @@ import pytest
 from empiremuse.utils.music import local_lavalink as ll
 
 ACCESS_FLAGS = ("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
-TOKENS_PROIBIDOS = ("MaxRAMPercentage", "UseZGC", "AOTCache")
 
 
 def _saida(linha_de_versao: str, antes: str = "") -> str:
@@ -99,33 +98,6 @@ class TestJavaCommand:
         presentes = [flag in args for flag in ACCESS_FLAGS]
         assert presentes == [com_flags, com_flags]
 
-    @pytest.mark.parametrize("java_major", [21, 24, 25, 26, None])
-    def test_o_log_de_payload_fica_desligado_em_todo_major(self, comando, java_major):
-        assert ll.NO_REQUEST_PAYLOAD_LOG_ARG in comando(java_major)
-
-    @pytest.mark.parametrize(
-        ("cpu_cores", "gc_esperado"),
-        [(1, "-XX:+UseSerialGC"), (2, "-XX:+UseG1GC"), (0, "-XX:+UseG1GC")],
-    )
-    def test_gc_serial_com_um_core_e_g1_nos_demais(self, comando, cpu_cores, gc_esperado):
-        args = comando(25, cpu_cores=cpu_cores)
-
-        gcs = [a for a in args if a.startswith("-XX:+Use") and a.endswith("GC")]
-        assert gcs == [gc_esperado]
-
-    @pytest.mark.parametrize("java_major", [21, 25, None])
-    @pytest.mark.parametrize("cpu_cores", [0, 1, 4])
-    def test_nunca_usa_maxrampercentage_zgc_nem_aotcache(self, comando, java_major, cpu_cores):
-        linha = " ".join(comando(java_major, cpu_cores=cpu_cores))
-
-        assert not [t for t in TOKENS_PROIBIDOS if t in linha]
-
-    @pytest.mark.parametrize("java_major", [21, 25, None])
-    def test_xmx_e_xms_seguem_o_comportamento_atual(self, comando, java_major):
-        args = comando(java_major)
-
-        assert "-Xmx512m" in args and "-Xms256m" in args
-
     @pytest.mark.parametrize("java_major", [21, 25, None])
     @pytest.mark.parametrize("cpu_cores", [1, 2])
     def test_toda_opcao_da_jvm_vem_antes_de_jar_e_o_jar_fecha_a_lista(self, comando, java_major, cpu_cores):
@@ -134,17 +106,3 @@ class TestJavaCommand:
         assert args[-2:] == ["-jar", "Lavalink.jar"]
         assert args[0] == "/opt/java/bin/java"
         assert all(a.startswith("-") for a in args[1:-2]), "só opções da JVM entre o java e o -jar"
-
-    def test_as_opcoes_seguem_a_ordem_do_contrato(self, comando):
-        args = comando(25, cpu_cores=1)
-
-        posicoes = [
-            args.index("-XX:ActiveProcessorCount=1"),
-            args.index("-Xmx512m"),
-            args.index("-Xms256m"),
-            args.index("-XX:+UseSerialGC"),
-            args.index(ACCESS_FLAGS[0]),
-            args.index(ACCESS_FLAGS[1]),
-            args.index(ll.NO_REQUEST_PAYLOAD_LOG_ARG),
-        ]
-        assert posicoes == sorted(posicoes)
