@@ -376,3 +376,295 @@ async def test_forget_schedules_a_refresh_for_the_server():
     panel.forget(GID)
     await asyncio.sleep(0)
     panel.refresh.assert_awaited_once_with(GID)
+
+
+# ---------------------------------------------------------------------- reenvio do painel: um só, sem mensagem órfã
+
+
+@pytest.mark.asyncio
+async def test_two_simultaneous_resends_send_one_panel_and_the_second_gets_the_existing_one(monkeypatch):
+    panel_bot = make_bot(2, "TOKEN_2")
+    panel_bot.get_channel = lambda cid: SimpleNamespace(id=cid)
+    panel, pool = panel_world(panel_bot)
+    pool.servers.request.get.return_value = SimpleNamespace(channel=PANEL_CHANNEL, message_id=None, current=1)
+    pool.servers.request.panel_bot.return_value = panel_bot
+    sent = SimpleNamespace(id=777)
+    state = {"message": None}
+
+    async def send_idle(channel, *, bot, force):
+        await asyncio.sleep(0)  # cede o laço: sem a trava o 2º reenvio passaria aqui também
+        state["message"] = sent
+        return sent
+
+    async def fetch_existing(pool_, gid):
+        return state["message"]
+
+    import empiremuse.utils.others as others
+
+    idle = AsyncMock(side_effect=send_idle)
+    monkeypatch.setattr(others, "send_idle_embed", idle)
+    monkeypatch.setattr(panel_module, "fetch_panel_message", fetch_existing)
+
+    first, second = await asyncio.gather(panel.resend(GID), panel.resend(GID))
+
+    assert idle.await_count == 1 and first is sent and second is sent
+
+
+@pytest.mark.asyncio
+async def test_a_config_conflict_while_resending_deletes_the_new_message_and_raises(monkeypatch):
+    from empiremuse.utils.servers import ServerConfigConflict
+
+    panel_bot = make_bot(2, "TOKEN_2")
+    panel_bot.get_channel = lambda cid: SimpleNamespace(id=cid)
+    panel, pool = panel_world(panel_bot)
+    pool.servers.request.get.return_value = SimpleNamespace(channel=PANEL_CHANNEL, message_id=None, current=1)
+    pool.servers.request.panel_bot.return_value = panel_bot
+    pool.servers.request.set.side_effect = ServerConfigConflict
+    sent = SimpleNamespace(id=777, delete=AsyncMock())
+    import empiremuse.utils.others as others
+
+    monkeypatch.setattr(others, "send_idle_embed", AsyncMock(return_value=sent))
+    monkeypatch.setattr(panel_module, "fetch_panel_message", AsyncMock(return_value=None))
+
+    with pytest.raises(ServerConfigConflict):
+        await panel.resend(GID)
+
+    sent.delete.assert_awaited_once()  # nenhum painel órfão no canal
+
+
+@pytest.mark.asyncio
+async def test_background_tasks_are_kept_while_running_and_dropped_when_done():
+    panel, _ = panel_world()
+    panel.refresh = AsyncMock()
+    panel.forget(GID)
+    assert len(panel._tasks) == 1  # referência forte enquanto roda
+    await asyncio.gather(*panel._tasks)
+    await asyncio.sleep(0)
+    assert panel._tasks == set()
+
+
+# ---------------------------------------------------------------------- player estático nunca manda mensagem própria no canal único
+
+
+def static_player(resend):
+    panel = SimpleNamespace(resend=resend)
+    text_channel = SimpleNamespace(send=AsyncMock())
+    player = SimpleNamespace(
+        bot=SimpleNamespace(pool=SimpleNamespace(request_panel=panel)),
+        message=None,
+        static=True,
+        guild_id=GID,
+        text_channel=text_channel,
+        allowed_mentions=disnake.AllowedMentions.none(),
+        channel_cleanup=AsyncMock(),
+    )
+    return player, SimpleNamespace(data={"content": "np"}), text_channel
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["no_message", "resend_fails"])
+async def test_a_static_player_never_posts_its_own_message_when_the_panel_cannot_be_resent(outcome):
+    from empiremuse.utils.music.models import np_steps
+
+    resend = AsyncMock(return_value=None) if outcome == "no_message" else AsyncMock(side_effect=RuntimeError("falhou"))
+    player, req, text_channel = static_player(resend)
+
+    await np_steps._np_send_new(player, req)
+
+    text_channel.send.assert_not_awaited()  # só o autor da mensagem (o bot do painel) pode mandar/editar o painel
+    assert player.message is None
+
+
+@pytest.mark.asyncio
+async def test_a_static_player_takes_the_resent_panel_message_and_edits_it():
+    from empiremuse.utils.music.models import np_steps
+
+    sent = SimpleNamespace(id=9, edit=AsyncMock())
+    player, req, text_channel = static_player(AsyncMock(return_value=sent))
+
+    await np_steps._np_send_new(player, req)
+
+    assert player.message is sent and sent.edit.await_args.kwargs["content"] == "np"
+    text_channel.send.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------- check_channel: quem toca e não é o painel só usa o canal
+
+
+def channel_check(*, panel_bot, channel_db):
+    request = SimpleNamespace(is_panel_bot=AsyncMock(return_value=panel_bot))
+    bot = SimpleNamespace(
+        user=SimpleNamespace(id=1),
+        pool=SimpleNamespace(servers=SimpleNamespace(request=request)),
+        get_channel=lambda cid: channel_db,
+        fetch_channel=AsyncMock(),
+    )
+    dispatch = ControllerDispatchMixin.__new__(ControllerDispatchMixin)
+    dispatch.reset_controller_db = AsyncMock()
+    everything_allowed = MagicMock()  # qualquer permissão consultada vale True
+    server = SimpleNamespace(id=GID, me=object())
+    other_channel = MagicMock(spec=disnake.TextChannel)
+    other_channel.id, other_channel.guild = 1, server
+    other_channel.permissions_for.return_value = everything_allowed
+    inter = SimpleNamespace(guild_id=GID, channel_id=1, channel=other_channel)
+    guild_data = {"player_controller": {"channel": str(PANEL_CHANNEL), "message_id": "1"}}
+    guild = SimpleNamespace(me=SimpleNamespace(guild_permissions=SimpleNamespace(read_message_history=False)))
+    return dispatch, bot, inter, guild_data, guild, other_channel
+
+
+@pytest.mark.asyncio
+async def test_a_bot_that_is_not_the_panel_bot_only_uses_the_channel_without_resetting_or_creating_a_post():
+    forum = MagicMock(spec=disnake.ForumChannel)
+    forum.create_thread = AsyncMock()
+    thread = MagicMock(spec=disnake.Thread)
+    thread.id, thread.owner_id, thread.guild, thread.parent = 22, 2, SimpleNamespace(id=GID), forum
+    dispatch, bot, inter, data, guild, other = channel_check(panel_bot=False, channel_db=thread)
+
+    channel_db, warn, message = await dispatch.check_channel(data, inter, other, guild, bot)
+
+    assert channel_db is thread and warn is None and message is None
+    dispatch.reset_controller_db.assert_not_awaited()
+    forum.create_thread.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_panel_bot_that_already_owns_the_post_does_not_create_another_one():
+    forum = MagicMock(spec=disnake.ForumChannel)
+    forum.create_thread = AsyncMock()
+    thread = MagicMock(spec=disnake.Thread)
+    thread.id, thread.owner_id, thread.parent = 22, 1, forum
+    thread.guild = SimpleNamespace(id=GID, me=object())
+    thread.locked = thread.archived = False
+    thread.permissions_for.return_value = MagicMock()
+    dispatch, bot, inter, data, guild, other = channel_check(panel_bot=True, channel_db=thread)
+
+    channel_db, _, _ = await dispatch.check_channel(data, inter, other, guild, bot)
+
+    assert channel_db is thread  # owner_id (um int) é comparado com o id do bot, não o objeto .owner
+    forum.create_thread.assert_not_awaited()
+    dispatch.reset_controller_db.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------- cliques: a ajuda não precisa de call, e o clique roteado vale no outro bot
+
+
+@pytest.mark.asyncio
+async def test_the_help_button_answers_even_without_a_call_and_nothing_else_happens():
+    self_, req, other, interaction = click(call=None)
+    req.control = controller_buttons.PlayerControls.help_button
+    helped = AsyncMock()
+    original = controller_buttons._pc_help_button
+    controller_buttons._pc_help_button = helped
+    try:
+        assert await controller_buttons._pc_route_panel_click(self_, req) is True
+    finally:
+        controller_buttons._pc_help_button = original
+
+    helped.assert_awaited_once_with(self_, req)
+    interaction.send.assert_not_awaited()
+    other.cog.player_controller.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_routed_click_is_marked_so_the_other_bot_does_not_drop_it_for_not_being_its_players_message():
+    self_, req, other, interaction = click(call=200)
+    await controller_buttons._pc_route_panel_click(self_, req)
+    assert interaction.panel_click is True
+
+    # no outro bot: a mensagem do clique não é a do player, mas com a marca o clique segue
+    interaction.message = "mensagem do painel"
+    player = SimpleNamespace(
+        message="mensagem do player",
+        static=True,
+        interaction_cooldown=False,
+        guild=SimpleNamespace(me=SimpleNamespace(voice=SimpleNamespace(channel="call"))),
+    )
+    request = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(message_id=None)))
+    me = SimpleNamespace(
+        bot=SimpleNamespace(
+            music=SimpleNamespace(players={GID: player}),
+            pool=SimpleNamespace(servers=SimpleNamespace(request=request)),
+        ),
+    )
+    req.control = controller_buttons.PlayerControls.pause_resume
+    req.player = None
+    dropped = await controller_buttons._pc_player_checks(me, req)
+    interaction.panel_click = False
+    dropped_without_mark = await controller_buttons._pc_player_checks(me, req)
+    assert dropped_without_mark is True and dropped is not True
+
+
+# ---------------------------------------------------------------------- /setup e /reset valem para os players de TODOS os bots
+
+
+def players_with_two_bots():
+    me, other = make_bot(1, "TOKEN", call=100), make_bot(2, "TOKEN_2", call=200)
+    for bot in (me, other):
+        player = bot.music.players[GID]
+        player.setup_hints, player.setup_features = MagicMock(), MagicMock()
+        player.process_hint, player.invoke_np = MagicMock(), AsyncMock()
+        player.text_channel = player.message = "antes"
+    panel = SimpleNamespace(
+        players=lambda gid: [(me, me.music.players[GID]), (other, other.music.players[GID])], refresh=AsyncMock()
+    )
+    me.pool = SimpleNamespace(request_panel=panel)
+    return me, other, panel
+
+
+@pytest.mark.asyncio
+async def test_setup_rebinds_the_players_of_the_other_bots_to_the_new_channel_and_refreshes_the_panel():
+    from empiremuse.utils.music import request_channel
+
+    me, other, panel = players_with_two_bots()
+    channel = SimpleNamespace(id=22, guild=SimpleNamespace(id=GID))
+    other_view_of_channel = SimpleNamespace(id=22)  # o outro bot enxerga o canal pelo cache dele
+    other.get_channel = lambda cid: other_view_of_channel
+    message = SimpleNamespace(id=555)
+
+    await request_channel._rebind_other_players(me, channel, message)
+
+    other_player, own_player = other.music.players[GID], me.music.players[GID]
+    assert other_player.text_channel is other_view_of_channel and other_player.message is message
+    other_player.setup_hints.assert_called_once()
+    other_player.setup_features.assert_called_once()
+    assert own_player.text_channel == "antes"  # o do próprio bot o comando já cuida
+    panel.refresh.assert_awaited_once_with(GID, now=True)
+
+
+@pytest.mark.asyncio
+async def test_reset_turns_the_players_of_the_other_bots_back_into_normal_ones():
+    from empiremuse.utils.music import request_channel
+
+    me, other, panel = players_with_two_bots()
+    other.music.players[GID].static = me.music.players[GID].static = True
+    other.get_channel = lambda cid: None
+    inter_channel = SimpleNamespace(id=33)
+
+    await request_channel._reset_other_players(me, GID, inter_channel)
+
+    other_player = other.music.players[GID]
+    assert other_player.static is False and other_player.message is None and other_player.text_channel is inter_channel
+    assert me.music.players[GID].static is True  # o do bot do comando é tratado à parte
+    other_player.invoke_np.assert_awaited_once_with(force=True)
+
+
+@pytest.mark.asyncio
+async def test_one_failing_player_does_not_stop_the_others_from_being_rebound(caplog):
+    from empiremuse.utils.music import request_channel
+
+    me, other, panel = players_with_two_bots()
+    third = make_bot(3, "TOKEN_3", call=300)
+    third.music.players[GID].setup_hints = MagicMock(side_effect=RuntimeError("falhou"))
+    third.music.players[GID].setup_features = MagicMock()
+    panel.players = lambda gid: [
+        (me, me.music.players[GID]),
+        (third, third.music.players[GID]),
+        (other, other.music.players[GID]),
+    ]
+    channel = SimpleNamespace(id=22, guild=SimpleNamespace(id=GID))
+    third.get_channel = other.get_channel = lambda cid: channel
+
+    await request_channel._rebind_other_players(me, channel, SimpleNamespace(id=1))
+
+    other.music.players[GID].setup_features.assert_called_once()  # o 2º segue mesmo com o 1º falhando
+    panel.refresh.assert_awaited_once_with(GID, now=True)

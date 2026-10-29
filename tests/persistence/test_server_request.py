@@ -215,3 +215,52 @@ def test_a_server_outside_the_pool_keeps_the_old_behaviour_in_the_bots_own_docum
     run(world.store.save_legacy(bot, OUTSIDE, doc))
     assert world.banco.docs[(DBModel.guilds, str(MAIN_ID), str(OUTSIDE))]["player_controller"]["channel"] == "42"
     assert world.banco.servers_doc(OUTSIDE) is None
+
+
+# ---------------------------------------------------------------------- o painel não muda de dono no boot (bot gravado ainda subindo)
+
+
+def _booting_main(world):
+    """O principal gravado como bot do painel, ainda sem ficar pronto e sem ver o servidor; a reserva já está pronta."""
+    world.bots[0].bot_ready = False
+    world.bots[0].get_guild = lambda gid: None
+
+
+def test_a_stored_panel_bot_that_is_still_booting_keeps_the_panel_while_a_ready_reserve_does_not_take_it(world):
+    run(world.request.elect(GID))  # o principal é o bot do painel
+    _booting_main(world)
+
+    assert world.request.elected_id(GID, MAIN_ID) == MAIN_ID  # a reserva não toma o painel só porque subiu antes
+    assert run(world.request.is_panel_bot(GID, world.bots[1])) is False
+    assert request_doc(world)["panel_bot_id"] == str(MAIN_ID)  # e nada foi gravado em nome dela
+
+
+@pytest.mark.parametrize(
+    ("ready", "sees_guild"), [(True, False), (False, True), (True, True)], ids=["ready", "sees_guild", "both"]
+)
+def test_once_the_stored_bot_is_ready_or_sees_the_server_the_normal_election_applies(world, ready, sees_guild):
+    run(world.request.elect(GID))
+    world.bots[0].bot_ready = ready
+    if not sees_guild:
+        world.bots[0].get_guild = lambda gid: None
+
+    expected = MAIN_ID if sees_guild else RESERVE_ID  # sem ver o servidor, o principal nem é candidato
+    assert world.request.elected_id(GID, MAIN_ID) == expected
+
+
+def test_with_nobody_in_the_server_the_panel_bot_is_none_and_the_database_is_never_touched(world):
+    for bot in world.bots:
+        bot.get_guild = lambda gid: None
+    world.banco.read_error = True  # qualquer leitura estouraria
+
+    assert run(world.request.panel_bot(GID)) is None
+    outsider = SimpleNamespace(user=SimpleNamespace(id=4040))
+    assert run(world.request.is_panel_bot(GID, outsider)) is False
+    assert world.banco.servers_doc() is None and world.banco.saves == []
+
+
+def test_a_bot_that_is_not_in_the_server_is_not_the_panel_bot_and_costs_no_write(world):
+    run(world.request.elect(GID))
+    saves = len(world.banco.saves)
+    outsider = SimpleNamespace(user=SimpleNamespace(id=4040), identifier="TOKEN_9")
+    assert run(world.request.is_panel_bot(GID, outsider)) is False and len(world.banco.saves) == saves

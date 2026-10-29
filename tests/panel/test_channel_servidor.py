@@ -75,3 +75,30 @@ class CanalServidorTest(TasksBase):
         self.settle(0.2)
         request = self.world.request_doc
         assert request["channel"] == "22" and request["message_id"], "canal e mensagem sempre juntos"
+
+
+class CanalTodosOsPlayersTest(TasksBase):
+    """O canal é único: o /setup e o /reset do painel valem para os players de TODOS os bots, não só o do bot do painel."""
+
+    def record(self, name):
+        from empiremuse.utils.music import request_channel
+
+        calls = []
+
+        async def fake(*args):
+            calls.append(args)
+
+        self.monkeypatch.setattr(request_channel, name, fake)
+        return calls
+
+    def test_setup_rebinds_the_players_of_the_other_bots(self):
+        calls = self.record("_rebind_other_players")
+        self.run_setup(modo="existente", canal="22")
+        assert len(calls) == 1 and calls[0][1].id == 22 and calls[0][2].id  # canal novo e mensagem do painel
+
+    def test_reset_releases_the_players_of_the_other_bots(self):
+        calls = self.record("_reset_other_players")
+        self.world.configured_text()
+        browser = self.logged_in()
+        assert self.finish(browser, self.confirm_reset(browser, self.reset_confirmation(browser)))[0] == "ok"
+        assert len(calls) == 1 and calls[0][1] == GID
