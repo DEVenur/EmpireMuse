@@ -82,6 +82,7 @@ Valores de tipo incompatível em chaves inteiras geram erro explicativo na inici
 | `LASTFM_KEY` / `LASTFM_SECRET` | Integração com o Last.fm (opcional). |
 | `TEST_GUILDS_<NOME_DO_BOT>` | IDs de servidores de teste (separados por `\|\|`) para registrar comandos só neles (`BotPool.setup` em `empiremuse/utils/client.py`). |
 | `SUPPORT_SERVER` | Convite do servidor de suporte exibido no `/about` e em mensagens de erro (padrão aponta para o EmpireHUB). Em instâncias próprias, altere para o seu servidor ou deixe vazio (`SUPPORT_SERVER=''`) para não exibir o link. |
+| `APP_DESCRIPTION` / `APP_TAGS` | Perfil da aplicação no Discord (descrição e até 5 tags de 20 caracteres, separadas por vírgula): cada bot grava o próprio ao iniciar, só se diferir. A descrição aceita `{prefix}`, `{bots}`, `{panel_url}` e `{support_url}` (a linha cujo marcador fica vazio sai) e `\n` como quebra de linha; passou de 400 caracteres, é encurtada com um aviso. Vazio = não mexer no campo. |
 | `ENABLE_JISHAKU` | Carrega o jishaku (execução de código e de shell pelo Discord, só para donos). Desligado por padrão (`false`); ligue só se precisar e confie em quem está em `OWNER_IDS`. O `shell` do owner roda com ambiente mínimo e devolve a saída mascarada só por DM. |
 | `EMBED_COLOR` | Cor dos embeds (hex de 6 dígitos; padrão `8B5CF6`). Defina `EMBED_COLOR=none` para restaurar e utilizar a cor do cargo mais alto do bot no servidor. |
 | `*_INTENT`, `MESSAGE_CONTENT_INTENT` etc. | Intents; os padrões estão em `DEFAULT_CONFIG` (`empiremuse/config_loader.py`). |

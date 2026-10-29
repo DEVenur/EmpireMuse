@@ -9,6 +9,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ### Adicionado
 - **Uso do bot e banimento de servidores (só o dono)**: o bot registra onde (servidor e canais), como (comando, botão, canal de pedidos, painel web, faixa tocada) e quando foi usado, sem nada sobre quem usou, com retenção de `USAGE_RETENTION_DAYS` dias (30 por padrão). No comando `servers`, "Ver uso" mostra o resumo de 7 dias do servidor, "Banir" tira todos os bots do servidor e impede que o readicionem, e "Banidos" lista e desbane. A lista de banidos é única para todo o pool.
+- **Perfil da aplicação no Discord**: ao iniciar, cada bot grava a descrição e as tags do próprio perfil (`APP_DESCRIPTION` e `APP_TAGS`) quando diferem do configurado: o que o bot é, o comando `/play`, o prefixo, o painel, o suporte e quantos bots há no pool. A descrição aceita `{prefix}`, `{bots}`, `{panel_url}` e `{support_url}`; valor vazio não mexe no campo. Falha ou limite de requisições vira aviso e o bot segue. O padrão de `CUSTOM_STATUS_PRESENCES` agora é a frase com `/play`, o painel e as calls em uso (vazio ainda desliga).
 
 ### Alterado
 - **Testes do painel mais enxutos**: removidos 54 testes de baixo valor em `tests/panel` (texto de `.env.example`/CSS/templates, favicon, caracterização da página de status, micro-otimizações do cache de marca) e fundidas variantes repetidas, sem tirar nenhum teste de segurança. A cobertura do painel não muda.

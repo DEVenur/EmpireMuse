@@ -72,6 +72,8 @@ services:
       ENABLE_COMMANDS_COOLDOWN: "true"
       COMMAND_LOG: "false"
       SUPPORT_SERVER: "https://discord.gg/KgtyNg9U6H"
+      APP_DESCRIPTION: "🎵 Bot de música da comunidade EmpireHub: YouTube, Spotify e Deezer.\n▶️ Comece com /play ou {prefix}play <nome ou link>. Ajuda: {prefix}help\n🤖 Somos {bots} bots: com mais de um no servidor, cada call pode ter o seu.\n⚙️ Painel: {panel_url}\n💬 Suporte: {support_url}"
+      APP_TAGS: "música,music,player,spotify,youtube"
       AUTO_SYNC_COMMANDS: "true"
       BOT_ADD_REMOVE_LOG_CHANNEL_ID: "01389041396324765827"
       EMBED_COLOR: "8B5CF6"
@@ -140,7 +142,7 @@ services:
       LISTENING_PRESENCES: ""
       WATCHING_PRESENCES: ""
       PLAYING_PRESENCES: ""
-      CUSTOM_STATUS_PRESENCES: ""
+      CUSTOM_STATUS_PRESENCES: "🎵 /play ou !play | ajuda: !help||⚙️ Painel: muse.empirecommunity.org/painel||🎧 Tocando em {players_count} calls"
       STREAMING_PRESENCES: ""
     volumes:
       - empiremuse-data:/data

@@ -309,6 +309,24 @@
             "rules": "required|string"
         },
         {
+            "name": "Descrição do perfil do bot",
+            "description": "Descrição da aplicação no Discord, gravada por cada bot ao iniciar. Aceita {prefix}, {bots}, {panel_url} e {support_url}; \\n quebra a linha; vazio não altera o perfil.",
+            "env_variable": "APP_DESCRIPTION",
+            "default_value": "🎵 Bot de música da comunidade EmpireHub: YouTube, Spotify e Deezer.\\n▶️ Comece com /play ou {prefix}play <nome ou link>. Ajuda: {prefix}help\\n🤖 Somos {bots} bots: com mais de um no servidor, cada call pode ter o seu.\\n⚙️ Painel: {panel_url}\\n💬 Suporte: {support_url}",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Tags do perfil do bot",
+            "description": "Até 5 tags (20 caracteres cada), separadas por vírgula, gravadas no perfil da aplicação ao iniciar; vazio não altera o perfil.",
+            "env_variable": "APP_TAGS",
+            "default_value": "música,music,player,spotify,youtube",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
             "name": "Sincronizar comandos na inicialização",
             "description": "Registra e sincroniza comandos slash automaticamente na API do Discord ao ligar.",
             "env_variable": "AUTO_SYNC_COMMANDS",
@@ -996,7 +1014,7 @@
             "name": "Presenças em status customizado",
             "description": "Mensagens de status personalizado fixadas no bot, separadas por barra dupla.",
             "env_variable": "CUSTOM_STATUS_PRESENCES",
-            "default_value": "",
+            "default_value": "🎵 /play ou !play | ajuda: !help||⚙️ Painel: muse.empirecommunity.org/painel||🎧 Tocando em {players_count} calls",
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string"
