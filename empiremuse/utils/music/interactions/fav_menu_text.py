@@ -28,12 +28,11 @@ def _format_fav(bot, index, data):
     return f"` {index:02} ` {md_link(name, url, limit=40)}"
 
 
-def _format_gfav(bot, index, data):
-    name, data = data
-    e = get_source_emoji_cfg(bot, data["url"])
-    if e:
-        return f"` {index:02} ` {e} {md_link(name, data['url'], limit=40)}"
-    return f"` {index:02} ` {md_link(name, data['url'], limit=40)}"
+def _format_playlist(bot, item):
+    e = get_source_emoji_cfg(bot, item.url)
+    genres = f" · `{', '.join(g.replace('`', '') for g in item.genres)}`" if item.genres else ""
+    label = md_link(item.name, item.url, limit=40)
+    return f"` {item.order:02} ` {e} {label}{genres}" if e else f"` {item.order:02} ` {label}{genres}"
 
 
 def _format_itg(bot, index, data):
@@ -129,29 +128,24 @@ class FavMenuTextMixin:
         return txt
 
     def _guild_fav_manager_txt(self) -> str:
-        txt = "### Gerenciador de favoritos do servidor.\n"
+        txt = "### Gerenciador de playlists do servidor.\n"
 
-        if not self.guild_data["player_controller"]["fav_links"]:
-            txt += f"Não há links adicionados no bot {self.bot.user.mention} (clique no botão de adicionar abaixo).\n"
+        if not self.playlists:
+            txt += "Não há playlists adicionadas no servidor (clique no botão de adicionar abaixo).\n"
             return txt
 
         txt += (
-            f"**Links atuais no bot {self.bot.user.mention}:**\n"
+            "**Playlists do servidor (iguais para todos os bots):**\n"
             + paginator(
-                "\n".join(
-                    f"> {_format_gfav(self.bot, n + 1, d)}"
-                    for n, d in enumerate(
-                        islice(self.guild_data["player_controller"]["fav_links"].items(), MAX_LISTED_ITEMS)
-                    )
-                ),
+                "\n".join(f"> {_format_playlist(self.bot, item)}" for item in islice(self.playlists, MAX_LISTED_ITEMS)),
                 max_size=LIST_MAX_SIZE,
             )[0]
         )
 
         txt += (
-            "\n\n**Como usá-los?**\n"
-            f"* Usando o menu de seleção do player durante o modo de espera.\n"
-            f"\n`Bot selecionado:` {self.bot.user.mention}"
+            "\n\n**Como usá-las?**\n"
+            "* Usando o menu de seleção do player durante o modo de espera.\n"
+            "* Usando o menu de favoritos do servidor no comando /play (com filtro por gênero)."
         )
 
         return txt

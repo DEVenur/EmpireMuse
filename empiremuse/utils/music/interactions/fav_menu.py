@@ -8,7 +8,9 @@ from typing import Union, TYPE_CHECKING
 
 import disnake
 
+from empiremuse.rules.errors import RuleError
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.music.checks import check_pool_bots
 from empiremuse.utils.music.converters import time_format, md_link
 from empiremuse.utils.others import (
@@ -25,7 +27,6 @@ from empiremuse.utils.music.interactions.fav_modals import (
 )
 from empiremuse.utils.music.interactions.common import (
     ViewMode,
-    process_idle_embed,
 )
 from empiremuse.utils.music.interactions.fav_menu_components import (
     FavMenuComponentsMixin,
@@ -33,6 +34,7 @@ from empiremuse.utils.music.interactions.fav_menu_components import (
 from empiremuse.utils.music.interactions.fav_menu_text import (
     FavMenuTextMixin,
 )
+from empiremuse.utils.music.interactions import fav_menu_playlists as playlists_ui
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
         self.guild = ctx.guild
         self.current = None
         self.data = data
-        self.guild_data = {}
+        self.playlists: tuple = ()
         self.message = None
         self.log = log
         self.prefix = prefix
@@ -118,7 +120,26 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         self.stop()
 
+    async def load_playlists(self, guild_id: int) -> None:
+        self.playlists = await self.bot.pool.servers.playlists.list(guild_id)
+
+    async def finish_write(self, inter: disnake.ModalInteraction, log: str) -> None:
+        """Depois de gravar no store: responde ao modal e redesenha o menu com a lista que o store tem agora."""
+        await self.load_playlists(inter.guild_id)
+        await inter.edit_original_message(content=log, allowed_mentions=disnake.AllowedMentions.none())
+        self.log = log
+        if not isinstance(self.ctx, CustomContext):
+            await self.ctx.edit_original_message(content=self.build_txt(), view=self)
+        elif self.message:
+            await self.message.edit(content=self.build_txt(), view=self)
+
     async def add_callback(self, inter: disnake.MessageInteraction):
+        if self.mode == ViewMode.guild_fav_manager:
+            if not playlists_ui.can_manage(inter):
+                await inter.send(playlists_ui.MSG_DENIED, ephemeral=True)
+                return
+            await inter.response.send_modal(playlists_ui.PlaylistModal(self))
+            return
         await inter.response.send_modal(FavModalAdd(name=None, url=None, view=self))
 
     async def edit_callback(self, inter: disnake.MessageInteraction):
@@ -135,45 +156,28 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
                 await inter.send(f"**Não há favorito com o nome:** {self.current}", ephemeral=True)
 
         elif self.mode == ViewMode.guild_fav_manager:
-            guild = self.bot.get_guild(inter.guild_id) or inter.guild
-
-            if not guild:
-                await inter.send("Você não pode executar essa ação fora de um servidor.", ephemeral=True)
+            if not playlists_ui.can_manage(inter):
+                await inter.send(playlists_ui.MSG_DENIED, ephemeral=True)
                 return
-            try:
-                await inter.response.send_modal(
-                    FavModalAdd(
-                        bot=self.bot,
-                        name=self.current,
-                        url=self.data["player_controller"]["fav_links"][self.current]["url"],
-                        description=self.data["player_controller"]["fav_links"][self.current]["description"],
-                        view=self,
-                    )
-                )
-            except KeyError:
-                await inter.send(f"**Não há favorito com nome:** {self.current}", ephemeral=True)
+            await self.load_playlists(inter.guild_id)
+            item = playlists_ui.find_by_name(self.playlists, self.current)
+            if item is None:
+                await inter.send(f"**Não há playlist com o nome:** `{self.current}`", ephemeral=True)
+                return
+            await inter.response.send_modal(playlists_ui.PlaylistModal(self, item))
 
     async def remove_callback(self, inter: disnake.MessageInteraction):
         if not self.current:
             await inter.send("Você deve selecionar um item!", ephemeral=True)
             return
 
+        if self.mode == ViewMode.guild_fav_manager:
+            await self._remove_playlist(inter)
+            return
+
         await inter.response.defer(ephemeral=True)
 
-        guild = None
-
-        if self.mode == ViewMode.guild_fav_manager:
-            guild = self.bot.get_guild(inter.guild_id)
-
-            if not guild:
-                await inter.send("Você não pode executar essa ação fora de um servidor.", ephemeral=True)
-                return
-
-            if not self.guild_data:
-                self.guild_data = await self.bot.get_data(inter.guild_id, db_name=DBModel.guilds)
-
-        else:
-            self.data = await self.bot.get_global_data(inter.author.id, db_name=DBModel.users)
+        self.data = await self.bot.get_global_data(inter.author.id, db_name=DBModel.users)
 
         if self.mode == ViewMode.fav_manager:
             try:
@@ -186,30 +190,6 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
             await self.bot.update_global_data(inter.author.id, self.data, db_name=DBModel.users)
 
             self.log = f"Favorito {url} foi removido com sucesso!"
-
-        elif self.mode == ViewMode.guild_fav_manager:
-            try:
-                item = self.guild_data["player_controller"]["fav_links"][self.current]
-                url = md_link(self.current, item["url"] if isinstance(item, dict) else item)
-                del self.guild_data["player_controller"]["fav_links"][self.current]
-            except KeyError:
-                try:
-                    await process_idle_embed(self.bot, guild, guild_data=self.guild_data)
-                except Exception:
-                    logger.exception("Falha ao atualizar o embed ocioso do player")
-
-                await inter.edit_original_message(
-                    embed=disnake.Embed(
-                        description=f"**Não há links da lista com o nome:** {self.current}",
-                        color=self.bot.get_color(guild.me),
-                    ),
-                    view=None,
-                )
-                return
-
-            await self.bot.update_data(inter.guild_id, self.guild_data, db_name=DBModel.guilds)
-
-            self.log = f"Link {url} foi removido com sucesso da lista de favoritos do servidor!"
 
         elif self.mode == ViewMode.integrations_manager:
             item = self.data["integration_links"][self.current]
@@ -230,39 +210,19 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         await inter.edit_original_message(content=self.build_txt(), view=self)
 
-    async def bot_select(self, inter: disnake.MessageInteraction):
-        value = int(inter.values[0][11:])
-
-        for b in self.bot.pool.get_guild_bots(inter.guild_id):
-            try:
-                if b.user.id == value:
-                    self.bot = b
-            except AttributeError:
-                continue
-
-        self.guild_data = await self.bot.get_data(inter.guild_id, db_name=DBModel.guilds)
-
-        await inter.response.edit_message(content=self.build_txt(), view=self)
-
     async def clear_callback(self, inter: disnake.MessageInteraction):
-        guild = None
-
         if self.mode == ViewMode.guild_fav_manager:
-            guild = self.bot.get_guild(inter.guild_id) or inter.guild
-
-            if not guild:
-                await inter.send("Você não pode executar essa ação fora de um servidor.", ephemeral=True)
+            if not await playlists_ui.clear_all(self, inter):
                 return
+            self.log = "Lista de playlists do servidor foi limpa com sucesso!"
+            await self.load_playlists(inter.guild_id)
+            self.current = None
+            await self._redraw()
+            return
 
-            await inter.response.defer(ephemeral=True)
+        await inter.response.defer(ephemeral=True)
 
-            if not self.guild_data:
-                self.guild_data = await self.bot.get_data(inter.guild_id, db_name=DBModel.guilds)
-
-        else:
-            await inter.response.defer(ephemeral=True)
-
-            self.data = await self.bot.get_global_data(inter.author.id, db_name=DBModel.users)
+        self.data = await self.bot.get_global_data(inter.author.id, db_name=DBModel.users)
 
         if self.mode == ViewMode.fav_manager:
             if not self.data["fav_links"]:
@@ -283,32 +243,6 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
                 'conteúdo do arquivo e clique no botão "importar" e cole o conteudo no campo indicado.`',
                 ephemeral=True,
                 file=disnake.File(fp, filename="favs.json"),
-            )
-
-        elif self.mode == ViewMode.guild_fav_manager:
-            if not self.guild_data["player_controller"]["fav_links"]:
-                await inter.send("**Não há links favoritos no servidor.**", ephemeral=True)
-                return
-
-            fp = BytesIO(bytes(json.dumps(self.guild_data["player_controller"]["fav_links"], indent=4), "utf-8"))
-
-            self.guild_data["player_controller"]["fav_links"].clear()
-
-            await self.bot.update_data(inter.guild_id, self.guild_data, db_name=DBModel.guilds)
-
-            try:
-                await process_idle_embed(self.bot, guild, guild_data=self.guild_data)
-            except Exception:
-                logger.exception("Falha ao atualizar o embed ocioso do player")
-
-            self.log = "Lista de favoritos do server foi limpa com sucesso!"
-
-            await inter.send(
-                "### Os links de favoritos do server foram excluídos com sucesso!\n"
-                "`um arquivo de backup foi gerado e caso queira reverter essa exclusão, copie o "
-                'conteúdo do arquivo e clique no botão "importar" e cole o conteudo no campo indicado.`',
-                ephemeral=True,
-                file=disnake.File(fp, filename="guild_favs.json"),
             )
 
         elif self.mode == ViewMode.integrations_manager:
@@ -334,12 +268,39 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
 
         self.current = None
 
+        await self._redraw()
+
+    async def _redraw(self) -> None:
         if not isinstance(self.ctx, CustomContext):
             await self.ctx.edit_original_message(content=self.build_txt(), view=self)
         elif self.message:
             await self.message.edit(content=self.build_txt(), view=self)
 
+    async def _remove_playlist(self, inter: disnake.MessageInteraction) -> None:
+        if not playlists_ui.can_manage(inter):
+            await inter.send(playlists_ui.MSG_DENIED, ephemeral=True)
+            return
+        await inter.response.defer(ephemeral=True)
+        try:
+            removed = await self.bot.pool.servers.playlists.remove(inter.guild_id, self.current)
+            await self.load_playlists(inter.guild_id)
+        except GenericError as exc:
+            await inter.edit_original_message(exc.text)
+            return
+        if isinstance(removed, RuleError):
+            await inter.edit_original_message(playlists_ui.error_text(removed))
+            await self._redraw()
+            return
+        self.log = f"Playlist `{removed.name}` foi removida da lista do servidor!"
+        await inter.edit_original_message(content=self.build_txt(), view=self)
+
     async def import_callback(self, inter: disnake.MessageInteraction):
+        if self.mode == ViewMode.guild_fav_manager:
+            if not playlists_ui.can_manage(inter):
+                await inter.send(playlists_ui.MSG_DENIED, ephemeral=True)
+                return
+            await inter.response.send_modal(playlists_ui.PlaylistImportModal(self))
+            return
         await inter.response.send_modal(FavModalImport(view=self))
 
     async def play_callback(self, inter: disnake.MessageInteraction):
@@ -351,6 +312,10 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
         )
 
     async def export_callback(self, inter: disnake.MessageInteraction):
+        if self.mode == ViewMode.guild_fav_manager:
+            await playlists_ui.export_file(self, inter)
+            return
+
         cog = self.bot.get_cog("Music")
 
         if retry_after := cog.fav_import_export_cd.get_bucket(inter).update_rate_limit():
@@ -396,25 +361,6 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
                 ephemeral=True,
             )
 
-        elif self.mode == ViewMode.guild_fav_manager:
-            if not self.guild_data["player_controller"]["fav_links"]:
-                await inter.edit_original_message(
-                    content=f"**Não há músicas/playlists fixadas no servidor..\n"
-                    f"Você pode adicionar usando o comando: {cmd}**"
-                )
-
-            fp = BytesIO(bytes(json.dumps(self.guild_data["player_controller"]["fav_links"], indent=4), "utf-8"))
-
-            guild = self.bot.get_guild(inter.guild_id) or inter.guild
-
-            embed = disnake.Embed(
-                description=f"**Os dados dos links de músicas/playlists fixas do servidor estão aqui.\n"
-                f"Você pode importar usando o comando:** {cmd}",
-                color=self.bot.get_color(guild.me),
-            )
-
-            await inter.send(embed=embed, file=disnake.File(fp=fp, filename="guild_favs.json"), ephemeral=True)
-
         elif self.mode == ViewMode.integrations_manager:
             if not self.data["integration_links"]:
                 await inter.edit_original_message(
@@ -454,9 +400,8 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
             self.components_updater_task = self.bot.loop.create_task(self.auto_update())
 
         elif self.mode == ViewMode.guild_fav_manager:
-            if not self.guild_data:
-                await inter.response.defer()
-                self.guild_data = await self.bot.get_data(inter.guild_id, db_name=DBModel.guilds)
+            await inter.response.defer()
+            await self.load_playlists(inter.guild_id)
 
         if inter.response.is_done():
             await inter.edit_original_message(content=self.build_txt(), view=self)

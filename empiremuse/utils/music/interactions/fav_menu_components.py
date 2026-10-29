@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import disnake
 
+from empiremuse.rules.playlists import may_manage, select_description
 from empiremuse.utils.others import music_source_emoji_url
 from empiremuse.utils.music.interactions.common import (
     ViewMode,
@@ -40,6 +41,10 @@ class FavMenuComponentsMixin:
 
         self._add_button("Fechar", "❌", self.cancel_callback)
 
+    def _can_manage_playlists(self) -> bool:
+        perms = self.ctx.author.guild_permissions
+        return may_manage(self.guild.owner_id == self.ctx.author.id, perms.administrator, perms.manage_guild)
+
     def _add_button(self, label: str, emoji: str, callback, **kwargs):
         button = disnake.ui.Button(label=label, emoji=emoji, **kwargs)
         button.callback = callback
@@ -68,7 +73,7 @@ class FavMenuComponentsMixin:
             )
         )
 
-        if self.guild and (self.ctx.author.guild_permissions.manage_guild or self.is_owner):
+        if self.guild and self._can_manage_playlists():
             mode_select.options.insert(
                 1,
                 disnake.SelectOption(
@@ -102,42 +107,25 @@ class FavMenuComponentsMixin:
         self.add_item(fav_select)
 
     def _add_guild_fav_selects(self):
-        bots_in_guild = []
-
-        for b in sorted(self.bot.pool.get_guild_bots(self.guild.id), key=lambda b: b.identifier):
-            if b.bot_ready and b.user in self.guild.members:
-                bots_in_guild.append(
-                    disnake.SelectOption(
-                        emoji="🎶",
-                        label=f"Bot: {b.user.display_name}"[:25],
-                        value=f"bot_select_{b.user.id}",
-                        description=f"ID: {b.user.id}",
-                        default=b == self.bot,
-                    )
-                )
-
-        if bots_in_guild:
-            bot_select = disnake.ui.Select(options=bots_in_guild, min_values=1, max_values=1)
-            bot_select.callback = self.bot_select
-            self.add_item(bot_select)
-
-        if not self.guild_data["player_controller"]["fav_links"]:
+        """Select das playlists do servidor (as 25 primeiras por ordem); o valor é o nome, re-resolvido no store."""
+        if not self.playlists:
             return
 
         fav_select = disnake.ui.Select(
             options=[
                 disnake.SelectOption(
-                    label=k, emoji=music_source_emoji_url(v["url"], self.bot)[0], description=v.get("description")
+                    label=item.name,
+                    value=item.name,
+                    emoji=music_source_emoji_url(item.url, self.bot)[0],
+                    description=select_description(item) or None,
                 )
-                for k, v in list(self.guild_data["player_controller"]["fav_links"].items())[
-                    :MAX_SELECT_OPTIONS
-                ]  # TODO: Lidar depois com os dados existentes que excedem a quantidade permitida
+                for item in self.playlists[:MAX_SELECT_OPTIONS]
             ],
             min_values=1,
             max_values=1,
         )
         fav_select.options[0].default = True
-        self.current = fav_select.options[0].label
+        self.current = fav_select.options[0].value
         fav_select.callback = self.select_callback
         self.add_item(fav_select)
 
@@ -168,7 +156,7 @@ class FavMenuComponentsMixin:
             self._add_button("Exportar", "📤", self.export_callback, disabled=no_links)
 
         elif self.mode == ViewMode.guild_fav_manager:
-            no_links = not self.guild_data["player_controller"]["fav_links"]
+            no_links = not self.playlists
             self._add_button("Editar", "✍️", self.edit_callback, disabled=no_links)
             self._add_button("Remover", "♻️", self.remove_callback, disabled=no_links)
             self._add_button("Limpar favoritos", "🚮", self.clear_callback, disabled=no_links)
