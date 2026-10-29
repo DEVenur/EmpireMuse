@@ -103,7 +103,7 @@ class SettingsForm:
 
     key = ""
     category = ""
-    scope_kind = "bot"  # "bot" (dados do bot) ou "global" (dados globais do servidor)
+    scope_kind = "bot"  # "bot", "global" (dados globais do servidor) ou "servidor" (doc único: pool.servers)
     fields: tuple[str, ...] = ()
     markers: tuple[str, ...] = ()  # campos que identificam este formulário num POST
 
@@ -118,16 +118,25 @@ class SettingsForm:
         return "form-" + self.key.replace("_", "-")
 
     def scope(self, ctx: FormContext) -> str:
-        return ctx.bot_id if self.scope_kind == "bot" else "global"
+        if self.scope_kind == "bot":
+            return ctx.bot_id
+        return "servidor" if self.scope_kind == "servidor" else "global"
 
     async def load(self, ctx: FormContext) -> dict:
         """Documento do cache do banco: somente leitura (nunca mutar nem regravar este objeto)."""
+        if self.scope_kind == "servidor":
+            return await ctx.pool.servers.settings(ctx.guild_id)
         if self.scope_kind == "bot":
             return await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
         return await ctx.bot.get_global_data(ctx.guild_id, db_name=DBModel.guilds)
 
-    async def store(self, ctx: FormContext, doc: dict) -> None:
-        if self.scope_kind == "bot":
+    async def store(self, ctx: FormContext, doc: dict, before: dict) -> None:
+        """Grava ``doc`` (cópia alterada de ``before``, o que ``load`` devolveu). No escopo servidor vai só o que mudou."""
+        if self.scope_kind == "servidor":
+            changes = {name: value for name, value in doc.items() if before.get(name) != value}
+            if changes:
+                await ctx.pool.servers.patch(ctx.guild_id, "settings", changes)
+        elif self.scope_kind == "bot":
             await ctx.bot.update_data(ctx.guild_id, doc, db_name=DBModel.guilds)
         else:
             await ctx.bot.update_global_data(ctx.guild_id, doc, db_name=DBModel.guilds)

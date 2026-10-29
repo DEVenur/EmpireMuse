@@ -1,4 +1,4 @@
-"""Categoria Aparência: skins por bot (G-08, G-09) e skins globais (G-10, G-11).
+"""Categoria Aparência: skins do servidor (G-08, G-09; doc único, valem para todos os bots) e skins globais (G-10, G-11).
 
 As skins personalizadas do servidor não são lidas nem gravadas pelo painel: um valor atual "> custom_skin: X" só é
 exibido e mantido se o formulário reenviar exatamente esse valor.
@@ -10,7 +10,7 @@ import logging
 from typing import Any, Optional
 
 from empiremuse.panel.services.base import DBModel, Args, FormContext, ParseResult, SettingsForm, first, flag
-from empiremuse.panel.services.player import active_player
+from empiremuse.panel.services.player import active_player, guild_players
 from empiremuse.rules import limits
 from empiremuse.rules.settings import allowed_names
 
@@ -54,18 +54,18 @@ async def reload_skin(player: Any, skin: str, static_skin: str, text: str) -> No
     await player.invoke_np(force=True)
 
 
-class SkinsBotForm(SettingsForm):
-    key = "skin_bot"
+class SkinsServerForm(SettingsForm):
+    key = "skin_servidor"
     category = "aparencia"
+    scope_kind = "servidor"
     fields = ("skin", "static_skin")
     markers = fields
 
     def extract(self, doc: dict) -> dict[str, Any]:
-        controller = doc["player_controller"]
-        return {"skin": controller.get("skin"), "static_skin": controller.get("static_skin")}
+        return {"skin": doc["skin"], "static_skin": doc["static_skin"]}
 
     def apply(self, doc: dict, new: dict[str, Any]) -> None:
-        doc["player_controller"].update(new)
+        doc.update(new)
 
     def display(self, ctx: FormContext, current: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -85,10 +85,10 @@ class SkinsBotForm(SettingsForm):
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
         global_data = await ctx.bot.get_global_data(ctx.guild_id, db_name=DBModel.guilds)
-        player = active_player(ctx.bot, ctx.guild_id)
-        if global_data["global_skin"] or player is None:
-            return  # no modo global o player segue a skin global
-        await reload_skin(player, new["skin"], new["static_skin"], "O painel alterou a skin do player.")
+        if global_data["global_skin"]:
+            return  # no modo global os players seguem a skin global
+        for player in guild_players(ctx):
+            await reload_skin(player, new["skin"], new["static_skin"], "O painel alterou a skin do player.")
 
 
 class SkinsGlobalForm(SettingsForm):
@@ -144,20 +144,20 @@ class SkinsGlobalForm(SettingsForm):
         )
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
-        for bot in ctx.pool.get_guild_bots(ctx.guild_id):
-            player = active_player(bot, ctx.guild_id)
-            if player is None:
-                continue
-            skin, static_skin = await self._effective(ctx, bot, new)
+        players = guild_players(ctx)
+        if not players:
+            return
+        skin, static_skin = await self._effective(ctx, new)
+        for player in players:
             await reload_skin(player, skin, static_skin, "O painel alterou a skin do player.")
 
     @staticmethod
-    async def _effective(ctx: FormContext, bot: Any, new: dict[str, Any]) -> tuple[str, str]:
-        """Skins que o player do bot deve usar: as globais (modo global) ou as do próprio bot."""
+    async def _effective(ctx: FormContext, new: dict[str, Any]) -> tuple[str, str]:
+        """Skins que os players devem usar: as globais (modo global) ou as do servidor."""
         if new["global_skin"]:
             return (
                 new["player_skin"] or ctx.pool.default_skin,
                 new["player_skin_static"] or ctx.pool.default_static_skin,
             )
-        own = (await bot.get_data(ctx.guild_id, db_name=DBModel.guilds))["player_controller"]
+        own = await ctx.pool.servers.settings(ctx.guild_id)
         return own["skin"] or ctx.pool.default_skin, own["static_skin"] or ctx.pool.default_static_skin

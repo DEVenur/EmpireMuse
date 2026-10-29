@@ -20,7 +20,7 @@ from empiremuse.panel.handlers.servers import (
     decode_args,
     initial_of,
 )
-from empiremuse.panel.services.appearance import SkinsBotForm, SkinsGlobalForm
+from empiremuse.panel.services.appearance import SkinsGlobalForm, SkinsServerForm
 from empiremuse.panel.services.base import (
     DBModel,
     DIGITS,
@@ -43,11 +43,11 @@ WRITE_LIMIT_PER_MINUTE = 20
 CATEGORY_FORMS: dict[str, tuple[SettingsForm, ...]] = {
     "player": (PlayerForm(),),
     "dj": (DjForm(),),
-    "aparencia": (SkinsBotForm(), SkinsGlobalForm()),
+    "aparencia": (SkinsServerForm(), SkinsGlobalForm()),
     "links": (LinksForm(),),
     "geral": (PrefixForm(), VoiceStatusForm(), ListenAlongForm()),
 }
-PER_BOT_CATEGORIES = frozenset({"player", "dj", "aparencia", "links", "canal"})
+PER_BOT_CATEGORIES = frozenset({"links", "canal"})  # player, dj e aparência são do servidor (doc único)
 CHANNEL_CATEGORY = "canal"  # tem handler próprio (panel/handlers/channel.py)
 _MSG_TOO_LARGE = ("Envio grande demais", "Os dados enviados excedem o limite permitido.")
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."

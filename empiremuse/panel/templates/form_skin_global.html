@@ -5,7 +5,7 @@
   {% module xsrf_form_html() %}
   <input type="hidden" name="versao" value="{{ form.versao }}">
   <h2 class="subtitulo">Aparência global do servidor</h2>
-  <p class="nota">Quando ativada, todos os bots deste servidor usam as skins abaixo no lugar das skins de cada bot.</p>
+  <p class="nota">Quando ativada, todos os bots deste servidor usam as skins abaixo no lugar da skin do servidor.</p>
   {% include "_mensagem_form.html" %}
   <label>
     <input type="checkbox" name="global_skin" value="on"{% if valores.get("global_skin") %} checked{% end %}>

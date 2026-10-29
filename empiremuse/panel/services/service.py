@@ -141,7 +141,7 @@ class SettingsService:
             ), None
         new_doc = copy.deepcopy(doc)
         form.apply(new_doc, parsed.new)
-        await form.store(ctx, new_doc)
+        await form.store(ctx, new_doc, doc)
         saved = form.extract(new_doc)
         outcome = Outcome(
             STATUS_OK,
