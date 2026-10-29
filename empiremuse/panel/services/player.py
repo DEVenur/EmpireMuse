@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, NamedTuple
 
 from empiremuse.panel.services.base import Args, FormContext, ParseResult, SettingsForm, flag, first
 from empiremuse.rules import limits
 from empiremuse.rules.errors import ROLE_DUPLICATE, ROLE_LIMIT
 from empiremuse.rules.settings import check_dj_roles, order_dj_roles, parse_volume
+
+logger = logging.getLogger(__name__)
 
 MSG_VOLUME = "Escolha um volume válido: de 5 a 100 (de 5 em 5) ou de 110 a 150 (de 10 em 10)."
 MSG_ROLE_INVALID = "Selecione apenas cargos que existem neste servidor."
@@ -60,7 +63,10 @@ class PlayerForm(SettingsForm):
 
     async def effects(self, ctx: FormContext, current: dict[str, Any], new: dict[str, Any]) -> None:
         for player in guild_players(ctx):
-            await player.process_save_queue()
+            try:
+                await player.process_save_queue()
+            except Exception as exc:  # o dado já foi gravado: um player com falha não impede os demais
+                logger.warning("Falha ao salvar a fila do player depois da configuração (%s)", type(exc).__name__)
 
 
 class RoleOption(NamedTuple):

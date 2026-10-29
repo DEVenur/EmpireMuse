@@ -45,13 +45,16 @@ async def reload_skin(player: Any, skin: str, static_skin: str, text: str) -> No
         await player.destroy_message()
     except Exception as exc:
         logger.warning("Falha ao remover a mensagem do player (%s)", type(exc).__name__)
-    player.skin = skin
-    player.skin_static = static_skin
-    player.setup_features()
-    player.setup_hints()
-    player.process_hint()
-    player.set_command_log(text=text, emoji="🎨")
-    await player.invoke_np(force=True)
+    try:
+        player.skin = skin
+        player.skin_static = static_skin
+        player.setup_features()
+        player.setup_hints()
+        player.process_hint()
+        player.set_command_log(text=text, emoji="🎨")
+        await player.invoke_np(force=True)
+    except Exception as exc:  # o dado já foi gravado: um player com falha não impede os demais
+        logger.warning("Falha ao recarregar a skin do player (%s)", type(exc).__name__)
 
 
 class SkinsServerForm(SettingsForm):

@@ -36,7 +36,7 @@ from empiremuse.panel.services.links import LinksForm
 from empiremuse.panel.services.listen_along import ListenAlongForm
 from empiremuse.panel.services.player import DjForm, PlayerForm
 from empiremuse.panel.services.service import Outcome, SettingsService
-from empiremuse.utils.servers import ServerConfigConflict
+from empiremuse.utils.servers import ServerConfigConflict, ServerConfigUnavailable
 from empiremuse.utils.usage import record_panel_action
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ CHANNEL_CATEGORY = "canal"  # tem handler próprio (panel/handlers/channel.py)
 _MSG_TOO_LARGE = ("Envio grande demais", "Os dados enviados excedem o limite permitido.")
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."
 _MSG_NO_FORM = ("Dados inválidos", "Não foi possível identificar o formulário enviado.")
+_UNAVAILABLE_TITLE = "Configuração indisponível"
 _MSG_FORBIDDEN = "Você não tem a permissão necessária no Discord para esta ação (Gerenciar Canais)."
 
 
@@ -71,6 +72,18 @@ class SettingsHandler(AuthenticatedHandler):
 
     async def get(self, guild_id: str, category: str) -> None:
         try:
+            await self._get(guild_id, category)
+        except ServerConfigUnavailable as exc:  # leitura do doc único falhou: mensagem própria, não o 500 genérico
+            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+
+    async def post(self, guild_id: str, category: str) -> None:
+        try:
+            await self._post(guild_id, category)
+        except ServerConfigUnavailable as exc:  # vale também para a releitura dos blocos de Conflict, 429 e respostas
+            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+
+    async def _get(self, guild_id: str, category: str) -> None:
+        try:
             ctx, access, action = await self._resolve(guild_id, category, fresh=False)
         except GuildAccessDenied:
             self._not_found()
@@ -78,7 +91,7 @@ class SettingsHandler(AuthenticatedHandler):
         states = {form.key: await self.service.read(form, ctx, action) for form in CATEGORY_FORMS[category]}
         self._render_full(category, access, ctx, states)
 
-    async def post(self, guild_id: str, category: str) -> None:
+    async def _post(self, guild_id: str, category: str) -> None:
         if len(self.request.body) > MAX_BODY_BYTES:
             self._reject_plain(413, *_MSG_TOO_LARGE)
             return
