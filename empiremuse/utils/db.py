@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
 import collections.abc
 import json
 import logging
 import os
 import shutil
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional, Union
 
 import disnake
@@ -38,6 +39,8 @@ class DBModel:
     guilds = "guilds"
     users = "users"
     default = "default"
+    usage_events = "usage_events"
+    banned_guilds = "banned_guilds"
 
 
 db_models = {
@@ -227,6 +230,29 @@ class LocalDatabase(BaseDB):
         for document in list(self._connect[collection][db_name].find(filter or {})):
             yield document
 
+    # Coleção de eventos (registro de uso): sem o cache de documentos, em lote e fora do laço de eventos. O TinyMongo regrava o
+    # arquivo da coleção inteiro a cada escrita; por isso a escrita é em lote e roda em uma thread. Quem chama serializa o acesso.
+    async def append_events(self, docs: list[dict], *, db_name: str, collection: str, expire_after: timedelta) -> None:
+        await asyncio.to_thread(self._connect[collection][db_name].insert_many, docs)
+
+    async def patch_event(self, id_: str, fields: dict, *, db_name: str, collection: str) -> None:
+        await asyncio.to_thread(self._connect[collection][db_name].update_one, {"_id": id_}, {"$set": fields})
+
+    async def find_events(self, filter: dict, *, db_name: str, collection: str, limit: int) -> list[dict]:
+        def read() -> list[dict]:
+            rows = list(self._connect[collection][db_name].find(filter))
+            rows.sort(key=lambda doc: doc.get("ts", 0), reverse=True)
+            return rows[:limit]
+
+        return await asyncio.to_thread(read)
+
+    async def purge_events(self, older_than_ms: int, *, db_name: str, collection: str) -> None:
+        """Poda os eventos mais antigos que o corte (no MongoDB quem poda é o índice TTL)."""
+        await asyncio.to_thread(self._connect[collection][db_name].delete_many, {"ts": {"$lt": older_than_ms}})
+
+    async def ensure_event_indexes(self, *, db_name: str, collection: str) -> None:
+        return None
+
     async def delete_data(self, id_, db_name: str, collection: str):
         try:
             self._connect[collection][db_name].delete_one({"_id": str(id_)})
@@ -336,6 +362,28 @@ class MongoDatabase(BaseDB):
         """O cursor do PyMongo Async entregue um documento por vez: nada da coleção é guardado na memória."""
         async for document in self._connect[collection][db_name].find(filter or {}):
             yield document
+
+    # Coleção de eventos (registro de uso): sem o cache de documentos. A retenção é do índice TTL em ``expire_at``.
+    async def append_events(self, docs: list[dict], *, db_name: str, collection: str, expire_after: timedelta) -> None:
+        expire_at = datetime.now(timezone.utc) + expire_after
+        await self._connect[collection][db_name].insert_many(
+            [{**doc, "expire_at": expire_at} for doc in docs], ordered=False
+        )
+
+    async def patch_event(self, id_: str, fields: dict, *, db_name: str, collection: str) -> None:
+        await self._connect[collection][db_name].update_one({"_id": id_}, {"$set": fields})
+
+    async def find_events(self, filter: dict, *, db_name: str, collection: str, limit: int) -> list[dict]:
+        cursor = self._connect[collection][db_name].find(filter).sort("ts", -1).limit(limit)
+        return [d async for d in cursor]
+
+    async def purge_events(self, older_than_ms: int, *, db_name: str, collection: str) -> None:
+        return None
+
+    async def ensure_event_indexes(self, *, db_name: str, collection: str) -> None:
+        events = self._connect[collection][db_name]
+        await events.create_index("expire_at", expireAfterSeconds=0)
+        await events.create_index([("guild", 1), ("ts", -1)])
 
     async def delete_data(self, id_, db_name: str, collection: str):
         try:

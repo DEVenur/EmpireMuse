@@ -8,6 +8,7 @@ from typing import Union, Optional
 import disnake
 from disnake.ext import commands
 
+from empiremuse.rules.usage import KIND_REQUEST
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import (
@@ -49,6 +50,7 @@ from empiremuse.music_cog.shared import (
     logger,
 )
 from empiremuse.music_cog.song_request_state import ParseRequestState, SongRequestState
+from empiremuse.utils.usage import label_for, usage_of
 from empiremuse.music_cog.song_request_steps import (
     _pr_checks,
     _pr_playlist,
@@ -218,6 +220,7 @@ class SongRequestsMixin:
 
         req.msg = None
         error = None
+        failure = None
         req.error_code = ""
         req.has_exception = None
 
@@ -235,11 +238,14 @@ class SongRequestsMixin:
             await self.parse_song_request(req.message, req.text_channel, req.data, response=req.msg, source=req.source)
 
         except GenericError as e:
+            failure = e
             error = f"{req.message.author.mention}. {e}"
 
         except Exception as e:
             if isinstance(e, PoolException):
                 return
+
+            failure = e
 
             try:
                 error_msg = parse_error(req.ctx, e, no_log=True)[0]
@@ -255,6 +261,16 @@ class SongRequestsMixin:
                     f"{req.message.author.mention} **ocorreu um erro ao tentar obter resultados para sua busca.**"
                     f"{error_code_text(req.error_code)}"
                 )
+
+        if usage := usage_of(self.bot):
+            usage.record_command(
+                KIND_REQUEST,
+                "song_request",
+                req.message,
+                bot=self.bot,
+                ok=failure is None,
+                error=None if failure is None else label_for(failure),
+            )
 
         if error:
             await self.delete_message(req.message)

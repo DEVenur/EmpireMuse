@@ -24,9 +24,11 @@ from empiremuse.rules.text import format_int, format_mib
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, db_models
+from empiremuse.utils.guild_ban import bans_of
 from empiremuse.utils.music.checks import check_requester_channel
 from empiremuse.utils.music.converters import time_format, URL_REG, md_bracketed, md_link, fix_characters
 from empiremuse.utils.others import select_bot_pool, CustomContext, paginator
+from empiremuse.utils.usage import usage_of
 from empiremuse.version import image_version, running_from_image
 
 if TYPE_CHECKING:
@@ -233,6 +235,9 @@ class Misc(commands.Cog):
 
     @commands.Cog.listener("on_guild_join")
     async def guild_add(self, guild: disnake.Guild):
+        if (bans := bans_of(self.bot)) and bans.is_banned(guild.id):
+            return  # a saída e o único log ficam com o GuildLog
+
         bots_in_guild = []
         bots_outside_guild = []
 
@@ -978,7 +983,12 @@ class GuildLog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: disnake.Guild):
-        logger.info("Bot %s foi removido(a) do servidor [%s]", self.bot.user.name, guild.id)
+        banned = (bans := bans_of(self.bot)) is not None and bans.is_banned(guild.id)
+
+        if not banned:
+            logger.info("Bot %s foi removido(a) do servidor [%s]", self.bot.user.name, guild.id)
+            if usage := usage_of(self.bot):
+                usage.record_guild("leave", guild, bot=self.bot)
 
         try:
             await self.bot.music.players[guild.id].destroy()
@@ -987,7 +997,7 @@ class GuildLog(commands.Cog):
         except Exception:
             logger.exception("Falha ao tratar a remoção do bot do servidor")
 
-        if not self.hook_url:
+        if banned or not self.hook_url:
             return
 
         try:
@@ -997,9 +1007,19 @@ class GuildLog(commands.Cog):
 
         await self.bot.update_appinfo()
 
+    @commands.Cog.listener("on_ready")
+    async def leave_banned_guilds(self):
+        if bans := bans_of(self.bot):
+            await bans.enforce_ready(self.bot)
+
     @commands.Cog.listener()
     async def on_guild_join(self, guild: disnake.Guild):
+        if (bans := bans_of(self.bot)) and await bans.enforce_join(self.bot, guild):
+            return  # servidor banido: saiu, sem aviso no webhook e sem outro log
+
         logger.info("Bot %s foi adicionado(a) no servidor [%s]", self.bot.user.name, guild.id)
+        if usage := usage_of(self.bot):
+            usage.record_guild("join", guild, bot=self.bot)
 
         try:
             guild_data = await self.bot.get_data(guild.id, db_name=DBModel.guilds)

@@ -21,6 +21,7 @@ from empiremuse.utils.music.models.helpers import (
     lavalink_text,
 )
 from empiremuse.utils.music.models.tracks import PartialTrack
+from empiremuse.utils.usage import usage_of
 
 logger = logging.getLogger("empiremuse.player")
 
@@ -89,11 +90,15 @@ async def _he_dispatch(self, event) -> None:
         if isinstance(event, wavelink.TrackEnd):
             if metrics:
                 metrics.track_ended(self.guild.id, str(getattr(event, "reason", "")))
+            if usage := usage_of(self.bot):
+                usage.playback_ended(self.bot, self.guild.id, getattr(event, "reason", ""))
             _he_log_track_event(self, f"Faixa terminada ({getattr(event, 'reason', '?')})", self.last_track)
             await _he_track_end(self, event)
         elif isinstance(event, wavelink.TrackStart):
             if metrics:
                 metrics.track_started(self.guild.id)
+            if usage := usage_of(self.bot):
+                usage.playback_started(self.bot, self, self.current)
             _he_log_track_event(self, "Faixa iniciada", self.current)
             await _he_track_start(self, event)
         elif isinstance(event, wavelink.TrackException):

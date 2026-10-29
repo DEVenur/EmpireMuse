@@ -6,7 +6,9 @@ from typing import Union, TYPE_CHECKING, Optional
 import disnake
 from disnake.ext import commands
 
+from empiremuse.utils.guild_ban import bans_of
 from empiremuse.utils.music.converters import fix_characters
+from empiremuse.utils.owner_usage import BanReasonModal, OwnerOnlyView, send_banned, send_usage
 from empiremuse.utils.others import CustomContext
 from empiremuse.utils.music.app_emojis import emoji as app_emoji
 
@@ -14,16 +16,22 @@ if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
 
 
-class ServerManagerView(disnake.ui.View):
+class ServerManagerView(OwnerOnlyView):
     def __init__(self, inter: Union[disnake.Interaction, CustomContext]):
-        super().__init__(timeout=300)
+        super().__init__(inter.bot, inter.user.id, timeout=300)
         self.message: Optional[disnake.Message] = None
         self.inter = inter
         self.bot = [b for b in inter.bot.pool.get_guild_bots(inter.guild.id) if b.guilds][0]
-        self.pages = list(disnake.utils.as_chunks([g for g in self.bot.guilds], 25))
+        self.pages = self.build_pages()
         self.current_page = 0
         self.current_guild = self.pages[self.current_page][0]
         self.rebuild_components()
+
+    def build_pages(self) -> list:
+        """Os servidores do bot escolhido em páginas de 25, sem os banidos (que acabam de sair e ainda estão no cache)."""
+        bans = bans_of(self.bot)
+        guilds = [g for g in self.bot.guilds if not (bans and bans.is_banned(g.id))]
+        return list(disnake.utils.as_chunks(guilds, 25))
 
     def bot_count(self, g: disnake.Guild):
         return len([m for m in g.members if m.bot])
@@ -33,7 +41,7 @@ class ServerManagerView(disnake.ui.View):
 
     async def update_data(self, interaction: disnake.MessageInteraction):
         self.current_page = 0
-        self.pages = list(disnake.utils.as_chunks([g for g in self.bot.guilds], 25))
+        self.pages = self.build_pages()
         self.current_guild = self.pages[0][0]
         await self.update_message(interaction)
 
@@ -122,18 +130,23 @@ class ServerManagerView(disnake.ui.View):
         leave.callback = self.leave_guild
         self.add_item(leave)
 
+        usage = disnake.ui.Button(label="Ver uso", emoji="📊")
+        usage.callback = self.show_usage
+        self.add_item(usage)
+
+        ban = disnake.ui.Button(label="Banir", emoji="🚫", style=disnake.ButtonStyle.red)
+        ban.callback = self.ban_guild
+        self.add_item(ban)
+
+        banned = disnake.ui.Button(label="Banidos", emoji="📋")
+        banned.callback = self.show_banned
+        self.add_item(banned)
+
         stop = disnake.ui.Button(
             label="Parar", emoji=app_emoji(self.inter.bot, "stop"), style=disnake.ButtonStyle.blurple
         )
         stop.callback = self.stop_interaction
         self.add_item(stop)
-
-    async def interaction_check(self, interaction: disnake.MessageInteraction) -> bool:
-        if interaction.author.id != self.inter.user.id:
-            await interaction.response.send_message("Você não pode interagir aqui...", ephemeral=True)
-            return False
-
-        return True
 
     async def on_timeout(self) -> None:
         for c in self.children:
@@ -168,6 +181,32 @@ class ServerManagerView(disnake.ui.View):
         await interaction.response.defer()
         await self.current_guild.leave()
         await self.update_data(interaction)
+
+    async def show_usage(self, interaction: disnake.MessageInteraction):
+        guild = self.current_guild
+        await send_usage(interaction, guild.id, guild.name, self.bot.get_color(guild.me))
+
+    async def ban_guild(self, interaction: disnake.MessageInteraction):
+        guild = self.current_guild
+        await interaction.response.send_modal(
+            BanReasonModal(self.inter.bot, self.inter.user.id, guild.id, guild.name, self)
+        )
+
+    async def show_banned(self, interaction: disnake.MessageInteraction):
+        await send_banned(interaction, self.inter.user.id, self.bot.get_color(self.current_guild.me))
+
+    async def refresh_after_ban(self):
+        """Depois de um banimento: tira o servidor da lista do painel (ou encerra o painel se não sobrou nenhum)."""
+        self.pages = self.build_pages()
+        if not self.pages:
+            await self.message.edit(content="Não há mais servidores.", embeds=[], view=None)
+            self.stop()
+            return
+        self.current_page = 0
+        self.current_guild = self.pages[0][0]
+        self.clear_items()
+        self.rebuild_components()
+        await self.message.edit(embeds=self.build_embed(self.inter), view=self)
 
     async def stop_interaction(self, interaction: disnake.MessageInteraction):
         await interaction.message.delete()

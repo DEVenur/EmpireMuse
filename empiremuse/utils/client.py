@@ -56,6 +56,8 @@ from empiremuse.utils import branding
 from empiremuse.version import image_version
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
+from empiremuse.utils.guild_ban import GuildBans
+from empiremuse.utils.usage import UsageRecorder
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
 from empiremuse.utils.music.checks import check_pool_bots
@@ -181,6 +183,8 @@ class BotPool:
     # Defaults de classe (como o killing_state): fakes de BotPool criados com __new__ não passam pelo __init__.
     update_ready_checked = False  # on_pool_ready roda uma vez, na primeira vez em que o pool fica saudável
     update_watch_task: Optional[asyncio.Task] = None
+    usage: Optional[UsageRecorder] = None
+    guild_bans: Optional[GuildBans] = None
     logs_task: Optional[asyncio.Task] = None
     version_check_task: Optional[asyncio.Task] = None
     helper_watch_tasks: tuple[asyncio.Task, ...] | set[asyncio.Task] = ()
@@ -246,6 +250,8 @@ class BotPool:
         self.cache_updater_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
         self.metrics = MetricsCollector()
+        self.usage = UsageRecorder(self)
+        self.guild_bans = GuildBans(self)
         self.logs_task: Optional[asyncio.Task] = None
         self.helper_watch_tasks: set[asyncio.Task] = set()  # referências fortes das tarefas do watch_helper
         # Uma atualização por vez no processo todo: o max_concurrency do comando vale só por bot (V10).
@@ -639,6 +645,9 @@ class BotPool:
                     "Falha ao finalizar o processo do Lavalink local durante o encerramento",
                     exc_info=True,
                 )
+
+        if self.usage is not None:
+            await self.usage.close()  # grava o que sobrou no buffer do registro de uso
 
         flush_logging()  # por último: sai a contagem dos repetidos que ainda estava pendente
 
@@ -1290,6 +1299,8 @@ class BotPool:
 
                 await bot.update_appinfo()
 
+                await self.guild_bans.enforce_ready(bot)  # servidor banido que continuou na lista de servidores do bot
+
                 bot.bot_ready = True
 
                 await self.check_pool_ready()
@@ -1318,6 +1329,7 @@ class BotPool:
 
         self.start_heartbeat()
         self.start_logs_task()
+        self.usage.start(self.loop)
         self.start_update_watch()
 
         for k, v in all_tokens.items():

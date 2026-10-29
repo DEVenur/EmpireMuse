@@ -58,6 +58,7 @@ DEFAULT_CONFIG = {
     "LOG_FILE": "auto",
     "LOG_DEBUG_GUILDS": "",
     "METRICS_INTERVAL": 300,
+    "USAGE_RETENTION_DAYS": 30,
     "KILL_ON_429": True,
     "PREFIXED_POOL_TIMEOUT": 4,
     "ENABLE_COMMANDS_COOLDOWN": True,
@@ -305,6 +306,7 @@ def load_config():
         "PANEL_SESSION_TTL_HOURS",
         "PANEL_SESSION_IDLE_MINUTES",
         "METRICS_INTERVAL",
+        "USAGE_RETENTION_DAYS",
     ]:
         if CONFIG[i] in ("", None):  # só o ausente e o vazio usam o padrão; o 0 inteiro do config.json vale
             CONFIG[i] = DEFAULT_CONFIG[i]

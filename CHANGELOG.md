@@ -7,6 +7,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Unreleased]
 
+### Adicionado
+- **Uso do bot e banimento de servidores (só o dono)**: o bot registra onde (servidor e canais), como (comando, botão, canal de pedidos, painel web, faixa tocada) e quando foi usado, sem nada sobre quem usou, com retenção de `USAGE_RETENTION_DAYS` dias (30 por padrão). No comando `servers`, "Ver uso" mostra o resumo de 7 dias do servidor, "Banir" tira todos os bots do servidor e impede que o readicionem, e "Banidos" lista e desbane. A lista de banidos é única para todo o pool.
+
 ### Alterado
 - **Testes do painel mais enxutos**: removidos 54 testes de baixo valor em `tests/panel` (texto de `.env.example`/CSS/templates, favicon, caracterização da página de status, micro-otimizações do cache de marca) e fundidas variantes repetidas, sem tirar nenhum teste de segurança. A cobertura do painel não muda.
 - **Suíte de testes enxuta (pastas logs, updater, web, persistence, serialization, rules, config, runtime, deploy, brand e repo)**: saem testes obsoletos, de caracterização, de mutação, de estrutura, que liam o texto de docs/ativos e vários testes para o mesmo caminho; ficam segurança, persistência, contratos e regras puras. Sem mudança no bot.

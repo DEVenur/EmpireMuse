@@ -53,7 +53,8 @@ Estrutura essencial do código (consulte [`docs/architecture.md`](docs/architect
 - `empiremuse/cogs/error_handler.py`: Tratamento centralizado de exceções e envio de mensagens de erro formatadas.
 - `empiremuse/cogs/help_cog.py`: Sistema interativo de ajuda.
 - `empiremuse/cogs/ll_yt_oauth.py`: Gestão de tokens OAuth do YouTube para o plugin Lavalink.
-- `empiremuse/cogs/server_manager.py`: Comandos administrativos para gerenciamento de servidores.
+- `empiremuse/cogs/server_manager.py`: Comandos administrativos para gerenciamento de servidores (listar, remover, ver uso, banir e desbanir; só o dono).
+- `empiremuse/cogs/usage_tracker.py`, `empiremuse/utils/usage.py`, `empiremuse/utils/guild_ban.py` e `empiremuse/rules/usage.py`: registro de uso (buffer e gravação em lote), lista global de servidores banidos e as regras puras de ambos.
 - `empiremuse/utils/branding.py`: Fonte única de identidade e URLs (nome, repositório, espelhos, upstream, `asset_url`).
 - `assets/`: Imagens em subpastas por função (`brand/`, `providers/`, `player/`, `skins/`, `ui/`, `docs/`, `emojis/`) e `SHA256SUMS` com caminhos relativos. O nome do arquivo é único entre as subpastas, e `asset_url(nome)` resolve o subcaminho. Os arquivos soltos na raiz são cópias de compatibilidade da 2.1.0 e saem numa versão futura.
 - `assets/brand/`: Arte e identidade visual de marca (logo vetorial, avatar, banner, avatares alternativos e favicon).
