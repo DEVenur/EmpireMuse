@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from empiremuse.rules.errors import RuleError
+from empiremuse.rules.errors import FILE_FORMAT, RuleError
 from empiremuse.rules.limits import MAX_SERVER_PLAYLISTS, PLAYLIST_FILE_MAX_BYTES, PLAYLIST_FILE_MAX_ITEMS
 from empiremuse.rules.playlists import (
     DUP_IN_FILE,
@@ -268,3 +268,9 @@ def test_report_escapes_third_party_names_and_never_passes_2000_characters():
 def test_select_descriptions_are_cut_at_100_characters_with_an_ellipsis():
     assert select_description("x" * 100) == "x" * 100
     assert len(select_description("x" * 101)) == 100 and select_description("x" * 250).endswith("…")
+
+
+@pytest.mark.regression
+def test_pasted_text_with_a_lone_surrogate_is_a_format_error_not_a_crash():
+    result = parse_file('{"playlists": [{"name": "Rock \ud800", "url": "https://exemplo.com/rock"}]}', max_bytes=65536)
+    assert isinstance(result, RuleError) and result.code == FILE_FORMAT

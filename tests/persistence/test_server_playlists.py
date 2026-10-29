@@ -368,3 +368,15 @@ def test_an_attachment_is_checked_by_name_and_declared_size_before_any_download(
 )
 def test_pasted_text_is_limited_to_4000_characters_on_the_server_too(text, ok):
     assert (check_paste(text) == text) is ok
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("raised", [ServerConfigConflict, ServerConfigUnavailable, UnknownGuild])
+def test_displaying_the_list_never_breaks_when_the_store_cannot_answer(raised):
+    from empiremuse.utils.server_playlists import safe_list
+
+    async def failing(gid):
+        raise raised
+
+    bot = SimpleNamespace(pool=SimpleNamespace(servers=SimpleNamespace(playlists=SimpleNamespace(list=failing))))
+    assert run(safe_list(bot, GID)) == ()

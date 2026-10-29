@@ -78,11 +78,15 @@ def select_options(
 
 async def safe_list(bot, gid: int) -> tuple[Playlist, ...]:
     """As playlists do servidor para EXIBIR (embed ocioso, select, menu): store indisponível ou servidor desconhecido = lista vazia."""
-    from empiremuse.utils.servers import ServerConfigUnavailable, UnknownGuild  # tarde: servers cria o ServerPlaylists
+    from empiremuse.utils.servers import (  # tarde: servers cria o ServerPlaylists
+        ServerConfigConflict,
+        ServerConfigUnavailable,
+        UnknownGuild,
+    )
 
     try:
         return await bot.pool.servers.playlists.list(gid)
-    except ServerConfigUnavailable, UnknownGuild:
+    except ServerConfigUnavailable, ServerConfigConflict, UnknownGuild:
         return ()
 
 

@@ -381,7 +381,12 @@ class PlayMenusMixin:
                     pass
 
                 if menu == "guild_favs":
-                    view = GuildPlaylistSelect(inter.author, bot, await safe_list(bot, guild.id))
+                    playlists = await safe_list(
+                        bot, guild.id
+                    )  # relida: pode ter esvaziado desde que o menu foi montado
+                    if not playlists:
+                        raise GenericError("**O servidor não possui links fixos/favoritos.**")
+                    view = GuildPlaylistSelect(inter.author, bot, playlists)
                 else:
                     view = SelectInteraction(user=inter.author, timeout=75, opts=[i["option"] for i in fav_opts])
 

@@ -65,6 +65,12 @@ def ensure_manage(inter: Union[disnake.ApplicationCommandInteraction, disnake.Mo
         raise GenericError(NOT_ALLOWED)
 
 
+def _manage_check(inter: disnake.ApplicationCommandInteraction) -> bool:
+    """Cheque do comando: roda ANTES do cooldown (quem não pode não gasta o cooldown do servidor dos admins)."""
+    ensure_manage(inter)
+    return True
+
+
 def error_message(error: RuleError) -> str:
     return ERROR_TEXT.get(error.code, ERROR_TEXT[FILE_FORMAT]).format(limit=error.limit)
 
@@ -93,6 +99,19 @@ class PasteModal(disnake.ui.Modal):
                 )
             ],
         )
+
+    async def on_error(self, error: Exception, inter: disnake.ModalInteraction) -> None:
+        """Sem isto o disnake só loga: o usuário ficaria sem resposta (negado, store indisponível, conflito)."""
+        text = error.text if isinstance(error, GenericError) else "**Não foi possível importar as playlists agora.**"
+        if not isinstance(error, GenericError):
+            logger.error("Falha ao importar playlists coladas (%s)", type(error).__name__)
+        try:
+            if inter.response.is_done():
+                await inter.edit_original_message(text, allowed_mentions=NO_MENTIONS)
+            else:
+                await inter.send(text, ephemeral=True, allowed_mentions=NO_MENTIONS)
+        except disnake.HTTPException:
+            pass
 
     async def callback(self, inter: disnake.ModalInteraction) -> None:
         ensure_manage(inter)
@@ -140,6 +159,7 @@ class ServerPlaylistsCog(commands.Cog):
         description=f"{desc_prefix}Importar playlists de um arquivo, de um anexo ou de um texto colado (só acrescenta).",
         cooldown=cooldown,
     )
+    @commands.check(_manage_check)
     async def import_(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -171,7 +191,13 @@ class ServerPlaylistsCog(commands.Cog):
             if refused is not None:
                 await inter.edit_original_message(error_message(refused), allowed_mentions=NO_MENTIONS)
                 return
-            data = await attachment.read()
+            try:
+                data = await attachment.read()
+            except disnake.HTTPException:  # inclui NotFound: o anexo sumiu ou o Discord falhou
+                await inter.edit_original_message(
+                    "**Não consegui baixar o anexo. Tente enviar o arquivo de novo.**", allowed_mentions=NO_MENTIONS
+                )
+                return
             allow_icon = False
         else:
             data = await asyncio.to_thread(read_import_file, IMPORT_DIR, file)
@@ -187,6 +213,7 @@ class ServerPlaylistsCog(commands.Cog):
         description=f"{desc_prefix}Exportar as playlists do servidor em um arquivo .json.",
         cooldown=cooldown,
     )
+    @commands.check(_manage_check)
     async def export_(self, inter: disnake.ApplicationCommandInteraction) -> None:
         ensure_manage(inter)
         await inter.response.defer(ephemeral=True)

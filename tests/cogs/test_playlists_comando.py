@@ -250,3 +250,46 @@ async def test_export_sends_a_private_json_named_after_the_guild_and_an_empty_se
     empty = make_inter(OWNER)
     await ServerPlaylistsCog.export_.callback(world.cog, empty)
     assert "ainda não tem playlists" in sent_text(empty) and "file" not in empty.edit_original_message.await_args.kwargs
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+@pytest.mark.parametrize("answered", [False, True])
+async def test_a_modal_failure_always_answers_the_user_privately_and_without_mentions(world, answered):
+    from empiremuse.utils.servers import ServerConfigUnavailable
+
+    inter = make_inter(ADMIN)
+    inter.response.is_done = lambda: answered
+    inter.send = AsyncMock()
+
+    await PasteModal(world.cog).on_error(ServerConfigUnavailable(), inter)
+
+    sender = inter.edit_original_message if answered else inter.send
+    sender.assert_awaited_once()
+    assert "indisponível" in sender.await_args.args[0]
+    assert sender.await_args.kwargs["allowed_mentions"].everyone is False
+    if not answered:
+        assert sender.await_args.kwargs["ephemeral"] is True
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_the_command_check_denies_a_plain_member_before_the_cooldown_is_spent(world):
+    for command in (ServerPlaylistsCog.import_, ServerPlaylistsCog.export_):
+        assert cog_module._manage_check in command.checks
+    with pytest.raises(GenericError):
+        cog_module._manage_check(make_inter(PLAIN))
+    assert cog_module._manage_check(make_inter(MANAGER)) is True
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_a_failed_attachment_download_is_a_friendly_answer_not_an_exception(world):
+    inter = make_inter(ADMIN)
+    failing = attachment()
+    failing.read = AsyncMock(side_effect=disnake.HTTPException(SimpleNamespace(status=500, reason="x"), "boom"))
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=failing)
+
+    assert "anexo" in sent_text(inter)
+    world.playlists.import_file.assert_not_awaited()

@@ -341,7 +341,10 @@ def _no_constant(name: str) -> Any:
 
 
 def _decode(raw: str | bytes, max_bytes: int) -> tuple[Any, list[str]] | RuleError:
-    data = raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+    try:
+        data = raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+    except UnicodeEncodeError:  # surrogate solto no texto colado
+        return RuleError(FILE_FORMAT)
     if len(data) > max_bytes:  # o limite vale ANTES de decodificar
         return RuleError(FILE_TOO_LARGE, limit=max_bytes)
     try:
