@@ -7,6 +7,7 @@ import disnake
 from disnake.ext import commands
 
 from empiremuse.utils.client import BotCore
+from empiremuse.rules.usage import KIND_BUTTON
 from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.checks import voice_status_lock_remaining
 from empiremuse.utils.music.converters import (
@@ -23,6 +24,7 @@ from empiremuse.utils.others import (
     send_idle_embed,
     CustomContext,
 )
+from empiremuse.utils.usage import component_name, usage_of
 
 from empiremuse.logs.context import guild_extra
 
@@ -289,6 +291,9 @@ class ControllerDispatchMixin:
         await check_cmd(command, interaction)
 
         await command(interaction, **kwargs)
+
+        if usage := usage_of(self.bot):
+            usage.record_command(KIND_BUTTON, component_name(interaction), interaction, bot=self.bot, ok=True)
 
         try:
             await command._max_concurrency.release(interaction)

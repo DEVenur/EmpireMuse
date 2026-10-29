@@ -18,6 +18,7 @@ Todas ficam no `.env` (modelo comentado em `.example.env`). `NO_COLOR` é lida s
 | `LOG_DEBUG_GUILDS` | IDs separados por vírgula | vazio | Servidores que registram em `DEBUG` mesmo com `LOG_LEVEL=INFO`. No máximo 50 IDs. |
 | `METRICS_INTERVAL` | segundos | `300` | Intervalo do resumo periódico. Mínimo 60 (de 1 a 59 vira 60); `0` desliga o resumo. |
 | `COMMAND_LOG` | `true`, `false` | `false` | Registra os comandos de quem não é dono (seção 5). |
+| `USAGE_RETENTION_DAYS` | dias, de 1 a 365 | `30` | Retenção do registro de uso e dos eventos de reprodução (seção 7). Inválido ou menor que 1 usa 30. |
 | `ENABLE_LOGGER` | `true`, `false` | `false` | Sinônimo antigo de `LOG_FILE=on`; nunca desliga nada. |
 
 ### 1.1 Nível e `LOG_DEBUG_GUILDS`
@@ -93,3 +94,21 @@ IDs são dado pessoal (LGPD). Mantenha o `COMMAND_LOG` desligado quando não pre
 ## 6. Menções
 
 Por padrão o bot não marca `@everyone` nem cargos em nenhuma mensagem, mesmo que o texto (por exemplo, um nome de música ou de playlist) contenha esse trecho. Menções a usuários continuam funcionando quando o código as pede.
+
+---
+
+## 7. Registro de uso e banimento de servidores
+
+O dono consulta **onde, como e quando** o bot foi usado, sem o log de arquivo e sem mensagem nova no Discord.
+
+**O que é gravado** (coleção `usage_events` do banco global, no MongoDB ou no banco local): hora UTC, bot, servidor (ID e nome), canal de texto e de voz (ID e nome), tipo (`slash`, `prefix`, `button`, `request_channel`, `panel`, `playback`, `guild`), nome do comando ou botão, `ok` ou um rótulo fixo de erro (nunca o texto da exceção) e a latência. Na reprodução entram também título, autor, origem, duração, o comando que enfileirou, os segundos ouvidos e o motivo do fim (`finished`, `skipped`, `stopped`, `error`). **Nunca** entram ID, nome, avatar ou contagem de usuários, nem o texto digitado na busca.
+
+**De onde vem:** comandos de barra, de menu e de prefixo abrem o evento no mesmo gancho do `COMMAND_LOG` (seção 5), mas o registro de uso fica sempre ligado e grava só o nome do comando e onde foi usado: nunca o usuário nem os valores das opções. O `COMMAND_LOG` continua opt-in e não muda.
+
+**Como grava:** os eventos vão para um buffer em memória e são gravados em lote a cada 10 segundos, fora do caminho do comando. Banco fora do ar não atrasa nem quebra comando: sai uma única linha de aviso por queda e o erro `usage_write` aparece no resumo de métricas (o lote é descartado). Nome de servidor, canal e faixa é texto de terceiros: o ANSI e os controles saem na gravação, o tamanho é limitado e o markdown é escapado na exibição, sempre sem menções.
+
+**Retenção:** `USAGE_RETENTION_DAYS` (30 por padrão). No MongoDB é um índice TTL (vale para os eventos gravados depois da mudança); no banco local, uma poda a cada hora.
+
+**Painel do dono (`servers`):** "Ver uso" responde só a você (efêmero) com o resumo dos últimos 7 dias, os canais mais usados e os 15 últimos eventos. "Banir" pede o motivo (opcional) e uma confirmação, grava o banimento e faz **todos** os bots do pool saírem do servidor. "Banidos" lista os servidores banidos e desbane. Os botões só respondem a quem abriu o painel e continua sendo dono do bot.
+
+**Lista de banidos:** uma só para todo o pool (coleção `banned_guilds` do banco global: ID, nome no momento do ban, data e motivo). Todo bot a consulta ao entrar em um servidor e ao ficar pronto; um ban ou desban feito no painel de qualquer bot vale para todos. Um servidor banido que readiciona o bot é abandonado na hora, sem boas-vindas, sem aviso no webhook de entrada/saída e com uma única linha de log.

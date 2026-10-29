@@ -8,6 +8,7 @@ import disnake
 from dotenv import dotenv_values
 
 from empiremuse import paths
+from empiremuse.rules.usage import clamp_retention_days
 from empiremuse.utils import branding
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ DEFAULT_CONFIG = {
     "LOG_FILE": "auto",
     "LOG_DEBUG_GUILDS": "",
     "METRICS_INTERVAL": 300,
+    "USAGE_RETENTION_DAYS": 30,
     "KILL_ON_429": True,
     "PREFIXED_POOL_TIMEOUT": 4,
     "ENABLE_COMMANDS_COOLDOWN": True,
@@ -314,6 +316,9 @@ def load_config():
             CONFIG[i] = int(CONFIG[i])
         except (ValueError, TypeError, OverflowError) as e:  # texto, lista/objeto do config.json e Infinity
             raise Exception(f"Você usou uma configuração inválida! {i}: {CONFIG[i]}\n{repr(e)}")
+
+    # Retenção do registro de uso: valor inválido ou menor que 1 usa o padrão (30), nunca derruba a inicialização.
+    CONFIG["USAGE_RETENTION_DAYS"] = clamp_retention_days(CONFIG["USAGE_RETENTION_DAYS"])
 
     # converter strings que requer valor bool/nulo.
     for i in [

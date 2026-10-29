@@ -34,6 +34,7 @@ from empiremuse.panel.services.channel import (
     TaskView,
 )
 from empiremuse.panel.services.tasks import Task, TaskBusy, TaskLimit, valid_task_id
+from empiremuse.utils.usage import record_panel_action
 
 CHANNEL_TEMPLATE = "bloco_canal.html"
 TASK_TEMPLATE = "bloco_tarefa_canal.html"
@@ -41,6 +42,7 @@ PAGE_TEMPLATE = "config_canal.html"
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."
 _MSG_ACTION = "Ação desconhecida."
 _MSG_VERSION = "Não foi possível validar o formulário. Recarregue a página e tente novamente."
+_KNOWN_ACTIONS = ("configurar", "reset", "confirmar_reset")
 _DEFAULT_VALUES = {
     "modo": "existente",
     "canal": "",
@@ -49,6 +51,12 @@ _DEFAULT_VALUES = {
     "tipo": "texto",
     "categoria": "",
 }
+
+
+def _audited_action(args: Args) -> str:
+    """A ação do formulário como rótulo fixo para o registro de uso (o valor enviado pelo cliente nunca é gravado)."""
+    action = first(args, "acao")
+    return action if action in _KNOWN_ACTIONS else "desconhecida"
 
 
 class ChannelHandler(SettingsHandler):
@@ -101,6 +109,7 @@ class ChannelHandler(SettingsHandler):
             return
         async with self.application.settings["settings_service"].lock(ctx.bot_id, ctx.guild_id):
             status, namespace = await self._dispatch(ctx, action, args)
+        record_panel_action(ctx, f"canal/{_audited_action(args)}", status)
         self._render(status, access, ctx, namespace)
 
     async def _dispatch(self, ctx: FormContext, action: str, args: Args) -> tuple[int, dict[str, Any]]:

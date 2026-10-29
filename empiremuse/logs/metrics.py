@@ -15,7 +15,7 @@ from types import MappingProxyType
 from empiremuse.logs.redact import sanitize_value
 
 MIB = 1024 * 1024
-ERROR_KINDS = ("track_exception", "track_stuck", "node_unavailable", "command_error")
+ERROR_KINDS = ("track_exception", "track_stuck", "node_unavailable", "command_error", "usage_write")
 OTHER_KIND = "other"
 DASH = "—"
 SUMMARY_PREFIX = "📊 "
