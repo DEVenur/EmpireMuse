@@ -29,6 +29,12 @@ STATUS_NO_PLACEHOLDER = "status_no_placeholder"
 ROLE_LIMIT = "role_limit"
 ROLE_DUPLICATE = "role_duplicate"
 ROLE_INVALID = "role_invalid"
+URL_TAKEN = "url_taken"
+PLAYLIST_NOT_FOUND = "playlist_not_found"
+FILE_FORMAT = "file_format"
+FILE_TOO_MANY = "file_too_many"
+GENRES_INVALID = "genres_invalid"
+ORDER_INVALID = "order_invalid"
 
 
 class RuleError(NamedTuple):
