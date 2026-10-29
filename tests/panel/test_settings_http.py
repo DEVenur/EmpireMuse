@@ -116,27 +116,28 @@ class AccessTest(HttpBase):
         assert self.db.writes == [], "negado não grava"
         assert len(self.db.reads) == reads_before, "negado não pode nem ler dados do servidor"
 
-    def test_default_bot_is_the_first_of_the_guild_and_bot_query_selects_the_other(self):
+    def test_server_settings_are_the_mains_and_the_bot_query_does_not_pick_another_document(self):
         browser = self.logged_in()
         _, first, _ = self.open_form(browser, 800, "player", "default_player_volume")
         _, second, _ = self.open_form(browser, 800, "player", "default_player_volume", bot=2)
-        assert first.value("default_player_volume") == "60", "padrão = bot 1 (volume 60 no seed)"
-        assert second.value("default_player_volume") == "80", "?bot=2 = bot 2 (volume 80 no seed)"
+        assert (
+            first.value("default_player_volume") == second.value("default_player_volume") == "60"
+        )  # o doc do bot 2 (80) é ignorado
 
     def test_selector_shows_bot_names_escaped(self):
         self.world.bot2.user.name = "<i>Bot Dois</i>"
-        body = self.logged_in().get(self.url(800, "player")).body.decode()
+        body = self.logged_in().get(self.url(800, "links")).body.decode()
         assert "<i>Bot Dois</i>" not in body and "&lt;i&gt;Bot Dois" in body
 
     def assert_write_is_404_after(self, revoke):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "player", "default_player_volume")
-        before, writes = self.db.doc("1", 100), len(self.db.writes)
+        before, writes = self.world.server_settings(100), len(self.db.writes)
         revoke()  # sem avançar o relógio: ainda dentro da janela de 30 s do cache de leitura
         response = self.submit(browser, url, form, gap=2, default_player_volume="30")
         assert response.code == 404, f"POST após revogação deveria ser 404, veio {response.code}"
         assert NOT_FOUND_TEXT in response.body.decode()
-        assert len(self.db.writes) == writes and self.db.doc("1", 100) == before, "nada pode ser gravado"
+        assert len(self.db.writes) == writes and self.world.server_settings(100) == before, "nada pode ser gravado"
 
     def test_write_after_bot_left_the_guild_is_404_inside_the_read_cache_window(self):
         self.assert_write_is_404_after(lambda: self.world.bot1.guilds.pop(100))
@@ -151,10 +152,10 @@ class ProtocolTest(HttpBase):
         _, first, _ = self.open_form(browser, 100, "player", "default_player_volume")
         _, again, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert first.value("versao") == again.value("versao")
-        external_change(self.db, "1", 100, djroles=["5010"])  # campo de OUTRO formulário
+        self.world.external_server_change(100, djroles=["5010"])  # campo de OUTRO formulário
         _, after_dj, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert after_dj.value("versao") == first.value("versao"), "versao do player não depende de djroles"
-        external_change(self.db, "1", 100, autoplay=True)  # campo do próprio formulário
+        self.world.external_server_change(100, autoplay=True)  # campo do próprio formulário
         _, after_own, _ = self.open_form(browser, 100, "player", "default_player_volume")
         assert after_own.value("versao") != first.value("versao")
 
@@ -215,10 +216,10 @@ class ResponseShapeTest(HttpBase):
     def test_change_to_a_field_outside_the_form_is_not_a_conflict_and_is_preserved(self):
         browser = self.logged_in()
         url, form, _ = self.open_form(browser, 100, "player", "default_player_volume")
-        external_change(self.db, "1", 100, djroles=["5010", "5011"])
+        self.world.external_server_change(100, djroles=["5010", "5011"])
         response = self.submit(browser, url, form, default_player_volume="30")
         assert response.code == 200, f"status {response.code}"
-        doc = self.db.doc("1", 100)
+        doc = self.world.server_settings(100)
         assert doc["default_player_volume"] == 30 and doc["djroles"] == ["5010", "5011"], "sem lost update"
 
 

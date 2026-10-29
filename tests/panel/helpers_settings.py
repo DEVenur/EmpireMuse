@@ -16,6 +16,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 import tornado.web
 
 from empiremuse.rules.voice_status import VoiceStatusConfig
+from empiremuse.utils.servers import ServerStore
 from tests.panel.helpers import XSRF_META_RE, require
 from tests.panel.helpers_login import make_fake_oauth
 from tests.panel.helpers_servers import FakeBot, FakeGuild, FakePool, raw_guild, USER_ID
@@ -96,6 +97,36 @@ class FakeDB:
         self.baseline[key] = copy.deepcopy(data)
         self.writes.append(key)
         self.events.append(("db", "update", scope, gid))
+
+
+class WorldDatabase:
+    """Banco do pool para o ``ServerStore`` real: o documento único em memória (compare-and-set por ``rev``); o documento
+    antigo de cada bot (a migração lê o do principal) vem do ``FakeDB``. Gravações do store entram em ``db.writes`` como
+    ``("servidor", gid)``."""
+
+    def __init__(self, db):
+        self.db = db
+        self.servers = {}
+
+    async def find_doc(self, id_, *, db_name, collection):
+        await asyncio.sleep(0)
+        if db_name == "servers":
+            self.db.reads.append(("servidor", int(id_)))
+            return copy.deepcopy(self.servers.get(int(id_)))
+        return copy.deepcopy(self.db.docs.get((collection, int(id_))))
+
+    async def get_data(self, id_, *, db_name, collection):
+        return copy.deepcopy(self.db.docs[(collection, int(id_))])
+
+    async def save_doc_cas(self, id_, doc, *, expected_rev, db_name, collection):
+        await asyncio.sleep(0)
+        gid, stored = int(id_), self.servers.get(int(id_))
+        if (stored is None) != (expected_rev is None) or (stored is not None and stored["rev"] != expected_rev):
+            return False
+        self.servers[gid] = copy.deepcopy(doc)
+        self.db.writes.append(("servidor", gid))
+        self.db.events.append(("db", "update", "servidor", gid))
+        return True
 
 
 # ============================================================================ players, bots, pool, servidores
@@ -201,6 +232,8 @@ class SettingsBot(FakeBot):
             for i, n in enumerate(("default", "green", "blue"))
         }
         self.default_skin = self.default_static_skin = "default"
+        self.identifier = "TOKEN" if int(bot_id) == 1 else f"TOKEN_{bot_id}"  # o bot 1 é o principal
+        self.exclusive_guild_id = None
 
     def get_channel(self, channel_id):
         self.calls["get_channel"] += 1
@@ -228,6 +261,9 @@ class SettingsPool(FakePool):
 
     def get_guild_bots(self, guild_id):
         return [b for b in self.bots if int(guild_id) in b.guilds]
+
+    def get_all_bots(self):
+        return list(self.bots)
 
 
 class SettingsWorld:
@@ -281,6 +317,8 @@ class SettingsWorld:
         self.pool.config = self.config  # no bot real, bot.config é pool.config
         for bot in self.pool.bots:
             bot.pool = self.pool
+        self.database = self.pool.database = WorldDatabase(self.db)
+        self.pool.servers = ServerStore(self.pool)  # o store real; só o banco é de mentira
         self.p100 = FakePlayer(self.events, "p100/b1", voice_channel_id=123)
         self.p800a = FakePlayer(self.events, "p800/b1", voice_channel_id=456)
         self.p800b = FakePlayer(self.events, "p800/b2", voice_channel_id=123)
@@ -302,6 +340,25 @@ class SettingsWorld:
         self.db.docs[("global", 200)]["listen_along_invites"] = {"123": "https://discord.gg/ccc"}
         for key in (("global", 800), ("global", 200)):
             self.db.baseline[key] = copy.deepcopy(self.db.docs[key])
+
+    async def premigrate(self):
+        """Estado de partida de um servidor já em uso: ``settings`` migrado do principal e contadores zerados."""
+        for gid in (100, 800, 200, 600):
+            await self.pool.servers.get(gid)
+        self.db.reads.clear()
+        self.db.writes.clear()
+        self.events.clear()
+
+    def server_settings(self, gid):
+        """Cópia do ``settings`` gravado no documento único."""
+        return copy.deepcopy(self.database.servers[gid]["settings"])
+
+    def external_server_change(self, gid, **fields):
+        """Outro escritor (comando no Discord) muda o documento único sem passar pelo painel."""
+        doc = self.database.servers[gid]
+        doc["settings"].update(fields)
+        doc["rev"] += 1
+        self.pool.servers._docs.clear()
 
     def _seed(self):
         self.db.seed("1", 100, self.bot_doc(volume=100, djroles=["5002"]))
@@ -538,6 +595,7 @@ class SettingsBase(LoginBase):
         self.pool, self.db, self.events = self.world.pool, self.world.db, self.world.events
         raw = self.world.raw if self.raw_override is None else self.raw_override
         self.fake = make_fake_oauth(settings, guilds=raw)
+        self.io_loop.run_sync(self.world.premigrate)
         app = panel.build_panel_app(self.pool, settings, oauth_client=self.fake, clock=self.clock)
         return panel.make_router(tornado.web.Application([]), app)
 
