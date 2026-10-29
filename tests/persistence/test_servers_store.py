@@ -307,3 +307,22 @@ def test_a_write_that_errors_after_being_applied_does_not_leave_the_old_copy_in_
     world.banco.save_doc_cas = real_save
 
     assert run(world.store.settings(GID))["autoplay"] is True  # veio do banco, não da cópia velha
+
+
+# ---------------------------------------------------------------------- V-156-1: servidor só como esboço do READY
+
+
+def test_migration_waits_while_the_guild_is_only_the_ready_stub_and_keeps_the_djs(world):
+    world.banco.put(DBModel.guilds, str(MAIN_ID), GID, old_doc(djroles=[10]))
+    loaded = world.bots[0].get_guild
+    stub = SimpleNamespace(roles=[], unavailable=True)  # o esboço do READY não traz cargos
+    for bot in world.bots:
+        bot.get_guild = lambda gid: stub
+
+    with pytest.raises(ServerConfigUnavailable):
+        run(world.store.settings(GID))
+    assert world.banco.servers_doc() is None  # nada gravado: a seção segue pendente
+
+    for bot in world.bots:
+        bot.get_guild = loaded
+    assert run(world.store.settings(GID))["djroles"] == ["10"]
