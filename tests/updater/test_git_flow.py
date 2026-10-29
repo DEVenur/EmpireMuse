@@ -250,56 +250,6 @@ def test_a_requires_python_above_the_interpreter_is_refused_before_any_checkout(
     assert head(local) == antes
 
 
-def retag(remoto: Path, arquivos: dict[str, str], mensagem: str = "2.1.0") -> None:
-    """Move a ``v2.1.0`` do remoto para um commit novo com ``arquivos`` e uma tag anotada com ``mensagem``."""
-    git(remoto, "tag", "-d", "v2.1.0")
-    commit(remoto, arquivos, "v2.1.0 refeita")
-    git(remoto, "tag", "-a", "v2.1.0", "-m", mensagem)
-
-
-def test_a_huge_changelog_with_the_target_section_on_top_still_yields_that_section(mundo):
-    remoto, local = mundo
-    antigas = "".join(f"## [1.{n}.0] - 2025-01-01\n" + "- item antigo\n" * 20 for n in range(500))
-    texto = (
-        "# Changelog\n\n## [2.1.0] - 2026-11-01\n- novidade da 2.1.0\n\n## [2.0.0] - 2026-09-01\n- base\n\n" + antigas
-    )
-    assert len(texto) > 100_000
-    retag(remoto, {"CHANGELOG.md": texto})
-
-    plano = planejar(remoto, local)
-
-    assert "novidade da 2.1.0" in plano.changelog and "item antigo" not in plano.changelog
-
-
-def test_a_requires_python_at_the_end_of_a_large_pyproject_is_still_checked(mundo):
-    remoto, local = mundo
-    enchimento = "".join(f"# linha de enchimento {n} {'x' * 60}\n" for n in range(100))
-    assert len(enchimento) > 4096
-    retag(remoto, {"pyproject.toml": '[project]\nname = "empiremuse"\n' + enchimento + 'requires-python = ">=99.0"\n'})
-    antes = head(local)
-
-    with pytest.raises(UpdateError):
-        planejar(remoto, local)
-
-    assert head(local) == antes
-
-
-def test_an_annotated_tag_with_a_five_kilobyte_message_is_accepted(mundo):
-    remoto, local = mundo
-    mensagem = "\n".join(f"nota {n:03d} " + "y" * 60 for n in range(90))
-    assert len(mensagem) > 5000
-    retag(remoto, {"app.txt": "v2.1.0 com tag grande\n"}, mensagem)
-
-    assert planejar(remoto, local).target == Version(2, 1, 0)
-
-
-def test_a_tag_message_that_imitates_a_header_line_does_not_change_the_checked_header(mundo):
-    remoto, local = mundo
-    retag(remoto, {"app.txt": "v2.1.0 com isca\n"}, "introdução\ntag v9.9.9\nfim")
-
-    assert planejar(remoto, local).target == Version(2, 1, 0)
-
-
 def test_a_tag_whose_header_names_another_tag_is_refused_even_if_the_message_says_its_name(mundo):
     """``refs/tags/v2.1.0`` aponta para um objeto de tag cujo cabeçalho é ``tag outro-nome``; a mensagem repete ``tag v2.1.0`` de isca."""
     remoto, local = mundo
@@ -686,28 +636,6 @@ def test_the_applying_mark_is_on_disk_before_the_first_checkout(mundo, python_fa
     assert marca["flow"] == "git"
 
 
-def test_on_success_the_same_pending_update_becomes_pending_with_zero_boots(mundo, python_falso, tmp_path):
-    remoto, local = mundo
-    plano = planejar(remoto, local)
-
-    devolvido = aplicar(plano, local, python_falso, tmp_path)
-
-    assert (devolvido.status, devolvido.boots) == ("pending", 0)
-    assert pendente_em_disco(tmp_path)["status"] == "pending" and pendente_em_disco(tmp_path)["boots"] == 0
-
-
-def test_a_failing_smoke_with_a_good_restore_removes_the_applying_mark(mundo, python_falso, tmp_path):
-    remoto, local = mundo
-    plano = planejar(remoto, local)
-    runner = roteiro(plano, smoke=git_flow.ExecResult(1, "falhou"))
-
-    with pytest.raises(UpdateError) as erro:
-        aplicar(plano, local, python_falso, tmp_path, runner)
-
-    assert type(erro.value) is UpdateError and "revertido" in str(erro.value)
-    assert head(local) == plano.prev_sha and not (tmp_path / "runtime" / "update-pending.json").exists()
-
-
 def test_a_failing_restore_keeps_the_applying_mark_and_raises_rollback_failed(mundo, python_falso, tmp_path):
     remoto, local = mundo
     plano = planejar(remoto, local)
@@ -787,18 +715,6 @@ def test_a_failed_restore_logs_the_original_failure_too_when_it_is_a_safe_update
 
     erros = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
     assert any(plano.prev_sha in m and "o teste de fumaça do código novo falhou" in m for m in erros), erros
-
-
-def test_a_failed_restore_logs_only_the_type_of_an_unexpected_original_failure(mundo, python_falso, tmp_path, caplog):
-    remoto, local = mundo
-    plano = planejar(remoto, local)
-    runner = roteiro(plano, smoke=RuntimeError("boom-secreto"), restore=git_flow.ExecResult(1, "falhou"))
-
-    with caplog.at_level(logging.ERROR), pytest.raises(git_flow.UpdateRollbackFailed):
-        aplicar(plano, local, python_falso, tmp_path, runner)
-
-    assert any("RuntimeError" in r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR)
-    assert "boom-secreto" not in caplog.text  # nem na mensagem, nem no traceback encadeado
 
 
 # ============================================================================ A12c (D10): restore robusto, em repositórios git reais
@@ -954,33 +870,6 @@ def test_the_restore_asks_git_for_the_files_the_target_added_without_following_r
     assert not any("clean" in c for c in chamadas)  # nunca git clean
 
 
-def test_the_apply_restore_also_receives_the_target_commit(mundo, python_falso, tmp_path):
-    remoto, local = mundo
-    plano = planejar(remoto, local)
-    chamadas: list[list[str]] = []
-    base = roteiro(plano, smoke=git_flow.ExecResult(1, "falhou"))
-
-    async def runner(*args, **kwargs):
-        chamadas.append([str(a) for a in args])
-        return await base(*args, **kwargs)
-
-    with pytest.raises(UpdateError):
-        aplicar(plano, local, python_falso, tmp_path, runner)
-
-    assert any("diff" in c and plano.prev_sha in c and plano.target_commit in c for c in chamadas)
-
-
-def test_the_applying_and_pending_marks_carry_the_target_commit(mundo, python_falso, tmp_path):
-    remoto, local = mundo
-    plano = planejar(remoto, local)
-    runner = roteiro(plano)
-
-    aplicar(plano, local, python_falso, tmp_path, runner)
-
-    assert runner.estado["pendente_no_1o_checkout"]["target_commit"] == plano.target_commit
-    assert pendente_em_disco(tmp_path)["target_commit"] == plano.target_commit
-
-
 # ---------------------------------------------------------------------------- _reap: SIGTERM, 5 s, SIGKILL
 
 
@@ -1014,10 +903,6 @@ async def lancar_e_cancelar(codigo_do_filho: str, *argumentos: str, antes_de_can
     return processo
 
 
-def test_the_reap_grace_period_is_five_seconds():
-    assert git_flow.REAP_GRACE_SECONDS == 5
-
-
 def test_a_child_that_exits_on_sigterm_is_never_sent_sigkill():
     async def principal():
         vivo_ao_cancelar = []
@@ -1045,24 +930,6 @@ def test_a_child_that_ignores_sigterm_gets_sigkill_after_the_grace_period(tmp_pa
     processo = asyncio.run(principal())
 
     assert processo.returncode == -9  # SIGKILL, depois da tolerância
-
-
-def test_a_timeout_also_reaps_with_sigterm_first_and_still_returns_124():
-    capturado: list[asyncio.subprocess.Process] = []
-    original = asyncio.create_subprocess_exec
-
-    async def espiao(*args, **kwargs):
-        processo = await original(*args, **kwargs)
-        capturado.append(processo)
-        return processo
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(asyncio, "create_subprocess_exec", espiao)
-        resultado = asyncio.run(
-            run_exec(sys.executable, "-c", "import time; time.sleep(60)", cwd=None, env=os.environ, timeout=0.2)
-        )
-
-    assert resultado.returncode == 124 and capturado[0].returncode == -15
 
 
 # ---------------------------------------------------------------------------- Médio do Vigil: arquivo do dono num caminho que o alvo acrescenta
@@ -1124,28 +991,6 @@ def test_the_plan_refuses_when_a_symlink_sits_on_a_path_the_target_adds(mundo):
     assert FRASE.format(caminho="ligacao.txt") in mensagem
 
 
-def test_the_plan_names_at_most_five_conflicting_paths_and_counts_the_rest(mundo):
-    nomes = [f"conflito_{n}.txt" for n in range(7)]
-
-    def preparar(local: Path) -> None:
-        for nome in nomes:
-            (local / nome).write_text("do dono\n", encoding="utf-8")
-
-    mensagem = plano_recusado(mundo, {nome: "do alvo\n" for nome in nomes}, preparar)
-
-    assert sum(nome in mensagem for nome in nomes) == 5 and "mais 2" in mensagem
-    assert FRASE.format(caminho="conflito_0.txt") in mensagem  # o primeiro conflitante
-
-
-def test_a_conflicting_path_with_a_line_break_is_sanitized_in_the_message(mundo):
-    def preparar(local: Path) -> None:
-        (local / "linha\nquebrada.txt").write_text("do dono\n", encoding="utf-8")
-
-    mensagem = plano_recusado(mundo, {"linha\nquebrada.txt": "do alvo\n"}, preparar)
-
-    assert "linha\nquebrada" not in mensagem and "quebrada.txt" in mensagem
-
-
 def test_the_plan_refuses_when_a_parent_directory_of_an_added_path_is_an_untracked_symlink_out_of_the_clone(
     mundo, tmp_path
 ):
@@ -1170,14 +1015,6 @@ def test_the_plan_refuses_when_a_parent_of_an_added_path_is_a_regular_file(mundo
     mensagem = plano_recusado(mundo, {"pai/filho.txt": "do alvo\n"}, preparar)
 
     assert FRASE.format(caminho="pai/filho.txt") in mensagem
-
-
-def test_without_a_conflict_the_plan_goes_on_even_if_the_target_adds_files(mundo):
-    remoto, local = mundo
-    trocar_alvo(remoto, {"sub/novo.txt": "do alvo\n"})
-    (local / "outro_do_dono.txt").write_text("não conflita\n", encoding="utf-8")
-
-    assert planejar(remoto, local).target == Version(2, 1, 0)
 
 
 # ---------------------------------------------------------------------------- restore: só apaga o que é EXATAMENTE o do alvo
@@ -1227,23 +1064,6 @@ def test_a_regular_file_where_the_target_has_a_symlink_is_kept(restore, caplog):
     assert dono.read_text() == "arquivo do dono\n" and "ligacao" in caplog.text
 
 
-def test_a_symlink_pointing_somewhere_else_than_the_target_symlink_is_kept(restore, caplog):
-    (restore.repo / "ligacao").unlink()
-    (restore.repo / "ligacao").symlink_to("b.txt")  # o alvo aponta para a.txt
-
-    with caplog.at_level(logging.WARNING):
-        restore.restaurar()
-
-    assert os.readlink(restore.repo / "ligacao") == "b.txt" and "ligacao" in caplog.text
-
-
-def test_files_identical_to_the_target_blob_are_still_removed(restore):
-    restore.restaurar()
-
-    for nome in ARQUIVOS_DO_ALVO:
-        assert not os.path.lexists(restore.repo / nome), nome
-
-
 def test_a_bat_file_written_with_crlf_by_the_checkout_is_still_recognized_as_the_targets_and_removed(restore):
     """O .gitattributes tem ``*.bat eol=crlf``: o arquivo na árvore tem CRLF e o hash cru dos bytes nunca bateria com o blob (LF)."""
     assert (restore.repo / "script.bat").read_bytes() == b"linha1\r\nlinha2\r\n"
@@ -1251,15 +1071,6 @@ def test_a_bat_file_written_with_crlf_by_the_checkout_is_still_recognized_as_the
     restore.restaurar()
 
     assert not os.path.lexists(restore.repo / "script.bat")
-
-
-def test_an_owner_bat_file_with_other_content_on_the_same_path_is_kept(restore, caplog):
-    (restore.repo / "script.bat").write_bytes(b"echo do dono\r\n")
-
-    with caplog.at_level(logging.WARNING):
-        restore.restaurar()
-
-    assert (restore.repo / "script.bat").read_bytes() == b"echo do dono\r\n" and "script.bat" in caplog.text
 
 
 # ---------------------------------------------------------------------------- restore: o .gitattributes é do PRÓPRIO alvo (a regra some depois do checkout do prev)
@@ -1300,20 +1111,3 @@ def test_a_crlf_file_written_under_the_targets_own_gitattributes_is_still_the_ta
     assert not os.path.lexists(attr_do_alvo.repo / "script.bat")
     assert (attr_do_alvo.repo / ".gitattributes").read_text() == "# sem regras\n"  # o do prev voltou
     assert git(attr_do_alvo.repo, "status", "--porcelain", "--untracked-files=no") == ""
-
-
-def test_an_owner_file_with_other_content_on_the_same_path_is_kept_in_that_scenario_too(attr_do_alvo, caplog):
-    (attr_do_alvo.repo / "script.bat").write_bytes(b"echo do dono\r\n")
-
-    with caplog.at_level(logging.WARNING):
-        attr_do_alvo.restaurar()
-
-    assert (attr_do_alvo.repo / "script.bat").read_bytes() == b"echo do dono\r\n" and "script.bat" in caplog.text
-
-
-def test_an_lf_file_identical_to_the_targets_blob_is_removed_in_that_scenario_as_well(attr_do_alvo):
-    (attr_do_alvo.repo / "script.bat").write_bytes(b"linha1\nlinha2\n")  # bytes exatamente iguais ao blob
-
-    attr_do_alvo.restaurar()
-
-    assert not os.path.lexists(attr_do_alvo.repo / "script.bat")

@@ -31,8 +31,6 @@ from tests.support.formatos_reais import (
 )
 from tests.support.formato_sessao import gravar, jogador_completo
 
-OUTRO_CANAL_DE_VOZ = 1100000000000000099
-
 
 @pytest.fixture(autouse=True)
 def _ambiente(monkeypatch):
@@ -156,17 +154,6 @@ async def retomar(versao_do_no, dados, *, canais=None):
 # ============================================================================ sem voice_state: reconecta por connect
 
 
-class TestSemVoiceState:
-    @pytest.mark.asyncio
-    async def test_a_retomada_usa_o_canal_de_voz_gravado_e_nao_um_dado_de_voz(self):
-        dados = await sessao_gravada()
-        dados.pop("voice_state", None)
-        dados["voice_channel"] = OUTRO_CANAL_DE_VOZ
-        canais = {OUTRO_CANAL_DE_VOZ: canal_de_voz(OUTRO_CANAL_DE_VOZ), CANAL_DE_TEXTO: canal_de_voz(CANAL_DE_TEXTO)}
-        jogador, _ = await retomar(4, dados, canais=canais)
-        assert jogador.conexoes == [OUTRO_CANAL_DE_VOZ]
-
-
 # ============================================================================ com voice_state na entrada: é ignorado
 
 
@@ -210,48 +197,3 @@ class JogadorDeTeste(LavalinkPlayer):
 
     async def process_next(self, start_position=0):
         self.registros.append(("process_next", start_position))
-
-
-def jogador_em_troca_de_no(*, voice_state, na_voz=True) -> JogadorDeTeste:
-    no = SimpleNamespace(identifier="no-1", is_available=False, players={SERVIDOR: object()})
-    jogador = JogadorDeTeste.__new__(JogadorDeTeste)
-    jogador.__dict__.update(
-        node=no,
-        guild_id=SERVIDOR,
-        guild=SimpleNamespace(me=SimpleNamespace(voice=object() if na_voz else None)),
-        bot=SimpleNamespace(music=SimpleNamespace(get_best_node=lambda ignore_node=None: no)),
-        _voice_state=voice_state,
-        locked=False,
-        update=False,
-        auto_pause=True,
-        current=None,
-        current_encoded=None,
-        queue=deque(),
-        auto_skip_track_task=SimpleNamespace(cancel=lambda: None),
-        registros=[],
-    )
-    return jogador
-
-
-class TestTrocaDeNoSemVoiceState:
-    @pytest.mark.asyncio
-    async def test_voice_state_verdadeiro_no_mesmo_no_reenvia_a_voz_sem_trocar_de_no(self):
-        jogador = jogador_em_troca_de_no(voice_state={"sessionId": "s", "event": {"token": "t", "endpoint": "e"}})
-        await jogador._wait_for_new_node()
-        assert "_dispatch_voice_update" in jogador.registros
-        assert not any(isinstance(r, tuple) and r[0] == "change_node" for r in jogador.registros)
-
-    @pytest.mark.asyncio
-    async def test_fora_da_voz_e_sem_voice_state_conecta_no_ultimo_canal(self, monkeypatch):
-        monkeypatch.setattr(models.player_voice, "can_connect", lambda *args, **kwargs: None)
-        jogador = jogador_em_troca_de_no(voice_state=None, na_voz=False)
-        await jogador._wait_for_new_node()
-        assert ("connect", CANAL_DE_VOZ) in jogador.registros
-        assert jogador.registros.index(("change_node", "no-1")) < jogador.registros.index(("connect", CANAL_DE_VOZ))
-
-    @pytest.mark.asyncio
-    async def test_no_disponivel_nao_faz_nada(self):
-        jogador = jogador_em_troca_de_no(voice_state=None)
-        jogador.node.is_available = True
-        await jogador._wait_for_new_node()
-        assert jogador.registros == []

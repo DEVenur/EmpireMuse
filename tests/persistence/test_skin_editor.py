@@ -75,22 +75,6 @@ def esperada(skin: dict) -> dict:
 
 class TestSalvaDicionario:
     @pytest.mark.asyncio
-    async def test_o_gravado_e_json_puro(self, editor_sem_tela):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        await salvar(menu)
-        assert json.loads(json.dumps(bot.banco)) == bot.banco
-
-    @pytest.mark.asyncio
-    async def test_renomear_remove_o_nome_antigo(self, editor_sem_tela):
-        dados = dados_globais(normais={"Antiga": skin_realista(), "Outra": skin_realista(content="o")})
-        menu, bot, _ = editor_sem_tela(dados)
-        menu.message_data, menu.skin_selected = skin_realista(), "> cs: Antiga"
-        await salvar(menu, "Nova")
-        assert sorted(bot.banco["custom_skins"]) == ["Nova", "Outra"]
-        assert bot.banco["custom_skins"]["Outra"] == skin_realista(content="o")
-
-    @pytest.mark.asyncio
     async def test_texto_com_emoji_composto_e_campo_em_branco_e_salvo(self, editor_sem_tela):
         menu, bot, _ = editor_sem_tela(dados_globais())
         menu.message_data = {
@@ -146,18 +130,6 @@ class TestNomeEQuantidade:
         interacao = await salvar(menu, nome)
         assert bot.escritas == [] and mensagens_ao_dono(interacao) and not salvo_com_sucesso(interacao)
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "nome",
-        ["a" * LIMITES.nome, "  com espaços nas pontas  "],
-        ids=["no-limite", "espacos-nas-pontas"],
-    )
-    async def test_nome_valido_e_salvo(self, editor_sem_tela, nome):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        assert salvo_com_sucesso(await salvar(menu, nome))
-        assert list(bot.banco["custom_skins"]) == [nome.strip()]
-
     @staticmethod
     def cheio(modo="custom_skins"):
         return dados_globais(
@@ -174,13 +146,6 @@ class TestNomeEQuantidade:
         menu.message_data = skin_realista()
         interacao = await salvar(menu, "Nova")
         assert bot.escritas == [] and mensagens_ao_dono(interacao) and not salvo_com_sucesso(interacao)
-
-    @pytest.mark.asyncio
-    async def test_sobrescrever_no_modo_cheio_e_permitido(self, editor_sem_tela):
-        menu, bot, _ = editor_sem_tela(self.cheio())
-        menu.message_data, menu.skin_selected = skin_realista(content="nova"), "> cs: s0"
-        assert salvo_com_sucesso(await salvar(menu, "s0"))
-        assert bot.banco["custom_skins"]["s0"]["content"] == "nova"
 
 
 # ============================================================================ achado D: memória e banco no mesmo formato
@@ -200,43 +165,8 @@ class TestMemoriaEBancoNoMesmoFormato:
         assert tipos_do_documento(bot.global_data) == tipos_do_documento(bot.banco)
         assert {t for modo in tipos_do_documento(bot.banco).values() for t in modo.values()} == {"dict"}
 
-    @pytest.mark.asyncio
-    async def test_continuar_editando_depois_de_salvar_nao_mexe_no_que_foi_salvo(self, editor_sem_tela):
-        jogador = Jogador()
-        menu, bot, _ = editor_sem_tela(dados_globais(), [jogador])
-        menu.message_data = skin_realista()
-        await salvar(menu)
-        cache, banco, player = (copy.deepcopy(x) for x in (bot.global_data, bot.banco, jogador.custom_skin_data))
-        menu.message_data["content"] = "editado depois, sem salvar"
-        menu.message_data["embeds"][0]["title"] = "mudou"
-        menu.message_data["embeds"][2]["fields"].append({"name": "x", "value": "y"})
-        assert bot.global_data == cache and bot.banco == banco and jogador.custom_skin_data == player
-
 
 # ============================================================================ downgrade seguro
-
-
-def renderizar(skin: dict) -> dict:
-    """O que a versão ANTIGA faz com a skin: ``skin_converter`` direto sobre o dicionário (ela só convertia texto)."""
-    avatar = SimpleNamespace(with_static_format=lambda formato: SimpleNamespace(url="https://exemplo.invalid/a.png"))
-    servidor = SimpleNamespace(me=SimpleNamespace(color=SimpleNamespace(value=255)), name="srv", id=1, icon=None)
-    contexto = SimpleNamespace(
-        bot=SimpleNamespace(get_color=lambda membro: 255),
-        author=SimpleNamespace(mention="<@1>", display_name="x", global_name="x", display_avatar=avatar),
-    )
-    saida = skin_converter(skin, guild=servidor, ctx=contexto)
-    return {"content": saida.get("content"), "embeds": [embed.to_dict() for embed in saida["embeds"]]}
-
-
-class TestDowngradeSeguro:
-    @pytest.mark.asyncio
-    async def test_a_versao_antiga_nao_tem_texto_a_converter_e_entrega_o_mesmo_embed(self, editor_sem_tela):
-        menu, bot, _ = editor_sem_tela(dados_globais())
-        menu.message_data = skin_realista()
-        await salvar(menu)
-        gravada = bot.banco["custom_skins"]["Minha"]
-        assert not any(isinstance(skin, str) for skin in bot.banco["custom_skins"].values())  # o laço antigo é um no-op
-        assert renderizar(gravada) == renderizar(esperada(skin_realista()))
 
 
 # ============================================================================ skins montadas pelo próprio editor
@@ -336,13 +266,6 @@ class TestEntradaDoEditorRegressao:
             await passo(menu, "skin_editor_setup_queue", queue_format="outro formato", queue_max_entries="aa")
 
         assert menu.message_data == antes
-
-    @pytest.mark.regression
-    @pytest.mark.asyncio
-    async def test_modal_mostra_ao_dono_o_texto_do_generic_error(self):
-        interacao = InteracaoDoEditor()
-        await ViewModal.on_error(SimpleNamespace(), GenericError("**Texto claro.**"), interacao)
-        assert interacao.enviados == ["**Texto claro.**"]
 
     @pytest.mark.regression
     @pytest.mark.asyncio

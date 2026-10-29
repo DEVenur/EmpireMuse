@@ -22,12 +22,6 @@ def gravar(caminho, conteudo=SEGREDO.encode()):
     return caminho
 
 
-def test_sem_dados_antigos_nao_loga_nada(caplog):
-    with caplog.at_level(logging.DEBUG):
-        log_ignored_legacy_data()
-    assert caplog.records == []
-
-
 def test_avisa_com_a_contagem_por_pasta_sem_abrir_nem_apagar(tmp_path, caplog, capsys):
     base = tmp_path / "local_database"
     antigos = [

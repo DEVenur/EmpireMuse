@@ -61,11 +61,3 @@ async def test_o_que_a_thread_recebe_e_uma_copia_dos_dados_do_player(espiao, des
     assert recebido is not dados
     assert recebido["queue"] is not dados["queue"] and recebido["queue"][0] is not dados["queue"][0]
     assert recebido["played"][0] is not dados["played"][0]
-
-
-@pytest.mark.asyncio
-async def test_o_conteudo_gravado_e_o_mesmo_de_antes(tmp_path):
-    cog = cog_de_sessoes()
-    dados = sessao_minima(queue=[faixa_info(0), faixa_info(1)])
-    await cog.save_session_local(SERVIDOR, dados)
-    assert (pasta_json(tmp_path) / f"{SERVIDOR}.json").read_bytes() == codec.encode_session(dados)

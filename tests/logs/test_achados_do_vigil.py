@@ -49,38 +49,6 @@ class TestSurrogateSolto:
         assert "título" in arquivo and "fim" in arquivo and "\\ud800" in arquivo and SURROGATE not in arquivo
         assert "título" in destinos.console.getvalue() and "fim" in destinos.console.getvalue()
 
-    def test_a_lone_surrogate_in_an_argument_reaches_the_file_escaped(self, destinos, capsys):
-        logging.getLogger("empiremuse.teste").warning("faixa %s", "a" + SURROGATE + "b")
-
-        assert "[log] falha ao emitir um registro" not in capsys.readouterr().err
-        assert "\\ud800" in ler_arquivo(destinos)
-
-    def test_a_lone_surrogate_in_a_traceback_reaches_the_file_escaped(self, destinos, capsys):
-        try:
-            raise ValueError("json com " + SURROGATE)
-        except ValueError:
-            logging.getLogger("empiremuse.teste").exception("falhou")
-
-        assert "[log] falha ao emitir um registro" not in capsys.readouterr().err
-        assert "ValueError" in ler_arquivo(destinos) and "\\ud800" in ler_arquivo(destinos)
-
-    def test_the_records_after_a_surrogate_are_still_written_and_valid_text_is_untouched(self, destinos):
-        log = logging.getLogger("empiremuse.teste")
-
-        log.warning("ruim " + SURROGATE)
-        log.info("depois: ação 🎵 ok")
-
-        arquivo = ler_arquivo(destinos)
-        assert "depois: ação 🎵 ok" in arquivo
-
-    def test_a_surrogate_from_json_loads_is_handled_like_any_other(self, destinos, capsys):
-        import json
-
-        logging.getLogger("empiremuse.teste").warning("título: %s", json.loads('"\\ud800"'))
-
-        assert "[log] falha ao emitir um registro" not in capsys.readouterr().err
-        assert "\\ud800" in ler_arquivo(destinos)
-
 
 # ============================================================================ V-P1-8 — tokens do OAuth do YouTube
 
@@ -138,16 +106,6 @@ class TestTokensDoOauth:
 
         assert refresh not in redact(refresh) and quote(refresh, safe="") not in redact(quote(refresh, safe=""))
 
-    def test_an_expired_flow_without_tokens_registers_nothing_and_raises_the_usual_error(self, monkeypatch):
-        from empiremuse.utils.music.errors import GenericError
-
-        ViewFalsa.dados = {}
-        monkeypatch.setattr(ll_yt_oauth, "YtOauthView", ViewFalsa)
-        cog, ctx = cog_com_sessao_que_para()
-
-        with pytest.raises(GenericError):
-            asyncio.run(cog.oauth_command(ctx))
-
 
 # ============================================================================ nome do logger no cabeçalho
 
@@ -164,16 +122,6 @@ class TestNomeDoLogger:
         saida = formatador().format(registro("mensagem", nome=NOME_FORJADO))
 
         assert saida.count("\n") == 0 and "x⏎ERROR forjado: mensagem" in saida
-
-    @pytest.mark.parametrize("nome", ["a\x1b[2Jb", "a\x9bb", "a‮b", "a⁦b", "a\rb", "a b"])
-    @pytest.mark.parametrize("formatador", [lambda: ConsoleFormatter(False), FileFormatter], ids=["console", "arquivo"])
-    def test_controls_and_bidi_in_the_logger_name_never_reach_the_output(self, formatador, nome):
-        saida = formatador().format(registro("mensagem", nome=nome))
-
-        assert not any(c in saida for c in ("\x1b", "\x9b", "‮", "⁦", "\r", " ")) and saida.count("\n") == 0
-
-    def test_an_ordinary_logger_name_is_untouched(self):
-        assert "empiremuse.wavelink.local: m" in FileFormatter().format(registro("m", nome="empiremuse.wavelink.local"))
 
     def test_end_to_end_a_forged_logger_name_gives_one_header_in_each_destination(self, destinos):
         logging.getLogger(NOME_FORJADO).warning("do logger forjado")

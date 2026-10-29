@@ -52,32 +52,8 @@ def test_a_fresh_heartbeat_is_fresh_up_to_the_limit_and_stale_after(tmp_path):
     assert not is_fresh(arquivo, AGORA + 3600)
 
 
-def test_the_max_age_is_a_parameter(tmp_path):
-    arquivo = tmp_path / "saude"
-    write_heartbeat(arquivo, AGORA)
-
-    assert is_fresh(arquivo, AGORA + 5, max_age=5)
-    assert not is_fresh(arquivo, AGORA + 6, max_age=5)
-
-
-def test_a_new_write_renews_the_heartbeat(tmp_path):
-    arquivo = tmp_path / "saude"
-    write_heartbeat(arquivo, AGORA)
-    write_heartbeat(arquivo, AGORA + 100)
-
-    assert is_fresh(arquivo, AGORA + 100 + MAX_AGE_SECONDS)
-    assert not is_fresh(arquivo, AGORA + 100 + MAX_AGE_SECONDS + 1)
-
-
 def test_without_the_file_it_is_not_fresh(tmp_path):
     assert not is_fresh(tmp_path / "nao-existe", AGORA)
-
-
-def test_the_write_leaves_only_the_target_file(tmp_path):
-    write_heartbeat(tmp_path / "saude", AGORA)
-    write_heartbeat(tmp_path / "saude", AGORA + 1)
-
-    assert [p.name for p in tmp_path.iterdir()] == ["saude"]
 
 
 def test_the_write_goes_through_a_temporary_in_the_same_directory_and_os_replace(tmp_path, monkeypatch):

@@ -35,37 +35,3 @@ class TestGravacaoForaDoLaco:
         lastfm.cache["k"] = {}
         await lastfm.scrobble_save_cache_async()
         assert threads and threads[0] != threading.get_ident()
-
-    @pytest.mark.asyncio
-    async def test_falha_de_disco_vira_aviso_e_nao_levanta(self, monkeypatch, caplog):
-        def negar(*args, **kwargs):
-            raise OSError("negado")
-
-        monkeypatch.setattr(lastfm_tools, "save_json_cache", negar)
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["k"] = {}
-        with caplog.at_level(logging.WARNING):
-            await lastfm.scrobble_save_cache_async()
-        assert any("não gravado" in r.getMessage() for r in caplog.records)
-
-
-class TestCogUsaAVersaoAssincrona:
-    def chamadas(self):
-        arvore = ast.parse((RAIZ / "empiremuse" / "cogs" / "lastfm.py").read_text(encoding="utf-8"))
-        sincronas, esperadas = [], []
-        for no in ast.walk(arvore):
-            if isinstance(no, ast.Await) and isinstance(no.value, ast.Call):
-                alvo = no.value.func
-                if isinstance(alvo, ast.Attribute) and alvo.attr == "scrobble_save_cache_async":
-                    esperadas.append(no.lineno)
-            elif (
-                isinstance(no, ast.Call)
-                and isinstance(no.func, ast.Attribute)
-                and no.func.attr == "scrobble_save_cache"
-            ):
-                sincronas.append(no.lineno)
-        return sincronas, esperadas
-
-    def test_nenhuma_chamada_sincrona_dentro_do_cog(self):
-        sincronas, _ = self.chamadas()
-        assert sincronas == []

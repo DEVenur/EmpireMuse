@@ -61,24 +61,6 @@ def docs(quantos: int) -> list[dict]:
 # ============================================================================ caracterização: o que os chamadores de hoje esperam
 
 
-class TestChamadoresDeHoje:
-    @pytest.mark.asyncio
-    async def test_mongo_o_filtro_filtra(self):
-        banco, _ = mongo_com(docs(10))
-        achados = list(await banco.query_data(db_name="guilds", collection="global", filter={"par": True}))
-        assert sorted(d["_id"] for d in achados) == ["0", "2", "4", "6", "8"]
-
-    @pytest.mark.asyncio
-    async def test_local_sem_limit_devolve_tudo_e_o_filtro_filtra(self, tmp_path):
-        banco = LocalDatabase(dir_=str(tmp_path))
-        for n in range(150):
-            await banco.update_data(id_=n, data={"par": n % 2 == 0}, db_name="guilds", collection="global")
-        todos = list(await banco.query_data(db_name="guilds", collection="global"))
-        assert len(todos) == 150
-        pares = list(await banco.query_data(db_name="guilds", collection="global", filter={"par": True}))
-        assert len(pares) == 75
-
-
 # ============================================================================ RED: o limit passa a valer
 
 

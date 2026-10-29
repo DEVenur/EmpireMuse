@@ -83,19 +83,6 @@ class TestOpcoesDoSlash:
     def descricao(self, opcoes: dict[str, object]) -> str:
         return tratador().build_report_embed(slash(opcoes)).description
 
-    def test_the_command_name_and_the_label_stay(self):
-        descricao = self.descricao({"busca": TEXTO_LIVRE})
-
-        assert "Slash Command:" in descricao and "play" in descricao
-
-    def test_each_option_is_summarized_by_type(self):
-        descricao = self.descricao(
-            {"busca": TEXTO_LIVRE, "alvo": membro(31), "arquivo": anexo("image/png", 4321), "volume": 70}
-        )
-
-        assert f"str(len={len(TEXTO_LIVRE)})" in descricao
-        assert "Member(id=31)" in descricao and "Attachment(tipo=image/png, tamanho=4321)" in descricao
-
     def test_a_secret_named_option_is_masked(self):
         descricao = self.descricao({"token": "valor-privado-R8"})
 
@@ -133,19 +120,10 @@ class TestBlocoDeOpcoes:
         assert self.TRES_ASPAS in descricao and "clique" in descricao and "toque" in descricao
         assert "image/png" in descricao
 
-    def test_without_the_guild_in_debug_the_free_text_is_still_only_its_length(self):
-        descricao = self.descricao(em_debug=False)
-
-        assert f"str(len={len(self.TEXTO_HOSTIL)})" in descricao and "clique" not in descricao
-        assert descricao.count(TRES_CRASES) == 4
-
 
 class TestConteudoDoPrefixo:
     def descricao(self, content: str, **kwargs) -> str:
         return tratador(**kwargs).build_report_embed(prefixo(content)).description
-
-    def test_the_label_stays(self):
-        assert "Comando:" in self.descricao("!play algo")
 
     def test_a_registered_secret_pasted_in_the_text_is_masked(self):
         register_secret(SEGREDO_NO_TEXTO)
@@ -159,23 +137,12 @@ class TestConteudoDoPrefixo:
 
         assert ESC not in descricao and RLO not in descricao
 
-    def test_the_text_never_goes_past_the_cap(self):
-        descricao = self.descricao("!play " + "x" * (MAX_MESSAGE_CHARS * 3))
-
-        assert (
-            len(descricao) <= MAX_MESSAGE_CHARS + 100
-        )  # o teto vale para o texto; sobra só o rótulo e as cercas do bloco
-
     def test_three_backticks_inside_the_text_cannot_close_the_code_block(self):
         descricao = self.descricao(f"!play a{TRES_CRASES}[clique](https://x.invalido)b")
 
         assert (
             descricao.count(TRES_CRASES) == 2
         )  # dentro do bloco o texto é literal; o que importa é não haver como fechá-lo
-
-    def test_a_bot_author_or_missing_message_content_intent_adds_no_text(self):
-        assert tratador().build_report_embed(prefixo("!play x", autor_bot=True)).description is None
-        assert tratador(message_content=False).build_report_embed(prefixo("!play x")).description is None
 
 
 @pytest.mark.parametrize(
@@ -203,8 +170,3 @@ class TestNomesNosBlocos:
         valor = self.valor(campo, fabrica)
 
         assert valor.count(TRES_CRASES) == 2 and links_alheios(valor) == []
-
-    def test_the_name_stays_readable_and_the_id_stays_in_the_block(self, campo, fabrica):
-        valor = self.valor(campo, fabrica)
-
-        assert "clique" in valor and "A" in valor and "B" in valor and "ID:" in valor

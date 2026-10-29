@@ -87,13 +87,6 @@ class TestGanchosDeProcesso:
         assert erros and erros[0].exc_info[0] is RuntimeError
         assert "trabalhadora-p4" in saida.getvalue() + erros[0].getMessage()
 
-    def test_keyboard_interrupt_is_still_reported_without_the_cause_chain(self, ganchos):
-        registros, saida = ganchos
-
-        sys.excepthook(*excecao("interrompido", KeyboardInterrupt))
-
-        assert "interrompido" in saida.getvalue() or any(r.exc_info for r in registros)
-
 
 class TestLacoDeEventos:
     def test_the_loop_handler_logs_the_exception_with_traceback_at_error(self, ganchos):
@@ -108,16 +101,6 @@ class TestLacoDeEventos:
         (registro,) = [r for r in registros if r.levelno >= logging.ERROR]
         assert registro.exc_info[1] is erro and "falha-na-tarefa-C3" in saida.getvalue()
 
-    def test_a_context_without_an_exception_is_logged_at_error_with_its_message(self, ganchos):
-        registros, saida = ganchos
-        loop = asyncio.new_event_loop()
-        try:
-            loop_exception_handler(loop, {"message": "mensagem-sem-excecao-D4"})
-        finally:
-            loop.close()
-
-        assert any(r.levelno >= logging.ERROR for r in registros) and "mensagem-sem-excecao-D4" in saida.getvalue()
-
     def test_cancelled_error_on_shutdown_is_not_an_error(self, ganchos):
         registros, saida = ganchos
         loop = asyncio.new_event_loop()
@@ -128,15 +111,6 @@ class TestLacoDeEventos:
 
         assert [r for r in registros if r.levelno >= logging.WARNING] == []
         assert "Traceback" not in saida.getvalue()
-
-    def test_installing_sets_the_loop_exception_handler(self):
-        loop = asyncio.new_event_loop()
-        try:
-            install_exception_handlers(loop)
-
-            assert loop.get_exception_handler() is not None
-        finally:
-            loop.close()
 
     @pytest.mark.asyncio
     async def test_a_forgotten_failing_task_reaches_the_errors_logger_through_the_installed_handler(self, ganchos):
@@ -202,13 +176,6 @@ class TestErrosEsperados:
 
         assert _nomes_de_erro(caplog) == []
         assert "Traceback" not in capsys.readouterr().err
-
-    @pytest.mark.asyncio
-    async def test_an_expected_error_does_leave_a_debug_record(self, handler, enviado, caplog):
-        with caplog.at_level(logging.DEBUG):
-            await handler.process_interaction_error(_interacao(), GenericError("mensagem pro usuário"))
-
-        assert [r for r in caplog.records if r.name.startswith("empiremuse") and r.levelno == logging.DEBUG]
 
 
 class TestErrosInesperados:

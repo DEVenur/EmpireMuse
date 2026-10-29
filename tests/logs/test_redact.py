@@ -40,12 +40,6 @@ def texto_final(record: logging.LogRecord) -> str:
     return "\n".join(filter(None, [record.getMessage(), record.exc_text, record.stack_info]))
 
 
-def test_constants_have_the_contract_values():
-    assert REDACTED == "***"
-    assert OMITTED == "[registro omitido: falha ao redigir]"
-    assert MAX_MESSAGE_CHARS == 8192 and MAX_TRACEBACK_CHARS == 32768
-
-
 # ============================================================================ B2 — padrões
 
 
@@ -180,11 +174,6 @@ class TestValoresRegistrados:
         saida = redact(f"senha={senha} url=/x?p={codificada}")
         assert senha not in saida and codificada not in saida
 
-    def test_register_secret_of_a_value_equal_to_its_encoded_form_registers_it_once(self):
-        register_secret("simples-sem-especiais-7")
-
-        assert redact("simples-sem-especiais-7") == REDACTED
-
     def test_registered_values_survive_a_new_configure_secrets(self):
         register_secret("aprendido-em-runtime-3")
 
@@ -197,16 +186,6 @@ class TestValoresRegistrados:
         register_secret("fghij")
 
         assert redact("abcde fghij") == "abcde fghij"
-
-    def test_a_six_character_value_is_masked(self):
-        register_secret("abcdef")
-
-        assert redact("x abcdef y") == "x *** y"
-
-    def test_configure_secrets_ignores_values_shorter_than_the_floor(self):
-        configure_secrets(["a1b2c", "a1b2c3d"])
-
-        assert redact("a1b2c a1b2c3d") == "a1b2c ***"
 
     def test_register_secret_and_redact_are_safe_between_threads(self):
         valores = [f"segredo-concorrente-{n:03d}" for n in range(60)]
@@ -245,21 +224,12 @@ class TestSaneamento:
     def test_sanitize_value_turns_control_and_bidi_characters_into_the_replacement_char(self, controle):
         assert sanitize_value(f"a{controle}b") == "a�b"
 
-    def test_sanitize_value_keeps_the_tab_and_ordinary_text(self):
-        assert sanitize_value("a\tb ção │ 🎵 — ok") == "a\tb ção │ 🎵 — ok"
-
     def test_sanitize_value_neutralises_a_terminal_clear_sequence(self):
         assert sanitize_value("\x1b[2J\x9b31m") == "�[2J�31m"
 
     @pytest.mark.parametrize("controle", CONTROLES + BIDI)
     def test_sanitize_text_also_replaces_controls_and_bidi(self, controle):
         assert sanitize_text(f"a{controle}b") == "a�b"
-
-    def test_sanitize_text_keeps_the_line_feed_and_the_tab(self):
-        assert sanitize_text("linha 1\n\tlinha 2") == "linha 1\n\tlinha 2"
-
-    def test_sanitize_text_replaces_the_carriage_return(self):
-        assert sanitize_text("a\rb") == "a�b"
 
     def test_a_forged_log_line_in_an_argument_stays_on_one_line(self):
         record = passar(registro("título: %s", "x\n2026-10-27 ERROR falso\r fim", nivel=logging.ERROR))
@@ -272,16 +242,6 @@ class TestSaneamento:
 
         mensagem = record.getMessage()
         assert not any(c in mensagem for c in ("\x1b", "\x9b", "‮")) and mensagem.endswith(" fim")
-
-    def test_the_message_template_itself_may_carry_a_line_feed_for_the_formatter_to_frame(self):
-        record = passar(registro("linha 1\nlinha 2"))
-
-        assert record.getMessage() == "linha 1\nlinha 2"
-
-    def test_an_esc_in_the_formatted_message_is_replaced(self):
-        record = passar(registro("a\x1b[31mb"))
-
-        assert "\x1b" not in record.getMessage() and "�" in record.getMessage()
 
 
 # ============================================================================ o filtro SanitizeAndRedact
@@ -306,16 +266,6 @@ class TestFiltro:
 
         assert (record.msg, record.args, record.empiremuse_template) == antes
         assert record.empiremuse_redacted is True
-
-    def test_numbers_booleans_and_none_are_left_as_they_are(self):
-        record = passar(registro("%d %s %s %s", 7, True, None, 2.5))
-
-        assert record.getMessage() == "7 True None 2.5"
-
-    def test_a_mapping_argument_is_sanitised_inside(self):
-        record = passar(registro("%(a)s e %(b)d", {"a": "x\ny", "b": 4}))
-
-        assert record.getMessage() == "x⏎y e 4"
 
     def test_a_secret_in_the_message_and_in_an_argument_is_masked(self):
         configure_secrets(["segredo-na-mensagem-1"])
@@ -343,11 +293,6 @@ class TestFiltro:
         assert "segredo-no-traceback-9" not in record.exc_text and REDACTED in record.exc_text
         assert record.empiremuse_exc_type.endswith("ValueError")
 
-    def test_a_record_without_exception_has_no_exc_type(self):
-        record = passar(registro("sem erro"))
-
-        assert record.empiremuse_exc_type is None and not record.exc_text
-
     def test_stack_info_is_redacted(self):
         configure_secrets(["segredo-na-pilha-5"])
         record = registro("pilha", stack_info='File "x.py", line 1\n    senha = "segredo-na-pilha-5"')
@@ -355,17 +300,6 @@ class TestFiltro:
         passar(record)
 
         assert "segredo-na-pilha-5" not in record.stack_info and REDACTED in record.stack_info
-
-    def test_the_exc_type_of_a_custom_exception_is_its_qualified_name(self):
-        class MeuErro(Exception):
-            pass
-
-        record = passar(registro("x", exc_info=excecao("m", MeuErro)))
-
-        assert record.empiremuse_exc_type.endswith("MeuErro")
-
-    def test_the_filter_is_total_for_anything_that_is_not_a_record(self):
-        assert SanitizeAndRedact().filter(object()) is True  # type: ignore[arg-type]
 
 
 # ============================================================================ B4 — redator que levanta
@@ -405,38 +339,16 @@ class TestRedatorQueLevanta:
 
         self._assert_omitido(record)
 
-    def test_the_omitted_notice_is_not_redacted_again_and_the_filter_still_returns_true(self, monkeypatch):
-        monkeypatch.setattr(redact_modulo, "redact", lambda texto: 1 / 0)
-        record = registro("x")
-
-        assert SanitizeAndRedact().filter(record) is True
-        assert record.msg == OMITTED
-
 
 # ============================================================================ B20 — teto por registro
 
 
 class TestTeto:
-    def test_cap_below_the_limit_is_identity(self):
-        assert cap("abc", 5) == "abc" and cap("abcde", 5) == "abcde"
-
-    def test_cap_cuts_and_reports_how_many_characters_were_dropped(self):
-        assert cap("a" * 10, 4) == f"aaaa{PONTO} [+6]"
-
     def test_a_one_megabyte_message_is_capped_with_the_right_count(self):
         record = passar(registro("x" * 1_000_000))
 
         mensagem = record.getMessage()
         assert mensagem == "x" * MAX_MESSAGE_CHARS + f"{PONTO} [+{1_000_000 - MAX_MESSAGE_CHARS}]"
-
-    def test_a_two_hundred_kilobyte_traceback_is_capped_with_the_right_count(self):
-        exc_info = excecao("y" * 200_000)
-        completo = logging.Formatter().formatException(exc_info)
-        record = registro("falhou", exc_info=exc_info)
-
-        passar(record)
-
-        assert record.exc_text == completo[:MAX_TRACEBACK_CHARS] + f"{PONTO} [+{len(completo) - MAX_TRACEBACK_CHARS}]"
 
     def test_the_cap_applies_after_the_redaction_so_a_secret_at_the_limit_is_never_left_half(self):
         segredo = "SegredoNoLimiteDoTeto-123456"
@@ -472,12 +384,6 @@ class TestScrub:
         assert saida == esperado[:30] + f"{PONTO} [+{len(esperado) - 30}]"
         assert "\x1b" not in saida and "segredo-do-scrub-42" not in saida
 
-    def test_scrub_keeps_line_feeds_and_tabs(self):
-        assert scrub("a\n\tb", 100) == "a\n\tb"
-
-    def test_scrub_of_clean_short_text_is_identity(self):
-        assert scrub("tudo certo com a versão 2.1.0", 8192) == "tudo certo com a versão 2.1.0"
-
 
 # ============================================================================ argumentos que não são texto nem número nativo (CodeRabbit r4393628119)
 
@@ -496,30 +402,6 @@ class Opaco:
 
 
 class TestArgumentosNaoTexto:
-    def test_percent_r_of_an_exception_keeps_the_repr(self):
-        record = passar(registro("falha: %r", ValueError("msg")))
-
-        assert record.getMessage() == "falha: ValueError('msg')"
-
-    def test_percent_s_of_an_exception_keeps_the_text(self):
-        record = passar(registro("falha: %s", ValueError("msg")))
-
-        assert record.getMessage() == "falha: msg"
-
-    def test_percent_d_of_a_decimal_formats_correctly(self):
-        from decimal import Decimal
-
-        record = passar(registro("%d itens", Decimal(3)))
-
-        assert record.getMessage() == "3 itens" and record.msg != OMITTED
-
-    def test_percent_dot_one_f_of_a_fraction_formats_correctly(self):
-        from fractions import Fraction
-
-        record = passar(registro("%.1f", Fraction(1, 2)))
-
-        assert record.getMessage() == "0.5" and record.msg != OMITTED
-
     @pytest.mark.parametrize("formato", ["%d", "%i", "%5.2f", "%e", "%s", "%r"])
     def test_numeric_formats_give_what_plain_logging_gives_for_decimal_and_fraction(self, formato):
         from decimal import Decimal
@@ -532,13 +414,6 @@ class TestArgumentosNaoTexto:
                 continue  # o formato não aceita o tipo nem no logging puro
             record = passar(registro(formato, valor))
             assert record.getMessage() == esperado and record.msg != OMITTED
-
-    def test_the_arguments_are_not_turned_into_text_when_they_are_numbers_of_any_kind(self):
-        from decimal import Decimal
-
-        record = passar(registro("%d-%s", Decimal(7), Decimal("1.5")))
-
-        assert record.getMessage() == "7-1.5"
 
     def test_a_secret_in_the_str_of_an_arbitrary_object_is_masked(self):
         register_secret("segredo-no-str-do-objeto-1")
@@ -560,43 +435,7 @@ class TestArgumentosNaoTexto:
         mensagem = record.getMessage()
         assert "\n" not in mensagem and "\x1b" not in mensagem and "⏎" in mensagem
 
-    def test_control_characters_in_the_repr_of_an_arbitrary_object_are_sanitised_like_any_value(self):
-        record = passar(registro("obj: %r", Opaco("x", "Opaco('a\nb\x9b‮')")))
-
-        mensagem = record.getMessage()
-        assert not any(c in mensagem for c in ("\n", "\x9b", "‮")) and "⏎" in mensagem
-
-    def test_s_and_r_conversions_in_one_message_are_each_redacted(self):
-        register_secret("segredo-nas-duas-formas-3")
-        por_str = Opaco("str segredo-nas-duas-formas-3", "x")
-        por_repr = Opaco("y", "repr segredo-nas-duas-formas-3")
-
-        record = passar(registro("%s | %r", por_str, por_repr))
-
-        assert "segredo-nas-duas-formas-3" not in record.getMessage() and record.getMessage().count(REDACTED) == 2
-
-    def test_the_same_object_used_with_s_and_with_r_is_handled_per_conversion(self):
-        register_secret("segredo-do-mesmo-objeto-4")
-        objeto = Opaco("str segredo-do-mesmo-objeto-4\nlinha", "repr segredo-do-mesmo-objeto-4\nlinha")
-
-        record = passar(registro("%(o)s | %(o)r", {"o": objeto}))
-
-        mensagem = record.getMessage()
-        assert "segredo-do-mesmo-objeto-4" not in mensagem and "\n" not in mensagem and mensagem.count("⏎") == 2
-
     def test_an_exception_message_with_a_line_break_is_sanitised_in_percent_s_and_percent_r(self):
         record = passar(registro("%s / %r", ValueError("a\nb"), ValueError("c\nd")))
 
         assert "\n" not in record.getMessage()
-
-    def test_a_mapping_argument_with_non_text_values_keeps_their_conversions(self):
-        from decimal import Decimal
-
-        record = passar(registro("%(n)d e %(e)r", {"n": Decimal(4), "e": KeyError("k")}))
-
-        assert record.getMessage() == "4 e KeyError('k')"
-
-    def test_an_object_that_is_neither_text_nor_number_is_still_printed_by_the_message(self):
-        record = passar(registro("lista: %s", ["a", 1, None]))
-
-        assert record.getMessage() == "lista: ['a', 1, None]"

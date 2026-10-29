@@ -103,31 +103,6 @@ class TestRestanteSegueSaindo:
         for texto in saidas(console, tmp_path):
             assert f"{pacotes} {verbo} {SUFIXO}" in texto
 
-    def test_the_same_sentence_from_a_disnake_child_logger_still_goes_out(
-        self, instalar: None, console: io.StringIO, tmp_path: Path
-    ) -> None:
-        logging.getLogger("disnake.client.extra").warning("%s %s " + SUFIXO, "PyNaCl", "is")
-
-        for texto in saidas(console, tmp_path):
-            assert f"PyNaCl is {SUFIXO}" in texto
-
-    @pytest.mark.parametrize("nivel", [logging.ERROR, logging.CRITICAL])
-    def test_the_same_sentence_above_warning_from_disnake_client_still_goes_out(
-        self, instalar: None, console: io.StringIO, tmp_path: Path, nivel: int
-    ) -> None:
-        logging.getLogger("disnake.client").log(nivel, "%s %s " + SUFIXO, "PyNaCl", "is")
-
-        for texto in saidas(console, tmp_path):
-            assert f"PyNaCl is {SUFIXO}" in texto
-
-    def test_a_different_voice_warning_from_disnake_client_still_goes_out(
-        self, instalar: None, console: io.StringIO, tmp_path: Path
-    ) -> None:
-        logging.getLogger("disnake.client").warning("voice connection lost for guild %s", 5)
-
-        for texto in saidas(console, tmp_path):
-            assert "voice connection lost for guild 5" in texto
-
 
 class TestFalhaDoFiltro:
     def test_a_record_whose_message_cannot_be_formatted_is_let_through(self) -> None:

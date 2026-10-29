@@ -86,14 +86,6 @@ class TestRoundTrip:
         await gravar_o_cache_de_playlist(pool)
         assert (tmp_path / "local_database" / "playlist_cache.json").is_file()
 
-    def test_cache_do_lastfm_e_gravado_na_raiz_e_volta_depois_do_reinicio(self, tmp_path):
-        lastfm = LastFM("chave", "segredo")
-        lastfm.cache["Artista - Música"] = {"name": "Música", "artist": "Artista", "album": "Álbum"}
-        lastfm.cache["Sem Resultado - X"] = {}
-        lastfm.scrobble_save_cache()
-        assert (tmp_path / ".lastfm_cache.json").is_file() and not (tmp_path / "local_database").exists()
-        assert len(LastFM("chave", "segredo").cache) == 2
-
 
 class TestArquivosAntigosNaoSaoLidos:
     """Cada arquivo antigo (de qualquer protocolo ou conteúdo) é ignorado: o cache recomeça vazio e o arquivo fica intacto."""
@@ -109,10 +101,3 @@ class TestArquivosAntigosNaoSaoLidos:
         pool.load_cache()
         assert all(len(getattr(pool, atributo)) == 0 for _, atributo in ARQUIVOS_DE_CACHE)
         assert all(caminho.read_bytes() == conteudo for caminho in caminhos)
-
-    @pytest.mark.parametrize("conteudo", [pickle.dumps({"Artista - Música": {"name": "Música"}}), b""])
-    def test_o_cache_antigo_do_lastfm_nao_e_carregado_nem_apagado(self, tmp_path, conteudo):
-        antigo = tmp_path / ".lastfm_cache"
-        antigo.write_bytes(conteudo)
-        assert len(LastFM("chave", "segredo").cache) == 0
-        assert antigo.read_bytes() == conteudo

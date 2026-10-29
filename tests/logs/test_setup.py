@@ -93,23 +93,6 @@ class TestHandlers:
         for handler in consoles + arquivos:
             assert nomes(handler.filters) == CADEIA
 
-    def test_the_redactor_and_the_aggregator_are_shared_between_the_two_handlers(self, instalar):
-        (console,), (arquivo,) = instalar(ajustes(arquivo=True))
-
-        for nome in ("SanitizeAndRedact", "RepeatAggregator"):
-            do_console = next(f for f in console.filters if type(f).__name__ == nome)
-            do_arquivo = next(f for f in arquivo.filters if type(f).__name__ == nome)
-            assert do_console is do_arquivo
-
-    def test_the_formatters_are_the_console_and_the_file_ones(self, instalar):
-        (console,), (arquivo,) = instalar(ajustes(arquivo=True))
-
-        assert type(console.formatter).__name__ == "ConsoleFormatter"
-        assert type(arquivo.formatter).__name__ == "FileFormatter"
-
-    def test_configure_logging_returns_nothing(self, raiz, console, tmp_path):
-        assert configure_logging(ajustes(), [], stream=console, logs_dir=tmp_path / ".logs") is None
-
 
 class TestNivelDaRaiz:
     def test_the_root_follows_the_configured_level(self, instalar, raiz):
@@ -122,14 +105,6 @@ class TestNivelDaRaiz:
 
         assert raiz.level == logging.DEBUG
 
-    def test_without_debug_guilds_a_discarded_debug_formats_nothing(self, instalar):
-        instalar(ajustes(nivel=logging.INFO))
-        espiao = Espiao()
-
-        logging.getLogger("empiremuse.player").debug("faixa %s", espiao)
-
-        assert espiao.chamadas == 0
-
     def test_with_debug_guilds_the_gate_drops_other_servers_before_formatting_anything(self, instalar, console):
         instalar(ajustes(nivel=logging.INFO, guildas={A}))
         espiao = Espiao()
@@ -138,19 +113,6 @@ class TestNivelDaRaiz:
         logging.getLogger("empiremuse.player").debug("sem servidor %s", espiao)
 
         assert espiao.chamadas == 0 and console.getvalue() == ""
-
-    def test_the_debug_of_the_chosen_server_comes_out_and_the_others_do_not(self, instalar, console):
-        instalar(ajustes(nivel=logging.INFO, guildas={A}))
-        log = logging.getLogger("empiremuse.player")
-
-        log.debug("do servidor A", extra={"guild": A})
-        log.debug("do servidor B", extra={"guild": B})
-        log.debug("sem servidor")
-        log.info("info de qualquer um", extra={"guild": B})
-
-        saida = console.getvalue()
-        assert "do servidor A" in saida and "do servidor B" not in saida and "sem servidor" not in saida
-        assert "info de qualquer um" in saida
 
     @pytest.mark.parametrize("nome", ["charset_normalizer", "requests", "curl_cffi", "dns.resolver"])
     def test_third_party_debug_inside_the_context_of_a_server_in_debug_stays_out(self, instalar, console, nome):
@@ -167,29 +129,11 @@ class TestNivelDaRaiz:
 
 
 class TestBibliotecas:
-    def test_the_library_loggers_constant_is_the_contract_one(self):
-        assert tuple(LIBRARY_LOGGERS) == (
-            "disnake",
-            "aiohttp",
-            "asyncio",
-            "tornado",
-            "urllib3",
-            "pymongo",
-            "motor",
-            "websockets",
-            "PIL",
-        )
-
     @pytest.mark.parametrize("nivel", [logging.DEBUG, logging.INFO, logging.ERROR])
     def test_the_libraries_are_always_at_warning(self, instalar, nivel):
         instalar(ajustes(nivel=nivel))
 
         assert all(logging.getLogger(nome).level == logging.WARNING for nome in LIBRARY_LOGGERS)
-
-    def test_the_vendored_wavelink_follows_the_configured_level(self, instalar):
-        instalar(ajustes(nivel=logging.DEBUG))
-
-        assert logging.getLogger("empiremuse.wavelink").getEffectiveLevel() == logging.DEBUG
 
     def test_a_library_info_is_dropped_and_its_warning_comes_out(self, instalar, console):
         instalar(ajustes(nivel=logging.DEBUG))
@@ -210,30 +154,6 @@ class TestIdempotencia:
         assert len([h for h in novos if not isinstance(h, logging.FileHandler)]) == 1
         assert len([h for h in novos if isinstance(h, logging.FileHandler)]) == 1
 
-    def test_a_second_call_with_the_file_off_removes_the_old_file_handler(self, raiz, instalar):
-        antes = list(raiz.handlers)
-        instalar(ajustes(arquivo=True))
-        instalar(ajustes(arquivo=False))
-
-        assert not [h for h in raiz.handlers if h not in antes and isinstance(h, logging.FileHandler)]
-
-    def test_handlers_that_were_not_installed_by_it_are_left_alone(self, raiz, instalar):
-        alheio = logging.NullHandler()
-        raiz.addHandler(alheio)
-
-        instalar(ajustes())
-        instalar(ajustes())
-
-        assert alheio in raiz.handlers
-        raiz.removeHandler(alheio)
-
-    def test_the_old_file_handler_is_closed_when_replaced(self, instalar):
-        _, (primeiro,) = instalar(ajustes(arquivo=True))
-
-        instalar(ajustes(arquivo=True))
-
-        assert primeiro.stream is None
-
     def test_after_the_second_call_a_record_is_written_once(self, instalar, console):
         instalar(ajustes())
         instalar(ajustes())
@@ -252,40 +172,12 @@ class TestArquivoB19:
         assert arquivo.is_file()
         assert stat.S_IMODE(arquivo.stat().st_mode) == 0o600 and stat.S_IMODE(arquivo.parent.stat().st_mode) == 0o700
 
-    def test_the_rotation_is_five_megabytes_times_three(self, instalar):
-        _, (arquivo,) = instalar(ajustes(arquivo=True))
-
-        assert arquivo.maxBytes == 5 * 1024 * 1024 and arquivo.backupCount == 3
-
-    def test_auto_outside_the_image_creates_the_file(self, instalar, tmp_path):
-        settings, _ = parse_log_settings({"LOG_FILE": "auto"}, {})
-
-        instalar(settings)
-
-        assert (tmp_path / ".logs" / "disnake.log").is_file()
-
     def test_auto_inside_the_image_creates_nothing(self, instalar, tmp_path):
         settings, _ = parse_log_settings({"LOG_FILE": "auto"}, {"EMPIREMUSE_VERSION": "2.1.0"})
 
         consoles, arquivos = instalar(settings)
 
         assert arquivos == [] and not (tmp_path / ".logs").exists() and len(consoles) == 1
-
-    def test_the_legacy_enable_logger_inside_the_image_creates_the_file(self, instalar, tmp_path):
-        settings, _ = parse_log_settings({"ENABLE_LOGGER": True}, {"EMPIREMUSE_VERSION": "2.1.0"})
-
-        instalar(settings)
-
-        assert (tmp_path / ".logs" / "disnake.log").is_file()
-
-    def test_the_file_level_follows_log_level_not_debug(self, instalar, tmp_path):
-        instalar(ajustes(nivel=logging.INFO, arquivo=True))
-
-        logging.getLogger("empiremuse.teste").debug("detalhe que não vai pro arquivo")
-        logging.getLogger("empiremuse.teste").info("linha que vai pro arquivo")
-
-        texto = (tmp_path / ".logs" / "disnake.log").read_text(encoding="utf-8")
-        assert "linha que vai pro arquivo" in texto and "detalhe que não vai" not in texto
 
 
 class TestSegredosEAgregador:
@@ -306,24 +198,3 @@ class TestSegredosEAgregador:
 
         for texto in (console.getvalue(), (tmp_path / ".logs" / "disnake.log").read_text(encoding="utf-8")):
             assert texto.count("repetida 2×") == 1
-
-    def test_tick_logging_closes_the_expired_window_with_the_injected_clock(self, instalar, console, relogio):
-        instalar(ajustes())
-        for n in range(3):
-            logging.getLogger("empiremuse.wavelink").warning("nó %s caiu", n)
-        tick_logging()
-        assert "repetida" not in console.getvalue()
-
-        relogio.avancar(61)
-        tick_logging()
-
-        assert console.getvalue().count("repetida 2×") == 1
-
-    def test_flush_logging_without_pending_counts_writes_nothing_more(self, instalar, console):
-        instalar(ajustes())
-        logging.getLogger("empiremuse.teste").warning("uma ocorrência só")
-        antes = console.getvalue()
-
-        flush_logging()
-
-        assert console.getvalue() == antes

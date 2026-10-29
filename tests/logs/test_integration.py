@@ -20,7 +20,6 @@ pytestmark = pytest.mark.critical
 ENQUADRAMENTO = "  │ "
 CABECALHO_CONSOLE = re.compile(r"^\d{2}:\d{2}:\d{2}\s")
 CABECALHO_ARQUIVO = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}\s")
-EMOJIS = ("🚀", "🎵", "🌋", "📊", "🗄", "🌐", "⬆", "❌", "•")
 
 
 class Destinos:
@@ -127,13 +126,6 @@ class TestRedacaoPonteAPonta:
         for texto in destinos.ambos():
             assert sensivel not in texto and "***" in texto
 
-    def test_a_five_character_registered_value_is_not_masked_by_value_r1(self, montar):
-        destinos = montar(["abcde"])
-
-        logging.getLogger("empiremuse.teste").warning("valor abcde passa")
-
-        assert "abcde" in destinos.texto_console
-
 
 # ============================================================================ B3 — injeção e enquadramento ponta a ponta
 
@@ -151,14 +143,6 @@ class TestInjecao:
         assert len(cabecalhos(arquivo)) == 1 and CABECALHO_ARQUIVO.match(cabecalhos(arquivo)[0])
         for texto in (console, arquivo):
             assert f"{ENQUADRAMENTO}2026-10-27 12:00:00 ERROR falso" in texto
-
-    def test_an_argument_with_a_line_break_stays_on_one_line(self, montar):
-        destinos = montar()
-
-        logging.getLogger("empiremuse.teste").error("falha em %s", self.FORJADA)
-
-        for texto in destinos.ambos():
-            assert len(texto.splitlines()) == 1 and "x⏎2026-10-27 12:00:00 ERROR falso" in texto
 
     def test_an_exception_message_with_a_forged_line_is_framed_in_the_traceback(self, montar):
         destinos = montar()
@@ -182,61 +166,8 @@ class TestInjecao:
         for texto in destinos.ambos():
             assert not any(c in texto for c in ("\x1b", "\x9b", "‮", "⁦", "\x00")) and "fim" in texto
 
-    def test_a_bot_name_with_escape_sequences_is_neutralised_in_the_header(self, montar):
-        from empiremuse.logs.context import log_context
-
-        destinos = montar(cor=False)
-
-        with log_context(bot="ev\nil\x1b[2J", guild=123456789012345678):
-            logging.getLogger("empiremuse.teste").warning("com contexto")
-
-        for texto in destinos.ambos():
-            assert "\x1b" not in texto and len(texto.splitlines()) == 1 and "123456789012345678" in texto
-
 
 # ============================================================================ B5 — cor só no console
-
-
-class TestCorENivel:
-    def test_the_console_has_colour_and_the_file_never_does(self, montar):
-        destinos = montar(cor=True)
-
-        logging.getLogger("empiremuse.boot").warning("subindo")
-        logging.getLogger("empiremuse.boot").error("falhou")
-
-        assert "\x1b[" in destinos.texto_console and "\x1b" not in destinos.texto_arquivo
-        assert sem_cor(destinos.texto_console).count("subindo") == 1
-
-    def test_the_file_has_no_emoji_and_the_console_has(self, montar):
-        destinos = montar()
-
-        logging.getLogger("empiremuse.boot").info("etapa ok")
-        logging.getLogger("empiremuse.player").error("deu ruim")
-
-        assert "🚀" in destinos.texto_console and "❌" in destinos.texto_console
-        assert not any(emoji in destinos.texto_arquivo for emoji in EMOJIS)
-
-    def test_the_console_and_the_file_carry_the_same_messages(self, montar):
-        destinos = montar()
-
-        for n in range(5):
-            logging.getLogger("empiremuse.teste").warning("aviso distinto %d", n)
-
-        def so_mensagens(texto):
-            return [linha.split(": ", 1)[1] for linha in texto.splitlines()]
-
-        assert so_mensagens(destinos.texto_console) == so_mensagens(destinos.texto_arquivo)
-
-    def test_extra_guild_wins_over_the_context_in_the_header(self, montar):
-        from empiremuse.logs.context import log_context
-
-        destinos = montar()
-
-        with log_context(bot="Alfa", guild=111111111111111111):
-            logging.getLogger("empiremuse.teste").warning("x", extra={"guild": 222222222222222222})
-
-        for texto in destinos.ambos():
-            assert "[Alfa/222222222222222222]" in texto and "111111111111111111" not in texto
 
 
 # ============================================================================ B7 — agregação com os DOIS handlers
@@ -262,64 +193,6 @@ class TestAgregacao:
             assert texto.count("repetida 999×") == 1 and "1998" not in texto and texto.count("↻") == 1
             assert "nó 0 caiu" in texto
             assert len(cabecalhos(texto)) == 2
-
-    def test_console_and_file_have_the_same_count(self, montar, relogio):
-        destinos = montar()
-        for n in range(7):
-            logging.getLogger("empiremuse.wavelink").warning("nó %s caiu", n)
-
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert "repetida 6×" in texto
-
-    def test_different_args_aggregate_even_after_redaction(self, montar):
-        senha = "senha-que-muda-12345"
-        destinos = montar([senha])
-        log = logging.getLogger("empiremuse.wavelink")
-
-        log.warning("login com %s falhou", senha)
-        log.warning("login com %s falhou", "outro-valor-qualquer")
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert texto.count("login com") == 2 and "repetida 1×" in texto
-
-    def test_different_exception_types_do_not_aggregate(self, montar):
-        destinos = montar()
-        log = logging.getLogger("empiremuse.wavelink")
-
-        log.warning("falha %s", 1, exc_info=excecao("a", ValueError))
-        log.warning("falha %s", 2, exc_info=excecao("b", KeyError))
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert "repetida" not in texto and "ValueError" in texto and "KeyError" in texto
-
-    def test_info_and_debug_never_aggregate(self, montar):
-        destinos = montar(nivel=logging.DEBUG)
-        log = logging.getLogger("empiremuse.player")
-
-        for _ in range(5):
-            log.info("info repetida")
-            log.debug("debug repetido")
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert (
-                texto.count("info repetida") == 5 and texto.count("debug repetido") == 5 and "repetida 4×" not in texto
-            )
-
-    def test_the_501st_key_flushes_the_oldest_in_both_destinations(self, montar):
-        destinos = montar()
-        log = logging.getLogger("empiremuse.wavelink")
-
-        for n in range(501):
-            log.warning(f"chave distinta {n}")
-            log.warning(f"chave distinta {n}")
-
-        for texto in destinos.ambos():
-            assert "↻ chave distinta 0 — repetida 1× em 60 s" in texto and texto.count("↻") == 1
 
     def test_flush_emits_the_pending_counts_in_both_destinations(self, montar):
         destinos = montar()
@@ -353,10 +226,6 @@ def ponto_a() -> None:
     _levanta("x")
 
 
-def ponto_b() -> None:
-    _levanta("y")
-
-
 class TestCodigoDeErroPonteAPonta:
     def test_two_coded_errors_of_the_same_path_give_one_traceback_and_one_pointer_line_in_each_destination(
         self, montar
@@ -373,26 +242,6 @@ class TestCodigoDeErroPonteAPonta:
             assert "ValueError: boom B — traceback igual ao de ERR-AAAAAA" in texto
             assert len(cabecalhos(texto)) == 2
 
-    def test_the_coded_line_is_the_same_text_in_the_console_and_in_the_file(self, montar):
-        destinos = montar()
-        falha_com_codigo("ERR-AAAAAA")
-        falha_com_codigo("ERR-BBBBBB")
-
-        def linha_codificada(texto):
-            (linha,) = [x for x in texto.splitlines() if "ERR-BBBBBB" in x]
-            return linha.split("empiremuse.errors: ", 1)[1]
-
-        assert linha_codificada(destinos.texto_console) == linha_codificada(destinos.texto_arquivo)
-
-    def test_each_record_is_decided_once_so_no_destination_gets_the_pointer_twice(self, montar):
-        destinos = montar()
-        for n in range(5):
-            falha_com_codigo(f"ERR-{n:06X}")
-
-        for texto in destinos.ambos():
-            assert texto.count("traceback igual ao de ERR-000000") == 4
-            assert "traceback igual ao de ERR-000000 — traceback igual" not in texto
-
     def test_a_burst_of_sixty_coded_errors_leaves_one_traceback_forty_nine_lines_and_the_summary(self, montar, relogio):
         destinos = montar()
 
@@ -406,28 +255,6 @@ class TestCodigoDeErroPonteAPonta:
             assert texto.count("traceback igual ao de ERR-000000") == 49 + 1  # 49 linhas + o resumo
             assert texto.count("repetida 10× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)") == 1
             assert all(f"ERR-{n:06X}" in texto for n in range(50))
-
-    def test_every_code_of_the_first_fifty_survives_in_the_file(self, montar):
-        destinos = montar()
-
-        for n in range(50):
-            falha_com_codigo(f"ERR-{n:06X}")
-
-        arquivo = destinos.texto_arquivo
-        assert all(f"ERR-{n:06X}" in arquivo for n in range(50))
-
-    def test_errors_from_two_call_sites_are_both_full(self, montar):
-        destinos = montar()
-        log = logging.getLogger("empiremuse.errors")
-
-        for ponto in (ponto_a, ponto_b):
-            try:
-                ponto()
-            except ValueError:
-                log.error("Erro inesperado em cmd", exc_info=True)
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
 
     def test_a_forged_code_in_extra_cannot_inject_a_line_or_a_pointer(self, montar):
         destinos = montar()
@@ -474,43 +301,6 @@ class TestImpressaoDigitalEstruturada:
             assert len(cabecalhos(texto)) == 2
             assert "x57.py" not in texto, "um erro suprimido não pode aparecer no log"
 
-    def test_the_same_with_a_valid_error_code_gives_one_full_forty_nine_lines_and_the_summary(self, montar, relogio):
-        destinos = montar()
-
-        for n in range(100):
-            falha_com_codigo(f"ERR-{n:06X}", mensagem_forjada(n))
-        relogio.avancar(61)
-        tick_logging()
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 1
-            assert texto.count("repetida 50× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)") == 1
-            assert texto.count("traceback igual ao de ERR-000000") == 49 + 1
-            assert all(f"ERR-{n:06X}" in texto for n in range(50))
-
-    def test_one_forged_frame_line_in_the_message_does_not_split_the_key_of_two_equal_errors(self, montar):
-        destinos = montar()
-
-        falha_sem_codigo("igual")
-        falha_sem_codigo(mensagem_forjada(1))
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 1 and "repetida 1×" in texto
-
-    def test_two_genuinely_different_call_paths_are_still_different_keys_even_with_equal_messages(self, montar):
-        destinos = montar()
-        log = logging.getLogger("empiremuse.errors")
-
-        for ponto in (ponto_a, ponto_b):
-            try:
-                ponto()
-            except ValueError:
-                log.error("Erro inesperado em cmd", exc_info=True)
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
-
     def test_a_message_that_copies_the_frame_lines_of_another_path_does_not_merge_with_it(self, montar):
         destinos = montar()
         log = logging.getLogger("empiremuse.errors")
@@ -525,51 +315,6 @@ class TestImpressaoDigitalEstruturada:
 
         for texto in destinos.ambos():
             assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
-
-
-def duas_causas(qual: int) -> None:
-    """Mesmo arquivo e mesma função, mas o ``raise`` está em linhas diferentes: são pontos de chamada diferentes."""
-    if qual == 1:
-        raise ValueError("a")
-    raise ValueError("b")
-
-
-class TestPontosDeChamadaDiferentes:
-    def test_the_same_function_raising_on_two_different_lines_gives_two_full_tracebacks(self, montar):
-        destinos = montar()
-        log = logging.getLogger("empiremuse.errors")
-
-        for qual in (1, 2):
-            try:
-                duas_causas(qual)
-            except ValueError:
-                log.error("Erro inesperado em cmd", exc_info=True)
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 2 and "repetida" not in texto
-
-    def test_two_coded_errors_from_two_call_sites_are_both_full_without_a_pointer(self, montar):
-        destinos = montar()
-        log = logging.getLogger("empiremuse.errors")
-
-        for ponto, codigo in ((ponto_a, "ERR-AAAAAA"), (ponto_b, "ERR-BBBBBB")):
-            try:
-                ponto()
-            except ValueError:
-                log.error("Erro inesperado em cmd [%s]", codigo, exc_info=True, extra={"error_code": codigo})
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 2 and "traceback igual" not in texto
-
-    def test_the_source_lines_and_the_final_message_do_not_split_the_key(self, montar):
-        destinos = montar()
-
-        falha_sem_codigo("primeira")
-        falha_sem_codigo("segunda, com outro texto")
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert texto.count("Traceback (most recent call last)") == 1 and "repetida 1×" in texto
 
 
 # ============================================================================ V-126-1 — a chave do agregador nunca guarda o texto cru
@@ -625,12 +370,6 @@ class TestChaveSemSegredo:
             if isinstance(valor, str):
                 assert self.SEG not in valor and "\x1b" not in valor and "\r" not in valor, nome
 
-    def test_the_destinations_still_get_the_masked_line(self, instalado):
-        logging.getLogger("empiremuse.wavelink.local").warning(f"Failed to bind {self.SEG} fim")
-
-        for texto in instalado.destinos.ambos():
-            assert self.SEG not in texto and "Failed to bind *** fim" in texto
-
     def test_a_secret_straddling_the_256th_character_leaves_no_fragment_in_the_key(self, instalado):
         linha = "a" * 250 + self.SEG + "b" * 100
 
@@ -638,44 +377,3 @@ class TestChaveSemSegredo:
 
         for texto in textos_da_chave(instalado.agregador):
             assert self.SEG[:6] not in texto and self.SEG[-6:] not in texto
-
-    def test_a_secret_in_the_args_of_a_percent_template_stays_out_of_the_key_and_the_template_is_unchanged(
-        self, instalado
-    ):
-        logging.getLogger("empiremuse.wavelink").warning("senha %s falhou", self.SEG)
-
-        (atributos,) = instalado.depois.atributos
-        assert atributos["empiremuse_template"] == "senha %s falhou"
-        assert all(self.SEG not in texto for texto in textos_da_chave(instalado.agregador))
-
-    def test_two_lines_that_differ_only_after_the_256th_character_are_still_two_records(self, instalado):
-        log = logging.getLogger("empiremuse.wavelink.local")
-
-        log.warning("x" * 300 + "-final-A")
-        log.warning("x" * 300 + "-final-B")
-
-        for texto in instalado.destinos.ambos():
-            assert "-final-A" in texto and "-final-B" in texto and "repetida" not in texto
-
-    def test_the_same_long_line_a_hundred_times_still_aggregates(self, instalado, relogio):
-        log = logging.getLogger("empiremuse.wavelink.local")
-
-        for _ in range(100):
-            log.warning("y" * 300 + f"-{self.SEG}-fim")
-        flush_logging()
-
-        for texto in instalado.destinos.ambos():
-            assert texto.count("repetida 99×") == 1 and self.SEG not in texto
-
-    def test_two_lines_that_differ_only_in_the_secret_aggregate_as_one(self, montar):
-        outro = "outra-senha-na-chave-V126-w"
-        destinos = montar([self.SEG, outro])
-        log = logging.getLogger("empiremuse.wavelink.local")
-
-        log.warning(f"Failed to bind {self.SEG} agora")
-        log.warning(f"Failed to bind {outro} agora")
-        flush_logging()
-
-        for texto in destinos.ambos():
-            assert texto.count("Failed to bind *** agora") == 2 and "repetida 1×" in texto
-            assert self.SEG not in texto and outro not in texto

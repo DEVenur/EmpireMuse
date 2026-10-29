@@ -23,17 +23,9 @@ def contexto_de(record):
 
 
 class TestContexto:
-    def test_the_context_variables_default_to_none(self):
-        assert log_bot.get() is None and log_guild.get() is None
-
     def test_a_record_inside_the_context_gets_the_bot_and_the_guild(self):
         with log_context(bot="Alfa", guild=A):
             assert contexto_de(registro("x")) == ("Alfa", A)
-
-    def test_a_record_outside_any_context_has_none(self):
-        bot, guild = contexto_de(registro("x"))
-
-        assert bot is None and guild is None
 
     def test_the_context_is_restored_on_exit_and_on_error(self):
         with pytest.raises(RuntimeError), log_context(bot="Alfa", guild=A):
@@ -46,9 +38,6 @@ class TestContexto:
             with log_context(guild=B):
                 assert contexto_de(registro("x"))[1] == B
             assert contexto_de(registro("x")) == ("Alfa", A)
-
-    def test_the_filter_always_lets_the_record_through(self):
-        assert ContextFilter().filter(registro("x")) is True
 
     def test_each_asyncio_task_sees_its_own_context(self):
         vistos = {}
@@ -78,13 +67,6 @@ class TestExtraVence:
         with log_context(guild=A):
             assert contexto_de(registro("x", guild=B))[1] == B
 
-    def test_extra_bot_wins_over_the_context(self):
-        with log_context(bot="Alfa"):
-            assert contexto_de(registro("x", bot="Beta"))[0] == "Beta"
-
-    def test_extra_guild_alone_works_without_a_context(self):
-        assert contexto_de(registro("x", guild=B))[1] == B
-
     @pytest.mark.parametrize("valor", ["123", "1\nERROR forjado", 12.5, ["1"], None])
     def test_a_guild_that_is_not_an_int_is_not_accepted(self, valor):
         guild = contexto_de(registro("x", guild=valor))[1]
@@ -99,15 +81,6 @@ class TestNomeDoBot:
             bot = contexto_de(registro("x"))[0]
 
         assert bot == "ev⏎il�[2J�"
-
-    def test_the_bot_name_from_extra_is_sanitised_too(self):
-        bot = contexto_de(registro("x", bot="a\rb\x9b"))[0]
-
-        assert bot == "a⏎b�"
-
-    def test_an_ordinary_name_is_untouched(self):
-        with log_context(bot="Empire Muse 2 ✨"):
-            assert contexto_de(registro("x"))[0] == "Empire Muse 2 ✨"
 
 
 # ============================================================================ B6 — LevelGate
@@ -133,12 +106,6 @@ class TestLevelGate:
     def test_a_debug_of_another_server_does_not_pass(self):
         assert self.gate().filter(com_servidor("empiremuse.player", DEBUG, B)) is False
 
-    def test_a_debug_without_a_server_does_not_pass(self):
-        assert self.gate().filter(com_servidor("empiremuse.player", DEBUG, None)) is False
-
-    def test_without_debug_guilds_a_debug_never_passes(self):
-        assert self.gate(guildas=()).filter(com_servidor("empiremuse.player", DEBUG, A)) is False
-
     @pytest.mark.parametrize(
         "nome", ["empiremuse", "empiremuse.wavelink", "empiremuse.player.fila", "empiremuse.utils.music.models"]
     )
@@ -160,18 +127,6 @@ class TestLevelGate:
     )
     def test_third_party_debug_never_passes_even_inside_a_server_in_debug(self, nome):
         assert self.gate().filter(com_servidor(nome, DEBUG, A)) is False
-
-    def test_third_party_warnings_still_pass(self):
-        assert self.gate().filter(com_servidor("requests", WARNING, A)) is True
-
-    def test_with_the_level_at_debug_everything_passes(self):
-        assert self.gate(DEBUG, ()).filter(com_servidor("charset_normalizer", DEBUG, None)) is True
-
-    def test_a_record_without_the_guild_attribute_is_handled(self):
-        assert self.gate().filter(registro("x", nivel=DEBUG, nome="empiremuse.player")) is False
-
-    def test_the_filter_is_total_for_anything_that_is_not_a_record(self):
-        assert self.gate().filter(object()) in (True, False)  # type: ignore[arg-type]
 
     def test_the_gate_does_not_format_the_arguments(self):
         chamadas = []

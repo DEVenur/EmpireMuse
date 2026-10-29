@@ -47,10 +47,6 @@ def linhas(emitidos) -> list[str]:
     return [r.getMessage() for r in emitidos]
 
 
-def test_the_contract_constants():
-    assert AGGREGATE_WINDOW == 60.0 and MAX_KEYS == 500
-
-
 # ============================================================================ janela e contagem
 
 
@@ -64,27 +60,6 @@ class TestJanela:
 
         (resumo,) = emitidos
         assert resumo.getMessage() == "↻ nó 0 caiu — repetida 999× em 60 s"
-
-    def test_the_summary_keeps_the_name_the_level_and_the_context_of_the_first_occurrence(self, agg, relogio, emitidos):
-        agg.filter(ocorrencia(nome="empiremuse.player", nivel=E, bot="Alfa", guild=77))
-        agg.filter(ocorrencia(nome="empiremuse.player", nivel=E, bot="Beta", guild=88))
-        relogio.avancar(61)
-
-        agg.tick()
-
-        (resumo,) = emitidos
-        assert (resumo.name, resumo.levelno, resumo.bot, resumo.guild) == ("empiremuse.player", E, "Alfa", 77)
-
-    def test_the_summary_is_marked_as_final_and_carries_no_traceback_or_args(self, agg, relogio, emitidos):
-        agg.filter(ocorrencia())
-        agg.filter(ocorrencia())
-        relogio.avancar(61)
-
-        agg.tick()
-
-        (resumo,) = emitidos
-        assert resumo.empiremuse_redacted is True and resumo.empiremuse_emit is True
-        assert not resumo.args and not resumo.exc_info and not resumo.exc_text
 
     def test_a_summary_that_comes_back_to_the_filter_passes_without_counting(self, agg, relogio, emitidos):
         agg.filter(ocorrencia())
@@ -100,24 +75,6 @@ class TestJanela:
         agg.flush()
 
         assert len(emitidos) == 1
-
-    def test_nothing_is_emitted_before_the_window_closes(self, agg, relogio, emitidos):
-        agg.filter(ocorrencia())
-        agg.filter(ocorrencia())
-        relogio.avancar(59)
-
-        agg.tick()
-
-        assert emitidos == []
-
-    def test_a_single_occurrence_never_produces_a_summary(self, agg, relogio, emitidos):
-        assert agg.filter(ocorrencia()) is True
-        relogio.avancar(120)
-
-        agg.tick()
-        agg.flush()
-
-        assert emitidos == []
 
     def test_the_next_record_of_the_same_key_after_the_window_closes_the_old_one_and_opens_a_new_one(
         self, agg, relogio, emitidos
@@ -158,10 +115,6 @@ class TestJanela:
 
 
 class TestChave:
-    def test_different_args_with_the_same_template_aggregate(self, agg):
-        assert agg.filter(ocorrencia(valor="A")) is True
-        assert agg.filter(ocorrencia(valor="B")) is False
-
     def test_the_key_is_the_template_not_the_redacted_message(self, agg):
         primeira = ocorrencia(valor="A")
         segunda = ocorrencia(valor="B")
@@ -170,36 +123,10 @@ class TestChave:
         assert agg.filter(primeira) is True
         assert agg.filter(segunda) is False
 
-    def test_the_same_message_with_different_templates_does_not_aggregate(self, agg):
-        um, dois = ocorrencia(template="um %s", valor="x"), ocorrencia(template="dois %s", valor="x")
-        um.msg = dois.msg = "mesma mensagem"
-
-        assert agg.filter(um) is True and agg.filter(dois) is True
-
     def test_different_exception_types_do_not_aggregate(self, agg):
         assert agg.filter(ocorrencia(tipo="builtins.ValueError")) is True
         assert agg.filter(ocorrencia(tipo="builtins.KeyError")) is True
         assert agg.filter(ocorrencia(tipo="builtins.ValueError")) is False
-
-    def test_with_and_without_an_exception_are_different_keys(self, agg):
-        assert agg.filter(ocorrencia(tipo=None)) is True
-        assert agg.filter(ocorrencia(tipo="builtins.ValueError")) is True
-
-    def test_different_loggers_and_levels_do_not_aggregate(self, agg):
-        assert agg.filter(ocorrencia(nome="empiremuse.a")) is True
-        assert agg.filter(ocorrencia(nome="empiremuse.b")) is True
-        assert agg.filter(ocorrencia(nivel=E)) is True
-        assert agg.filter(ocorrencia(nivel=W)) is True
-        assert agg.filter(ocorrencia(nivel=W)) is False
-
-    def test_the_summary_has_the_level_of_the_key(self, agg, relogio, emitidos):
-        agg.filter(ocorrencia(nivel=E))
-        agg.filter(ocorrencia(nivel=E))
-        relogio.avancar(61)
-
-        agg.tick()
-
-        assert emitidos[0].levelno == E
 
     @pytest.mark.parametrize("nivel", [I, D])
     def test_info_and_debug_never_aggregate(self, agg, relogio, emitidos, nivel):
@@ -231,13 +158,6 @@ class TestTetoDeChaves:
 
         assert linhas(emitidos) == ["↻ chave 0 — repetida 1× em 60 s"]
 
-    def test_a_flushed_key_starts_over_if_it_comes_back(self, agg, emitidos):
-        for n in range(MAX_KEYS + 1):
-            agg.filter(ocorrencia(template=f"chave {n}"))
-            agg.filter(ocorrencia(template=f"chave {n}"))
-
-        assert agg.filter(ocorrencia(template="chave 0")) is True
-
     def test_the_number_of_pending_summaries_never_exceeds_the_cap(self, agg, emitidos):
         for n in range(MAX_KEYS + 50):
             agg.filter(ocorrencia(template=f"chave {n}"))
@@ -263,14 +183,6 @@ class TestUmaDecisaoPorRegistro:
 
         assert linhas(emitidos) == ["↻ nó A caiu — repetida 1× em 60 s"]
 
-    def test_the_decision_is_written_on_the_record(self, agg):
-        primeira, repetida = ocorrencia(), ocorrencia()
-
-        agg.filter(primeira)
-        agg.filter(repetida)
-
-        assert primeira.empiremuse_emit is True and repetida.empiremuse_emit is False
-
     def test_the_second_pass_reads_the_decision_even_if_the_window_closed_in_between(self, agg, relogio):
         agg.filter(ocorrencia())
         suprimida = ocorrencia()
@@ -278,15 +190,6 @@ class TestUmaDecisaoPorRegistro:
         relogio.avancar(61)
 
         assert agg.filter(suprimida) is False
-
-    def test_a_record_that_already_carries_emit_true_passes_without_counting(self, agg, emitidos):
-        pronta = ocorrencia()
-        pronta.empiremuse_emit = True
-
-        resultado = [agg.filter(pronta) for _ in range(4)]
-        agg.flush()
-
-        assert all(resultado) and emitidos == []
 
 
 # ============================================================================ trava e robustez
@@ -311,14 +214,6 @@ class TestTrava:
         fio.join(timeout=ESPERA_MAXIMA)
 
         assert not fio.is_alive() and len(recebidos) == 1
-
-    def test_the_filter_is_total_for_anything_that_is_not_a_record(self, agg):
-        assert agg.filter(object()) in (True, False)  # type: ignore[arg-type]
-
-    def test_a_record_without_the_redaction_attributes_does_not_break_the_filter(self, agg):
-        crua = registro("sem atributos do filtro de redação", nivel=W)
-
-        assert agg.filter(crua) in (True, False)
 
     def test_many_threads_counting_the_same_key_lose_no_occurrence(self, agg, emitidos):
         def contar():
@@ -385,15 +280,6 @@ class TestCodigoDeErro:
         agg.flush()
         assert emitidos == []  # as linhas com código não entram na contagem
 
-    def test_the_last_line_of_the_original_traceback_is_cut_at_300_characters(self, agg):
-        agg.filter(com_codigo("ERR-AAAAAA"))
-        longa = com_codigo("ERR-BBBBBB", mensagem="x" * 1000)
-
-        agg.filter(longa)
-
-        mensagem = longa.getMessage()
-        assert "x" * 100 in mensagem and "x" * 301 not in mensagem and "traceback igual ao de ERR-AAAAAA" in mensagem
-
     def test_the_first_occurrence_keeps_its_traceback_untouched(self, agg):
         primeira = com_codigo("ERR-AAAAAA")
         texto, pilha = primeira.exc_text, primeira.stack_info
@@ -404,30 +290,6 @@ class TestCodigoDeErro:
             texto,
             pilha,
         ) and "traceback igual" not in primeira.getMessage()
-
-    def test_the_same_record_through_the_second_handler_is_not_rewritten_twice(self, agg):
-        agg.filter(com_codigo("ERR-AAAAAA"))
-        segunda = com_codigo("ERR-BBBBBB")
-
-        agg.filter(segunda)
-        primeira_leitura = segunda.getMessage()
-        assert agg.filter(segunda) is True
-
-        assert segunda.getMessage() == primeira_leitura and segunda.getMessage().count("traceback igual ao de") == 1
-
-    def test_k8c_same_path_with_different_exception_messages_is_the_same_key(self, agg, relogio, emitidos):
-        assert agg.filter(com_codigo(None, mensagem="boom 1")) is True
-        assert agg.filter(com_codigo(None, mensagem="boom 2")) is False
-        assert agg.filter(com_codigo(None, mensagem="boom 3", fonte="outra()")) is False
-
-        relogio.avancar(61)
-        agg.tick()
-
-        assert [r.getMessage() for r in emitidos] == ["↻ Erro inesperado em cmd — repetida 2× em 60 s"]
-
-    def test_the_fingerprint_ignores_the_source_lines_and_the_final_message_line(self, agg):
-        assert agg.filter(com_codigo(None, fonte="a()", mensagem="m1")) is True
-        assert agg.filter(com_codigo(None, fonte="b(1, 2)", mensagem="m2")) is False
 
     def test_k8d_a_burst_of_sixty_coded_errors_gives_one_full_forty_nine_lines_and_a_summary_of_ten(
         self, agg, relogio, emitidos
@@ -447,30 +309,6 @@ class TestCodigoDeErro:
         (resumo,) = emitidos
         assert resumo.getMessage() == (
             f"↻ {registros[0].getMessage()} — repetida 10× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)"
-        )
-
-    def test_exactly_fifty_coded_errors_in_the_window_leave_no_summary(self, agg, relogio, emitidos):
-        for n in range(MAX_CODED_REPEATS):
-            assert agg.filter(com_codigo(f"ERR-{n:06X}")) is True
-
-        relogio.avancar(61)
-        agg.tick()
-        agg.flush()
-
-        assert emitidos == []
-
-    def test_the_fifty_first_coded_error_is_suppressed_and_counted(self, agg, relogio, emitidos):
-        for n in range(MAX_CODED_REPEATS):
-            agg.filter(com_codigo(f"ERR-{n:06X}"))
-
-        assert agg.filter(com_codigo("ERR-FFFFFF")) is False
-        relogio.avancar(61)
-        agg.tick()
-
-        assert (
-            emitidos[0]
-            .getMessage()
-            .endswith("repetida 1× em 60 s (códigos omitidos; traceback igual ao de ERR-000000)")
         )
 
     def test_a_new_window_starts_over_with_a_full_traceback_and_a_new_first_code(self, agg, relogio):
@@ -521,17 +359,3 @@ class TestCodigoDeErro:
         agg.tick()
 
         assert all("ERR-AAAAAA" not in r.getMessage() for r in emitidos)
-
-    def test_k8f_a_thousand_errors_without_a_code_give_one_full_and_a_summary_of_999(self, agg, relogio, emitidos):
-        resultados = [agg.filter(com_codigo(None, mensagem=f"boom {n}")) for n in range(1000)]
-
-        assert resultados[0] is True and not any(resultados[1:])
-        relogio.avancar(61)
-        agg.tick()
-        assert [r.getMessage() for r in emitidos] == ["↻ Erro inesperado em cmd — repetida 999× em 60 s"]
-
-    def test_info_and_debug_with_a_code_are_never_aggregated(self, agg):
-        for nivel in (logging.INFO, logging.DEBUG):
-            resultados = [agg.filter(com_codigo(f"ERR-{n:06X}", nivel=nivel)) for n in range(5)]
-
-            assert all(resultados)

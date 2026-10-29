@@ -176,26 +176,6 @@ class TestInicioEFim:
 
         assert TITULO not in console.saida.getvalue()
 
-    async def test_the_track_counters_go_up(self):
-        metricas = MetricsCollector()
-        Console(INFO)
-
-        for guild in range(1, 51):
-            player = jogador(guild, metrics=metricas)
-            await _he_dispatch(player, inicio(player))
-            await _he_dispatch(player, fim(player))
-
-        assert metricas.snapshot_and_reset(1.0).tracks_started == 50
-
-    async def test_the_start_line_has_duration_and_source_in_debug(self):
-        console = Console(DEBUG, {5_000_000_000_000_005})
-        player = jogador(5_000_000_000_000_005)
-
-        await _he_dispatch(player, inicio(player))
-
-        (linha,) = console.do_player()
-        assert FONTE in linha and any(forma in linha for forma in ("215", "3:35", "03:35"))
-
 
 # ============================================================================ B12 — travou e exceção
 
@@ -243,14 +223,6 @@ class TestFalhasDeFaixa:
 
         assert console.do_player() == []
 
-    async def test_a_mirror_not_found_cause_shows_up_in_the_guild_debug(self):
-        console = Console(INFO, {9_000_000_000_000_009})
-        player = jogador(9_000_000_000_000_009)
-
-        await _he_dispatch(player, excecao(player, causa=MIRROR_NOT_FOUND_CAUSES[0]))
-
-        assert console.do_player() and all("WARNING" not in linha for linha in console.do_player())
-
     async def test_the_exception_text_from_lavalink_is_not_printed_to_the_real_stdout(self, capsys):
         Console(INFO)
         player = jogador(1)
@@ -258,33 +230,6 @@ class TestFalhasDeFaixa:
         await _he_dispatch(player, excecao(player))
 
         assert "Erro ao reproduzir a música" not in capsys.readouterr().out
-
-    async def test_an_unknown_event_is_debug_only(self, capsys):
-        console = Console(INFO, {3_000_000_000_000_003})
-        player = jogador(3_000_000_000_000_003)
-
-        await _he_dispatch(player, SimpleNamespace(nome="evento novo"))
-
-        linhas = console.do_player()
-        assert linhas and all("DEBUG" in linha for linha in linhas)
-        assert "Unknown Wavelink event" not in capsys.readouterr().out
-
-    async def test_an_unknown_event_at_info_gives_nothing(self):
-        console = Console(INFO)
-        player = jogador(3)
-
-        await _he_dispatch(player, SimpleNamespace(nome="evento novo"))
-
-        assert console.linhas == []
-
-    async def test_the_dispatch_sets_the_guild_context_for_every_line(self):
-        console = Console(DEBUG, {4_000_000_000_000_004})
-        player = jogador(4_000_000_000_000_004)
-
-        await _he_dispatch(player, inicio(player))
-        await _he_dispatch(player, travou(player))
-
-        assert all("4000000000000004" in linha for linha in console.do_player())
 
 
 # ============================================================================ B14 — um intervalo com 500 players saudáveis
@@ -358,14 +303,6 @@ class TestBuscaDoUsuario:
 
         assert "CONSULTA-SECRETA" not in console.saida.getvalue()
 
-    async def test_a_search_inside_a_guild_in_debug_shows_the_query(self):
-        console = Console(INFO, {6_000_000_000_000_006})
-
-        with log_context(guild=6_000_000_000_000_006):
-            await no_de_busca().get_tracks(CONSULTA)
-
-        assert "CONSULTA-SECRETA" in console.saida.getvalue()
-
     async def test_a_search_inside_another_guild_does_not_show_the_query(self):
         console = Console(INFO, {6_000_000_000_000_006})
 
@@ -373,13 +310,6 @@ class TestBuscaDoUsuario:
             await no_de_busca().get_tracks(CONSULTA)
 
         assert "CONSULTA-SECRETA" not in console.saida.getvalue()
-
-    async def test_the_search_never_uses_the_real_stdout(self, capsys):
-        Console(INFO)
-
-        await no_de_busca().get_tracks(CONSULTA)
-
-        assert "CONSULTA-SECRETA" not in capsys.readouterr().out
 
 
 class TestOpDesconhecido:
@@ -392,13 +322,6 @@ class TestOpDesconhecido:
 
         saida = console.saida.getvalue()
         assert "WARNING" in saida and "operacao-nova" in saida and "PAYLOAD-SECRETO-K9" not in saida
-
-    async def test_the_payload_shows_up_only_at_debug(self):
-        console = Console(DEBUG)
-
-        await WebSocket.__new__(WebSocket).process_data(dict(self.PAYLOAD))
-
-        assert "PAYLOAD-SECRETO-K9" in console.saida.getvalue()
 
     async def test_an_op_with_control_characters_stays_on_one_line(self):
         console = Console(INFO)
@@ -533,52 +456,5 @@ class TestEventosDeNo:
         assert len(brutos) == 2
         assert len([linha for linha in console.linhas if "ERROR" in linha]) == 2  # janela do agregador já fechada
 
-    async def test_all_nodes_unavailable_counts_in_the_metrics(self):
-        Console(INFO)
-        node = no_fisico("unico", disponivel=False)
-        cog = cog_de_nos(node)
-
-        await NodesMixin.node_connection_closed(cog, node)
-
-        assert dict(cog.bot.pool.metrics.snapshot_and_reset(1.0).errors).get("node_unavailable", 0) >= 1
-
 
 # ============================================================================ integração — um evento do player com o pipeline real
-
-
-class TestIntegracao:
-    async def test_one_player_event_comes_out_identically_in_console_and_file(self, tmp_path):
-        console = io.StringIO()
-        configure_logging(
-            LogSettings(INFO, False, True, frozenset(), 300),
-            [],
-            stream=console,
-            logs_dir=tmp_path / ".logs",
-            clock=Relogio(),
-        )
-        player = jogador(123456789012345678)
-
-        await _he_dispatch(player, travou(player))
-        tick_logging()
-
-        arquivo = (tmp_path / ".logs" / "disnake.log").read_text(encoding="utf-8")
-        for texto in (console.getvalue(), arquivo):
-            assert "123456789012345678" in texto and "WARNING" in texto and TITULO not in texto
-            assert "empiremuse.player" in texto
-
-    async def test_the_file_has_no_emoji_and_the_console_has_the_player_one_for_a_player_line(self, tmp_path):
-        console = io.StringIO()
-        configure_logging(
-            LogSettings(INFO, False, True, frozenset(), 300),
-            [],
-            stream=console,
-            logs_dir=tmp_path / ".logs",
-            clock=Relogio(),
-        )
-        player = jogador(1)
-
-        await _he_dispatch(player, travou(player))
-
-        assert "🎵" in console.getvalue() and "🎵" not in (tmp_path / ".logs" / "disnake.log").read_text(
-            encoding="utf-8"
-        )

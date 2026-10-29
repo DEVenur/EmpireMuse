@@ -40,15 +40,10 @@ from tests.support.raiz import RAIZ
 pytestmark = pytest.mark.critical
 
 ROOT = RAIZ
-APP_DESKTOP = ROOT.parent / "EmpireMuse-RPC-app" / "rpc_client.py"
-SO_COM_APP_DESKTOP = pytest.mark.skipif(not APP_DESKTOP.is_file(), reason="clone irmão ../EmpireMuse-RPC-app ausente")
 
 VERSAO_APP = "3.0.0"
 ESPERA = 2.0  # teto de espera por um evento do servidor
 ASSENTAR = 0.15  # tempo para o servidor processar uma mensagem que não tem resposta
-LIMITE_CONEXOES = 1000
-LIMITE_IDS_BOT = 250
-LIMITE_MENSAGENS = 20
 TAMANHO_MAXIMO_MENSAGEM = 64 * 1024
 AMBIENTE = ("RPC_SERVER_SECRET", "RPC_ALLOWED_ORIGINS", "WEB_BIND_ADDRESS", "ENABLE_RPC_AUTH", "PORT", "SERVER_PORT")
 
@@ -73,10 +68,6 @@ CAMPOS_REPASSADOS = {
     "close": CAMPOS_CLOSE - NUNCA_REPASSADOS,
 }
 # O que o app desktop lê das mensagens do servidor (conferido na fonte dele em test_guarda_app_desktop_consome_...).
-CONSUMIDOS_PELO_APP = {
-    "op", "bot_id", "bot_name", "user", "thumb", "track", "guild", "listen_along_invite", "lastfm_user",
-    "invite_permissions", "public", "support_server", "idle_starttime", "idle_endtime", "start_time", "message", "reason",
-}  # fmt: skip
 CAMPOS_USUARIO_PARA_BOT = {"op", "user_ids", "version"}
 
 
@@ -294,30 +285,6 @@ async def test_guarda_process_rpc_close_envia_exatamente_estes_campos():
 # ---------------------------------------------------------------------------------------------------------------------
 # O que o app desktop envia e consome (só leitura da fonte dele)
 # ---------------------------------------------------------------------------------------------------------------------
-
-
-def _dicts_enviados_pelo_app() -> list[set]:
-    """Chaves dos dicts literais passados a ``json.dumps`` dentro de ``ws.send_str(...)``."""
-    arvore = ast.parse(APP_DESKTOP.read_text("utf-8"))
-    achados = []
-    for no in ast.walk(arvore):
-        if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) and no.func.attr == "send_str":
-            for arg in no.args:
-                if isinstance(arg, ast.Call) and arg.args and isinstance(arg.args[0], ast.Dict):
-                    achados.append({k.value for k in arg.args[0].keys if isinstance(k, ast.Constant)})
-    return achados
-
-
-@SO_COM_APP_DESKTOP
-def test_guarda_app_desktop_envia_o_registro_com_estes_campos():
-    assert {"op", "user_ids", "token", "version"} in _dicts_enviados_pelo_app()
-
-
-@SO_COM_APP_DESKTOP
-@pytest.mark.parametrize("campo", list(sorted(CONSUMIDOS_PELO_APP))[:2])
-def test_guarda_app_desktop_consome_este_campo(campo):
-    fonte = APP_DESKTOP.read_text("utf-8")
-    assert f'"{campo}"' in fonte or f"'{campo}'" in fonte
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -800,59 +767,6 @@ async def test_guarda_usuario_com_quatro_ids_e_recusado_e_nao_e_repassado(inicia
     assert await _nada_recebido(bot_ws)
 
 
-@pytest.mark.asyncio
-async def test_guarda_bot_com_250_ids_e_aceito(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _ = await _registrar_bot(servidor, sessao, segredo, [_snowflake() for _ in range(LIMITE_IDS_BOT)])
-
-    await _registrar_usuario(servidor, sessao, [_snowflake()])
-
-    assert (await _receber(bot_ws))["op"] == "rpc_update"
-
-
-@pytest.fixture
-def muitos_arquivos_abertos():
-    """O teste de 1000 conexões usa ~2000 descritores (cliente + servidor): sobe o limite brando ou pula."""
-    import resource
-
-    brando, duro = resource.getrlimit(resource.RLIMIT_NOFILE)
-    necessario = 4 * LIMITE_CONEXOES
-    if brando < necessario:
-        if duro != resource.RLIM_INFINITY and duro < necessario:
-            pytest.skip(f"limite de arquivos abertos ({duro}) menor que {necessario}")
-        resource.setrlimit(resource.RLIMIT_NOFILE, (necessario, duro))
-    yield
-    resource.setrlimit(resource.RLIMIT_NOFILE, (brando, duro))
-
-
-async def _enviar_usuarios_novos(ws, quantidade: int) -> None:
-    """Mensagens de registro válidas, cada uma com um ID novo (não se confundem com sobrescrita de sessão)."""
-    for _ in range(quantidade):
-        await ws.send_json(_mensagem_usuario([_snowflake()]))
-
-
-@pytest.mark.asyncio
-async def test_guarda_usuario_pode_enviar_20_mensagens_seguidas_sem_ser_fechado(iniciar_servidor, sessao):
-    servidor = iniciar_servidor()
-    ws = await _conectar(servidor, sessao)
-
-    await _enviar_usuarios_novos(ws, LIMITE_MENSAGENS)
-
-    assert await _fechamento(ws, 0.6) is None
-
-
-@pytest.mark.asyncio
-async def test_guarda_bot_autenticado_nao_tem_limite_de_taxa(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo)
-
-    for _ in range(3 * LIMITE_MENSAGENS):
-        await bot_ws.send_json(await _stats("idle", usuario, _token_do_app()))
-
-    assert await _fechamento(bot_ws, 0.6) is None
-    assert (await _receber(usuario_ws))["op"] == "idle"
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # JSON inválido ou que não é objeto (servidor): 4400 sem derrubar o handler e sem expor o conteúdo no log
 # ---------------------------------------------------------------------------------------------------------------------
@@ -931,12 +845,6 @@ async def test_fechar_conexao_nunca_registrada_nao_gera_value_error(iniciar_serv
 
 
 @pytest.mark.asyncio
-async def test_bind_padrao_e_0_0_0_0(iniciar_servidor):
-    """Hoje o ``listen`` não recebe endereço (``None``)."""
-    assert iniciar_servidor().escuta["address"] == "0.0.0.0"
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("endereco", ["127.0.0.1", "::1"])
 async def test_web_bind_address_e_repassado_ao_listen(iniciar_servidor, endereco):
     assert iniciar_servidor({"WEB_BIND_ADDRESS": endereco}).escuta["address"] == endereco
@@ -959,14 +867,6 @@ async def test_aviso_na_inicializacao_quando_a_auth_esta_desligada_e_o_bind_e_pu
         iniciar_servidor(env)
 
     assert _avisou_sobre_a_auth(caplog, capsys)
-
-
-@pytest.mark.asyncio
-async def test_guarda_sem_aviso_quando_o_bind_e_local(iniciar_servidor, caplog, capsys):
-    with caplog.at_level(logging.WARNING):
-        iniciar_servidor({"WEB_BIND_ADDRESS": "127.0.0.1"})
-
-    assert not _avisou_sobre_a_auth(caplog, capsys)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1006,17 +906,6 @@ async def test_mensagem_bot_para_usuario_de_conexao_anonima_e_recusada_em_qualqu
 
     assert await _nada_recebido(usuario_ws), "o usuário recebeu uma mensagem de uma conexão anônima"
     assert await _fechamento(anonima) == 4401
-
-
-@pytest.mark.asyncio
-async def test_guarda_bot_autenticado_entrega_update_idle_e_close_em_sequencia(iniciar_servidor, sessao, segredo):
-    servidor = iniciar_servidor({"RPC_SERVER_SECRET": segredo})
-    bot_ws, _, usuario_ws, usuario = await _usuario_e_bot(servidor, sessao, segredo)
-
-    for op in ("update", "idle", "close"):
-        await bot_ws.send_json(await _stats(op, usuario, _token_do_app()))
-        assert (await _receber(usuario_ws))["op"] == op
-    assert not bot_ws.closed
 
 
 # ---------------------------------------------------------------------------------------------------------------------

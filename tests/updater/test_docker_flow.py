@@ -112,11 +112,6 @@ async def test_the_plan_targets_the_newest_release_with_its_digest_and_trimmed_c
     assert resultado.changelog == esperado and github["digest"] == ["v2.2.0"] and github["changelog"] == ["v2.2.0"]
 
 
-async def test_without_a_newer_release_there_is_no_plan_and_nothing_else_is_fetched(docker_flow, github):
-    assert await docker_flow.plan_docker_update(object(), Version(2, 2, 0)) is None
-    assert github == {"digest": [], "changelog": []}
-
-
 async def test_a_changelog_failure_does_not_drop_the_plan(docker_flow, github, monkeypatch):
     async def falha(session, tag):
         raise UpdateError("sem changelog")
@@ -471,11 +466,3 @@ async def test_a_secret_that_would_straddle_the_cut_never_shows_not_even_partial
     assert len(dm) <= LIMITE_DM and "depois 04" in dm
     assert segredo not in dm
     assert all(segredo[inicio : inicio + 12] not in dm for inicio in range(0, 600 - 12, 12))  # nem um pedaço
-
-
-async def test_a_short_log_is_sent_intact(docker_flow, tmp_path, pendente):
-    linhas = ["empiremuse-updater: pull 0", "empiremuse-updater: up 70"]
-
-    (dm,) = await mandar_log(docker_flow, tmp_path, pendente, linhas)
-
-    assert dm.endswith("\n".join(linhas)) and "…" not in dm

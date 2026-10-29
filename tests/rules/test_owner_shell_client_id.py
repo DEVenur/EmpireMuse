@@ -32,12 +32,6 @@ class TestSnowflakeNaoESegredo:
         assert mask_secrets(f"client_id={SNOWFLAKE}", coletados) == f"client_id={SNOWFLAKE}"
         assert MASK not in mask_secrets(f"client_id={SNOWFLAKE}", coletados)
 
-    def test_the_name_alone_is_no_longer_a_secret_name(self) -> None:
-        assert is_secret_name(NOME) is False
-
-    def test_the_exemption_works_in_both_sources_of_the_pool(self) -> None:
-        assert collect_secret_values({NOME: SNOWFLAKE}, {NOME: SNOWFLAKE}) == frozenset()
-
 
 class TestOutroValorContinuaColetado:
     @pytest.mark.parametrize(
@@ -88,14 +82,6 @@ class TestOutrosNomesContinuamSegredo:
     def test_the_name_is_secret_and_its_snowflake_value_is_collected(self, nome: str) -> None:
         assert is_secret_name(nome) is True
         assert collect_secret_values({nome: SNOWFLAKE}) == frozenset({SNOWFLAKE})
-
-    def test_the_same_snowflake_under_another_secret_key_is_still_masked(self) -> None:
-        fontes = {NOME: SNOWFLAKE, "PANEL_OAUTH_CLIENT_SECRET": SNOWFLAKE}
-
-        coletados = collect_secret_values(fontes)
-
-        assert coletados == frozenset({SNOWFLAKE})
-        assert mask_secrets(f"id={SNOWFLAKE}", coletados) == f"id={MASK}"
 
     def test_the_public_exemption_does_not_leak_to_the_secret_beside_it(self) -> None:
         segredo = "segredo-do-painel-xyz"

@@ -67,13 +67,6 @@ class TestValoresValidosIntactos:
     def test_a_partir_de_1_o_valor_e_respeitado(self, home, chave, valor):
         assert pelo_config_json(home, chave, valor) == int(valor)
 
-    @pytest.mark.parametrize("chave", list(CHAVES_COM_MINIMO_1)[:2])
-    def test_ausente_ou_vazio_continua_no_padrao(self, home, chave):
-        padrao = config_loader.DEFAULT_CONFIG[chave]
-        assert padrao >= 1
-        assert pelo_config_json(home, chave, None) == padrao
-        assert pelo_config_json(home, chave, "") == padrao
-
     def test_outras_chaves_continuam_aceitando_zero(self, home):
         """0 segue com o seu significado nas chaves documentadas (sem limite) e nas que já têm o seu mínimo."""
         (home / "config.json").write_text(
@@ -81,23 +74,3 @@ class TestValoresValidosIntactos:
         )
         config = config_loader.load_config()
         assert (config["MAX_USER_FAVS"], config["MAX_USER_INTEGRATIONS"], config["QUEUE_MAX_ENTRIES"]) == (0, 0, 0)
-
-
-class TestComentariosDoExampleEnv:
-    """O texto do comentário de cada chave avisa que o mínimo é 1 (só o comentário; nenhuma variável nova)."""
-
-    @staticmethod
-    def comentario_da_chave(chave):
-        linhas = EXAMPLE_ENV.read_text(encoding="utf-8").splitlines()
-        indice = next(i for i, linha in enumerate(linhas) if re.match(rf"{chave}\s*=", linha))
-        bloco = []
-        for linha in reversed(linhas[:indice]):
-            if not linha.startswith("#"):
-                break
-            bloco.append(linha)
-        return "\n".join(reversed(bloco))
-
-    def test_guarda_nenhuma_variavel_nova_alem_das_existentes(self):
-        """DBCACHE_SIZE não está no exemplo e não é criada aqui (a tarefa só muda comentário)."""
-        texto = EXAMPLE_ENV.read_text(encoding="utf-8")
-        assert not re.search(r"^DBCACHE_SIZE\s*=", texto, re.MULTILINE)

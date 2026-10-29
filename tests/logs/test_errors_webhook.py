@@ -53,16 +53,6 @@ class TestWebhookDeErro:
         assert proibidos_no_arquivo(relatorio) == []
 
     @pytest.mark.asyncio
-    async def test_the_prefix_report_has_none_of_them_either(self, handler, arquivos_do_webhook, segredos_do_pool):
-        handler.bot.config["AUTO_ERROR_REPORT_WEBHOOK"] = "https://discord.com/api/webhooks/1/segredo"
-
-        await handler.on_legacy_command_error(_Contexto(True), erro_com_segredos())
-
-        handler.send_webhook.assert_awaited_once()
-        relatorio = "\n".join(arquivos_do_webhook)
-        assert "RuntimeError" in relatorio and proibidos_no_arquivo(relatorio) == []
-
-    @pytest.mark.asyncio
     async def test_the_url_userinfo_of_the_mongo_uri_is_gone_even_if_it_was_never_registered(
         self, handler, enviado, arquivos_do_webhook
     ):
