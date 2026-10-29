@@ -288,8 +288,10 @@ class PlayerSettings(disnake.ui.View):
     async def close_callback(self, interaction: disnake.MessageInteraction):
         try:
             await interaction.response.defer()  # a gravação pode demorar mais que o prazo de resposta da interação
-        except disnake.HTTPException:
-            pass
+        except disnake.HTTPException as exc:
+            logger.warning(
+                "Falha ao adiar a resposta do menu de configurações (%s); a gravação continua", type(exc).__name__
+            )
         await self.save_data()  # grava antes de dizer "salvo": se a gravação falhar, o usuário não vê sucesso
         try:
             if isinstance(self.ctx, CustomContext):
