@@ -310,9 +310,18 @@
         },
         {
             "name": "Descrição do perfil do bot",
-            "description": "Descrição da aplicação no Discord, gravada por cada bot ao iniciar. Aceita {prefix}, {bots}, {panel_url} e {support_url}; \\n quebra a linha; vazio não altera o perfil.",
+            "description": "Descrição da aplicação no Discord, gravada por cada bot ao iniciar. Aceita {prefix}, {bots}, {panel_url}, {support_url} e {main}; \\n quebra a linha; vazio não altera o perfil.",
             "env_variable": "APP_DESCRIPTION",
-            "default_value": "🎵 Bot de música da comunidade EmpireHub: YouTube, Spotify e Deezer.\\n▶️ Comece com /play ou {prefix}play <nome ou link>. Ajuda: {prefix}help\\n🤖 Somos {bots} bots: com mais de um no servidor, cada call pode ter o seu.\\n⚙️ Painel: {panel_url}\\n💬 Suporte: {support_url}",
+            "default_value": "🎵 Bot de música da comunidade EmpireHub: YouTube, Spotify e Deezer.\\n▶️ Comece com /play ou {prefix}play <nome ou link>. Ajuda: {prefix}help\\n🤖 Somos {bots} bots: se eu estiver ocupado, uma reserva entra na sua call.\\n⚙️ Painel: {panel_url}\\n💬 Suporte: {support_url}",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string"
+        },
+        {
+            "name": "Descrição do perfil das reservas",
+            "description": "Descrição da aplicação dos bots reserva (todos menos o do TOKEN). {main} é o nome do bot principal; vazio não altera o perfil das reservas.",
+            "env_variable": "APP_DESCRIPTION_RESERVE",
+            "default_value": "🎵 Reserva do {main}: entro na call quando o {main} está ocupado.\\n▶️ Comandos de barra ficam no {main}; aqui use {prefix}play. Ajuda: {prefix}help\\n⚙️ Painel: {panel_url}\\n💬 Suporte: {support_url}",
             "user_viewable": true,
             "user_editable": true,
             "rules": "nullable|string"

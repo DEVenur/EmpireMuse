@@ -38,13 +38,16 @@ async def _sync(bot: BotCore, bots: int) -> None:
     if appinfo is None:
         return
     config = bot.config
+    main = bot.pool.main_bot
     desired = build_profile(
-        description=config["APP_DESCRIPTION"],
+        # a reserva tem o próprio texto (diz onde ficam os comandos de barra); o principal e os bots exclusivos usam o geral
+        description=config["APP_DESCRIPTION_RESERVE"] if bot.is_reserve else config["APP_DESCRIPTION"],
         tags=config["APP_TAGS"],
         prefix=config["DEFAULT_PREFIX"],
         bots=bots,
         panel_url=panel_url_of(config["PANEL_BASE_URL"], config["PANEL_ENABLED"]),
         support_url=config["SUPPORT_SERVER"],
+        main=main.user.name if main is not None and main.user is not None else "",
     )
     for warning in desired.warnings:
         logger.warning("Perfil da aplicação do bot %s: %s", bot.identifier, warning)

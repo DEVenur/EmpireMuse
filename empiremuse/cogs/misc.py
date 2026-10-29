@@ -21,6 +21,7 @@ from disnake.ext import commands
 
 from empiremuse import paths
 from empiremuse.rules.text import format_int, format_mib
+from empiremuse.rules.bot_roles import Peer, invite_order, main_missing_notice, notifier
 from empiremuse.utils import branding
 from empiremuse.utils.branding import asset_url
 from empiremuse.utils.db import DBModel, db_models
@@ -234,12 +235,47 @@ class Misc(commands.Cog):
         except Exception:
             logger.exception("Falha no loop de presença do bot")
 
+    async def reserve_join_notice(self, guild: disnake.Guild) -> None:
+        """Reserva entrou num servidor SEM o principal: um aviso no canal de sistema (S-V10).
+
+        Um por servidor no pool (a reserva de menor ``identifier`` que está lá), no máximo a cada 24 h, só no canal de sistema (sem cair
+        para outro), com permissão de envio conferida, texto fixo, convite montado aqui e nenhuma menção.
+        """
+        pool = self.bot.pool
+        main = pool.main_bot
+        if main is None or main.get_guild(guild.id) is not None:
+            return
+
+        here = {b.identifier for b in pool.bots if b.is_reserve and b.get_guild(guild.id) is not None}
+        if notifier(here | {self.bot.identifier}) != self.bot.identifier or guild.id in pool.join_notices:
+            return
+
+        url = self.bot.main_invite_url()
+        channel = guild.system_channel
+        if url is None or channel is None or not channel.permissions_for(guild.me).send_messages:
+            return
+
+        pool.join_notices[guild.id] = True  # antes de enviar: duas reservas entrando juntas não repetem o aviso
+        try:
+            await channel.send(
+                main_missing_notice(main.user.name, url, self.bot.default_prefix),
+                allowed_mentions=disnake.AllowedMentions.none(),
+            )
+        except Exception as exc:  # noqa: BLE001 - aviso é cortesia: falha vira log e não se repete por 24 h
+            logger.warning("Aviso de servidor sem o principal não enviado [%s] (%s)", guild.id, type(exc).__name__)
+
     @commands.Cog.listener("on_guild_join")
     async def guild_add(self, guild: disnake.Guild):
         if bans := bans_of(self.bot):
             await bans.ensure_loaded()
             if bans.is_banned(guild.id):
                 return  # a saída e o único log ficam com o GuildLog
+
+        if (
+            self.bot.is_reserve
+        ):  # a reserva não tem comandos de barra: em vez da boas-vindas de "/", o aviso de servidor sem o principal
+            await self.reserve_join_notice(guild)
+            return
 
         bots_in_guild = []
         bots_outside_guild = []
@@ -740,7 +776,15 @@ class Misc(commands.Cog):
                 if guild := bot.get_guild(inter.guild_id):
                     break
 
-        for bot in sorted(self.bot.pool.bots, key=lambda b: len(b.guilds)):
+        pool_bots = [b for b in self.bot.pool.bots if b.user is not None]
+        if guild:  # no servidor: só quem falta, na ordem de convite (o principal primeiro, depois as reservas)
+            by_id = {b.user.id: b for b in pool_bots}
+            order = invite_order([Peer(b.identifier, b.user.id, b.is_main) for b in pool_bots], ())
+            pool_bots = [by_id[peer.bot_id] for peer in order]
+        else:
+            pool_bots = sorted(pool_bots, key=lambda b: len(b.guilds))
+
+        for bot in pool_bots:
             try:
                 if not bot.appinfo.bot_public and not await bot.is_owner(inter.author):
                     continue
@@ -764,8 +808,9 @@ class Misc(commands.Cog):
             else:
                 invite += f" `[{len(bot.guilds)}]`"
 
-            if guild and inter.author.guild_permissions.manage_guild and bot.user in guild.members:
-                bots_in_guild.append(invite)
+            if guild and bot.user in guild.members:
+                if inter.author.guild_permissions.manage_guild:
+                    bots_in_guild.append(invite)
             else:
                 bots_invites.append(invite)
 
