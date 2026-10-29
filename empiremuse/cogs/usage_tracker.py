@@ -41,8 +41,8 @@ class UsageTracker(commands.Cog):
     @commands.Cog.listener("on_message_command_error")
     @commands.Cog.listener("on_command_error")
     async def command_failed(self, source, error: Exception):
-        if not isinstance(error, PoolException):
-            self._finish(source, error)
+        # Inclui o ``PoolException`` (ninguém do pool pôde atender): o evento aberto fecha como ``rejected`` em vez de ficar sem desfecho.
+        self._finish(source, error)
 
     @commands.Cog.listener("on_interaction_player_error")
     async def player_component_failed(self, inter, error: Exception):
