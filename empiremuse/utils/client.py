@@ -1320,7 +1320,8 @@ class BotPool:
 
                 await self.check_pool_ready()
 
-                await sync_app_profile(bot, len(self.get_all_bots()))  # depois do ready: não atrasa a inicialização; não levanta
+                # depois do ready: não atrasa a inicialização, e a função não levanta
+                await sync_app_profile(bot, len(self.get_all_bots()))
 
             bot.loop.create_task(initial_setup())
 
