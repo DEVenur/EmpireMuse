@@ -127,7 +127,7 @@ class FavMenuView(FavMenuComponentsMixin, FavMenuTextMixin, disnake.ui.View):
         """Depois de gravar no store: responde ao modal e redesenha o menu com a lista que o store tem agora."""
         await self.load_playlists(inter.guild_id)
         await inter.edit_original_message(content=log, allowed_mentions=disnake.AllowedMentions.none())
-        self.log = log
+        self.log = log.split("\n", 1)[0]  # o relatório completo já foi para o modal; o menu leva só o resumo
         await self._redraw()
 
     async def add_callback(self, inter: disnake.MessageInteraction):

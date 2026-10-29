@@ -31,7 +31,7 @@ from empiremuse.rules.errors import (
     URL_TOO_LONG,
     RuleError,
 )
-from empiremuse.rules.playlists import Playlist, format_report, may_manage, parse_file
+from empiremuse.rules.playlists import Playlist, format_report, may_manage, parse_file, to_export
 from empiremuse.utils.music.converters import md_link
 from empiremuse.utils.music.errors import GenericError
 
@@ -244,24 +244,41 @@ async def export_file(view, inter: disnake.MessageInteraction) -> None:
 
 
 async def clear_all(view, inter: disnake.MessageInteraction) -> bool:
-    """Entrega o backup (resposta efêmera à parte) e limpa a lista; ``False`` se nada foi limpo."""
+    """Entrega o backup (mensagem efêmera à parte) ANTES de limpar a lista; ``False`` se nada foi limpo.
+
+    A limpeza só vale para a versão da lista que virou backup: se mudou no meio (outra importação, outro admin), nada é apagado.
+    """
     if not can_manage(inter):
         await inter.send(MSG_DENIED, ephemeral=True)
         return False
     await inter.response.defer(with_message=True, ephemeral=True)
     store = view.bot.pool.servers.playlists
     try:
-        backup = await store.export_bytes(inter.guild_id)
-        if not json.loads(backup).get("playlists"):
-            await inter.edit_original_message("**Não há playlists fixadas no servidor.**")
-            return False
-        await store.clear(inter.guild_id)
+        items, rev = await store.snapshot(inter.guild_id)
     except GenericError as exc:
         await inter.edit_original_message(exc.text)
         return False
-    await inter.edit_original_message(
-        content="### As playlists do servidor foram excluídas.\n"
-        "`O arquivo é o backup: para reverter, importe o conteúdo dele.`",
-        file=disnake.File(BytesIO(backup), filename=f"playlists-{inter.guild_id}.json"),
-    )
+    if not items:
+        await inter.edit_original_message("**Não há playlists fixadas no servidor.**")
+        return False
+
+    backup = json.dumps(to_export(items), ensure_ascii=False, indent=2).encode(
+        "utf-8"
+    )  # a mesma lista que será apagada
+    try:
+        await inter.followup.send(
+            "**Backup das playlists do servidor.** Para reverter, importe o conteúdo dele.",
+            file=disnake.File(BytesIO(backup), filename=f"playlists-{inter.guild_id}.json"),
+            ephemeral=True,
+        )
+    except disnake.HTTPException:
+        await inter.edit_original_message("**Não consegui enviar o backup, então não apaguei nada.**")
+        return False
+
+    try:
+        await store.clear(inter.guild_id, expected_rev=rev)
+    except GenericError as exc:
+        await inter.edit_original_message(f"{exc.text}\n`O backup já foi enviado.`")
+        return False
+    await inter.edit_original_message(content="### As playlists do servidor foram excluídas.")
     return True

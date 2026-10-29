@@ -127,3 +127,64 @@ async def test_a_genre_named_like_the_all_option_is_a_real_genre_not_the_reset()
 
     assert view.genre == ALL_GENRES  # filtrou por ele, não voltou para "Todos"
     assert [o.label for o in view.item_pages[0]] == ["Todos"]
+
+
+def clearing_world(*, send_fails=False, conflict=False):
+    """Um servidor com 2 playlists na versão 7; ``calls`` registra a ordem entre enviar o backup e limpar."""
+    from empiremuse.utils.servers import ServerConfigConflict
+
+    calls = []
+    view, store = make_view()
+    items = (
+        Playlist(1, "Rock", "", (), "https://ok.exemplo/rock", None),
+        Playlist(2, "Pop", "", (), "https://ok.exemplo/pop", None),
+    )
+    store.snapshot = AsyncMock(return_value=(items, 7))
+
+    async def clear(gid, expected_rev=None):
+        calls.append(("clear", expected_rev))
+        if conflict:
+            raise ServerConfigConflict()
+        return 2
+
+    async def followup(*args, **kwargs):
+        calls.append(("backup", kwargs["file"].filename))
+        if send_fails:
+            raise disnake.HTTPException(SimpleNamespace(status=500, reason="x"), "boom")
+
+    store.clear = AsyncMock(side_effect=clear)
+    inter = make_inter(member(manage_guild=True))
+    inter.followup = SimpleNamespace(send=AsyncMock(side_effect=followup))
+    return view, store, inter, calls
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_clearing_sends_the_backup_first_and_only_clears_the_version_that_became_the_backup():
+    view, store, inter, calls = clearing_world()
+
+    assert await playlists_ui.clear_all(view, inter) is True
+
+    assert calls == [("backup", f"playlists-{GID}.json"), ("clear", 7)]  # backup antes; limpeza presa à versão 7
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_a_backup_that_cannot_be_sent_means_nothing_is_cleared():
+    view, store, inter, calls = clearing_world(send_fails=True)
+
+    assert await playlists_ui.clear_all(view, inter) is False
+
+    store.clear.assert_not_awaited()
+    assert "não apaguei nada" in inter.edit_original_message.await_args.args[0]
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_a_list_that_changed_after_the_backup_is_not_cleared_and_the_user_is_told():
+    view, store, inter, calls = clearing_world(conflict=True)
+
+    assert await playlists_ui.clear_all(view, inter) is False
+
+    assert [name for name, _ in calls] == ["backup", "clear"]
+    assert "backup já foi enviado" in inter.edit_original_message.await_args.args[0]
