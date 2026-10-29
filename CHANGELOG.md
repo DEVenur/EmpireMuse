@@ -10,11 +10,15 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Adicionado
 - **Uso do bot e banimento de servidores (só o dono)**: o bot registra onde (servidor e canais), como (comando, botão, canal de pedidos, painel web, faixa tocada) e quando foi usado, sem nada sobre quem usou, com retenção de `USAGE_RETENTION_DAYS` dias (30 por padrão). No comando `servers`, "Ver uso" mostra o resumo de 7 dias do servidor, "Banir" tira todos os bots do servidor e impede que o readicionem, e "Banidos" lista e desbane. A lista de banidos é única para todo o pool.
 - **Perfil da aplicação no Discord**: ao iniciar, cada bot grava a descrição e as tags do próprio perfil (`APP_DESCRIPTION` e `APP_TAGS`) quando diferem do configurado: o que o bot é, o comando `/play`, o prefixo, o painel, o suporte e quantos bots há no pool. A descrição aceita `{prefix}`, `{bots}`, `{panel_url}` e `{support_url}`; valor vazio não mexe no campo. Falha ou limite de requisições vira aviso e o bot segue. O padrão de `CUSTOM_STATUS_PRESENCES` agora é a frase com `/play`, o painel e as calls em uso (vazio ainda desliga).
+- **Configuração única por servidor**: volume padrão, modo restrito, cargos de DJ, `autoplay`, `check_other_bots_in_vc` e as skins passam a valer para o servidor inteiro, em um só documento (`servers`, banco global) em vez de um por bot. Mudar uma delas por comando ou pelo painel grava só o campo alterado, com trava por servidor, e vale para todos os bots do pool. Na primeira leitura de cada servidor a configuração é copiada do documento do bot principal (`TOKEN`); se ele não puder ser lido ou não tiver logado, nada é gravado e a chamada falha em vez de usar o padrão.
 
 ### Alterado
 - **Testes do painel mais enxutos**: removidos 54 testes de baixo valor em `tests/panel` (texto de `.env.example`/CSS/templates, favicon, caracterização da página de status, micro-otimizações do cache de marca) e fundidas variantes repetidas, sem tirar nenhum teste de segurança. A cobertura do painel não muda.
 - **Suíte de testes enxuta (pastas logs, updater, web, persistence, serialization, rules, config, runtime, deploy, brand e repo)**: saem testes obsoletos, de caracterização, de mutação, de estrutura, que liam o texto de docs/ativos e vários testes para o mesmo caminho; ficam segurança, persistência, contratos e regras puras. Sem mudança no bot.
 - **Testes**: enxugadas as suítes de `tests/audio`, `tests/cogs` e `tests/pool` (caracterização em massa, testes de mutação e testes em volta de correções já feitas) e removidos os helpers de `tests/support` que nenhum teste usa mais; ficam os testes de segurança, contratos Discord/Lavalink e um por bug real.
+
+### Corrigido
+- **`/play` lia o documento errado**: a configuração do servidor era buscada com o id de quem pediu a música, não com o do servidor; agora usa o id do servidor.
 
 ### Documentação
 - **README e AGENTS.md**: badge do Docker Hub, bloco de links (convite do bot, Discord e página do projeto) e aviso de que não há compromisso de suporte à hospedagem própria; novo "Mapa de risco" no `AGENTS.md` ligando áreas do repositório aos níveis Baixo, Médio e Alto.
