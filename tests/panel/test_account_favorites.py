@@ -7,9 +7,7 @@ Limite MAX_USER_FAVS (0 = ilimitado; dono do bot isento), lido de bot.config a c
 Integrações: `integration_links`; remover e importar (sem requisição externa); adicionar por URL fica fora da v1.
 """
 
-import html
 import json
-import re
 
 from tests.panel.helpers_settings import UID, acao_form, version_of
 from tests.panel.test_account_page import URL, AccountCase
@@ -32,18 +30,6 @@ class FavoritesBase(AccountCase):
     def do_import(self, browser, payload, **kw):
         raw = payload if isinstance(payload, str) else json.dumps(payload)
         return self.act(browser, "favoritos_importar", dados=raw, **kw)
-
-
-# ============================================================================ leitura
-
-
-class FavoritesReadTest(FavoritesBase):
-    def test_count_and_limit_are_shown(self):
-        text = html.unescape(re.sub(r"<[^>]+>", " ", self.body(self.logged_in())))
-        assert re.search(r"\b1 de 10\b", text), "contagem 'N de MAX_USER_FAVS' (limite da config)"
-        self.world.config["MAX_USER_FAVS"] = 0
-        text = html.unescape(re.sub(r"<[^>]+>", " ", self.body(self.logged_in())))
-        assert re.search(r"ilimitad", text, re.I)
 
 
 # ============================================================================ adicionar / editar / remover

@@ -35,29 +35,19 @@ class SessaoDePalcoPeloPainelTest(HttpBase):
         self.io_loop.run_sync(assentar)
         return resposta.code
 
-    def test_turning_the_permanent_on_leaves_the_stage_session_alone(self) -> None:
-        sessao = self.sessao_no_palco()
+    def test_saving_from_the_panel_leaves_the_stage_session_alone(self) -> None:
+        casos = (
+            ("liga", {CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}, True),
+            ("so-o-modelo", {CAMPO_PERMANENTE: "on", CAMPO_MODELO: "outro {track.title}"}, True),
+            ("desliga", {CAMPO_PERMANENTE: None, CAMPO_MODELO: "outro {track.title}"}, False),
+        )
+        for nome, campos, permanente in casos:
+            with self.subTest(nome):
+                sessao = self.sessao_no_palco()
 
-        assert self.salvar(**{CAMPO_PERMANENTE: "on", CAMPO_MODELO: MODELO}) == 200
+                assert self.salvar(**campos) == 200
 
-        assert self.db.doc("global", 100)[CAMPO_PERMANENTE] is True
-        assert sessao.player.voice_status_permanent is True
-        assert sessao.sessao_intacta(), "o save pelo painel mexeu na sessão de palco"
-        assert sessao.nada_foi_ao_palco()
-
-    def test_turning_the_permanent_off_leaves_the_stage_session_alone(self) -> None:
-        sessao = self.sessao_no_palco()
-
-        assert self.salvar(**{CAMPO_PERMANENTE: None, CAMPO_MODELO: MODELO}) == 200
-
-        assert self.db.doc("global", 100)[CAMPO_PERMANENTE] is False
-        assert sessao.player.voice_status_permanent is False
-        assert sessao.sessao_intacta() and sessao.nada_foi_ao_palco()
-        assert sessao.player.stage_title_template == MODELO_DA_SESSAO
-
-    def test_changing_only_the_model_leaves_the_stage_session_alone(self) -> None:
-        sessao = self.sessao_no_palco()
-
-        assert self.salvar(**{CAMPO_PERMANENTE: "on", CAMPO_MODELO: "outro {track.title}"}) == 200
-
-        assert sessao.sessao_intacta() and sessao.nada_foi_ao_palco()
+                assert self.db.doc("global", 100)[CAMPO_PERMANENTE] is permanente
+                assert sessao.player.voice_status_permanent is permanente
+                assert sessao.sessao_intacta() and sessao.nada_foi_ao_palco()
+                assert sessao.player.stage_title_template == MODELO_DA_SESSAO

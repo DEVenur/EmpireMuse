@@ -611,10 +611,6 @@ COMMAND_VOICE_MAX_LENGTH = 496
 COMMAND_PREFIX_MAX_LENGTH = 5
 
 
-def command_allowed_volumes():
-    return set(COMMAND_VOLUMES)
-
-
 def command_voice_placeholders():
     return COMMAND_VOICE_PLACEHOLDERS
 

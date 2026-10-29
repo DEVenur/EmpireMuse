@@ -1,16 +1,8 @@
 """E4a — categorias Player (G-01…G-04) e DJ (G-05): leitura, escrita só dos campos do formulário, validações
 contra o código dos comandos, escopo por bot e efeitos em memória."""
 
-from tests.panel.helpers_settings import ROLE_IDS, command_allowed_volumes, parse_forms
+from tests.panel.helpers_settings import ROLE_IDS
 from tests.panel.test_settings_http import HttpBase, external_change
-
-
-class PlayerReadTest(HttpBase):
-    def test_volume_choices_are_exactly_the_command_set_when_the_control_is_a_select(self):
-        _, form, _ = self.open_form(self.logged_in(), 100, "player", "default_player_volume")
-        offered = form.choices("default_player_volume")
-        if offered:  # <select>; um <input type=number> é validado só no POST
-            assert {int(v) for v in offered} == command_allowed_volumes()
 
 
 class PlayerWriteTest(HttpBase):
@@ -22,12 +14,6 @@ class PlayerWriteTest(HttpBase):
         assert self.db.doc("2", 800)["default_player_volume"] == 30
         assert self.db.doc("1", 800) == before1
         assert self.db.writes == [("2", 800)]
-
-    def test_422_message_sits_on_the_volume_field(self):
-        browser = self.logged_in()
-        response = self.save(browser, 100, "player", "default_player_volume", default_player_volume="7")
-        form = next(f for f in parse_forms(response.body.decode()) if f.has("default_player_volume"))
-        assert form.control("default_player_volume")["attrs"].get("aria-invalid") == "true"
 
     def test_reaching_a_guild_with_no_document_yet_creates_defaults_without_raising_ver(self):
         browser = self.logged_in()

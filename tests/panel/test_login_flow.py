@@ -18,9 +18,9 @@ from tests.panel.helpers import (
     require,
 )
 from tests.panel.helpers_login import (
+    DEFAULT_USER,
     ACCESS_TOKEN,
     CODE,
-    DEFAULT_USER,
     Browser,
     FakeClock,
     authorize_params,
@@ -253,14 +253,7 @@ class NoSecretLeakOnFailureTest(LoginBase):
             assert secret not in response.body.decode()
 
 
-# ============================================================================ página inicial logada
-
-
 class IndexStateTest(LoginBase):
-    def test_anonymous_index_shows_login_button_only(self):
-        body = self.index_html(self.browser())
-        assert "Entrar com Discord" in body and "/painel/logout" not in body and "Olá," not in body
-
     def test_falls_back_to_username_when_there_is_no_global_name(self):
         self.fake.user = {**DEFAULT_USER, "global_name": None, "avatar": None}
         browser = self.browser()

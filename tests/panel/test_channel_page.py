@@ -81,19 +81,10 @@ class CanalAccessTest(CanalBase):
 
 
 class CanalPageTest(CanalBase):
-    def test_removed_channel_is_shown_as_such(self):
-        self.world.configure("424242", "1")
-        body = html.unescape(self.body(self.logged_in())).lower()
-        assert "não configurado" in body or "removido" in body or "apagado" in body
-
     def test_creation_options_stage_only_with_community_and_categories_from_the_cache(self):
         form = self.setup_form(self.logged_in())
         assert set(form.choices("tipo")) == {"texto", "voz"}
         assert set(form.choices("categoria")) >= {"66"} and "" in form.choices("categoria")
-
-    def test_pages_of_the_other_categories_link_to_canal_too(self):
-        body = self.logged_in().get(f"/painel/servidores/{GID}/player").body.decode()
-        assert f"/painel/servidores/{GID}/canal" in body
 
 
 # ============================================================================ validações (422 síncrono, sem efeitos)

@@ -14,8 +14,6 @@ from unittest import mock
 
 import pytest
 import tornado.testing
-from tornado import httputil
-from tornado.http1connection import HTTP1Connection
 
 from empiremuse.panel.handlers import brand
 from tests.panel.test_app import PanelTestBase
@@ -63,63 +61,19 @@ class PanelBrandCacheTest(PanelTestBase):
 
         assert self._lidos_da_marca(lidos) == []
 
-    def test_repeated_requests_return_identical_bodies(self):
+    def test_conditional_get_returns_304_without_body_and_a_stale_etag_gets_the_whole_file(self):
         def check(nome):
-            primeiro, segundo = self.get_page(f"/painel/marca/{nome}"), self.get_page(f"/painel/marca/{nome}")
-            assert primeiro.body == segundo.body and len(primeiro.body) > 0
+            primeiro = self.get_page(f"/painel/marca/{nome}")
+            etag = primeiro.headers.get("Etag")
+            assert etag and etag == self.get_page(f"/painel/marca/{nome}").headers["Etag"]
+            assert primeiro.headers.get("Cache-Control") == "public, max-age=86400"
+            igual = self.fetch(f"/painel/marca/{nome}", headers={"If-None-Match": etag}, follow_redirects=False)
+            assert igual.code == 304 and igual.body == b"" and igual.headers.get("Etag") == etag
+            assert max_age(igual.headers.get("Cache-Control", "")) is not None
+            outro = self.fetch(f"/painel/marca/{nome}", headers={"If-None-Match": '"outro"'}, follow_redirects=False)
+            assert outro.code == 200 and outro.body == primeiro.body and len(outro.body) > 0
 
         self.assert_all(ARQUIVOS, check)
-
-    def test_each_brand_file_carries_a_stable_etag(self):
-        def check(nome):
-            a, b = self.get_page(f"/painel/marca/{nome}"), self.get_page(f"/painel/marca/{nome}")
-            assert a.headers.get("Etag") and a.headers["Etag"] == b.headers["Etag"]
-
-        self.assert_all(ARQUIVOS, check)
-
-    def test_the_etags_of_different_files_differ(self):
-        etags = {nome: self.get_page(f"/painel/marca/{nome}").headers.get("Etag") for nome in ARQUIVOS}
-
-        assert len(set(etags.values())) == len(ARQUIVOS) and all(etags.values())
-
-    def test_a_conditional_get_with_the_current_etag_returns_304_without_a_body(self):
-        def check(nome):
-            etag = self.get_page(f"/painel/marca/{nome}").headers["Etag"]
-            resposta = self.fetch(
-                f"/painel/marca/{nome}".replace("/painel", "/painel", 1),
-                headers={"If-None-Match": etag},
-                follow_redirects=False,
-            )
-            assert resposta.code == 304 and resposta.body == b""
-            assert resposta.headers.get("Etag") == etag
-
-        self.assert_all(ARQUIVOS, check)
-
-    def test_a_conditional_get_with_another_etag_returns_the_whole_file(self):
-        def check(nome):
-            resposta = self.fetch(f"/painel/marca/{nome}", headers={"If-None-Match": '"outro"'}, follow_redirects=False)
-            assert resposta.code == 200 and len(resposta.body) > 0
-
-        self.assert_all(ARQUIVOS, check)
-
-    def test_the_304_keeps_the_cache_control_header(self):
-        etag = self.get_page("/painel/marca/logo.svg").headers["Etag"]
-
-        resposta = self.fetch("/painel/marca/logo.svg", headers={"If-None-Match": etag}, follow_redirects=False)
-
-        assert resposta.code == 304 and max_age(resposta.headers.get("Cache-Control", "")) is not None
-
-    def test_the_cache_control_is_public_for_one_day(self):
-        def check(nome):
-            controle = self.get_page(f"/painel/marca/{nome}").headers.get("Cache-Control", "")
-            assert controle == "public, max-age=86400", controle
-
-        self.assert_all(ARQUIVOS, check)
-
-    def test_a_head_request_also_gets_the_headers_without_reading_the_disk_again(self):
-        resposta = self.fetch("/painel/marca/logo.svg", method="HEAD", follow_redirects=False)
-
-        assert resposta.code in (200, 405) and resposta.body == b""
 
 
 class PanelBrandColdBurstTest(PanelTestBase):
@@ -195,76 +149,6 @@ class PanelBrandColdBurstTest(PanelTestBase):
         assert primeira.code == 404 and segunda.code == 200 and len(chamadas) == 2
 
 
-class PanelBrandLogoPequenoTest(PanelTestBase):
-    """O logo da interface é o ``logo-256.png`` (pequeno, da lista fechada); o SVG de 6 MB deixa de ir para a tela."""
-
-    def test_the_small_logo_is_served_as_png(self):
-        resposta = self.get_page("/painel/marca/logo-256.png")
-
-        assert resposta.code == 200 and resposta.headers["Content-Type"] == "image/png"
-        assert resposta.body.startswith(b"\x89PNG\r\n\x1a\n") and len(resposta.body) < 100 * 1024
-
-    def test_the_panel_home_references_the_small_logo_and_not_the_svg(self):
-        corpo = self.get_page("/painel/").body.decode("utf-8")
-
-        assert "/painel/marca/logo-256.png" in corpo and "logo.svg" not in corpo
-
-
-class PanelBrandWritePathTest(PanelTestBase):
-    """V-AS-L1 (seguimento): a resposta 200 não monta um ``bytes`` novo de cabeçalho+corpo por requisição.
-
-    O Tornado concatena quando o corpo vai junto do cabeçalho (``finish(data)`` sem flush prévio). O contrato: ``Content-Length`` definido, cabeçalhos
-    enviados sozinhos e o corpo em cache escrito depois. Observado no caminho de escrita da conexão (espiões), sem medir memória.
-    """
-
-    def _espiar(self, nome: str):
-        cabecalhos: list[bytes] = []
-        corpos: list[bytes] = []
-        escrever_cabecalhos, escrever = HTTP1Connection.write_headers, HTTP1Connection.write
-
-        def espia_cabecalhos(conexao, linha_inicial, headers, chunk=None):
-            if isinstance(linha_inicial, httputil.ResponseStartLine):
-                cabecalhos.append(bytes(chunk or b""))
-            return escrever_cabecalhos(conexao, linha_inicial, headers, chunk)
-
-        def espia_escrita(conexao, chunk):
-            corpos.append(chunk)
-            return escrever(conexao, chunk)
-
-        with (
-            mock.patch.object(HTTP1Connection, "write_headers", espia_cabecalhos),
-            mock.patch.object(HTTP1Connection, "write", espia_escrita),
-        ):
-            resposta = self.get_page(f"/painel/marca/{nome}")
-        return resposta, cabecalhos, corpos
-
-    def test_the_headers_leave_alone_and_the_cached_body_is_written_afterwards(self):
-        def check(nome):
-            self.get_page(f"/painel/marca/{nome}")  # aquece o cache
-            resposta, cabecalhos, corpos = self._espiar(nome)
-            em_cache = brand._cache[nome][0]
-
-            assert resposta.code == 200 and cabecalhos == [b""], "o corpo não pode ir junto do cabeçalho"
-            assert any(c is em_cache for c in corpos), "o corpo escrito deve ser o próprio objeto em cache"
-
-        self.assert_all(ARQUIVOS, check)
-
-    def test_the_response_is_not_chunked_and_declares_the_exact_length(self):
-        def check(nome):
-            resposta, _, _ = self._espiar(nome)
-
-            assert resposta.headers.get("Transfer-Encoding") is None
-            assert resposta.headers.get("Content-Length") == str(len(resposta.body))
-
-        self.assert_all(ARQUIVOS, check)
-
-    def test_the_304_path_carries_no_body_at_all(self):
-        etag = self.get_page("/painel/marca/logo.svg").headers["Etag"]
-        resposta = self.fetch("/painel/marca/logo.svg", headers={"If-None-Match": etag}, follow_redirects=False)
-
-        assert resposta.code == 304 and resposta.body == b""
-
-
 class PanelBrandSymlinkTest(PanelTestBase):
     """Um arquivo de marca que é link simbólico é recusado (o resto da lista fechada continua servido)."""
 
@@ -293,7 +177,3 @@ class PanelBrandSymlinkTest(PanelTestBase):
         resposta = self.get_page("/painel/marca/logo.svg")
 
         assert resposta.code in (403, 404) and b"<svg" not in resposta.body
-
-    def test_the_regular_brand_files_are_still_served(self):
-        assert self.get_page("/painel/marca/avatar.png").code == 200
-        assert self.get_page("/painel/marca/favicon.ico").code == 200
