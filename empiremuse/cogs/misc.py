@@ -235,8 +235,10 @@ class Misc(commands.Cog):
 
     @commands.Cog.listener("on_guild_join")
     async def guild_add(self, guild: disnake.Guild):
-        if (bans := bans_of(self.bot)) and bans.is_banned(guild.id):
-            return  # a saída e o único log ficam com o GuildLog
+        if bans := bans_of(self.bot):
+            await bans.ensure_loaded()
+            if bans.is_banned(guild.id):
+                return  # a saída e o único log ficam com o GuildLog
 
         bots_in_guild = []
         bots_outside_guild = []

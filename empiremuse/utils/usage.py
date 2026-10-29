@@ -22,10 +22,12 @@ from empiremuse.rules.usage import (
     KIND_GUILD,
     KIND_PANEL,
     KIND_PLAYBACK,
+    LABEL_LIMIT,
     MS_PER_DAY,
     MS_PER_SECOND,
     SUMMARY_DAYS,
     clamp_retention_days,
+    clean_text,
     end_reason,
     error_label,
     normalize_event,
@@ -46,6 +48,8 @@ QUERY_LIMIT = 20000
 STAMP_LIMIT = 1000  # quantas faixas da fila recebem o rótulo do comando que as enfileirou
 METRIC_KIND = "usage_write"
 EXTRA_KEY = "usage_cmd"
+# Só o que enfileira música carimba as faixas (um /skip ou /volume não enfileira nada).
+ENQUEUE_PREFIXES = ("play", "search", "add", "enqueue", "embed_", "song_request")
 
 
 def _id_and_name(obj: object) -> tuple[Optional[int], Optional[str]]:
@@ -164,7 +168,9 @@ class UsageRecorder:
     # ------------------------------------------------------------------ reprodução
 
     def stamp_queue(self, bot: object, guild_id: int, label: str) -> None:
-        """Marca as faixas ainda sem rótulo da fila com o comando que acabou de rodar (o que as enfileirou)."""
+        """Marca as faixas ainda sem rótulo (e que não vieram do autoplay) com o comando que acabou de enfileirar."""
+        if not label.startswith(ENQUEUE_PREFIXES):
+            return
         try:
             player = bot.music.players.get(guild_id)  # type: ignore[attr-defined]
             if player is None:
@@ -174,10 +180,18 @@ class UsageRecorder:
                 tracks.append(player.current)
             for track in tracks:
                 extra = track.info.get("extra")
-                if isinstance(extra, dict) and EXTRA_KEY not in extra:
+                if isinstance(extra, dict) and EXTRA_KEY not in extra and not extra.get("autoplay"):
                     extra[EXTRA_KEY] = label
+                    if track is player.current:
+                        self._label_playing(bot, guild_id, label)
         except Exception:  # noqa: BLE001 - carimbo é só rótulo; sem ele a faixa fica sem "via"
             return
+
+    def _label_playing(self, bot: object, guild_id: int, label: str) -> None:
+        """A faixa começou antes de o comando terminar: acrescenta o ``via`` ao evento de reprodução já registrado."""
+        playback = self._playing.get((bot.user.id, guild_id))  # type: ignore[attr-defined]
+        if playback is not None:
+            self._enqueue(("patch", (playback.event_id, {"via": clean_text(label, LABEL_LIMIT)})))
 
     def playback_started(self, bot: object, player: object, track: object) -> None:
         try:
@@ -196,7 +210,9 @@ class UsageRecorder:
                 guild=guild,
                 text_channel=getattr(player, "text_channel", None),
                 voice_channel=voice,
-                title=info.get("title"),
+                title=None
+                if info.get("sourceName") == "http"
+                else info.get("title"),  # no link direto o título é a URL do usuário
                 author=info.get("author"),
                 source=info.get("sourceName"),
                 length=length,

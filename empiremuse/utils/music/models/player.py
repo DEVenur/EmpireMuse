@@ -16,6 +16,7 @@ from empiremuse.rules.voice_status import DEFAULT_VOICE_TEMPLATE
 from empiremuse.utils.music.converters import time_format, md_link, md_code
 from empiremuse.utils.music.skin_utils import skin_converter
 from empiremuse.utils.others import string_to_file
+from empiremuse.utils.usage import usage_of
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
@@ -366,4 +367,8 @@ class LavalinkPlayer(
         return data
 
     async def destroy(self, *, force: bool = False, inter: disnake.MessageInteraction = None):
+        if usage := usage_of(self.bot):
+            usage.playback_ended(
+                self.bot, self.guild.id, "STOPPED"
+            )  # sem TrackEnd ao destruir: fecha o evento de reprodução
         self.bot.loop.create_task(self.process_destroy(force=force, inter=inter))

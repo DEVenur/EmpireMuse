@@ -231,16 +231,20 @@ class LocalDatabase(BaseDB):
             yield document
 
     # Coleção de eventos (registro de uso): sem o cache de documentos, em lote e fora do laço de eventos. O TinyMongo regrava o
-    # arquivo da coleção inteiro a cada escrita; por isso a escrita é em lote e roda em uma thread. Quem chama serializa o acesso.
+    # arquivo inteiro a cada escrita e guarda todas as tabelas de um banco no mesmo arquivo; por isso os eventos ficam em um arquivo
+    # só deles (``<banco>_events``), a escrita é em lote e roda em uma thread. Quem chama serializa o acesso.
+    def _events(self, db_name: str, collection: str):
+        return self._connect[f"{collection}_events"][db_name]
+
     async def append_events(self, docs: list[dict], *, db_name: str, collection: str, expire_after: timedelta) -> None:
-        await asyncio.to_thread(self._connect[collection][db_name].insert_many, docs)
+        await asyncio.to_thread(self._events(db_name, collection).insert_many, docs)
 
     async def patch_event(self, id_: str, fields: dict, *, db_name: str, collection: str) -> None:
-        await asyncio.to_thread(self._connect[collection][db_name].update_one, {"_id": id_}, {"$set": fields})
+        await asyncio.to_thread(self._events(db_name, collection).update_one, {"_id": id_}, {"$set": fields})
 
     async def find_events(self, filter: dict, *, db_name: str, collection: str, limit: int) -> list[dict]:
         def read() -> list[dict]:
-            rows = list(self._connect[collection][db_name].find(filter))
+            rows = list(self._events(db_name, collection).find(filter))
             rows.sort(key=lambda doc: doc.get("ts", 0), reverse=True)
             return rows[:limit]
 
@@ -248,7 +252,7 @@ class LocalDatabase(BaseDB):
 
     async def purge_events(self, older_than_ms: int, *, db_name: str, collection: str) -> None:
         """Poda os eventos mais antigos que o corte (no MongoDB quem poda é o índice TTL)."""
-        await asyncio.to_thread(self._connect[collection][db_name].delete_many, {"ts": {"$lt": older_than_ms}})
+        await asyncio.to_thread(self._events(db_name, collection).delete_many, {"ts": {"$lt": older_than_ms}})
 
     async def ensure_event_indexes(self, *, db_name: str, collection: str) -> None:
         return None
