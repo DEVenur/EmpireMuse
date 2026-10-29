@@ -57,7 +57,8 @@ from empiremuse.version import image_version
 from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.guild_ban import GuildBans
-from empiremuse.utils.usage import UsageRecorder
+from empiremuse.rules.usage import KIND_PREFIX, KIND_SLASH
+from empiremuse.utils.usage import UsageRecorder, usage_of
 from empiremuse.utils.music.audio_sources.deezer import DeezerClient
 from empiremuse.utils.music.audio_sources.spotify import SpotifyClient
 from empiremuse.utils.music.checks import check_pool_bots
@@ -1194,17 +1195,26 @@ class BotPool:
                 if inter.bot.exclusive_guild_id and inter.guild_id != inter.bot.exclusive_guild_id:
                     raise GenericError("Esse servidor não está autorizado para usar meus comandos...")
 
-                if self.config["COMMAND_LOG"] and inter.guild and not (await inter.bot.is_owner(inter.author)):
+                # Um só gancho para o COMMAND_LOG (opt-in, com IDs e opções resumidas) e para o registro de uso (sempre ligado, só
+                # o nome do comando e onde foi usado: nunca o usuário nem os valores das opções).
+                usage = usage_of(inter.bot) if inter.guild else None
+                log_command = bool(
+                    self.config["COMMAND_LOG"] and inter.guild and not (await inter.bot.is_owner(inter.author))
+                )
+                if usage or log_command:
                     try:
                         # LGPD (B23): só IDs, o comando e as opções resumidas por tipo; nada de nome, conteúdo nem URL de anexo.
                         info = command_context(inter, level=logging.INFO)
-                        commands_logger.info(
-                            "cmd log: [user: %s] - [guild: %s] - [cmd: %s] - %s",
-                            info["user_id"],
-                            info["guild_id"],
-                            info["command"],
-                            info["params"],
-                        )
+                        if usage:
+                            usage.command_started(KIND_SLASH, inter, info["command"], bot=inter.bot)
+                        if log_command:
+                            commands_logger.info(
+                                "cmd log: [user: %s] - [guild: %s] - [cmd: %s] - %s",
+                                info["user_id"],
+                                info["guild_id"],
+                                info["command"],
+                                info["params"],
+                            )
                     except Exception:
                         logger.exception("Falha ao registrar o log do comando")
 
@@ -1247,14 +1257,18 @@ class BotPool:
 
                 return True
 
-            if self.config["COMMAND_LOG"]:
+            @bot.listen("on_command")
+            async def command_hook(ctx: CustomContext):
+                # Mesmo gancho do COMMAND_LOG (opt-in) e do registro de uso (sempre ligado, sem usuário nem opções).
+                usage = usage_of(bot) if ctx.guild else None
+                log_command = bool(self.config["COMMAND_LOG"] and not (await bot.is_owner(ctx.author)))
+                if not (usage or log_command):
+                    return
 
-                @bot.listen("on_command")
-                async def command_log(ctx: CustomContext):
-                    if await bot.is_owner(ctx.author):
-                        return
-
-                    info = command_context(ctx, level=logging.INFO)
+                info = command_context(ctx, level=logging.INFO)
+                if usage:
+                    usage.command_started(KIND_PREFIX, ctx, info["command"], bot=bot)
+                if log_command:
                     commands_logger.info(
                         "cmd (prefix) log: [user: %s] - [guild: %s] - [cmd: %s] - %s",
                         info["user_id"],

@@ -103,6 +103,8 @@ O dono consulta **onde, como e quando** o bot foi usado, sem o log de arquivo e 
 
 **O que é gravado** (coleção `usage_events` do banco global, no MongoDB ou no banco local): hora UTC, bot, servidor (ID e nome), canal de texto e de voz (ID e nome), tipo (`slash`, `prefix`, `button`, `request_channel`, `panel`, `playback`, `guild`), nome do comando ou botão, `ok` ou um rótulo fixo de erro (nunca o texto da exceção) e a latência. Na reprodução entram também título, autor, origem, duração, o comando que enfileirou, os segundos ouvidos e o motivo do fim (`finished`, `skipped`, `stopped`, `error`). **Nunca** entram ID, nome, avatar ou contagem de usuários, nem o texto digitado na busca.
 
+**De onde vem:** comandos de barra, de menu e de prefixo abrem o evento no mesmo gancho do `COMMAND_LOG` (seção 5), mas o registro de uso fica sempre ligado e grava só o nome do comando e onde foi usado: nunca o usuário nem os valores das opções. O `COMMAND_LOG` continua opt-in e não muda.
+
 **Como grava:** os eventos vão para um buffer em memória e são gravados em lote a cada 10 segundos, fora do caminho do comando. Banco fora do ar não atrasa nem quebra comando: sai uma única linha de aviso por queda e o erro `usage_write` aparece no resumo de métricas (o lote é descartado). Nome de servidor, canal e faixa é texto de terceiros: o ANSI e os controles saem na gravação, o tamanho é limitado e o markdown é escapado na exibição, sempre sem menções.
 
 **Retenção:** `USAGE_RETENTION_DAYS` (30 por padrão). No MongoDB é um índice TTL (vale para os eventos gravados depois da mudança); no banco local, uma poda a cada hora.

@@ -17,12 +17,15 @@ from collections import deque
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Optional
 
+from cachetools import TTLCache
+
 from empiremuse.logs.redact import redact
 from empiremuse.rules.usage import (
     KIND_GUILD,
     KIND_PANEL,
     KIND_PLAYBACK,
     LABEL_LIMIT,
+    MAX_LATENCY_MS,
     MS_PER_DAY,
     MS_PER_SECOND,
     SUMMARY_DAYS,
@@ -48,6 +51,8 @@ QUERY_LIMIT = 20000
 STAMP_LIMIT = 1000  # quantas faixas da fila recebem o rótulo do comando que as enfileirou
 METRIC_KIND = "usage_write"
 EXTRA_KEY = "usage_cmd"
+OPEN_COMMANDS_MAX = 2000  # comandos iniciados e ainda sem desfecho
+OPEN_COMMANDS_TTL = 900
 # Só o que enfileira música carimba as faixas (um /skip ou /volume não enfileira nada).
 ENQUEUE_PREFIXES = ("play", "search", "add", "enqueue", "embed_", "song_request")
 
@@ -72,6 +77,22 @@ class _Playback:
         self.length = length
 
 
+class _OpenCommand:
+    __slots__ = ("event_id", "started", "name", "guild_id", "bot")
+
+    def __init__(self, event_id: str, name: str, guild_id: int, bot: object) -> None:
+        self.event_id = event_id
+        self.started = time.monotonic()
+        self.name = name
+        self.guild_id = guild_id
+        self.bot = bot
+
+
+def _source_key(source: object) -> Optional[int]:
+    """Identifica a interação (``id``) ou o contexto de prefixo (``id`` da mensagem) que abriu o comando."""
+    return getattr(source, "id", None) or getattr(getattr(source, "message", None), "id", None)
+
+
 class UsageRecorder:
     def __init__(self, pool: BotPool) -> None:
         self.pool = pool
@@ -79,6 +100,7 @@ class UsageRecorder:
         self._lock = asyncio.Lock()
         self._task: Optional[asyncio.Task] = None
         self._playing: dict[tuple[int, int], _Playback] = {}
+        self._open: TTLCache = TTLCache(maxsize=OPEN_COMMANDS_MAX, ttl=OPEN_COMMANDS_TTL)
         self._failure_logged = False
         self._indexes_ready = False
         self._last_prune: Optional[float] = None
@@ -140,6 +162,44 @@ class UsageRecorder:
         self._buffer.append(op)
 
     # ------------------------------------------------------------------ comandos e servidores
+
+    def command_started(self, kind: str, source: object, name: str, *, bot: object) -> None:
+        """Abre o evento de um comando de barra, de menu ou de prefixo no gancho do ``COMMAND_LOG``: só o nome e onde foi usado.
+
+        O usuário e os valores das opções ficam de fora; o desfecho (``ok``/erro e latência) entra depois, em ``command_finished``.
+        """
+        try:
+            guild = getattr(source, "guild", None)
+            key = _source_key(source)
+            if guild is None or key is None or not name:
+                return
+            event_id = self.record(kind, name, bot=bot, guild=guild, text_channel=getattr(source, "channel", None))
+            if event_id is not None:
+                self._open[key] = _OpenCommand(event_id, name, guild.id, bot)
+        except Exception as exc:  # noqa: BLE001
+            self._note_failure("registrar", exc)
+
+    def command_finished(
+        self, source: object, error: Optional[BaseException] = None, *, music_bot: object = None
+    ) -> None:
+        """Fecha o evento aberto por ``command_started``: ``ok`` ou o rótulo fixo do erro, a latência e o bot que executou."""
+        try:
+            opened = self._open.pop(_source_key(source), None)
+            if opened is None:
+                return
+            fields: dict[str, Any] = {
+                "ok": error is None,
+                "ms": min(int((time.monotonic() - opened.started) * MS_PER_SECOND), MAX_LATENCY_MS),
+            }
+            if error is not None:
+                fields["error"] = label_for(error)
+            executor = music_bot or opened.bot
+            if executor is not opened.bot:
+                fields["bot"] = executor.user.id  # type: ignore[attr-defined]
+            self._enqueue(("patch", (opened.event_id, fields)))
+            self.stamp_queue(executor, opened.guild_id, opened.name)
+        except Exception as exc:  # noqa: BLE001
+            self._note_failure("registrar", exc)
 
     def record_command(
         self, kind: str, name: str, source: object, *, bot: object, ok: bool, error: Optional[str] = None
