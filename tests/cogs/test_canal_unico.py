@@ -1018,3 +1018,72 @@ async def test_a_setup_that_loses_the_race_deletes_only_the_channel_it_created(m
 
     inner.assert_not_awaited()  # nenhum efeito do setup
     assert target.delete.await_count == (1 if deleted else 0)
+
+
+@pytest.mark.asyncio
+async def test_the_operation_lock_is_one_per_server_and_the_same_for_the_same_server():
+    request = operation_world(config_of(PANEL_MESSAGE)).pool.servers.request
+    assert request.operation(GID) is request.operation(GID)
+    assert request.operation(GID) is not request.operation(GID + 1)  # um servidor não segura o outro
+
+
+@pytest.mark.asyncio
+async def test_setup_and_reset_run_their_steps_holding_the_servers_operation_lock(monkeypatch):
+    from empiremuse.utils.music import request_channel as rc
+
+    bot = operation_world(config_of(PANEL_MESSAGE))
+    held = {}
+
+    async def spy(name, *args, **kwargs):
+        held[name] = bot.pool.servers.request.operation(GID).locked()
+
+    async def setup_step(*args, **kwargs):
+        await spy("setup")
+
+    async def reset_step(*args, **kwargs):
+        await spy("reset")
+
+    monkeypatch.setattr(rc, "_apply_request_channel", setup_step)
+    monkeypatch.setattr(rc, "_reset_request_channel", reset_step)
+    guild = SimpleNamespace(id=GID)
+
+    await rc.apply_request_channel(
+        bot, guild, object(), object(), existing_channel=True, config=config_of(PANEL_MESSAGE)
+    )
+    await rc.reset_request_channel(
+        bot,
+        guild,
+        object(),
+        object(),
+        delete_channel=None,
+        channel_inter=object(),
+        config=config_of(PANEL_MESSAGE),
+        notify=None,
+    )
+
+    assert held == {"setup": True, "reset": True}
+    assert not bot.pool.servers.request.operation(GID).locked()  # e soltou no fim
+
+
+@pytest.mark.asyncio
+async def test_a_reset_with_a_stale_config_is_refused_before_touching_discord(monkeypatch):
+    from empiremuse.utils.music import request_channel as rc
+    from empiremuse.utils.servers import ServerConfigConflict
+
+    bot = operation_world(config_of(999))
+    inner = AsyncMock()
+    monkeypatch.setattr(rc, "_reset_request_channel", inner)
+
+    with pytest.raises(ServerConfigConflict):
+        await rc.reset_request_channel(
+            bot,
+            SimpleNamespace(id=GID),
+            object(),
+            object(),
+            delete_channel="sim",
+            channel_inter=object(),
+            config=config_of(PANEL_MESSAGE),
+            notify=None,
+        )
+
+    inner.assert_not_awaited()  # nada de apagar o canal de uma configuração que já é outra
