@@ -339,6 +339,10 @@ class FakeRequestStore:
 
     def __init__(self, bot):
         self.bot = bot
+        self._lock = asyncio.Lock()
+
+    def operation(self, gid):
+        return self._lock
 
     async def panel_bot(self, gid):
         return self.bot

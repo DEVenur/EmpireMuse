@@ -219,7 +219,7 @@ class ChannelBase(SettingsBase):
         self.io_loop.run_sync(self.world.premigrate)
         request_channel = require("empiremuse.utils.music.request_channel")
         self.monkeypatch.setitem(
-            request_channel.apply_request_channel.__kwdefaults__, "send_idle_embed", self.world.fake_send_idle_embed
+            request_channel._apply_request_channel.__kwdefaults__, "send_idle_embed", self.world.fake_send_idle_embed
         )
         app = panel.build_panel_app(self.pool, settings, oauth_client=self.fake, clock=self.clock)
         self.panel_app = app

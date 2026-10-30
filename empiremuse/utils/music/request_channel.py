@@ -15,6 +15,7 @@ os pontos em que a UI se mistura à lógica entram como callbacks:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple, Optional, Union
 
@@ -24,6 +25,7 @@ from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import send_idle_embed as default_send_idle_embed
 from empiremuse.utils.server_request import RequestConfig
+from empiremuse.utils.servers import ServerConfigConflict
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +227,40 @@ def validate_request_target(bot: BotCore, guild: disnake.Guild, target, *, exist
         )
 
 
+@contextlib.asynccontextmanager
+async def exclusive_operation(bot: BotCore, guild_id: int, config: RequestConfig):
+    """Uma operação do canal de pedidos por vez no servidor (Discord e painel web), com a configuração conferida DENTRO da trava.
+
+    Se o canal/mensagem gravados já não são os que o comando leu, ``ServerConfigConflict`` ANTES de qualquer efeito no Discord:
+    o compare-and-set sozinho só recusa a gravação, não desfaz um canal criado ou apagado.
+    """
+    request = bot.pool.servers.request
+    async with request.operation(guild_id):
+        if (await request.get(guild_id)).current != config.current:
+            raise ServerConfigConflict
+        yield
+
+
 async def apply_request_channel(
+    bot: BotCore, guild: disnake.Guild, actor: Any, target, *, config: RequestConfig, **kwargs
+):
+    """Configura ``target`` como canal de pedidos (passos pós-escolha do ``/setup``) sob a trava de operação do servidor.
+
+    Se perder a corrida (a configuração mudou), o canal que este ``/setup`` acabou de criar é apagado: não sobra canal órfão.
+    """
+    try:
+        async with exclusive_operation(bot, guild.id, config):
+            return await _apply_request_channel(bot, guild, actor, target, config=config, **kwargs)
+    except ServerConfigConflict:
+        if not kwargs.get("existing_channel", True):
+            try:
+                await target.delete(reason="Configuração do canal de pedidos mudou durante o /setup.")
+            except disnake.HTTPException:
+                logger.warning("Canal recém-criado não apagado após conflito [%s]", guild.id)
+        raise
+
+
+async def _apply_request_channel(
     bot: BotCore,
     guild: disnake.Guild,
     actor: Any,
@@ -506,6 +541,31 @@ async def _clear_in_discord(actor: Any, channel, delete_channel: Optional[str], 
 
 
 async def reset_request_channel(
+    bot: BotCore,
+    guild: disnake.Guild,
+    actor: Any,
+    channel,
+    *,
+    delete_channel: Optional[str],
+    channel_inter,
+    config: RequestConfig,
+    notify: Notify,
+) -> None:
+    """``/reset`` sob a trava de operação do servidor (nunca junto de um ``/setup``, nem apaga canal de uma configuração nova)."""
+    async with exclusive_operation(bot, guild.id, config):
+        await _reset_request_channel(
+            bot,
+            guild,
+            actor,
+            channel,
+            delete_channel=delete_channel,
+            channel_inter=channel_inter,
+            config=config,
+            notify=notify,
+        )
+
+
+async def _reset_request_channel(
     bot: BotCore,
     guild: disnake.Guild,
     actor: Any,

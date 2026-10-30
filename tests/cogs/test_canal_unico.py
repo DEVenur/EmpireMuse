@@ -936,3 +936,85 @@ async def test_unloading_the_guild_log_cancels_the_roster_tasks():
     for task in tasks:
         task.cancel()  # limpeza: nada fica pendurado se a asserção falhar
     assert cancelled
+
+
+# ---------------------------------------------------------------------- /setup e /reset: uma operação por vez no servidor (CodeRabbit #159)
+
+
+def operation_world(stored):
+    """Um bot cujo ``pool.servers.request`` é o ``ServerRequest`` de verdade (só a leitura do banco é falsa)."""
+    from empiremuse.utils.server_request import ServerRequest
+
+    request = ServerRequest(SimpleNamespace(pool=None))
+    request.get = AsyncMock(return_value=stored)
+    return SimpleNamespace(pool=SimpleNamespace(servers=SimpleNamespace(request=request)))
+
+
+def config_of(message):
+    from empiremuse.utils.server_request import RequestConfig
+
+    return RequestConfig(PANEL_CHANNEL, message, None, 1)
+
+
+@pytest.mark.asyncio
+async def test_setup_and_reset_never_run_at_the_same_time_on_the_same_server():
+    from empiremuse.utils.music import request_channel as rc
+
+    bot = operation_world(config_of(PANEL_MESSAGE))
+    first_in, release, order = asyncio.Event(), asyncio.Event(), []
+
+    async def setup():
+        async with rc.exclusive_operation(bot, GID, config_of(PANEL_MESSAGE)):
+            order.append("setup começou")
+            first_in.set()
+            await release.wait()
+            order.append("setup terminou")
+
+    async def reset():
+        async with rc.exclusive_operation(bot, GID, config_of(PANEL_MESSAGE)):
+            order.append("reset começou")
+
+    first = asyncio.ensure_future(setup())
+    await asyncio.wait_for(first_in.wait(), 5)
+    second = asyncio.ensure_future(reset())
+    assert not second.done() and order == ["setup começou"]  # o reset espera a trava
+
+    release.set()
+    await asyncio.wait_for(asyncio.gather(first, second), 5)
+    assert order == ["setup começou", "setup terminou", "reset começou"]
+
+
+@pytest.mark.asyncio
+async def test_a_stale_config_is_refused_inside_the_lock_before_any_effect_on_discord():
+    from empiremuse.utils.music import request_channel as rc
+    from empiremuse.utils.servers import ServerConfigConflict
+
+    bot = operation_world(config_of(999))  # um setup concorrente já gravou outra mensagem
+    effects = []
+
+    with pytest.raises(ServerConfigConflict):
+        async with rc.exclusive_operation(bot, GID, config_of(PANEL_MESSAGE)):  # o comando leu a mensagem antiga
+            effects.append("apagou o canal")
+
+    assert effects == []
+    assert not bot.pool.servers.request.operation(GID).locked()  # e a trava foi solta
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("existing", "deleted"), [(False, True), (True, False)], ids=["created_here", "pre_existing"])
+async def test_a_setup_that_loses_the_race_deletes_only_the_channel_it_created(monkeypatch, existing, deleted):
+    from empiremuse.utils.music import request_channel as rc
+    from empiremuse.utils.servers import ServerConfigConflict
+
+    bot = operation_world(config_of(999))
+    inner = AsyncMock()
+    monkeypatch.setattr(rc, "_apply_request_channel", inner)
+    target = SimpleNamespace(delete=AsyncMock())
+
+    with pytest.raises(ServerConfigConflict):
+        await rc.apply_request_channel(
+            bot, SimpleNamespace(id=GID), object(), target, existing_channel=existing, config=config_of(PANEL_MESSAGE)
+        )
+
+    inner.assert_not_awaited()  # nenhum efeito do setup
+    assert target.delete.await_count == (1 if deleted else 0)

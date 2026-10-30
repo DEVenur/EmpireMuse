@@ -8,7 +8,9 @@ passa pelo store (``utils/servers``): trava por servidor, ``rev`` +1 e compare-a
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import weakref
 from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from empiremuse.rules.request_panel import PanelPeer, elect_panel_bot
@@ -66,6 +68,17 @@ def _config(doc: dict) -> RequestConfig:
 class ServerRequest:
     def __init__(self, store: ServerStore) -> None:
         self.store = store
+        self._operation_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
+
+    def operation(self, gid: int) -> asyncio.Lock:
+        """A trava de OPERAÇÃO do canal do servidor: ``/setup`` e ``/reset`` (Discord e painel web) correm um de cada vez.
+
+        É diferente da trava do store: ela cobre os efeitos no Discord (criar, apagar, arquivar), que o compare-and-set não desfaz.
+        """
+        lock = self._operation_locks.get(gid)
+        if lock is None:
+            lock = self._operation_locks[gid] = asyncio.Lock()
+        return lock
 
     # ------------------------------------------------------------------ leitura
 
