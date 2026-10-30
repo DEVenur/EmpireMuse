@@ -212,8 +212,8 @@ class RequestPanel:
         if election.bot is None or not election.changed or not config.channel:
             return
         message = await self.resend(guild_id, replace_message_id=config.message_id)
-        if message is None:
-            return
+        if message is None or (await request.get(guild_id)).message_id != message.id:
+            return  # outro reenvio gravou uma mensagem mais nova durante este: religar à antiga deixaria os players numa apagada
         for _, player in self.players(guild_id):
             player.message = message  # a anterior foi apagada; os players passam a editar o painel novo
             player.last_data = {}

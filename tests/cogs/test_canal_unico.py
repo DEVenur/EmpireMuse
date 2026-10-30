@@ -675,13 +675,15 @@ async def test_one_failing_player_does_not_stop_the_others_from_being_rebound(ca
 # ---------------------------------------------------------------------- correções do CodeRabbit: painel novo, tarefas e encerramento
 
 
-def static_players_world(*, resent):
+def static_players_world(*, resent, newest=None):
     one, two = make_bot(1, "TOKEN", call=100), make_bot(2, "TOKEN_2", call=200)
     for bot in (one, two):
         bot.music.players[GID].message = "mensagem antiga"
         bot.music.players[GID].last_data = {"skin": "antiga"}
     panel, pool = panel_world(one, two)
-    pool.servers.request.get.return_value = SimpleNamespace(channel=PANEL_CHANNEL, message_id=PANEL_MESSAGE)
+    before = SimpleNamespace(channel=PANEL_CHANNEL, message_id=PANEL_MESSAGE)
+    after = SimpleNamespace(channel=PANEL_CHANNEL, message_id=getattr(newest or resent, "id", PANEL_MESSAGE))
+    pool.servers.request.get.side_effect = [before, after]  # antes do reenvio, e depois dele (o que ficou gravado)
     pool.servers.request.elect.return_value = SimpleNamespace(bot=object(), changed=True)
     panel.resend = AsyncMock(return_value=resent)
     panel.refresh = AsyncMock()
@@ -699,6 +701,18 @@ async def test_after_the_panel_is_resent_every_static_player_edits_the_new_messa
         player = bot.music.players[GID]
         assert player.message is new and player.last_data == {}  # "nada mudou" não pode pular o redesenho
     panel.refresh.assert_awaited_once_with(GID, now=True)
+
+
+@pytest.mark.asyncio
+async def test_a_resend_that_lost_the_race_to_a_newer_one_does_not_rebind_the_players_to_the_deleted_message():
+    older, newer = SimpleNamespace(id=777), SimpleNamespace(id=888)
+    panel, one, two = static_players_world(resent=older, newest=newer)
+
+    await panel.on_roster_change(GID)
+
+    for bot in (one, two):
+        assert bot.music.players[GID].message == "mensagem antiga"
+    panel.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
