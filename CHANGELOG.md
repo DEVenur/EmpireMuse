@@ -23,6 +23,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Testes**: enxugadas as suítes de `tests/audio`, `tests/cogs` e `tests/pool` (caracterização em massa, testes de mutação e testes em volta de correções já feitas) e removidos os helpers de `tests/support` que nenhum teste usa mais; ficam os testes de segurança, contratos Discord/Lavalink e um por bug real.
 
 ### Corrigido
+- **Link da importação de playlists fora do log**: o parâmetro `link` do `/playlists importar` (que pode trazer `?token=` ou a assinatura do CDN) agora aparece como `***` no contexto dos erros, inclusive em nível DEBUG ou em servidor de `LOG_DEBUG_GUILDS`.
 - **`/play` lia o documento errado**: a configuração do servidor era buscada com o id de quem pediu a música, não com o do servidor; agora usa o id do servidor.
 
 ### Documentação

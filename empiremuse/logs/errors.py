@@ -58,9 +58,14 @@ def _rest_of_prefix_command(ctx: object) -> str | None:
     return parts[1] if len(parts) > 1 else ""
 
 
+# Parâmetros de comando cujo VALOR é uma credencial mesmo sem o nome dizer: o link do ``/playlists importar`` pode trazer ``?token=`` ou a
+# assinatura do CDN do Discord, então nem com o nível em DEBUG ele vai para o log (o contrato da importação por link é "nunca logar a URL").
+_SECRET_PARAMS = frozenset({"link"})
+
+
 def _summarize(name: str, value: object, *, reveal: bool, budget: int) -> str:
     """Resumo de um parâmetro por tipo, sem ``repr`` (que traria nome, apelido e URL assinada da CDN)."""
-    if is_secret_name(name):
+    if is_secret_name(name) or name.casefold() in _SECRET_PARAMS:
         return MASKED
     if isinstance(value, disnake.Attachment):
         return f"Attachment(tipo={value.content_type}, tamanho={value.size})"
@@ -81,7 +86,7 @@ def command_context(ctx_or_inter: object, *, level: int) -> dict[str, object]:
     """``command``, ``user_id``, ``guild_id``, ``channel_id`` e ``params`` (nome → resumo em texto) de uma interação ou contexto de prefixo.
 
     O texto livre só aparece com ``level <= DEBUG`` ou com o servidor em ``LOG_DEBUG_GUILDS``; nos demais casos vai só o tamanho. Um
-    parâmetro cujo nome casa com o regex de segredo vira ``***`` em qualquer nível. Nunca levanta.
+    parâmetro cujo nome casa com o regex de segredo (ou é o ``link`` da importação) vira ``***`` em qualquer nível. Nunca levanta.
     """
     author = getattr(ctx_or_inter, "author", None) or getattr(ctx_or_inter, "user", None)
     guild_id = _first_id(
