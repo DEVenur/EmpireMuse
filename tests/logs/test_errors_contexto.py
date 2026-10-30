@@ -66,7 +66,9 @@ class TestResumoPorTipo:
         assert "cdn" not in saida and URL_DO_ANEXO not in saida
 
     @pytest.mark.parametrize("nome", ["link", "Link"])
-    def test_the_import_link_never_reaches_the_log_not_even_at_debug_or_in_a_debug_guild(self, nome):  # V-160-1
+    def test_the_import_link_never_reaches_the_log_not_even_at_debug_or_in_a_debug_guild(
+        self, nome: str
+    ) -> None:  # V-160-1
         url = "https://cdn.discordapp.com/attachments/1/2/playlists.json?ex=abc&hm=assinatura-secreta"
         for nivel in (ERROR, DEBUG):
             saida = resumo({nome: url}, nivel)[nome]
