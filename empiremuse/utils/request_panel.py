@@ -96,8 +96,17 @@ class RequestPanel:
         return found
 
     def takes_over(self, guild_id: int) -> bool:
-        """O painel inteiro (lista) assume a mensagem? Só com 2 ou mais players: com 1, vale a skin estática do player."""
-        return len(self.players(guild_id)) >= 2
+        """O painel inteiro (lista) assume a mensagem? Com 2 ou mais players, ou com 1 numa call privada (S-V7: a skin mostraria a faixa).
+
+        Com 1 player numa call aberta vale a skin estática dele, como sempre foi.
+        """
+        players = self.players(guild_id)
+        if len(players) >= 2:
+            return True
+        if not players:
+            return False
+        voice = getattr(getattr(players[0][1].guild.me, "voice", None), "channel", None)
+        return voice is not None and is_private(voice)
 
     # ------------------------------------------------------------------ edição agrupada
 
@@ -154,7 +163,7 @@ class RequestPanel:
         players = self.players(guild_id)
         if not players:
             await send_idle_embed(message, bot=panel_bot, force=True)
-        elif len(players) == 1:
+        elif not self.takes_over(guild_id):
             await players[0][1].invoke_np(force=True, panel_render=True)  # a skin estática do player, como sempre foi
         else:
             for _, player in players:

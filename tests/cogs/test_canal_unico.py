@@ -21,9 +21,16 @@ pytestmark = pytest.mark.critical
 GID, PANEL_CHANNEL, PANEL_MESSAGE = 111, 22, 555
 
 
-def make_bot(bot_id, identifier, *, call=None, ready=True, exclusive=None, in_guild=True, static=True):
-    """Um bot do pool: ``call`` = id da call onde ele toca (``None`` = livre)."""
-    voice = SimpleNamespace(channel=SimpleNamespace(id=call, name=f"call-{call}")) if call else None
+def make_bot(bot_id, identifier, *, call=None, ready=True, exclusive=None, in_guild=True, static=True, private=False):
+    """Um bot do pool: ``call`` = id da call onde ele toca (``None`` = livre; ``private`` = ``@everyone`` não vê a call)."""
+    perms = SimpleNamespace(view_channel=not private, connect=not private)
+    channel = SimpleNamespace(
+        id=call,
+        name=f"call-{call}",
+        guild=SimpleNamespace(default_role="everyone"),
+        permissions_for=lambda role: perms,
+    )
+    voice = SimpleNamespace(channel=channel) if call else None
     guild = SimpleNamespace(id=GID, me=SimpleNamespace(voice=voice), get_member=lambda _id: None)
     player = (
         SimpleNamespace(guild=guild, static=static, is_closing=False, current=None, queue=[], paused=False)
@@ -166,6 +173,17 @@ async def test_a_click_from_someone_in_no_call_only_warns_and_changes_nothing():
     interaction.send.assert_awaited_once_with(MSG_JOIN_A_CALL, ephemeral=True)
     assert not hasattr(interaction, "music_bot")
     other.cog.player_controller.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_click_on_the_panel_bots_own_player_is_marked_so_a_non_static_player_does_not_swallow_it():
+    self_, req, _, interaction = click(call=100)
+    assert await controller_buttons._pc_route_panel_click(self_, req) is False
+    assert interaction.panel_click is True
+
+    self_, req, _, interaction = click(call=100, message_id=999)  # outra mensagem: segue o fluxo normal, sem marca
+    assert await controller_buttons._pc_route_panel_click(self_, req) is False
+    assert not hasattr(interaction, "panel_click")
 
 
 @pytest.mark.asyncio
@@ -747,6 +765,36 @@ async def test_drawing_the_list_resets_each_players_cache_so_going_back_to_one_p
     message.edit.assert_awaited_once()
     assert message.edit.await_args.kwargs["allowed_mentions"].everyone is False
     assert one.music.players[GID].last_data == {} and two.music.players[GID].last_data == {}
+
+
+def test_one_player_in_an_open_call_keeps_its_skin_but_in_a_private_call_the_list_takes_over():  # S-V7
+    open_call, hidden_call = make_bot(1, "TOKEN", call=100), make_bot(1, "TOKEN", call=100, private=True)
+    assert not panel_world(open_call)[0].takes_over(GID)
+    assert panel_world(hidden_call)[0].takes_over(GID)
+
+
+@pytest.mark.asyncio
+async def test_one_player_in_a_private_call_is_drawn_as_the_list_with_no_track_or_requester(monkeypatch):  # S-V7
+    from empiremuse.utils.music.interactions import request_panel as ui
+    from empiremuse.utils import server_playlists
+
+    track = SimpleNamespace(title="Faixa secreta", uri="https://exemplo.test/x", requester="7")
+    one = make_bot(1, "TOKEN", call=100, private=True)
+    one.music.players[GID].current = track
+    one.music.players[GID].invoke_np = AsyncMock()
+    panel, pool = panel_world(one)
+    pool.servers.request.panel_bot = AsyncMock(return_value=one)
+    message = SimpleNamespace(guild=SimpleNamespace(), edit=AsyncMock())
+    drawn = []
+    monkeypatch.setattr(panel_module, "fetch_panel_message", AsyncMock(return_value=message))
+    monkeypatch.setattr(ui, "render_panel", lambda panel_bot, guild, entries, **kw: drawn.extend(entries) or {})
+    monkeypatch.setattr(server_playlists, "load_select_options", AsyncMock(return_value=[]))
+
+    await panel._draw(GID)
+
+    one.music.players[GID].invoke_np.assert_not_awaited()  # a skin (que mostra a faixa) não é usada
+    assert len(drawn) == 1 and drawn[0].private and (drawn[0].title, drawn[0].url, drawn[0].requester) == (None,) * 3
+    message.edit.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,7 @@
 da trava conferindo quem está no servidor, e o formato antigo grava canal/mensagem só no documento único e só o que o escritor mudou."""
 
 import asyncio
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -283,3 +284,18 @@ def test_an_existing_server_document_without_the_request_section_reads_the_bots_
 
     assert view["player_controller"]["channel"] == "12" and view["player_controller"]["message_id"] == "34"
     assert len(world.banco.saves) == saves
+
+
+def test_a_bot_entering_or_leaving_never_changes_the_servers_settings_or_playlists(world):  # S9
+    run(world.store.patch(GID, "settings", {"autoplay": True}))
+    run(world.request.elect(GID))
+    before = deepcopy(world.banco.servers_doc())
+
+    world.bots[1].get_guild = lambda gid: None  # a reserva sai...
+    run(world.request.elect(GID))
+    world.bots[1].get_guild = lambda gid: SimpleNamespace(roles=[])  # ...e volta
+    run(world.request.elect(GID))
+
+    after = world.banco.servers_doc()
+    assert after["settings"] == before["settings"] and after["playlists"] == before["playlists"]
+    assert after["migrated"] == before["migrated"] and after["request"] == before["request"]

@@ -203,6 +203,9 @@ async def _pc_route_panel_click(self, req) -> bool:
         return True
     bot, _ = resolved
     if bot is self.bot:
+        interaction.panel_click = (
+            True  # o player da call é o deste bot, mesmo que não seja o estático da mensagem do painel
+        )
         return False
     update_attr(interaction, bot, bot.get_guild(interaction.guild_id))
     interaction.panel_click = (
