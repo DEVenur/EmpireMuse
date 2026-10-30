@@ -16,6 +16,7 @@ from empiremuse.cogs.server_playlists import (
     ensure_manage,
     member_may_manage,
 )
+from empiremuse.rules.errors import FILE_TOO_LARGE, RuleError
 from empiremuse.rules.limits import PLAYLIST_FILE_MAX_BYTES, PLAYLIST_PASTE_MAX
 from empiremuse.rules.playlists import ImportReport
 from empiremuse.utils.music.errors import GenericError
@@ -305,3 +306,102 @@ def test_every_command_and_option_description_fits_the_discord_limit_of_100_char
         assert len(str(body.description)) <= 100, body.name
         for option in body.options:
             assert len(str(option.description)) <= 100, (body.name, option.name)
+
+
+# ---------------------------------------------------------------------- P5: origem por link
+
+
+LINK = "https://raw.githubusercontent.com/dono/repo/main/playlists.json?token=segredo-9f3a"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "origins",
+    [{"file": "rock-80.json", "link": LINK}, {"attachment": object(), "link": LINK}],
+    ids=["file+link", "attachment+link"],
+)
+async def test_two_origins_including_the_link_are_refused(world, monkeypatch, origins):
+    fetched = AsyncMock()
+    monkeypatch.setattr(cog_module, "fetch_import", fetched)
+    inter = make_inter(ADMIN)
+
+    with pytest.raises(GenericError) as refused:
+        await ServerPlaylistsCog.import_.callback(
+            world.cog, inter, **{"file": None, "attachment": None, "link": None, **origins}
+        )
+
+    assert "Escolha só uma origem" in refused.value.text
+    fetched.assert_not_awaited()
+    inter.response.defer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "http://raw.githubusercontent.com/p.json",
+        "https://evil.com/p.json",
+        "https://192.168.0.1/p.json?token=segredo-9f3a",
+    ],
+)
+async def test_a_bad_link_is_refused_before_deferring_and_without_any_fetch(world, monkeypatch, bad):
+    fetched = AsyncMock()
+    monkeypatch.setattr(cog_module, "fetch_import", fetched)
+    inter = make_inter(ADMIN)
+
+    with pytest.raises(GenericError) as refused:
+        await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None, link=bad)
+
+    fetched.assert_not_awaited()
+    inter.response.defer.assert_not_awaited()
+    assert "segredo-9f3a" not in refused.value.text and bad not in refused.value.text  # a resposta nunca repete o link
+    world.playlists.import_file.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_good_link_is_fetched_imported_without_icons_and_answered_with_the_report(world, monkeypatch):
+    fetched = AsyncMock(return_value=json.dumps(FILE).encode())
+    monkeypatch.setattr(cog_module, "fetch_import", fetched)
+    inter = make_inter(MANAGER)
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None, link=LINK)
+
+    fetched.assert_awaited_once_with(LINK)
+    (gid, parsed), _ = world.playlists.import_file.await_args
+    assert gid == GID and parsed.items[0].name == "Rock" and parsed.items[0].icon is None  # ícone só de arquivo do bot
+    assert_private_and_without_mentions(inter)
+    assert "segredo-9f3a" not in sent_text(inter)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuleError(cog_module.IMPORT_FETCH_FAILED),
+        RuleError(cog_module.IMPORT_URL_REFUSED),
+        RuleError(FILE_TOO_LARGE, limit=PLAYLIST_FILE_MAX_BYTES),
+    ],
+    ids=["fetch_failed", "refused_by_dns", "too_large"],
+)
+async def test_a_failed_fetch_answers_with_a_fixed_text_that_never_has_the_link(world, monkeypatch, failure):
+    monkeypatch.setattr(cog_module, "fetch_import", AsyncMock(return_value=failure))
+    inter = make_inter(ADMIN)
+
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None, link=LINK)
+
+    world.playlists.import_file.assert_not_awaited()
+    assert "segredo-9f3a" not in sent_text(inter) and "raw.githubusercontent.com/dono" not in sent_text(inter)
+    assert_private_and_without_mentions(inter)
+
+
+@pytest.mark.asyncio
+async def test_a_plain_member_cannot_use_the_link_origin_and_no_origin_still_opens_the_modal(world, monkeypatch):
+    fetched = AsyncMock()
+    monkeypatch.setattr(cog_module, "fetch_import", fetched)
+    with pytest.raises(GenericError):
+        await ServerPlaylistsCog.import_.callback(world.cog, make_inter(PLAIN), file=None, attachment=None, link=LINK)
+    fetched.assert_not_awaited()  # sem permissão, nenhuma busca de rede
+
+    inter = make_inter(ADMIN)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None, link=None)
+    assert isinstance(inter.response.send_modal.await_args.args[0], PasteModal)
