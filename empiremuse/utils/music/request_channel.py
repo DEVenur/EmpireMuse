@@ -253,11 +253,24 @@ async def apply_request_channel(
             return await _apply_request_channel(bot, guild, actor, target, config=config, **kwargs)
     except ServerConfigConflict:
         if not kwargs.get("existing_channel", True):
-            try:
-                await target.delete(reason="Configuração do canal de pedidos mudou durante o /setup.")
-            except disnake.HTTPException:
-                logger.warning("Canal recém-criado não apagado após conflito [%s]", guild.id)
+            await _discard_created_channel(bot, guild.id, target)
         raise
+
+
+async def _discard_created_channel(bot: BotCore, guild_id: int, target) -> None:
+    """Apaga o canal que este ``/setup`` criou e perdeu a corrida, SEM apagar um que outra operação já tenha configurado.
+
+    O canal nasce antes da trava; outra operação pode tê-lo escolhido por ID como canal existente nesse meio-tempo. A configuração é
+    relida sob a trava de operação e a trava só é solta depois do ``delete``.
+    """
+    request = bot.pool.servers.request
+    async with request.operation(guild_id):
+        if (await request.get(guild_id)).channel == getattr(target, "id", None):
+            return  # já é o canal de pedidos de outra operação: fica
+        try:
+            await target.delete(reason="Configuração do canal de pedidos mudou durante o /setup.")
+        except disnake.HTTPException:
+            logger.warning("Canal recém-criado não apagado após conflito [%s]", guild_id)
 
 
 async def _apply_request_channel(

@@ -970,14 +970,18 @@ async def test_setup_and_reset_never_run_at_the_same_time_on_the_same_server():
             await release.wait()
             order.append("setup terminou")
 
+    reset_tried = asyncio.Event()
+
     async def reset():
+        reset_tried.set()  # a tarefa já está rodando e vai pedir a trava
         async with rc.exclusive_operation(bot, GID, config_of(PANEL_MESSAGE)):
             order.append("reset começou")
 
     first = asyncio.ensure_future(setup())
     await asyncio.wait_for(first_in.wait(), 5)
     second = asyncio.ensure_future(reset())
-    assert not second.done() and order == ["setup começou"]  # o reset espera a trava
+    await asyncio.wait_for(reset_tried.wait(), 5)
+    assert not second.done() and order == ["setup começou"]  # o reset tentou e espera a trava
 
     release.set()
     await asyncio.wait_for(asyncio.gather(first, second), 5)
@@ -1009,7 +1013,9 @@ async def test_a_setup_that_loses_the_race_deletes_only_the_channel_it_created(m
     bot = operation_world(config_of(999))
     inner = AsyncMock()
     monkeypatch.setattr(rc, "_apply_request_channel", inner)
-    target = SimpleNamespace(delete=AsyncMock())
+    target = SimpleNamespace(
+        id=PANEL_CHANNEL + 1, delete=AsyncMock()
+    )  # o canal configurado agora é outro (PANEL_CHANNEL)
 
     with pytest.raises(ServerConfigConflict):
         await rc.apply_request_channel(
@@ -1018,6 +1024,23 @@ async def test_a_setup_that_loses_the_race_deletes_only_the_channel_it_created(m
 
     inner.assert_not_awaited()  # nenhum efeito do setup
     assert target.delete.await_count == (1 if deleted else 0)
+
+
+@pytest.mark.asyncio
+async def test_a_created_channel_that_another_operation_meanwhile_configured_is_not_deleted():  # CodeRabbit #159
+    from empiremuse.utils.music import request_channel as rc
+    from empiremuse.utils.servers import ServerConfigConflict
+
+    bot = operation_world(config_of(999))  # a outra operação já configurou o canal PANEL_CHANNEL
+    target = SimpleNamespace(id=PANEL_CHANNEL, delete=AsyncMock())  # o mesmo canal que este /setup tinha criado
+
+    with pytest.raises(ServerConfigConflict):
+        await rc.apply_request_channel(
+            bot, SimpleNamespace(id=GID), object(), target, existing_channel=False, config=config_of(PANEL_MESSAGE)
+        )
+
+    target.delete.assert_not_awaited()
+    assert not bot.pool.servers.request.operation(GID).locked()
 
 
 @pytest.mark.asyncio
