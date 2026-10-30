@@ -487,6 +487,30 @@ async def test_two_simultaneous_resends_send_one_panel_and_the_second_gets_the_e
 
 
 @pytest.mark.asyncio
+async def test_a_panel_message_from_a_different_author_is_replaced_not_reused(monkeypatch):
+    panel_bot = make_bot(2, "TOKEN_2")
+    old_author_message = SimpleNamespace(id=444, author=SimpleNamespace(id=1))  # o painel do bot que saiu
+    deleted = AsyncMock()
+    channel = SimpleNamespace(id=PANEL_CHANNEL, get_partial_message=lambda mid: SimpleNamespace(delete=deleted))
+    panel_bot.get_channel = lambda cid: channel
+    panel, pool = panel_world(panel_bot)
+    pool.servers.request.get.return_value = SimpleNamespace(channel=PANEL_CHANNEL, message_id=444, current=1)
+    pool.servers.request.panel_bot.return_value = panel_bot
+    new = SimpleNamespace(id=999, author=SimpleNamespace(id=2))
+    import empiremuse.utils.others as others
+
+    idle = AsyncMock(return_value=new)
+    monkeypatch.setattr(others, "send_idle_embed", idle)
+    monkeypatch.setattr(panel_module, "fetch_panel_message", AsyncMock(return_value=old_author_message))
+
+    assert await panel.resend(GID) is new
+
+    idle.assert_awaited_once()  # uma mensagem de outro bot não pode ser editada por este: manda uma nova
+    deleted.assert_awaited_once()  # e a antiga sai
+    assert pool.servers.request.set.await_args.args[:3] == (GID, PANEL_CHANNEL, 999)
+
+
+@pytest.mark.asyncio
 async def test_a_config_conflict_while_resending_deletes_the_new_message_and_raises(monkeypatch):
     from empiremuse.utils.servers import ServerConfigConflict
 
@@ -772,6 +796,9 @@ async def test_after_the_panel_is_resent_every_static_player_edits_the_new_messa
 
     await panel.handoff(GID)
 
+    panel.resend.assert_awaited_once_with(
+        GID
+    )  # sem id para substituir: se o painel já é do bot, o reenvio devolve o existente
     for bot in (one, two):
         player = bot.music.players[GID]
         assert player.message is new and player.last_data == {}  # "nada mudou" não pode pular o redesenho

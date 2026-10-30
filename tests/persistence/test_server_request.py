@@ -322,3 +322,28 @@ def test_every_path_that_persists_a_new_panel_bot_hands_the_panel_off(world):  #
     main.get_guild = lambda gid: None  # o principal sai
     assert run(world.request.is_panel_bot(GID, reserve)) is True
     assert handoffs == [GID, GID, GID]
+
+
+def test_panel_bot_and_is_panel_bot_retry_a_pending_handoff_once_the_election_is_stored(world):  # CodeRabbit #159
+    retried = []
+    world.pool.request_panel = SimpleNamespace(schedule_handoff=lambda gid: None, retry_pending_handoff=retried.append)
+    main, reserve = world.bots
+    run(world.request.elect(GID))  # eleição gravada: o principal
+    retried.clear()
+
+    assert run(world.request.panel_bot(GID)) is main
+    assert retried == [GID]
+    assert run(world.request.is_panel_bot(GID, main)) is True
+    assert retried == [GID, GID]
+
+    assert run(world.request.is_panel_bot(GID, reserve)) is False  # quem não é o bot do painel não retoma nada
+    assert retried == [GID, GID]
+
+
+def test_a_repeated_election_with_no_change_does_not_hand_the_panel_off_again(world):
+    handoffs = []
+    world.pool.request_panel = SimpleNamespace(schedule_handoff=handoffs.append, retry_pending_handoff=lambda gid: None)
+
+    assert run(world.request.elect(GID)).changed is True and handoffs == [GID]
+    assert run(world.request.elect(GID)).changed is False
+    assert handoffs == [GID]  # a mesma eleição gravada duas vezes passa o painel uma vez só
