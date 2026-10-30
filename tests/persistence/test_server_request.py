@@ -157,8 +157,8 @@ def test_the_election_looks_at_who_is_in_the_server_again_inside_the_lock(world,
     def peers(gid):
         calls.append(gid)
         return (
-            real(gid) if len(calls) > 1 else [p for p in real(gid) if p.bot_id == RESERVE_ID]
-        )  # 1ª olhada: só a reserva
+            real(gid) if len(calls) > 2 else [p for p in real(gid) if p.bot_id == RESERVE_ID]
+        )  # 1ª e 2ª olhadas, fora da trava: só a reserva
 
     monkeypatch.setattr(world.request, "peers", peers)
 

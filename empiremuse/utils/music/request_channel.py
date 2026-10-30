@@ -442,6 +442,7 @@ async def _rebind_other_players(bot: BotCore, channel, message) -> None:
             player.message = message
             player.setup_hints()
             player.setup_features()
+            player.last_data = {}  # o painel novo está ocioso: o redesenho não pode ser pulado por "nada mudou"
         except Exception:
             logger.exception("Falha ao religar o player de outro bot ao novo canal de pedidos")
     if panel := getattr(bot.pool, "request_panel", None):

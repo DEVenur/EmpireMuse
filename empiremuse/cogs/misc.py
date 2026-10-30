@@ -1050,6 +1050,10 @@ class GuildLog(commands.Cog):
 
         await self.bot.update_appinfo()
 
+    def cog_unload(self) -> None:
+        for task in list(self._roster_tasks):
+            task.cancel()
+
     def roster_changed(self, guild_id: int) -> None:
         """Um bot entrou ou saiu do servidor: se o bot do painel do canal de pedidos mudou, o novo reenvia o painel (em segundo plano)."""
         panel = getattr(self.bot.pool, "request_panel", None)

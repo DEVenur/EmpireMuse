@@ -157,6 +157,8 @@ class RequestPanel:
         elif len(players) == 1:
             await players[0][1].invoke_np(force=True, panel_render=True)  # a skin estática do player, como sempre foi
         else:
+            for _, player in players:
+                player.last_data = {}  # o painel vira lista: ao voltar à skin, ela precisa ser redesenhada
             entries = [e for bot, player in players if (e := entry_for(bot, player)) is not None]
             payload = render_panel(
                 panel_bot,
@@ -209,7 +211,13 @@ class RequestPanel:
         election = await request.elect(guild_id)
         if election.bot is None or not election.changed or not config.channel:
             return
-        await self.resend(guild_id, replace_message_id=config.message_id)
+        message = await self.resend(guild_id, replace_message_id=config.message_id)
+        if message is None:
+            return
+        for _, player in self.players(guild_id):
+            player.message = message  # a anterior foi apagada; os players passam a editar o painel novo
+            player.last_data = {}
+        await self.refresh(guild_id, now=True)
 
     def forget(self, guild_id: int) -> None:
         """Um player acabou ou saiu da call: o painel se refaz (volta ao ocioso, ou à skin do que sobrou)."""
@@ -217,3 +225,8 @@ class RequestPanel:
             self._spawn(self.refresh(guild_id))
         except RuntimeError:
             return
+
+    def close(self) -> None:
+        """Cancela as tarefas de fundo do painel (encerramento do pool)."""
+        for task in list(self._tasks):
+            task.cancel()

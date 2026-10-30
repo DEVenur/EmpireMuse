@@ -365,7 +365,10 @@ class ServerStore:
             if gid_int is None:
                 raise UnknownGuild
             unique = await self._ensure(gid_int, (SECTION_SETTINGS, SECTION_REQUEST))
-            settings, request = unique[SECTION_SETTINGS], unique[SECTION_REQUEST]
+            settings = unique[SECTION_SETTINGS]
+            request = unique.get(SECTION_REQUEST) or request_from_legacy(
+                base
+            )  # documento antigo sem a seção: vale o do bot
         except UnknownGuild:  # DM ou servidor fora do pool: vale o que o próprio bot tinha, sem criar documento único
             settings, request = settings_from_legacy(base), request_from_legacy(base)
         doc = GuildDoc(to_legacy(base, settings, request))

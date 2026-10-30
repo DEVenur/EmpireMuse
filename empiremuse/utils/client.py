@@ -682,6 +682,8 @@ class BotPool:
             self.version_check_task.cancel()
         for task in list(self.helper_watch_tasks):
             task.cancel()
+        if self.request_panel:
+            self.request_panel.close()
         for bot in self.get_all_bots():
             try:
                 if not bot.is_closed():
