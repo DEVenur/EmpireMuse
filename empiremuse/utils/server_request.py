@@ -170,6 +170,7 @@ class ServerRequest:
             return None
         if config.panel_bot_id != elected:
             return (await self.elect(gid)).bot
+        self._retry_handoff(gid)
         return self._bot_by_id(elected)
 
     async def is_panel_bot(self, gid: int, bot: BotCore) -> bool:
@@ -181,4 +182,12 @@ class ServerRequest:
             return False
         if config.panel_bot_id != bot.user.id:
             await self.elect(gid)
+        else:
+            self._retry_handoff(gid)
         return True
+
+    def _retry_handoff(self, gid: int) -> None:
+        """A eleição já está gravada: se a passagem do painel ficou pendente (falhou antes), tenta de novo."""
+        panel = getattr(self.store.pool, "request_panel", None)
+        if panel is not None:
+            panel.retry_pending_handoff(gid)

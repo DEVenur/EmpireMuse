@@ -304,7 +304,7 @@ def test_a_bot_entering_or_leaving_never_changes_the_servers_settings_or_playlis
 def test_every_path_that_persists_a_new_panel_bot_hands_the_panel_off(world):  # CodeRabbit #159
     """``panel_bot`` e ``is_panel_bot`` também gravam a eleição: a passagem do painel sai de ``elect``, não só de ``on_roster_change``."""
     handoffs = []
-    world.pool.request_panel = SimpleNamespace(schedule_handoff=handoffs.append)
+    world.pool.request_panel = SimpleNamespace(schedule_handoff=handoffs.append, retry_pending_handoff=lambda gid: None)
     main, reserve = world.bots
     main_sees = main.get_guild
     main.get_guild = lambda gid: None  # só a reserva está no servidor

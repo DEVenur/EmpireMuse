@@ -81,6 +81,10 @@ class RequestPanel:
         self._last: dict[int, int] = {}
         self._pending: dict[int, asyncio.Task] = {}
         self._tasks: set[asyncio.Task] = set()
+        self._handoff_running: set[int] = set()
+        self._handoff_pending: set[int] = (
+            set()
+        )  # passagem pedida e ainda não concluída (falhou, ou foi pedida de novo durante a anterior)
         self._locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
         self._resend_locks: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
 
@@ -234,17 +238,37 @@ class RequestPanel:
         await self.refresh(guild_id, now=True)
 
     def schedule_handoff(self, guild_id: int) -> None:
-        """Agenda ``handoff`` em segundo plano (quem grava a eleição não espera o Discord)."""
+        """Agenda ``handoff`` em segundo plano (quem grava a eleição não espera o Discord). Pedido durante uma passagem em curso a repete."""
+        self._handoff_pending.add(guild_id)
+        if guild_id in self._handoff_running:
+            return
+        self._handoff_running.add(guild_id)
         try:
             self._spawn(self._handoff_quietly(guild_id))
         except RuntimeError:
-            return
+            self._handoff_running.discard(guild_id)
+
+    def retry_pending_handoff(self, guild_id: int) -> None:
+        """Uma passagem que falhou fica pendente; quem passa pelo bot do painel (``panel_bot``/``is_panel_bot``) a retoma."""
+        if guild_id in self._handoff_pending and guild_id not in self._handoff_running:
+            self.schedule_handoff(guild_id)
 
     async def _handoff_quietly(self, guild_id: int) -> None:
         try:
-            await self.handoff(guild_id)
-        except Exception as exc:  # noqa: BLE001 - o painel é enfeite sobre uma configuração já gravada
-            logger.warning("Painel do canal de pedidos não passado ao novo bot [%s] (%s)", guild_id, type(exc).__name__)
+            while guild_id in self._handoff_pending:
+                self._handoff_pending.discard(guild_id)
+                try:
+                    await self.handoff(guild_id)
+                except Exception as exc:  # noqa: BLE001 - o painel é enfeite sobre uma configuração já gravada
+                    self._handoff_pending.add(
+                        guild_id
+                    )  # fica pendente: a próxima chamada de panel_bot/is_panel_bot tenta de novo
+                    logger.warning(
+                        "Painel do canal de pedidos não passado ao novo bot [%s] (%s)", guild_id, type(exc).__name__
+                    )
+                    return
+        finally:
+            self._handoff_running.discard(guild_id)
 
     def forget(self, guild_id: int) -> None:
         """Um player acabou ou saiu da call: o painel se refaz (volta ao ocioso, ou à skin do que sobrou)."""

@@ -380,13 +380,69 @@ async def test_a_roster_change_only_re_elects_the_handoff_is_scheduled_by_the_el
 @pytest.mark.asyncio
 async def test_schedule_handoff_runs_the_handoff_in_the_background_and_a_failure_is_only_logged():
     panel, _ = panel_world()
-    panel.handoff = AsyncMock(side_effect=RuntimeError("falha"))
+    finished = asyncio.Event()
+
+    async def failing(gid):
+        finished.set()
+        raise RuntimeError("falha")
+
+    panel.handoff = AsyncMock(side_effect=failing)
 
     panel.schedule_handoff(GID)
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
+    await asyncio.wait_for(finished.wait(), 5)  # sinal do próprio dublê, sem sleep
 
     panel.handoff.assert_awaited_once_with(GID)
+
+
+async def settle(panel):
+    """Espera as tarefas de fundo do painel terminarem (sem sleep): é o que o ``_spawn`` guarda."""
+    if panel._tasks:
+        await asyncio.wait_for(asyncio.wait(list(panel._tasks)), 5)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_handoff_stays_pending_and_the_next_panel_bot_call_retries_it_until_it_succeeds():  # CodeRabbit #159
+    panel, _ = panel_world()
+    outcomes = [RuntimeError("falha transitória"), None]
+
+    async def handoff(gid):
+        failure = outcomes.pop(0)
+        if failure:
+            raise failure
+
+    panel.handoff = AsyncMock(side_effect=handoff)
+
+    panel.schedule_handoff(GID)
+    await settle(panel)
+    assert panel.handoff.await_count == 1 and GID in panel._handoff_pending  # falhou: fica pendente
+
+    panel.retry_pending_handoff(GID)  # o que panel_bot/is_panel_bot fazem quando a eleição já está gravada
+    await settle(panel)
+    assert panel.handoff.await_count == 2 and GID not in panel._handoff_pending
+
+    panel.retry_pending_handoff(GID)  # nada pendente: nada a refazer
+    await settle(panel)
+    assert panel.handoff.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_handoff_requested_during_another_one_runs_again_after_it():
+    panel, _ = panel_world()
+    started, release, calls = asyncio.Event(), asyncio.Event(), []
+
+    async def handoff(gid):
+        calls.append(gid)
+        started.set()
+        await release.wait()
+
+    panel.handoff = AsyncMock(side_effect=handoff)
+    panel.schedule_handoff(GID)
+    await asyncio.wait_for(started.wait(), 5)
+    panel.schedule_handoff(GID)  # outra troca de bot gravada enquanto a passagem corre
+    release.set()
+    await settle(panel)
+
+    assert calls == [GID, GID]
 
 
 @pytest.mark.asyncio
