@@ -195,10 +195,13 @@ class RequestPanel:
                 return None
             if replace_message_id is None:
                 try:
-                    if (existing := await fetch_panel_message(self.pool, guild_id)) is not None:
-                        return existing
+                    existing = await fetch_panel_message(self.pool, guild_id)
                 except disnake.HTTPException:
-                    pass
+                    existing = None
+                if existing is not None:
+                    if existing.author.id == bot.user.id:
+                        return existing  # já é do bot do painel: nada a reenviar
+                    replace_message_id = existing.id  # é de outro bot (o painel anterior): o novo o substitui
             channel = bot.get_channel(config.channel) or await bot.fetch_channel(config.channel)
             message = await send_idle_embed(channel, bot=bot, force=True)
             try:
@@ -214,19 +217,34 @@ class RequestPanel:
         return message
 
     async def on_roster_change(self, guild_id: int) -> None:
-        """Um bot entrou ou saiu do servidor: se o bot do painel mudou, o novo reenvia o painel (e a mensagem do antigo sai)."""
+        """Um bot entrou ou saiu do servidor: reelege o bot do painel. Se a eleição mudou, ``elect`` já agenda a passagem do painel."""
+        await self.pool.servers.request.elect(guild_id)
+
+    async def handoff(self, guild_id: int) -> None:
+        """A passagem do painel: garante que a mensagem é do bot do painel atual (senão ele manda uma nova e a antiga sai), religa os
+        players a ela e redesenha. É o ÚNICO caminho depois de uma troca de ``panel_bot_id``, venha ela do ``/setup``, da entrada ou
+        saída de um bot ou de quem chamou ``panel_bot``/``is_panel_bot`` primeiro: idempotente (painel já do bot = só religar)."""
         request = self.pool.servers.request
-        config = await request.get(guild_id)
-        election = await request.elect(guild_id)
-        if election.bot is None or not election.changed or not config.channel:
-            return
-        message = await self.resend(guild_id, replace_message_id=config.message_id)
+        message = await self.resend(guild_id)
         if message is None or (await request.get(guild_id)).message_id != message.id:
             return  # outro reenvio gravou uma mensagem mais nova durante este: religar à antiga deixaria os players numa apagada
         for _, player in self.players(guild_id):
             player.message = message  # a anterior foi apagada; os players passam a editar o painel novo
             player.last_data = {}
         await self.refresh(guild_id, now=True)
+
+    def schedule_handoff(self, guild_id: int) -> None:
+        """Agenda ``handoff`` em segundo plano (quem grava a eleição não espera o Discord)."""
+        try:
+            self._spawn(self._handoff_quietly(guild_id))
+        except RuntimeError:
+            return
+
+    async def _handoff_quietly(self, guild_id: int) -> None:
+        try:
+            await self.handoff(guild_id)
+        except Exception as exc:  # noqa: BLE001 - o painel é enfeite sobre uma configuração já gravada
+            logger.warning("Painel do canal de pedidos não passado ao novo bot [%s] (%s)", guild_id, type(exc).__name__)
 
     def forget(self, guild_id: int) -> None:
         """Um player acabou ou saiu da call: o painel se refaz (volta ao ocioso, ou à skin do que sobrou)."""

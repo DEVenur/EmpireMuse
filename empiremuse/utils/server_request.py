@@ -152,7 +152,13 @@ class ServerRequest:
             return True
 
         await self.store.mutate_doc(gid, SECTIONS, apply)
-        return Election(self._bot_by_id(outcome["elected"]), bool(outcome["changed"]))
+        election = Election(self._bot_by_id(outcome["elected"]), bool(outcome["changed"]))
+        if election.changed and election.bot is not None:
+            # toda troca gravada passa o painel ao novo bot, qualquer que seja o caminho que a gravou (panel_bot, is_panel_bot, entrada/saída)
+            panel = getattr(self.store.pool, "request_panel", None)
+            if panel is not None:
+                panel.schedule_handoff(gid)
+        return election
 
     async def panel_bot(self, gid: int) -> Optional[BotCore]:
         """O bot do painel do servidor (grava a eleição se mudou). ``None`` se nenhum bot do pool está no servidor."""

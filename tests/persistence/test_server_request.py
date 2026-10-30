@@ -299,3 +299,26 @@ def test_a_bot_entering_or_leaving_never_changes_the_servers_settings_or_playlis
     after = world.banco.servers_doc()
     assert after["settings"] == before["settings"] and after["playlists"] == before["playlists"]
     assert after["migrated"] == before["migrated"] and after["request"] == before["request"]
+
+
+def test_every_path_that_persists_a_new_panel_bot_hands_the_panel_off(world):  # CodeRabbit #159
+    """``panel_bot`` e ``is_panel_bot`` também gravam a eleição: a passagem do painel sai de ``elect``, não só de ``on_roster_change``."""
+    handoffs = []
+    world.pool.request_panel = SimpleNamespace(schedule_handoff=handoffs.append)
+    main, reserve = world.bots
+    main_sees = main.get_guild
+    main.get_guild = lambda gid: None  # só a reserva está no servidor
+
+    assert run(world.request.is_panel_bot(GID, reserve)) is True  # 1ª eleição (is_panel_bot grava)
+    assert handoffs == [GID]
+
+    main.get_guild = main_sees  # o principal volta: quem notar primeiro grava a troca
+    assert run(world.request.panel_bot(GID)) is main
+    assert handoffs == [GID, GID]
+
+    assert run(world.request.panel_bot(GID)) is main and run(world.request.is_panel_bot(GID, main)) is True
+    assert handoffs == [GID, GID]  # sem troca, sem passagem
+
+    main.get_guild = lambda gid: None  # o principal sai
+    assert run(world.request.is_panel_bot(GID, reserve)) is True
+    assert handoffs == [GID, GID, GID]

@@ -367,24 +367,26 @@ async def test_resending_is_done_by_the_panel_bot_and_the_new_message_id_is_save
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("channel", "changed", "resends"),
-    [(PANEL_CHANNEL, True, True), (PANEL_CHANNEL, False, False), (None, True, False)],
-    ids=["panel_bot_changed", "same_panel_bot", "no_request_channel"],
-)
-async def test_a_roster_change_resends_only_when_the_panel_bot_changed_and_there_is_a_channel(
-    channel, changed, resends
-):
+async def test_a_roster_change_only_re_elects_the_handoff_is_scheduled_by_the_election_itself():
     panel, pool = panel_world(make_bot(2, "TOKEN_2"))
-    pool.servers.request.get.return_value = SimpleNamespace(channel=channel, message_id=PANEL_MESSAGE)
-    pool.servers.request.elect.return_value = SimpleNamespace(bot=object(), changed=changed)
-    panel.resend, panel.refresh = AsyncMock(return_value=None), AsyncMock()
+    panel.resend, panel.handoff = AsyncMock(), AsyncMock()
 
     await panel.on_roster_change(GID)
 
-    assert panel.resend.await_count == (1 if resends else 0)
-    if resends:
-        panel.resend.assert_awaited_once_with(GID, replace_message_id=PANEL_MESSAGE)
+    pool.servers.request.elect.assert_awaited_once_with(GID)
+    panel.resend.assert_not_awaited()  # não depende de "a eleição mudou" depois de uma espera (outra rotina pode ter gravado antes)
+
+
+@pytest.mark.asyncio
+async def test_schedule_handoff_runs_the_handoff_in_the_background_and_a_failure_is_only_logged():
+    panel, _ = panel_world()
+    panel.handoff = AsyncMock(side_effect=RuntimeError("falha"))
+
+    panel.schedule_handoff(GID)
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    panel.handoff.assert_awaited_once_with(GID)
 
 
 @pytest.mark.asyncio
@@ -406,7 +408,7 @@ async def test_two_simultaneous_resends_send_one_panel_and_the_second_gets_the_e
     panel, pool = panel_world(panel_bot)
     pool.servers.request.get.return_value = SimpleNamespace(channel=PANEL_CHANNEL, message_id=None, current=1)
     pool.servers.request.panel_bot.return_value = panel_bot
-    sent = SimpleNamespace(id=777)
+    sent = SimpleNamespace(id=777, author=SimpleNamespace(id=2))  # do bot do painel (id 2)
     state = {"message": None}
 
     async def send_idle(channel, *, bot, force):
@@ -699,9 +701,8 @@ def static_players_world(*, resent, newest=None):
         bot.music.players[GID].message = "mensagem antiga"
         bot.music.players[GID].last_data = {"skin": "antiga"}
     panel, pool = panel_world(one, two)
-    before = SimpleNamespace(channel=PANEL_CHANNEL, message_id=PANEL_MESSAGE)
     after = SimpleNamespace(channel=PANEL_CHANNEL, message_id=getattr(newest or resent, "id", PANEL_MESSAGE))
-    pool.servers.request.get.side_effect = [before, after]  # antes do reenvio, e depois dele (o que ficou gravado)
+    pool.servers.request.get.side_effect = [after]  # depois do reenvio: o que ficou gravado
     pool.servers.request.elect.return_value = SimpleNamespace(bot=object(), changed=True)
     panel.resend = AsyncMock(return_value=resent)
     panel.refresh = AsyncMock()
@@ -713,7 +714,7 @@ async def test_after_the_panel_is_resent_every_static_player_edits_the_new_messa
     new = SimpleNamespace(id=777)
     panel, one, two = static_players_world(resent=new)
 
-    await panel.on_roster_change(GID)
+    await panel.handoff(GID)
 
     for bot in (one, two):
         player = bot.music.players[GID]
@@ -726,7 +727,7 @@ async def test_a_resend_that_lost_the_race_to_a_newer_one_does_not_rebind_the_pl
     older, newer = SimpleNamespace(id=777), SimpleNamespace(id=888)
     panel, one, two = static_players_world(resent=older, newest=newer)
 
-    await panel.on_roster_change(GID)
+    await panel.handoff(GID)
 
     for bot in (one, two):
         assert bot.music.players[GID].message == "mensagem antiga"
@@ -737,7 +738,7 @@ async def test_a_resend_that_lost_the_race_to_a_newer_one_does_not_rebind_the_pl
 async def test_when_nothing_could_be_resent_the_players_keep_what_they_had():
     panel, one, two = static_players_world(resent=None)
 
-    await panel.on_roster_change(GID)
+    await panel.handoff(GID)
 
     assert one.music.players[GID].message == "mensagem antiga" and one.music.players[GID].last_data == {
         "skin": "antiga"
