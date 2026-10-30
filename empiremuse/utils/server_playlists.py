@@ -202,34 +202,16 @@ class ServerPlaylists:
     # ------------------------------------------------------------------ embed ocioso
 
     def refresh_idle(self, gid: int) -> None:
-        """Atualiza, em segundo plano, o embed ocioso de CADA bot do pool no servidor (até o painel único do P4)."""
+        """Atualiza, em segundo plano, o painel do canal de pedidos (o canal é único: só o bot do painel edita a mensagem)."""
         task = asyncio.get_running_loop().create_task(self._refresh(gid))
         self._refresh_tasks.add(task)
         task.add_done_callback(self._refresh_tasks.discard)
 
     async def _refresh(self, gid: int) -> None:
-        for bot in self.store.pool.get_all_bots():
-            try:
-                await self._refresh_bot(bot, gid)
-            except Exception as exc:  # noqa: BLE001 - enfeite: a lista já foi gravada
-                logger.warning(
-                    "Embed ocioso do bot %s não atualizado [%s] (%s)", bot.identifier, gid, type(exc).__name__
-                )
-
-    async def _refresh_bot(self, bot, gid: int) -> None:
-        from empiremuse.utils.others import send_idle_embed  # tarde: utils.others importa muita coisa
-
-        if bot.user is None or bot.get_guild(gid) is None or gid in bot.music.players:
-            return  # tocando, o player mostra o próprio embed
-        data = await bot.get_data(gid, db_name=DBModel.guilds)
-        controller = data["player_controller"]
-        if not controller["channel"]:
+        panel = getattr(self.store.pool, "request_panel", None)
+        if panel is None:
             return
-        channel = bot.get_channel(int(controller["channel"]))
-        if isinstance(channel, disnake.Thread):
-            target = channel
-        elif isinstance(channel, disnake.TextChannel) and controller["message_id"]:
-            target = await channel.fetch_message(int(controller["message_id"]))
-        else:
-            return
-        await send_idle_embed(target, bot=bot, guild_data=data, force=True)
+        try:
+            await panel.refresh(gid)
+        except Exception as exc:  # noqa: BLE001 - enfeite: a lista já foi gravada
+            logger.warning("Painel do canal de pedidos não atualizado [%s] (%s)", gid, type(exc).__name__)

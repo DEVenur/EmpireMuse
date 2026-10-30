@@ -1,14 +1,15 @@
 """Categoria Canal de pedidos (G-06 setup, G-07 reset): validação síncrona, token do reset e jobs das tarefas.
 
-As regras e os efeitos no Discord ficam em ``utils/music/request_channel.py`` (compartilhado com os comandos). Aqui:
+O canal de pedidos é UM por servidor (item 11, P4): lido e gravado só pela seção ``request`` do documento único
+(``pool.servers.request``); o ``rev`` dela é a versão do formulário (P-V7). As regras e os efeitos no Discord ficam em
+``utils/music/request_channel.py`` (compartilhado com os comandos) e quem os executa é o bot do painel. Aqui:
 - a validação roda ANTES de criar a tarefa (422 sem nenhum efeito no Discord nem no banco);
 - o reset tem dois passos (confirmação com token assinado, 2 min, uso único);
-- os jobs entregam CÓPIA PROFUNDA dos dados ao módulo e rodam sob o lock do escopo ``(bot, servidor)``.
+- os jobs releem a seção dentro da trava do servidor e passam o ``RequestConfig`` lido ao módulo compartilhado.
 """
 
 from __future__ import annotations
 
-import copy
 import logging
 import re
 import time
@@ -18,13 +19,14 @@ from typing import Any, Callable, NamedTuple, Optional
 import disnake
 
 from empiremuse.panel.services.channel_tokens import ResetTokens
-from empiremuse.panel.services.base import DBModel, DIGITS, Args, FormContext, first, flag, version_of
+from empiremuse.panel.services.base import DIGITS, Args, FormContext, first, flag, version_of
 from empiremuse.panel.services.service import SettingsService
 from empiremuse.panel.services.tasks import Job, Task, TaskFailure, TaskRunner
 from empiremuse.rules import limits
 from empiremuse.utils import branding
 from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.server_request import RequestConfig
 from empiremuse.utils.music.request_channel import (
     MissingManagePermissions,
     apply_request_channel,
@@ -60,7 +62,7 @@ MSG_CATEGORY = "Escolha uma categoria da lista (ou deixe sem categoria)."
 MSG_PURGE = (
     "Para limpar as mensagens, o bot precisa das permissões Gerenciar Mensagens e Mostrar histórico de mensagens."
 )
-MSG_NO_CHANNEL = "Não há canal de pedidos configurado neste bot."
+MSG_NO_CHANNEL = "Não há canal de pedidos configurado neste servidor."
 MSG_NAME = "Digite o nome exato do canal para confirmar a exclusão."
 MSG_TOKEN = "A confirmação expirou ou é inválida. Peça a reinicialização de novo."
 MSG_BUSY = "Já existe uma operação em andamento neste servidor. Aguarde terminar e tente de novo."
@@ -129,6 +131,7 @@ class CurrentChannel(NamedTuple):
     configurado: bool
     nome: Optional[str]
     removido: bool
+    bot_painel: Optional[str] = None  # nome do bot que envia o painel e atende o canal
 
 
 class Confirmation(NamedTuple):
@@ -177,10 +180,12 @@ class ChannelService:
 
     # ------------------------------------------------------------------ leitura
 
+    SCOPE = "servidor"  # trava e auditoria: o canal é do servidor, não de um bot
+
     @staticmethod
-    def version(doc: dict) -> str:
-        controller = doc["player_controller"]
-        return version_of({"channel": controller.get("channel"), "message_id": controller.get("message_id")})
+    def version(config: RequestConfig) -> str:
+        """Versão do formulário: o conteúdo da seção (canal e mensagem), o mesmo que o store confere ao gravar (CAS)."""
+        return version_of({"channel": config.channel, "message_id": config.message_id})
 
     @staticmethod
     def resolve(ctx: FormContext, raw: Optional[str], kinds: tuple) -> Optional[Any]:
@@ -197,13 +202,13 @@ class ChannelService:
         channels = guild.channels
         return list(channels.values()) if isinstance(channels, dict) else list(channels)
 
-    def current(self, ctx: FormContext, doc: dict) -> CurrentChannel:
-        raw = doc["player_controller"].get("channel")
-        if not raw:
-            return CurrentChannel(False, None, False)
-        channel = ctx.bot.get_channel(int(raw)) if str(raw).isdigit() else None
+    def current(self, ctx: FormContext, config: RequestConfig) -> CurrentChannel:
+        bot_name = str(getattr(ctx.bot.user, "name", "") or "") or None
+        if not config.channel:
+            return CurrentChannel(False, None, False, bot_name)
+        channel = ctx.bot.get_channel(config.channel)
         name = str(channel.name) if channel is not None else None
-        return CurrentChannel(True, name, name is None)
+        return CurrentChannel(True, name, name is None, bot_name)
 
     def choices(
         self, ctx: FormContext
@@ -297,32 +302,31 @@ class ChannelService:
             return Check(errors, echo)
         return Check({}, echo, plan=SetupPlan("criar", kind=kind or "text", category_id=category_id))
 
-    def check_reset(self, ctx: FormContext, doc: dict) -> Optional[str]:
+    def check_reset(self, ctx: FormContext, config: RequestConfig) -> Optional[str]:
         """Mensagem de erro (pt-BR) se o reset não pode começar; ``None`` se pode."""
-        raw = doc["player_controller"].get("channel")
-        if not raw:
+        if not config.channel:
             return MSG_NO_CHANNEL
         try:
             ensure_can_reset(ctx.guild)
         except GenericError as exc:
             return refusal_message(exc)
-        if self.current(ctx, doc).removido:
+        if self.current(ctx, config).removido:
             return MSG_NO_CHANNEL
         return None
 
-    def confirmation(self, ctx: FormContext, doc: dict, delete: bool) -> Confirmation:
-        raw = str(doc["player_controller"]["channel"])
-        token = self.tokens.issue(ctx.user_id, ctx.guild_id, ctx.bot_id, raw)
-        return Confirmation(token, delete, self.current(ctx, doc).nome or "")
+    def confirmation(self, ctx: FormContext, config: RequestConfig, delete: bool) -> Confirmation:
+        token = self.tokens.issue(ctx.user_id, ctx.guild_id, self.SCOPE, str(config.channel))
+        return Confirmation(token, delete, self.current(ctx, config).nome or "")
 
-    def check_confirmation(self, ctx: FormContext, doc: dict, args: Args) -> tuple[str, Optional[str], dict[str, str]]:
+    def check_confirmation(
+        self, ctx: FormContext, config: RequestConfig, args: Args
+    ) -> tuple[str, Optional[str], dict[str, str]]:
         """(``"ok"`` | ``"invalido"`` | ``"outro"`` | ``"nome"``, token, erros)."""
         token = first(args, "token") or ""
-        raw = str(doc["player_controller"].get("channel") or "")
-        status = self.tokens.check(token, ctx.user_id, ctx.guild_id, ctx.bot_id, raw)
+        status = self.tokens.check(token, ctx.user_id, ctx.guild_id, self.SCOPE, str(config.channel or ""))
         if status:
             return status, None, {}
-        if flag(args, "deletar") and (first(args, "confirmar_nome") or "") != (self.current(ctx, doc).nome or "\0"):
+        if flag(args, "deletar") and (first(args, "confirmar_nome") or "") != (self.current(ctx, config).nome or "\0"):
             return "nome", token, {"confirmar_nome": MSG_NAME}
         return "ok", token, {}
 
@@ -336,15 +340,15 @@ class ChannelService:
 
     def _setup_job(self, ctx: FormContext, plan: SetupPlan) -> Job:
         async def job() -> str:
-            async with self._settings.lock(ctx.bot_id, ctx.guild_id):
+            async with self._settings.lock(self.SCOPE, ctx.guild_id):
                 await self._setup(ctx, plan)
             return MSG_SETUP_OK
 
         return job
 
     async def _setup(self, ctx: FormContext, plan: SetupPlan) -> None:
-        guild_data = copy.deepcopy(await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds))
-        player, original_message = await find_current_request_message(ctx.bot, ctx.guild, guild_data)
+        config = await ctx.pool.servers.request.get(ctx.guild_id)  # relido na trava: o módulo grava com esse rev
+        player, original_message = await find_current_request_message(ctx.bot, ctx.guild, config)
         channel_kwargs = build_channel_kwargs(ctx.guild)
         try:
             target = await self._target(ctx, plan, channel_kwargs)
@@ -359,7 +363,7 @@ class ChannelService:
                 channel_name=plan.title,
                 original_message=original_message,
                 player=player,
-                guild_data=guild_data,
+                config=config,
             )
         except GenericError as exc:
             raise TaskFailure(refusal_message(exc))
@@ -379,20 +383,20 @@ class ChannelService:
 
     def _reset_job(self, ctx: FormContext, delete: bool) -> Job:
         async def job() -> str:
-            async with self._settings.lock(ctx.bot_id, ctx.guild_id):
+            async with self._settings.lock(self.SCOPE, ctx.guild_id):
                 await self._reset(ctx, delete)
             return MSG_RESET_OK
 
         return job
 
     async def _reset(self, ctx: FormContext, delete: bool) -> None:
-        guild_data = copy.deepcopy(await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds))
+        config = await ctx.pool.servers.request.get(ctx.guild_id)
 
         async def notify(event: str) -> None:
             return None
 
         try:
-            channel = await find_request_channel(ctx.bot, ctx.guild_id, guild_data)
+            channel = await find_request_channel(ctx.bot, ctx.guild_id, config)
             await reset_request_channel(
                 ctx.bot,
                 ctx.guild,
@@ -400,7 +404,7 @@ class ChannelService:
                 channel,
                 delete_channel="sim" if delete else None,
                 channel_inter=self._detached_channel(ctx),
-                guild_data=guild_data,
+                config=config,
                 notify=notify,
             )
         except GenericError as exc:
@@ -413,15 +417,16 @@ class ChannelService:
         voice = getattr(ctx.guild.me, "voice", None)
         return getattr(voice, "channel", None)
 
-    @staticmethod
-    def _audit(ctx: FormContext, kind: str) -> None:
+    @classmethod
+    def _audit(cls, ctx: FormContext, kind: str) -> None:
         # Só ids e o tipo da operação: título, nome de canal e token nunca vão para o log.
         logger.info(
-            "Configuração alterada: usuario=%s servidor=%s escopo=%s categoria=canal campos=%s",
+            "Configuração alterada: usuario=%s servidor=%s escopo=%s categoria=canal campos=%s bot=%s",
             ctx.user_id,
             ctx.guild_id,
-            ctx.bot_id,
+            cls.SCOPE,
             kind,
+            ctx.bot_id,
         )
 
     # ------------------------------------------------------------------ exibição da tarefa

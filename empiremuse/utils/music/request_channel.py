@@ -15,21 +15,40 @@ os pontos em que a UI se mistura à lógica entram como callbacks:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, NamedTuple, Optional, Union
 
 import disnake
 
-from empiremuse.utils.db import DBModel
 from empiremuse.utils.music.converters import perms_translations
 from empiremuse.utils.music.errors import GenericError
 from empiremuse.utils.others import send_idle_embed as default_send_idle_embed
+from empiremuse.utils.server_request import RequestConfig
+from empiremuse.utils.servers import ServerConfigConflict
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from empiremuse.utils.client import BotCore
     from empiremuse.utils.music.models import LavalinkPlayer
+
+
+def config_as_data(config: RequestConfig) -> dict:
+    """O canal de pedidos no formato que o ``send_idle_embed`` lê (``player_controller.channel``/``message_id`` como texto)."""
+    return {
+        "player_controller": {
+            "channel": str(config.channel) if config.channel else None,
+            "message_id": str(config.message_id) if config.message_id else None,
+        }
+    }
+
+
+async def ensure_panel_bot(bot: BotCore, guild_id: int) -> None:
+    """Só o bot do painel configura ou reseta o canal de pedidos: ele é o autor da mensagem do canal (S-V11)."""
+    if not await bot.pool.servers.request.is_panel_bot(guild_id, bot):
+        raise GenericError("**Só o bot do painel do servidor pode configurar ou resetar o canal de pedidos.**")
+
 
 # Nomes CANÔNICOS de ``disnake.Permissions`` (a iteração devolve ``view_channel`` e ``send_messages``; os aliases
 # ``read_messages`` e ``create_forum_threads`` nunca apareciam e a falta dessas permissões passava batido).
@@ -105,7 +124,7 @@ def build_channel_kwargs(guild: disnake.Guild) -> dict:
     return {"overwrites": {guild.me: disnake.PermissionOverwrite(**perms_dict)}}
 
 
-async def find_current_request_message(bot: BotCore, guild: disnake.Guild, guild_data: dict):
+async def find_current_request_message(bot: BotCore, guild: disnake.Guild, config: RequestConfig):
     """(player ativo ou None, mensagem atual do canal de pedidos ou None): player estático primeiro, depois o banco."""
     original_message = None
 
@@ -118,10 +137,8 @@ async def find_current_request_message(bot: BotCore, guild: disnake.Guild, guild
 
     if not original_message:
         try:
-            channel_db = bot.get_channel(int(guild_data["player_controller"]["channel"])) or await bot.fetch_channel(
-                int(guild_data["player_controller"]["channel"])
-            )
-            original_message = await channel_db.fetch_message(int(guild_data["player_controller"]["message_id"]))
+            channel_db = bot.get_channel(config.channel) or await bot.fetch_channel(config.channel)  # type: ignore[arg-type]
+            original_message = await channel_db.fetch_message(config.message_id)  # type: ignore[arg-type]
         except Exception:
             pass
 
@@ -210,7 +227,53 @@ def validate_request_target(bot: BotCore, guild: disnake.Guild, target, *, exist
         )
 
 
+@contextlib.asynccontextmanager
+async def exclusive_operation(bot: BotCore, guild_id: int, config: RequestConfig):
+    """Uma operação do canal de pedidos por vez no servidor (Discord e painel web), com a configuração conferida DENTRO da trava.
+
+    Se o canal/mensagem gravados já não são os que o comando leu, ``ServerConfigConflict`` ANTES de qualquer efeito no Discord:
+    o compare-and-set sozinho só recusa a gravação, não desfaz um canal criado ou apagado.
+    """
+    request = bot.pool.servers.request
+    async with request.operation(guild_id):
+        if (await request.get(guild_id)).current != config.current:
+            raise ServerConfigConflict
+        yield
+
+
 async def apply_request_channel(
+    bot: BotCore, guild: disnake.Guild, actor: Any, target, *, config: RequestConfig, **kwargs
+):
+    """Configura ``target`` como canal de pedidos (passos pós-escolha do ``/setup``) sob a trava de operação do servidor.
+
+    Se perder a corrida (a configuração mudou), o canal que este ``/setup`` acabou de criar é apagado: não sobra canal órfão.
+    """
+    try:
+        async with exclusive_operation(bot, guild.id, config):
+            return await _apply_request_channel(bot, guild, actor, target, config=config, **kwargs)
+    except ServerConfigConflict:
+        if not kwargs.get("existing_channel", True):
+            await _discard_created_channel(bot, guild.id, target)
+        raise
+
+
+async def _discard_created_channel(bot: BotCore, guild_id: int, target) -> None:
+    """Apaga o canal que este ``/setup`` criou e perdeu a corrida, SEM apagar um que outra operação já tenha configurado.
+
+    O canal nasce antes da trava; outra operação pode tê-lo escolhido por ID como canal existente nesse meio-tempo. A configuração é
+    relida sob a trava de operação e a trava só é solta depois do ``delete``.
+    """
+    request = bot.pool.servers.request
+    async with request.operation(guild_id):
+        if (await request.get(guild_id)).channel == getattr(target, "id", None):
+            return  # já é o canal de pedidos de outra operação: fica
+        try:
+            await target.delete(reason="Configuração do canal de pedidos mudou durante o /setup.")
+        except disnake.HTTPException:
+            logger.warning("Canal recém-criado não apagado após conflito [%s]", guild_id)
+
+
+async def _apply_request_channel(
     bot: BotCore,
     guild: disnake.Guild,
     actor: Any,
@@ -222,7 +285,7 @@ async def apply_request_channel(
     channel_name: str,
     original_message,
     player,
-    guild_data: dict,
+    config: RequestConfig,
     ask_forum_title: Optional[AskForumTitle] = None,
     send_idle_embed=default_send_idle_embed,
 ) -> Optional[RequestChannelResult]:
@@ -230,6 +293,9 @@ async def apply_request_channel(
 
     Devolve ``None`` se ``ask_forum_title`` informou que o tempo esgotou (nada foi gravado).
     """
+    await ensure_panel_bot(bot, guild.id)
+    guild_data = config_as_data(config)
+
     embed_archived = disnake.Embed(
         description=f"**Este canal de pedir música foi reconfigurado pelo membro {actor.mention}.**",
         color=bot.get_color(guild.me),
@@ -329,9 +395,10 @@ async def apply_request_channel(
 
     message = await _switch_player_and_thread(bot, guild, actor, channel, message, player, guild_data, send_idle_embed)
 
-    guild_data["player_controller"]["channel"] = str(channel.id)
-    guild_data["player_controller"]["message_id"] = str(message.id)
-    await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
+    # canal e mensagem juntos, no documento do servidor; se mudaram desde que o comando leu, ServerConfigConflict (nada é sobrescrito)
+    await bot.pool.servers.request.set(guild.id, channel.id, message.id, expected=config.current)
+
+    await _rebind_other_players(bot, channel, message)
 
     return RequestChannelResult(channel, message)
 
@@ -394,12 +461,10 @@ def ensure_can_reset(guild: disnake.Guild) -> None:
         raise GenericError(f"Não tenho permissão de **{perms_translations['manage_threads']}** no servidor.")
 
 
-async def find_request_channel(bot: BotCore, guild_id: int, guild_data: dict):
+async def find_request_channel(bot: BotCore, guild_id: int, config: RequestConfig):
     """Canal de pedidos configurado no banco (cache ou API); ``GenericError`` se não há/foi apagado/é de outro servidor."""
     try:
-        channel = bot.get_channel(int(guild_data["player_controller"]["channel"])) or await bot.fetch_channel(
-            int(guild_data["player_controller"]["channel"])
-        )
+        channel = bot.get_channel(config.channel) or await bot.fetch_channel(config.channel)  # type: ignore[arg-type]
     except Exception:
         channel = None
 
@@ -409,6 +474,36 @@ async def find_request_channel(bot: BotCore, guild_id: int, guild_data: dict):
         )
 
     return channel
+
+
+def _other_static_players(bot: BotCore, guild_id: int):
+    """Os players estáticos dos OUTROS bots do pool: o canal é único, então eles também seguem o /setup e o /reset."""
+    panel = getattr(bot.pool, "request_panel", None)
+    return [(b, p) for b, p in panel.players(guild_id) if b is not bot] if panel else []
+
+
+async def _rebind_other_players(bot: BotCore, channel, message) -> None:
+    """Depois do /setup: os players dos outros bots passam a usar o novo canal e a mensagem do painel (que é do bot do painel)."""
+    for other, player in _other_static_players(bot, channel.guild.id):
+        try:
+            player.text_channel = other.get_channel(channel.id) or channel
+            player.message = message
+            player.setup_hints()
+            player.setup_features()
+            player.last_data = {}  # o painel novo está ocioso: o redesenho não pode ser pulado por "nada mudou"
+        except Exception:
+            logger.exception("Falha ao religar o player de outro bot ao novo canal de pedidos")
+    if panel := getattr(bot.pool, "request_panel", None):
+        await panel.refresh(channel.guild.id, now=True)
+
+
+async def _reset_other_players(bot: BotCore, guild_id: int, channel_inter) -> None:
+    """Depois do /reset: os players dos outros bots deixam de ser estáticos, como o do bot do painel."""
+    for other, player in _other_static_players(bot, guild_id):
+        try:
+            await _reset_player(player, other.get_channel(channel_inter.id) or channel_inter)
+        except Exception:
+            logger.exception("Falha ao resetar o player de outro bot")
 
 
 async def _reset_player(player, channel_inter):
@@ -425,21 +520,21 @@ MSG_RESET_DISCORD_FAILED = (
 )
 
 
-async def _fetch_configured_message(channel, guild_data: dict):
+async def _fetch_configured_message(channel, config: RequestConfig):
     """Mensagem do canal de pedidos registrada no banco; ``None`` se não existe mais ou o registro é inválido."""
     try:
-        return await channel.fetch_message(int(guild_data["player_controller"]["message_id"]))
-    except disnake.HTTPException, KeyError, TypeError, ValueError:
+        return await channel.fetch_message(config.message_id)
+    except disnake.HTTPException, TypeError, ValueError:
         return None
 
 
-async def _clear_in_discord(actor: Any, channel, delete_channel: Optional[str], guild_data: dict) -> bool:
+async def _clear_in_discord(actor: Any, channel, delete_channel: Optional[str], config: RequestConfig) -> bool:
     """Apaga o post/canal ou devolve a mensagem ao estado "reconfigurar". ``True`` se era um post de fórum."""
     if isinstance(getattr(channel, "parent", None), disnake.ForumChannel):
         await channel.delete(reason=f"{actor.id} resetou player")
         return True
 
-    original_message = await _fetch_configured_message(channel, guild_data)
+    original_message = await _fetch_configured_message(channel, config)
 
     if delete_channel == "sim":
         await channel.delete(reason=f"Player resetado por: {actor}")
@@ -466,7 +561,32 @@ async def reset_request_channel(
     *,
     delete_channel: Optional[str],
     channel_inter,
-    guild_data: dict,
+    config: RequestConfig,
+    notify: Notify,
+) -> None:
+    """``/reset`` sob a trava de operação do servidor (nunca junto de um ``/setup``, nem apaga canal de uma configuração nova)."""
+    async with exclusive_operation(bot, guild.id, config):
+        await _reset_request_channel(
+            bot,
+            guild,
+            actor,
+            channel,
+            delete_channel=delete_channel,
+            channel_inter=channel_inter,
+            config=config,
+            notify=notify,
+        )
+
+
+async def _reset_request_channel(
+    bot: BotCore,
+    guild: disnake.Guild,
+    actor: Any,
+    channel,
+    *,
+    delete_channel: Optional[str],
+    channel_inter,
+    config: RequestConfig,
     notify: Notify,
 ) -> None:
     """Passos do ``/reset`` depois de achar o canal. ``delete_channel == "sim"`` apaga o canal.
@@ -474,8 +594,10 @@ async def reset_request_channel(
     Ordem: Discord primeiro, banco depois; só então o aviso (``notify``) e o reset do player. Se o Discord falhar, o
     banco continua intacto e o usuário recebe uma ``GenericError`` genérica (o detalhe vai para o log).
     """
+    await ensure_panel_bot(bot, guild.id)
+
     try:
-        was_forum = await _clear_in_discord(actor, channel, delete_channel, guild_data)
+        was_forum = await _clear_in_discord(actor, channel, delete_channel, config)
     except Exception as exc:
         logger.error(
             "Reset do canal de pedidos: falha no Discord (servidor=%s, canal=%s): %s",
@@ -486,11 +608,11 @@ async def reset_request_channel(
         )
         raise GenericError(MSG_RESET_DISCORD_FAILED) from exc
 
-    guild_data["player_controller"].update({"message_id": None, "channel": None})
-
-    await bot.update_data(guild.id, guild_data, db_name=DBModel.guilds)
+    await bot.pool.servers.request.clear(guild.id, expected=config.current)
 
     await notify("forum_deleted" if was_forum else "reset_done")
+
+    await _reset_other_players(bot, guild.id, channel_inter)
 
     try:
         player: LavalinkPlayer = bot.music.players[guild.id]

@@ -13,12 +13,13 @@
   <section class="bloco-config bloco-largo" aria-labelledby="titulo-canal-atual">
     <h2 class="subtitulo" id="titulo-canal-atual">Canal atual</h2>
     {% if canal_atual.configurado and canal_atual.nome %}
-    <p>O canal de pedidos deste bot é <strong>{{ canal_atual.nome }}</strong>.</p>
+    <p>O canal de pedidos deste servidor é <strong>{{ canal_atual.nome }}</strong>.</p>
     {% elif canal_atual.configurado %}
     <p>O canal de pedidos configurado foi removido do Discord. Configure um novo canal abaixo.</p>
     {% else %}
     <p>Canal de pedidos não configurado neste servidor.</p>
     {% end %}
+    <p class="nota">Um canal só, para todos os bots do servidor: o painel lista cada player ativo e os botões agem na call de quem os usa.{% if canal_atual.bot_painel %} Quem envia o painel e atende o canal é o <strong>{{ canal_atual.bot_painel }}</strong>.{% end %}</p>
   </section>
 
   {% if tarefa %}

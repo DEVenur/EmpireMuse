@@ -334,6 +334,40 @@ class FakePlayer:
         self.journal.add("player.connect", channel_id)
 
 
+class FakeRequestStore:
+    """O ``pool.servers.request`` do canal de pedidos sobre o ``FakeDB`` (o bot é o único e portanto o bot do painel)."""
+
+    def __init__(self, bot):
+        self.bot = bot
+        self._lock = asyncio.Lock()
+
+    def operation(self, gid):
+        return self._lock
+
+    async def panel_bot(self, gid):
+        return self.bot
+
+    async def is_panel_bot(self, gid, bot):
+        return True
+
+    async def get(self, gid):
+        from empiremuse.utils.server_request import RequestConfig
+
+        controller = self.bot.db.doc["player_controller"]
+        ident = lambda value: int(value) if value else None
+        return RequestConfig(ident(controller["channel"]), ident(controller["message_id"]), self.bot.user.id, 1)
+
+    async def set(self, gid, channel_id, message_id, *, expected_rev=None, expected=None):
+        doc = copy.deepcopy(self.bot.db.doc)
+        doc["player_controller"]["channel"] = str(channel_id) if channel_id else None
+        doc["player_controller"]["message_id"] = str(message_id) if channel_id and message_id else None
+        await self.bot.db.update(doc)
+        return await self.get(gid)
+
+    async def clear(self, gid, *, expected_rev=None, expected=None):
+        return await self.set(gid, None, None)
+
+
 class FakeBot:
     def __init__(self, journal, guild, db):
         self.journal, self.guild, self.db = journal, guild, db
@@ -345,7 +379,9 @@ class FakeBot:
         self.fetchable = {}  # canais que só a API devolve (fora do cache)
         self.script = {}  # evento -> lista de interações entregues por wait_for (exceção = levantar)
         self.waits = []
-        self.pool = SimpleNamespace(get_guild_bots=lambda gid: [self])
+        self.pool = SimpleNamespace(
+            get_guild_bots=lambda gid: [self], servers=SimpleNamespace(request=FakeRequestStore(self))
+        )
 
     @property
     def loop(self):

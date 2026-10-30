@@ -1013,6 +1013,7 @@ class GuildLog(commands.Cog):
     def __init__(self, bot: BotCore):
         self.bot = bot
         self.hook_url: str = ""
+        self._roster_tasks: set[asyncio.Task] = set()
 
         if bot.config["BOT_ADD_REMOVE_LOG"]:
             if URL_REG.match(bot.config["BOT_ADD_REMOVE_LOG"]):
@@ -1036,6 +1037,9 @@ class GuildLog(commands.Cog):
         except Exception:
             logger.exception("Falha ao tratar a remoção do bot do servidor")
 
+        if not banned:
+            self.roster_changed(guild.id)
+
         if banned or not self.hook_url:
             return
 
@@ -1045,6 +1049,26 @@ class GuildLog(commands.Cog):
             logger.exception("Falha ao enviar o aviso de remoção do servidor")
 
         await self.bot.update_appinfo()
+
+    def cog_unload(self) -> None:
+        for task in list(self._roster_tasks):
+            task.cancel()
+
+    def roster_changed(self, guild_id: int) -> None:
+        """Um bot entrou ou saiu do servidor: se o bot do painel do canal de pedidos mudou, o novo reenvia o painel (em segundo plano)."""
+        panel = getattr(self.bot.pool, "request_panel", None)
+        if panel is None:
+            return
+        task = self.bot.loop.create_task(self._roster_changed(panel, guild_id))
+        self._roster_tasks.add(task)
+        task.add_done_callback(self._roster_tasks.discard)
+
+    @staticmethod
+    async def _roster_changed(panel, guild_id: int) -> None:
+        try:
+            await panel.on_roster_change(guild_id)
+        except Exception as exc:  # noqa: BLE001 - o painel é enfeite sobre uma configuração já gravada
+            logger.warning("Painel do canal de pedidos não reeleito [%s] (%s)", guild_id, type(exc).__name__)
 
     @commands.Cog.listener("on_ready")
     async def leave_banned_guilds(self):
@@ -1059,6 +1083,8 @@ class GuildLog(commands.Cog):
         logger.info("Bot %s foi adicionado(a) no servidor [%s]", self.bot.user.name, guild.id)
         if usage := usage_of(self.bot):
             usage.record_guild("join", guild, bot=self.bot)
+
+        self.roster_changed(guild.id)
 
         try:
             # Só o documento POR BOT (canal, mensagem e favoritos voltam ao padrão): a configuração do servidor, no documento

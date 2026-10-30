@@ -60,6 +60,7 @@ from empiremuse.utils.safe_error import HTTPStatusError, safe_error
 from empiremuse.utils.db import MongoDatabase, LocalDatabase, get_prefix, DBModel, global_db_models
 from empiremuse.utils.app_profile import sync_app_profile
 from empiremuse.utils.guild_ban import GuildBans
+from empiremuse.utils.request_panel import RequestPanel
 from empiremuse.utils.servers import ServerStore
 from empiremuse.rules.usage import KIND_PREFIX, KIND_SLASH
 from empiremuse.utils.usage import UsageRecorder, usage_of
@@ -195,6 +196,7 @@ class BotPool:
     usage: Optional[UsageRecorder] = None
     guild_bans: Optional[GuildBans] = None
     servers: Optional[ServerStore] = None
+    request_panel: Optional[RequestPanel] = None
     join_notices: Optional[TTLCache] = None
     logs_task: Optional[asyncio.Task] = None
     version_check_task: Optional[asyncio.Task] = None
@@ -264,6 +266,7 @@ class BotPool:
         self.usage = UsageRecorder(self)
         self.guild_bans = GuildBans(self)
         self.servers = ServerStore(self)
+        self.request_panel = RequestPanel(self)
         # servidor -> aviso de "sem o principal" já enviado; a validade de 24 h é o limitador único (um aviso por servidor no pool)
         self.join_notices = TTLCache(maxsize=5000, ttl=NOTICE_WINDOW_SECONDS)
         self.logs_task: Optional[asyncio.Task] = None
@@ -679,6 +682,8 @@ class BotPool:
             self.version_check_task.cancel()
         for task in list(self.helper_watch_tasks):
             task.cancel()
+        if self.request_panel:
+            self.request_panel.close()
         for bot in self.get_all_bots():
             try:
                 if not bot.is_closed():

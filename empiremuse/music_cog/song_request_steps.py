@@ -11,6 +11,7 @@ from disnake.ext import commands
 
 from empiremuse.utils.client import BotCore
 from empiremuse.utils.db import DBModel
+from empiremuse.utils.request_panel import fetch_panel_message
 from empiremuse.utils.music.checks import (
     can_connect,
     check_player_perm,
@@ -59,30 +60,27 @@ async def _pr_checks(self, req):
     data = req.data
     message = req.message
     source = req.source
-    text_channel = req.text_channel
+    # a mensagem é do bot do painel; quem executa pode ser outro bot: tudo que depende do "eu" (permissões, voz) vem do servidor DELE
+    guild = self.bot.get_guild(message.guild.id) or message.guild
+    text_channel = self.bot.get_channel(req.text_channel.id) or req.text_channel
 
     if not message.author.voice:
         raise GenericError("Você deve entrar em um canal de voz para pedir uma música.")
 
+    voice_channel = guild.get_channel(message.author.voice.channel.id) or message.author.voice.channel
+
     can_connect(
-        channel=message.author.voice.channel,
-        guild=message.guild,
+        channel=voice_channel,
+        guild=guild,
         check_other_bots_in_vc=data["check_other_bots_in_vc"],
         bot=self.bot,
     )
 
     try:
-        if message.guild.me.voice.channel != message.author.voice.channel:
-            raise GenericError(
-                f"Você deve entrar no canal <#{message.guild.me.voice.channel.id}> para pedir uma música."
-            )
+        if guild.me.voice.channel != voice_channel:
+            raise GenericError(f"Você deve entrar no canal <#{guild.me.voice.channel.id}> para pedir uma música.")
     except AttributeError:
         pass
-
-    try:
-        message_id = int(data["player_controller"]["message_id"])
-    except TypeError:
-        message_id = None
 
     try:
         player = self.bot.music.players[message.guild.id]
@@ -91,23 +89,24 @@ async def _pr_checks(self, req):
     except KeyError:
         destroy_message = False
         player = await self.create_player(
-            inter=message, bot=self.bot, guild=message.guild, channel=text_channel, guild_data=data
+            inter=message, bot=self.bot, guild=guild, channel=text_channel, guild_data=data
         )
 
     tracks, node = await self.get_tracks(message.content, message, message.author, source=source)
     tracks = await self.check_player_queue(message.author, self.bot, message.guild.id, tracks)
 
     if not player.message:
+        # o painel é do bot do painel (o autor da mensagem): só ele pode editá-la, então o player a recebe ligada a ele
         try:
-            cached_message = await text_channel.fetch_message(message_id)
+            cached_message = await fetch_panel_message(self.bot.pool, message.guild.id)
         except Exception:
-            cached_message = await send_idle_embed(message, bot=self.bot, guild_data=data)
-            data["player_controller"]["message_id"] = str(cached_message.id)
-            await self.bot.update_data(message.guild.id, data, db_name=DBModel.guilds)
+            cached_message = None
+        if cached_message is None:
+            cached_message = await self.bot.pool.request_panel.resend(message.guild.id)
 
         player.message = cached_message
 
-    embed = disnake.Embed(color=self.bot.get_color(message.guild.me))
+    embed = disnake.Embed(color=self.bot.get_color(guild.me))
 
     try:
         components = [disnake.ui.Button(emoji="🎛️", label="Player-controller", url=player.message.jump_url)]
@@ -260,6 +259,14 @@ async def _pr_single(self, req):
             await self.delete_message(message)
 
 
+async def _is_panel_bot(self, guild_id: int) -> bool:
+    """Este bot é o bot do painel do servidor? Store indisponível = não (melhor ignorar a mensagem que duas respostas)."""
+    try:
+        return await self.bot.pool.servers.request.is_panel_bot(guild_id, self.bot)
+    except GenericError:
+        return False
+
+
 async def _sr_validate_channel(self, req):
     """Valida o canal de pedidos, as permissões e a mensagem recebida."""
     data = req.data
@@ -294,6 +301,9 @@ async def _sr_validate_channel(self, req):
                 return True
         elif str(message.channel.id) != channel_id:
             return True
+
+        if not await _is_panel_bot(self, message.guild.id):
+            return True  # o canal é único para o pool: só o bot do painel trata o que é digitado nele
 
         try:
             text_channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))

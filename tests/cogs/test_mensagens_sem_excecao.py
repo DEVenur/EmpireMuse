@@ -200,6 +200,9 @@ def montar_pedido(monkeypatch, erro: BaseException, *, webhook=False):
         http=SimpleNamespace(token=TOKEN_FALSO),
         config={"AUTO_ERROR_REPORT_WEBHOOK": "https://discord.com/api/webhooks/1/segredo" if webhook else ""},
         get_cog=lambda nome: webhook_cog,
+        pool=SimpleNamespace(
+            servers=SimpleNamespace(request=SimpleNamespace(is_panel_bot=AsyncMock(return_value=True)))
+        ),
     )
     self_ = SimpleNamespace(
         bot=bot,
@@ -207,6 +210,7 @@ def montar_pedido(monkeypatch, erro: BaseException, *, webhook=False):
         delete_message=AsyncMock(),
         parse_song_request=AsyncMock(side_effect=erro),
     )
+    self_.song_request_executor = AsyncMock(return_value=self_)  # o bot que toca é o próprio
     ctx = SimpleNamespace(command=None, guild=guilda, channel=canal, author=autor)
     return music.Music, self_, ctx, mensagem, envios, webhook_cog
 

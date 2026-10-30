@@ -18,6 +18,8 @@ from empiremuse.rules.limits import CUSTOM_SKIN_PREFIX, MAX_DJ_ROLES, VOLUMES
 DOC_VERSION = 1.0
 SECTION_SETTINGS = "settings"
 SECTION_PLAYLISTS = "playlists"
+SECTION_REQUEST = "request"
+REQUEST_FIELDS = ("channel", "message_id")  # o que o formato antigo ainda enxerga em player_controller
 MIGRATED_SECTIONS = ("settings", "request", "playlists")
 
 SETTINGS_FIELDS = (
@@ -172,10 +174,51 @@ def settings_from_legacy(flat: Mapping[str, Any]) -> dict[str, Any]:
     return settings
 
 
-def to_legacy(base: Mapping[str, Any], settings: Mapping[str, Any]) -> dict[str, Any]:
-    """O documento no formato antigo: ``base`` (o documento por bot, com canal/mensagem/favoritos) com ``settings`` por cima."""
+def _id_text(value: Any) -> str | None:
+    """Id de canal/mensagem do Discord como texto de dígitos; qualquer outra coisa (vazio, texto, número negativo) vira ``None``."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    text = str(value)
+    return text if _ROLE_ID.fullmatch(text) and int(text) > 0 else None
+
+
+def request_from_legacy(flat: Mapping[str, Any]) -> dict[str, Any]:
+    """A seção ``request`` a partir de um documento antigo (canal e mensagem do canal de pedidos; sem canal, sem mensagem)."""
+    controller = flat.get("player_controller") or {}
+    channel = _id_text(controller.get("channel"))
+    return {"channel": channel, "message_id": _id_text(controller.get("message_id")) if channel else None}
+
+
+def migrate_request(legacy: Mapping[str, Any] | None) -> dict[str, Any]:
+    """``request`` migrado do documento antigo do principal (``None`` = ele não tinha): canal e mensagem válidos; o bot do painel
+    ainda não foi eleito (``None``)."""
+    request = request_from_legacy(legacy or {})
+    return {**request, "panel_bot_id": None}
+
+
+def changed_request(incoming: Mapping[str, Any], seen: Mapping[str, Any]) -> dict[str, Any]:
+    """Os campos do canal de pedidos que o escritor MUDOU em relação ao que leu (valor inválido levanta ``SettingError``)."""
+    controller = incoming.get("player_controller") or {}
+    changes: dict[str, Any] = {}
+    for name in REQUEST_FIELDS:
+        if name not in controller or controller[name] == seen.get(name):
+            continue
+        value = controller[name]
+        if value is not None and _id_text(value) is None:
+            raise SettingError(f"{name} deve ser um id do Discord")
+        changes[name] = None if value is None else _id_text(value)
+    return changes
+
+
+def to_legacy(
+    base: Mapping[str, Any], settings: Mapping[str, Any], request: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """O documento no formato antigo: ``base`` (o documento por bot) com ``settings`` (e o canal de pedidos, se vier) por cima."""
     flat = deepcopy(dict(base))
     controller = flat.setdefault("player_controller", {})
+    if request is not None:
+        for name in REQUEST_FIELDS:
+            controller[name] = request.get(name)
     for name in SETTINGS_FIELDS:
         value = deepcopy(settings[name])
         if name in _LEGACY_CONTROLLER_KEYS:

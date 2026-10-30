@@ -50,6 +50,19 @@ def _cu_session_older_than_skin_grace(self) -> bool:
 
 
 async def _cu_static_session(self, inter: disnake.MessageInteraction = None) -> None:
+    panel = getattr(self.bot.pool, "request_panel", None)
+    if panel is not None and panel.players(self.guild_id):
+        # outros players seguem tocando no canal único: o painel se refaz com eles, em vez do embed ocioso por cima de todos
+        if inter is not None:
+            try:
+                if not inter.response.is_done():
+                    await inter.response.defer()
+            except Exception:
+                logger.exception("Falha em _cu_static_session")
+        panel.forget(self.guild_id)
+        await self.channel_cleanup()
+        return
+
     try:
         await send_idle_embed(inter or self.message, self.command_log, bot=self.bot)
     except Exception:

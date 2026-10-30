@@ -456,6 +456,9 @@ class MusicSettings(commands.Cog):
         if not bot:
             return
 
+        # o canal de pedidos é único: quem o cria e escreve nele é o bot do painel (o principal, senão a 1ª reserva presente)
+        bot = (await bot.pool.servers.request.panel_bot(inter.guild_id)) or bot
+
         guild = bot.get_guild(inter.guild_id)
 
         channel = bot.get_channel(inter.channel.id)
@@ -508,11 +511,11 @@ class MusicSettings(commands.Cog):
 
         await inter.response.defer(ephemeral=True)
 
-        guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
+        config = await bot.pool.servers.request.get(inter.guild_id)
 
         existing_channel = True
 
-        player, original_message = await find_current_request_message(bot, guild, guild_data)
+        player, original_message = await find_current_request_message(bot, guild, config)
 
         if not target:
             try:
@@ -760,7 +763,7 @@ class MusicSettings(commands.Cog):
             channel_name=channel_name,
             original_message=original_message,
             player=player,
-            guild_data=guild_data,
+            config=config,
             ask_forum_title=ask_forum_title,
             send_idle_embed=send_idle_embed,
         )
@@ -829,6 +832,10 @@ class MusicSettings(commands.Cog):
         if not bot:
             return
 
+        bot = (
+            await bot.pool.servers.request.panel_bot(inter.guild_id)
+        ) or bot  # o canal é único: quem reseta é o bot do painel
+
         await inter.response.defer(ephemeral=True)
 
         guild = bot.get_guild(inter.guild_id) or inter.guild
@@ -837,9 +844,9 @@ class MusicSettings(commands.Cog):
 
         channel_inter = bot.get_channel(inter.channel.id)
 
-        guild_data = await bot.get_data(inter.guild_id, db_name=DBModel.guilds)
+        config = await bot.pool.servers.request.get(inter.guild_id)
 
-        channel = await find_request_channel(bot, inter.guild_id, guild_data)
+        channel = await find_request_channel(bot, inter.guild_id, config)
 
         async def notify(event: str):
             if event == "forum_deleted":
@@ -873,7 +880,7 @@ class MusicSettings(commands.Cog):
             channel,
             delete_channel=delete_channel,
             channel_inter=channel_inter,
-            guild_data=guild_data,
+            config=config,
             notify=notify,
         )
 

@@ -74,11 +74,6 @@ class TasksBase(CanalBase):
         assert form is not None, "a confirmação deve trazer o formulário acao=confirmar_reset"
         return self.submit(browser, self.canal_url(), form, htmx=True, **fields)
 
-    def db_other_fields(self):
-        doc = self.world.doc
-        pc = {k: v for k, v in doc["player_controller"].items() if k not in ("channel", "message_id")}
-        return {k: v for k, v in doc.items() if k != "player_controller"}, pc
-
 
 # ============================================================================ tarefa de setup: execução e efeitos
 
@@ -94,7 +89,7 @@ class SetupExecutionTest(TasksBase):
         create = self.world.j.of("forum.create_thread")[0]
         assert create[2:] == ("Pedidos do bot", "Post para pedido de músicas.", 10080, 5)
         post = self.world.forum.created[0]
-        assert self.world.doc["player_controller"]["channel"] == str(post.id)
+        assert self.world.request_doc["channel"] == str(post.id)
         assert self.world.j.of("channel.purge") == [], "limpar mensagens é ignorado em fórum"
 
     def test_active_player_is_moved_to_the_new_channel(self):
@@ -199,8 +194,8 @@ class ResetFlowTest(TasksBase):
         state, _ = self.finish(browser, self.confirm_reset(browser, self.reset_confirmation(browser)))
         assert state == "ok"
         assert self.world.j.of("channel.delete")[0][1] == post.label
-        assert self.world.doc["player_controller"]["channel"] is None
-        assert self.world.doc["player_controller"]["message_id"] is None
+        assert self.world.request_doc["channel"] is None and self.world.request_doc["message_id"] is None
+        assert self.world.bot_doc["player_controller"]["fav_links"], "o documento por bot nem é tocado"
 
     def test_tampering_with_the_delete_flag_in_step_two_still_requires_the_name(self):
         self.world.configured_text()

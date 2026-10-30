@@ -16,6 +16,8 @@ from empiremuse.utils.music.checks import (
     is_dj,
     can_connect,
     check_player_perm,
+    resolve_player,
+    update_attr,
 )
 from empiremuse.utils.music.converters import fix_characters, URL_REG, md_link
 from empiremuse.utils.music.errors import (
@@ -171,10 +173,55 @@ async def _pc_lastfm(self, req):
     return False
 
 
+async def _pc_route_panel_click(self, req) -> bool:
+    """Clique no painel do canal único: age no player da call de quem apertou (``resolve_player``, S-V8), nunca no do bot que recebeu.
+
+    O painel pertence ao bot do painel, então o clique chega a ele; se o player da call de quem apertou é de outro bot, o clique é
+    entregue ao ``Music`` desse bot. Sem call, ou numa call sem player, nada muda e a pessoa é avisada. ``True`` = tratado aqui.
+    """
+    interaction = req.interaction
+    pool = self.bot.pool
+    try:
+        request = pool.servers.request
+        config = await request.get(interaction.guild_id)
+        if not config.message_id or interaction.message.id != config.message_id:
+            return False
+        if not await request.is_panel_bot(interaction.guild_id, self.bot):
+            return False
+    except GenericError:
+        return False
+
+    if req.control == PlayerControls.help_button:
+        await _pc_help_button(self, req)  # só texto: não precisa de call nem de player
+        return True
+
+    resolved = resolve_player(pool, interaction.guild_id, interaction.author)
+    if resolved is None:
+        from empiremuse.utils.music.interactions.request_panel import MSG_JOIN_A_CALL
+
+        await interaction.send(MSG_JOIN_A_CALL, ephemeral=True)
+        return True
+    bot, _ = resolved
+    if bot is self.bot:
+        interaction.panel_click = (
+            True  # o player da call é o deste bot, mesmo que não seja o estático da mensagem do painel
+        )
+        return False
+    update_attr(interaction, bot, bot.get_guild(interaction.guild_id))
+    interaction.panel_click = (
+        True  # a mensagem é a do painel, não a do player: o outro bot não descarta o clique por isso
+    )
+    await bot.get_cog("Music").player_controller(interaction, req.control)
+    return True
+
+
 async def _pc_player_checks(self, req):
     """Localiza o player ativo e confere cooldown e canal de voz."""
     control = req.control
     interaction = req.interaction
+
+    if await _pc_route_panel_click(self, req):
+        return True
 
     try:
         player: LavalinkPlayer = self.bot.music.players[interaction.guild_id]
@@ -183,7 +230,7 @@ async def _pc_player_checks(self, req):
         await send_idle_embed(interaction.message, bot=self.bot)
         return True
 
-    if interaction.message != player.message:
+    if interaction.message != player.message and not getattr(interaction, "panel_click", False):
         if control != PlayerControls.queue:
             return True
 

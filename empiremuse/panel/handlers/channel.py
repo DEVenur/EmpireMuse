@@ -1,6 +1,7 @@
 """Categoria Canal de pedidos: página, configurar/reset (em dois passos) e acompanhamento das tarefas.
 
-Só HTTP: validação, token e execução ficam em ``panel.services.channel.py`` e ``panel/services/tasks.py``.
+Só HTTP: validação, token e execução ficam em ``panel.services.channel.py`` e ``panel/services/tasks.py``. O canal é do
+servidor (seção ``request`` do documento único): sem seletor de bot; quem executa no Discord é o bot do painel.
 """
 
 from __future__ import annotations
@@ -11,14 +12,18 @@ import tornado.web
 
 from empiremuse.panel.authz import GuildAccess, GuildAccessDenied
 from empiremuse.panel.handlers.servers import initial_of
-from empiremuse.panel.handlers.settings import MAX_BODY_BYTES, SettingsHandler, decode_args
+from empiremuse.panel.handlers.settings import (
+    MAX_BODY_BYTES,
+    UNAVAILABLE_TITLE,
+    SettingsHandler,
+    decode_args,
+)
 from empiremuse.panel.services.base import (
     CONFLICT_TEXT,
     HEX16,
     INVALID_TEXT,
     KIND_ERROR,
     Args,
-    DBModel,
     FormContext,
     Formulario,
     first,
@@ -34,6 +39,8 @@ from empiremuse.panel.services.channel import (
     TaskView,
 )
 from empiremuse.panel.services.tasks import Task, TaskBusy, TaskLimit, valid_task_id
+from empiremuse.utils.server_request import RequestConfig
+from empiremuse.utils.servers import ServerConfigConflict, ServerConfigUnavailable
 from empiremuse.utils.usage import record_panel_action
 
 CHANNEL_TEMPLATE = "bloco_canal.html"
@@ -60,11 +67,14 @@ def _audited_action(args: Args) -> str:
 
 
 class ChannelHandler(SettingsHandler):
-    """``GET/POST /painel/servidores/<gid>/canal[?bot=<id>]``."""
+    """``GET/POST /painel/servidores/<gid>/canal``."""
 
     @property
     def channels(self) -> ChannelService:
         return self.application.settings["channel_service"]
+
+    async def _config(self, ctx: FormContext) -> RequestConfig:
+        return await ctx.pool.servers.request.get(ctx.guild_id)
 
     def _own_active_task(self, ctx: FormContext) -> Optional[Task]:
         """Tarefa ativa do servidor só se for do próprio usuário (a de outro daria 404 no polling)."""
@@ -75,16 +85,28 @@ class ChannelHandler(SettingsHandler):
 
     async def get(self, guild_id: str) -> None:  # type: ignore[override]
         try:
+            await self._get(guild_id)
+        except ServerConfigUnavailable as exc:
+            self.render_error(503, UNAVAILABLE_TITLE, exc.text)
+
+    async def _get(self, guild_id: str) -> None:
+        try:
             ctx, access, action = await self._resolve(guild_id, "canal", fresh=False)
         except GuildAccessDenied:
             self._not_found()
             return
-        doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
-        self._render(200, access, ctx, self._namespace_for(ctx, doc, action, task=self._own_active_task(ctx)))
+        config = await self._config(ctx)
+        self._render(200, access, ctx, self._namespace_for(ctx, config, action, task=self._own_active_task(ctx)))
 
     # ------------------------------------------------------------------ POST
 
     async def post(self, guild_id: str) -> None:  # type: ignore[override]
+        try:
+            await self._post(guild_id)
+        except ServerConfigUnavailable as exc:
+            self.render_error(503, UNAVAILABLE_TITLE, exc.text)
+
+    async def _post(self, guild_id: str) -> None:
         if len(self.request.body) > MAX_BODY_BYTES:
             self._reject_plain(413, "Envio grande demais", "Os dados enviados excedem o limite permitido.")
             return
@@ -99,77 +121,87 @@ class ChannelHandler(SettingsHandler):
         args = decode_args(self)
         if self.channels.runner.active_for_guild(ctx.guild_id) is not None:
             # Antes do lock: a tarefa em andamento o segura até terminar e este POST não deve esperar por ela.
-            doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
+            config = await self._config(ctx)
             self._render(
                 409,
                 access,
                 ctx,
-                self._namespace_for(ctx, doc, action, message=MSG_BUSY, task=self._own_active_task(ctx)),
+                self._namespace_for(ctx, config, action, message=MSG_BUSY, task=self._own_active_task(ctx)),
             )
             return
-        async with self.application.settings["settings_service"].lock(ctx.bot_id, ctx.guild_id):
-            status, namespace = await self._dispatch(ctx, action, args)
+        try:
+            async with self.application.settings["settings_service"].lock(self.channels.SCOPE, ctx.guild_id):
+                status, namespace = await self._dispatch(ctx, action, args)
+        except ServerConfigConflict:  # outro escritor venceu a corrida no store: o usuário recarrega
+            config = await self._config(ctx)
+            status, namespace = 409, self._namespace_for(ctx, config, action, message=CONFLICT_TEXT)
         record_panel_action(ctx, f"canal/{_audited_action(args)}", status)
         self._render(status, access, ctx, namespace)
 
     async def _dispatch(self, ctx: FormContext, action: str, args: Args) -> tuple[int, dict[str, Any]]:
-        doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
+        config = await self._config(ctx)
         sent = first(args, "versao")
         if sent is None or not HEX16.fullmatch(sent):
-            return 422, self._namespace_for(ctx, doc, action, message=_MSG_VERSION)
-        if sent != self.channels.version(doc):
-            return 409, self._namespace_for(ctx, doc, action, message=CONFLICT_TEXT)
+            return 422, self._namespace_for(ctx, config, action, message=_MSG_VERSION)
+        if sent != self.channels.version(config):
+            return 409, self._namespace_for(ctx, config, action, message=CONFLICT_TEXT)
         handler = {
             "configurar": self._configure,
             "reset": self._reset_step_one,
             "confirmar_reset": self._reset_confirm,
         }.get(first(args, "acao") or "")
         if handler is None:
-            return 422, self._namespace_for(ctx, doc, action, message=_MSG_ACTION)
-        return await handler(ctx, doc, action, args)
+            return 422, self._namespace_for(ctx, config, action, message=_MSG_ACTION)
+        return await handler(ctx, config, action, args)
 
-    async def _configure(self, ctx: FormContext, doc: dict, action: str, args: Args) -> tuple[int, dict[str, Any]]:
+    async def _configure(
+        self, ctx: FormContext, config: RequestConfig, action: str, args: Args
+    ) -> tuple[int, dict[str, Any]]:
         check = self.channels.validate_setup(ctx, args)
         if check.errors or check.plan is None:
-            return 422, self._invalid(ctx, doc, action, check)
-        return self._start(ctx, doc, action, lambda: self.channels.start_setup(ctx, check.plan))
+            return 422, self._invalid(ctx, config, action, check)
+        return self._start(ctx, config, action, lambda: self.channels.start_setup(ctx, check.plan))
 
-    async def _reset_step_one(self, ctx: FormContext, doc: dict, action: str, args: Args) -> tuple[int, dict[str, Any]]:
-        error = self.channels.check_reset(ctx, doc)
+    async def _reset_step_one(
+        self, ctx: FormContext, config: RequestConfig, action: str, args: Args
+    ) -> tuple[int, dict[str, Any]]:
+        error = self.channels.check_reset(ctx, config)
         if error:
-            return 422, self._namespace_for(ctx, doc, action, message=error, errors={"acao": error})
-        confirmation = self.channels.confirmation(ctx, doc, flag(args, "deletar"))
-        return 200, self._namespace_for(ctx, doc, action, confirmation=confirmation)
+            return 422, self._namespace_for(ctx, config, action, message=error, errors={"acao": error})
+        confirmation = self.channels.confirmation(ctx, config, flag(args, "deletar"))
+        return 200, self._namespace_for(ctx, config, action, confirmation=confirmation)
 
-    async def _reset_confirm(self, ctx: FormContext, doc: dict, action: str, args: Args) -> tuple[int, dict[str, Any]]:
-        error = self.channels.check_reset(ctx, doc)
+    async def _reset_confirm(
+        self, ctx: FormContext, config: RequestConfig, action: str, args: Args
+    ) -> tuple[int, dict[str, Any]]:
+        error = self.channels.check_reset(ctx, config)
         if error:
-            return 422, self._namespace_for(ctx, doc, action, message=error, errors={"acao": error})
-        status, token, errors = self.channels.check_confirmation(ctx, doc, args)
+            return 422, self._namespace_for(ctx, config, action, message=error, errors={"acao": error})
+        status, token, errors = self.channels.check_confirmation(ctx, config, args)
         if status == "outro":
-            return 409, self._namespace_for(ctx, doc, action, message=CONFLICT_TEXT)
+            return 409, self._namespace_for(ctx, config, action, message=CONFLICT_TEXT)
         if status == "invalido":
-            return 422, self._namespace_for(ctx, doc, action, message=MSG_TOKEN)
+            return 422, self._namespace_for(ctx, config, action, message=MSG_TOKEN)
         if errors:
-            confirmation = Confirmation(token or "", True, self.channels.current(ctx, doc).nome or "")
-            return 422, self._namespace_for(ctx, doc, action, errors=errors, confirmation=confirmation)
+            confirmation = Confirmation(token or "", True, self.channels.current(ctx, config).nome or "")
+            return 422, self._namespace_for(ctx, config, action, errors=errors, confirmation=confirmation)
         delete = flag(args, "deletar")
-        result = self._start(ctx, doc, action, lambda: self.channels.start_reset(ctx, delete))
+        result = self._start(ctx, config, action, lambda: self.channels.start_reset(ctx, delete))
         if result[0] == 202:
             self.channels.tokens.consume(token or "")
         return result
 
-    def _start(self, ctx: FormContext, doc: dict, action: str, submit) -> tuple[int, dict[str, Any]]:
+    def _start(self, ctx: FormContext, config: RequestConfig, action: str, submit) -> tuple[int, dict[str, Any]]:
         try:
             task = submit()
         except TaskBusy:
-            return 409, self._namespace_for(ctx, doc, action, message=MSG_BUSY, task=self._own_active_task(ctx))
+            return 409, self._namespace_for(ctx, config, action, message=MSG_BUSY, task=self._own_active_task(ctx))
         except TaskLimit:
-            return 429, self._namespace_for(ctx, doc, action, message=MSG_LIMIT)
-        return 202, self._namespace_for(ctx, doc, action, task=task)
+            return 429, self._namespace_for(ctx, config, action, message=MSG_LIMIT)
+        return 202, self._namespace_for(ctx, config, action, task=task)
 
-    def _invalid(self, ctx: FormContext, doc: dict, action: str, check: Check) -> dict[str, Any]:
-        return self._namespace_for(ctx, doc, action, values=check.echo, errors=check.errors, missing=check.missing)
+    def _invalid(self, ctx: FormContext, config: RequestConfig, action: str, check: Check) -> dict[str, Any]:
+        return self._namespace_for(ctx, config, action, values=check.echo, errors=check.errors, missing=check.missing)
 
     async def _rate_limited_channel(self, guild_id: str) -> None:
         self.set_header("Retry-After", "60")
@@ -181,15 +213,15 @@ class ChannelHandler(SettingsHandler):
         except GuildAccessDenied:
             self._not_found()
             return
-        doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
-        self._render(429, access, ctx, self._namespace_for(ctx, doc, action, message=_MSG_RATE))
+        config = await self._config(ctx)
+        self._render(429, access, ctx, self._namespace_for(ctx, config, action, message=_MSG_RATE))
 
     # ------------------------------------------------------------------ montagem do que vai ao template
 
     def _namespace_for(
         self,
         ctx: FormContext,
-        doc: dict,
+        config: RequestConfig,
         action: str,
         *,
         values: Optional[dict] = None,
@@ -206,7 +238,7 @@ class ChannelHandler(SettingsHandler):
             form_id="canal-conteudo",
             template=CHANNEL_TEMPLATE,
             acao=action,
-            versao=self.channels.version(doc),
+            versao=self.channels.version(config),
             valores={**_DEFAULT_VALUES, **(values or {})},
             erros=errors or {},
             mensagem=text,
@@ -214,7 +246,7 @@ class ChannelHandler(SettingsHandler):
         )
         view: Optional[TaskView] = self.channels.task_view(task, ctx.guild_id) if task is not None else None
         return {
-            "canal_atual": self.channels.current(ctx, doc),
+            "canal_atual": self.channels.current(ctx, config),
             "formulario": form,
             "canais": groups,
             "tipos": types,
@@ -226,11 +258,11 @@ class ChannelHandler(SettingsHandler):
 
     def _render(self, status: int, access: GuildAccess, ctx: FormContext, namespace: dict[str, Any]) -> None:
         self.set_status(status)
-        common = {"acesso": access, "inicial": initial_of(access.name), "bot_atual": self._bot_ref(access, ctx)}
+        common = {"acesso": access, "inicial": initial_of(access.name), "bot_atual": None}
         if self._is_htmx():
             self.render_page(CHANNEL_TEMPLATE, **common, **namespace)
             return
-        self.render_page(PAGE_TEMPLATE, mostrar_seletor=len(access.bots) >= 2, **common, **namespace)
+        self.render_page(PAGE_TEMPLATE, mostrar_seletor=False, **common, **namespace)
 
 
 class ChannelTaskHandler(ChannelHandler):
@@ -250,8 +282,12 @@ class ChannelTaskHandler(ChannelHandler):
         if self._is_htmx():
             self.render_page(TASK_TEMPLATE, tarefa=view)
             return
-        doc = await ctx.bot.get_data(ctx.guild_id, db_name=DBModel.guilds)
-        self._render(200, access, ctx, self._namespace_for(ctx, doc, action, task=task))
+        try:
+            config = await self._config(ctx)
+        except ServerConfigUnavailable as exc:
+            self.render_error(503, UNAVAILABLE_TITLE, exc.text)
+            return
+        self._render(200, access, ctx, self._namespace_for(ctx, config, action, task=task))
 
     async def post(self, *args: str) -> None:  # type: ignore[override]
         """A URL de acompanhamento só aceita GET (o POST herdado tem outra assinatura e daria 500)."""

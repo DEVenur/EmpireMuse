@@ -47,12 +47,14 @@ CATEGORY_FORMS: dict[str, tuple[SettingsForm, ...]] = {
     "links": (LinksForm(),),
     "geral": (PrefixForm(), VoiceStatusForm(), ListenAlongForm()),
 }
-PER_BOT_CATEGORIES = frozenset({"canal"})  # player, dj, aparência e playlists (links) são do servidor (doc único)
-CHANNEL_CATEGORY = "canal"  # tem handler próprio (panel/handlers/channel.py)
+PER_BOT_CATEGORIES: frozenset[str] = (
+    frozenset()
+)  # tudo é do servidor (doc único): sem seletor de bot em categoria alguma
+CHANNEL_CATEGORY = "canal"  # tem handler próprio (panel/handlers/channel.py); quem executa no Discord é o bot do painel
 _MSG_TOO_LARGE = ("Envio grande demais", "Os dados enviados excedem o limite permitido.")
 _MSG_RATE = "Muitas alterações em pouco tempo. Aguarde um minuto e tente novamente."
 _MSG_NO_FORM = ("Dados inválidos", "Não foi possível identificar o formulário enviado.")
-_UNAVAILABLE_TITLE = "Configuração indisponível"
+UNAVAILABLE_TITLE = "Configuração indisponível"
 _MSG_FORBIDDEN = "Você não tem a permissão necessária no Discord para esta ação (Gerenciar Canais)."
 
 
@@ -72,13 +74,13 @@ class SettingsHandler(AuthenticatedHandler):
         try:
             await self._get(guild_id, category)
         except ServerConfigUnavailable as exc:  # leitura do doc único falhou: mensagem própria, não o 500 genérico
-            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+            self.render_error(503, UNAVAILABLE_TITLE, exc.text)
 
     async def post(self, guild_id: str, category: str) -> None:
         try:
             await self._post(guild_id, category)
         except ServerConfigUnavailable as exc:  # vale também para a releitura dos blocos de Conflict, 429 e respostas
-            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+            self.render_error(503, UNAVAILABLE_TITLE, exc.text)
 
     async def _get(self, guild_id: str, category: str) -> None:
         try:
@@ -130,8 +132,12 @@ class SettingsHandler(AuthenticatedHandler):
         if bot_id is not None:
             if bot_id not in {bot.id for bot in access.bots}:
                 raise GuildAccessDenied
+        elif per_bot:
+            bot_id = self._chosen_bot_id(access)
+        elif category == CHANNEL_CATEGORY:
+            bot_id = await self._panel_bot_id(pool, guild_id, access)
         else:
-            bot_id = self._chosen_bot_id(access) if per_bot else access.bots[0].id
+            bot_id = access.bots[0].id
         pair = next((p for p in ready_bots_with_guild(pool, int(guild_id)) if str(p[0].user.id) == bot_id), None)
         if pair is None:
             raise GuildAccessDenied
@@ -140,6 +146,18 @@ class SettingsHandler(AuthenticatedHandler):
         if per_bot:
             action += "?" + urlencode({"bot": bot_id})
         return ctx, access, action
+
+    @staticmethod
+    async def _panel_bot_id(pool: Any, guild_id: str, access: GuildAccess) -> str:
+        """O bot do painel executa setup/reset do canal de pedidos; sem eleição válida, o 1º bot autorizado."""
+        try:
+            panel_bot = await pool.servers.request.panel_bot(int(guild_id))
+        except ServerConfigUnavailable:
+            panel_bot = None
+        allowed = {bot.id for bot in access.bots}
+        if panel_bot is not None and panel_bot.user is not None and str(panel_bot.user.id) in allowed:
+            return str(panel_bot.user.id)
+        return access.bots[0].id
 
     def _chosen_bot_id(self, access: GuildAccess) -> str:
         requested = self.get_query_argument("bot", None, strip=False)
@@ -232,7 +250,7 @@ class LinksExportHandler(SettingsHandler):
         try:
             content = await ctx.pool.servers.playlists.export_bytes(ctx.guild_id)
         except ServerConfigUnavailable as exc:
-            self.render_error(503, _UNAVAILABLE_TITLE, exc.text)
+            self.render_error(503, UNAVAILABLE_TITLE, exc.text)
             return
         self.set_header("Content-Type", "application/json; charset=UTF-8")
         self.set_header("Content-Disposition", f'attachment; filename="playlists-{guild_id}.json"')

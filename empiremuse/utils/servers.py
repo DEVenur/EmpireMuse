@@ -23,13 +23,17 @@ from empiremuse.rules.limits import MAX_DJ_ROLES
 from empiremuse.rules.playlists import plan_migration, to_doc
 from empiremuse.rules.servers import (
     SECTION_PLAYLISTS,
+    SECTION_REQUEST,
     SECTION_SETTINGS,
     Allowed,
     SettingError,
+    changed_request,
     changed_settings,
     MAIN_IDENTIFIERS,
     is_main_identifier,
+    migrate_request,
     migrate_settings,
+    request_from_legacy,
     new_doc,
     normalize_role_ids,
     settings_from_legacy,
@@ -78,6 +82,7 @@ class GuildDoc(dict):
     """O documento no formato antigo devolvido por ``get_data``: lembra o ``settings`` que leu para saber se o escritor mexeu nele."""
 
     settings_seen: dict
+    request_seen: dict
 
 
 def as_guild_id(value: object) -> Optional[int]:
@@ -99,6 +104,9 @@ class ServerStore:
         from empiremuse.utils.server_playlists import ServerPlaylists  # aqui para não criar ciclo de importação
 
         self.playlists = ServerPlaylists(self)
+        from empiremuse.utils.server_request import ServerRequest
+
+        self.request = ServerRequest(self)
 
     # ------------------------------------------------------------------ o pool
 
@@ -227,6 +235,14 @@ class ServerStore:
             logger.info(
                 "Servidor [%s] migrado: configuração antiga do principal %s", gid, "copiada" if legacy else "ausente"
             )
+        if SECTION_REQUEST in pending:
+            new["request"] = migrate_request(legacy)
+            new["migrated"][SECTION_REQUEST] = True
+            logger.info(
+                "Servidor [%s] migrado: canal de pedidos do principal %s",
+                gid,
+                "copiado" if new["request"]["channel"] else "ausente",
+            )
         if SECTION_PLAYLISTS in pending:
             plan = plan_migration(((legacy or {}).get("player_controller") or {}).get("fav_links"))
             new["playlists"] = [to_doc(p) for p in plan.items]
@@ -348,31 +364,54 @@ class ServerStore:
         try:
             if gid_int is None:
                 raise UnknownGuild
-            settings = await self.settings(gid_int)
+            unique = await self._ensure(gid_int, (SECTION_SETTINGS, SECTION_REQUEST))
+            settings = unique[SECTION_SETTINGS]
+            request = unique.get(SECTION_REQUEST) or request_from_legacy(
+                base
+            )  # documento antigo sem a seção: vale o do bot
         except UnknownGuild:  # DM ou servidor fora do pool: vale o que o próprio bot tinha, sem criar documento único
-            settings = settings_from_legacy(base)
-        doc = GuildDoc(to_legacy(base, settings))
+            settings, request = settings_from_legacy(base), request_from_legacy(base)
+        doc = GuildDoc(to_legacy(base, settings, request))
         doc.settings_seen = deepcopy(settings)
+        doc.request_seen = {"channel": request.get("channel"), "message_id": request.get("message_id")}
         return doc
 
     async def save_legacy(self, bot: BotCore, gid: object, data: dict) -> dict:
-        """Grava no documento do bot só canal, mensagem e favoritos. Levanta se ``settings`` foi alterado (use ``pool.servers``)."""
+        """Grava o canal e a mensagem do canal de pedidos NO DOCUMENTO ÚNICO, só o que o escritor mudou em relação ao que leu.
+
+        Levanta se ``settings`` foi alterado (use ``pool.servers``). Servidor fora do pool (ou DM) grava no documento do bot, como antes.
+        """
+        reference = None
         seen = getattr(data, "settings_seen", None)
-        if seen is None:  # documento montado à mão: compara com o que o servidor tem agora
-            seen = (await self.legacy_doc(bot, gid)).settings_seen
+        seen_request = getattr(data, "request_seen", None)
+        if seen is None or seen_request is None:  # documento montado à mão: compara com o que o servidor tem agora
+            reference = await self.legacy_doc(bot, gid)
+            seen, seen_request = reference.settings_seen, reference.request_seen
         if changed := changed_settings(data, seen):
             raise StaleSettingsWriter(
                 f"update_data com settings alterado ({', '.join(sorted(changed))}): use pool.servers"
             )
-        collection = str(bot.user.id)
-        incoming = data.get("player_controller") or {}
-        async with self._lock(
-            f"{collection}:{gid}"
-        ):  # ler-mesclar-gravar o documento do bot sem pisar em outra gravação
-            stored = deepcopy(await self._database.get_data(gid, db_name=DBModel.guilds, collection=collection))
-            controller = stored.setdefault("player_controller", {})
-            for key in CONTROLLER_KEYS:
-                if key in incoming:
-                    controller[key] = deepcopy(incoming[key])
-            await self._database.update_data(gid, stored, db_name=DBModel.guilds, collection=collection)
+        changes = changed_request(data, seen_request)
+        gid_int = as_guild_id(gid)
+        if changes:
+            if gid_int is not None and self.knows(gid_int):
+
+                def apply(doc: dict) -> bool:
+                    before = dict(doc["request"])
+                    doc["request"].update(changes)
+                    if changes.get("channel") is None and "channel" in changes:
+                        doc["request"]["message_id"] = None  # sem canal não há mensagem
+                    return doc["request"] != before
+
+                await self.mutate_doc(gid_int, (SECTION_REQUEST,), apply)
+            else:
+                await self._save_bot_document(bot, gid, changes)
         return data
+
+    async def _save_bot_document(self, bot: BotCore, gid: object, changes: dict) -> None:
+        """Servidor fora do pool: canal e mensagem no documento do próprio bot (o comportamento antigo, sem o documento único)."""
+        collection = str(bot.user.id)
+        async with self._lock(f"{collection}:{gid}"):
+            stored = deepcopy(await self._database.get_data(gid, db_name=DBModel.guilds, collection=collection))
+            stored.setdefault("player_controller", {}).update(changes)
+            await self._database.update_data(gid, stored, db_name=DBModel.guilds, collection=collection)
