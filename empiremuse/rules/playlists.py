@@ -6,6 +6,7 @@ decisões; o banco, a trava e os efeitos são do ``utils/server_playlists``. Tex
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -20,6 +21,7 @@ from empiremuse.rules.errors import (
     FILE_TOO_LARGE,
     FILE_TOO_MANY,
     GENRES_INVALID,
+    IMPORT_URL_REFUSED,
     ITEM_FORMAT,
     NAME_INVALID,
     NAME_TAKEN,
@@ -64,6 +66,14 @@ _TRACKING_PARAMS = frozenset({"si", "feature", "pp"})  # mais todo ``utm_*``
 _ICON = re.compile(r"icons/[a-z0-9-]{1,29}\.png")
 _IMPORT_FILE = re.compile(r"[a-z0-9-]{1,64}\.json")
 _ELLIPSIS = "…"
+
+# Importar por URL (P5): só estes hosts, por https na porta 443. Qualquer outro nome, IP literal, ponto final ou ``%`` fica de fora.
+IMPORT_URL_HOSTS = frozenset(
+    {"raw.githubusercontent.com", "gist.githubusercontent.com", "cdn.discordapp.com", "media.discordapp.net"}
+)
+IMPORT_URL_MAX = 2000
+_HTTPS_PORT = "443"
+_NAT64_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
 _REASON_TEXT = {
     INVALID: "inválida",
     DUP_NAME: "nome já existe",
@@ -322,6 +332,73 @@ def check_attachment(filename: Any, size: Any) -> RuleError | None:
     if not _is_int(size) or not 0 <= size <= PLAYLIST_FILE_MAX_BYTES:
         return RuleError(FILE_TOO_LARGE, limit=PLAYLIST_FILE_MAX_BYTES)
     return None
+
+
+def check_import_url(raw: Any) -> str | RuleError:
+    """Link de importação: ``https``, host EXATO da lista, sem credencial, porta ausente ou 443, sem IP literal nem barra invertida.
+
+    Devolve a URL normalizada (host em minúsculas, sem porta e sem ``#``) para ser enviada; ``RuleError(IMPORT_URL_REFUSED)`` no resto.
+    O texto da recusa nunca repete o link: ele pode trazer ``?token=`` e vale como credencial.
+    """
+    refused = RuleError(IMPORT_URL_REFUSED)
+    if not isinstance(raw, str):
+        return refused
+    text = raw.strip()
+    if (
+        len(text) >= 2 and text.startswith("<") and text.endswith(">")
+    ):  # ``<link>``: o Discord usa para esconder a prévia
+        text = text[1:-1].strip()
+    if not text or len(text) > IMPORT_URL_MAX or not text.isascii() or not text.isprintable() or " " in text:
+        return refused
+    if "\\" in text:
+        return refused
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        return refused
+    netloc = parts.netloc
+    if parts.scheme != "https" or not netloc or "@" in netloc or "[" in netloc or not parts.path.startswith("/"):
+        return refused
+    host, separator, port = netloc.partition(":")
+    if separator and port != _HTTPS_PORT:
+        return refused
+    host = host.lower()
+    if host not in IMPORT_URL_HOSTS:
+        return refused
+    return urlunsplit(("https", host, parts.path, parts.query, ""))
+
+
+def _embedded_ipv4(address: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address]:
+    """Os IPv4 escondidos num IPv6 (mapeado, 6to4, Teredo, NAT64 e o antigo compatível): cada um também precisa ser público."""
+    found: list[ipaddress.IPv4Address] = []
+    if address.ipv4_mapped is not None:
+        found.append(address.ipv4_mapped)
+    if address.sixtofour is not None:
+        found.append(address.sixtofour)
+    if address.teredo is not None:
+        found.extend(address.teredo)
+    if address in _NAT64_PREFIX or int(address) < 2**32:
+        found.append(ipaddress.IPv4Address(int(address) & 0xFFFFFFFF))
+    return found
+
+
+def _is_public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if not address.is_global or address.is_multicast:
+        return False
+    if isinstance(address, ipaddress.IPv6Address):
+        return all(_is_public(inner) for inner in _embedded_ipv4(address))
+    return True
+
+
+def is_public_address(text: Any) -> bool:
+    """O endereço é de um servidor público? Recusa privado, loopback, link-local, reservado, multicast e não especificado, inclusive
+    quando o IPv4 vem dentro de um IPv6 (mapeado, 6to4, Teredo, NAT64). Texto que não é IP, ou com escopo (``%``), não vale."""
+    if not isinstance(text, str) or "%" in text:
+        return False
+    try:
+        return _is_public(ipaddress.ip_address(text.strip()))
+    except ValueError:
+        return False
 
 
 def check_paste(text: Any) -> str | RuleError:

@@ -109,7 +109,7 @@ async def test_a_plain_member_is_denied_in_every_command_and_modal_before_anythi
         if entry == "paste_modal":
             await PasteModal.callback(PasteModal(world.cog), inter)
         elif entry == "import_":
-            await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None)
+            await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None, link=None)
         else:
             await ServerPlaylistsCog.export_.callback(world.cog, inter)
 
@@ -125,11 +125,13 @@ async def test_a_plain_member_is_denied_in_every_command_and_modal_before_anythi
 @pytest.mark.asyncio
 async def test_no_origin_opens_the_paste_modal_and_two_origins_are_refused(world):
     inter = make_inter(ADMIN)
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=None, link=None)
     assert isinstance(inter.response.send_modal.await_args.args[0], PasteModal)
 
     with pytest.raises(GenericError):
-        await ServerPlaylistsCog.import_.callback(world.cog, make_inter(ADMIN), file="rock.json", attachment=object())
+        await ServerPlaylistsCog.import_.callback(
+            world.cog, make_inter(ADMIN), file="rock.json", attachment=object(), link=None
+        )
     world.playlists.import_file.assert_not_awaited()
 
 
@@ -148,7 +150,7 @@ def attachment(filename="lista.json", size=100, content=None):
 async def test_a_bad_attachment_is_refused_before_it_is_downloaded(world, filename, size):  # A8
     inter, file = make_inter(ADMIN), attachment(filename, size)
 
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=file)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=file, link=None)
 
     file.read.assert_not_awaited()
     world.playlists.import_file.assert_not_awaited()
@@ -159,7 +161,7 @@ async def test_a_bad_attachment_is_refused_before_it_is_downloaded(world, filena
 async def test_an_attachment_import_uses_the_interaction_guild_and_drops_any_icon(world):  # A11
     inter = make_inter(MANAGER)
 
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=attachment())
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=attachment(), link=None)
 
     (gid, parsed), _ = world.playlists.import_file.await_args
     assert gid == GID and [p.name for p in parsed.items] == ["Rock"] and parsed.items[0].icon is None
@@ -171,7 +173,7 @@ async def test_a_file_that_is_not_json_changes_nothing_and_shows_no_exception_te
     inter, file = make_inter(ADMIN), attachment()
     file.read = AsyncMock(return_value=b"\xff nao e json")
 
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=file)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=file, link=None)
 
     world.playlists.import_file.assert_not_awaited()
     assert "Traceback" not in sent_text(inter) and "Decode" not in sent_text(inter)
@@ -198,7 +200,7 @@ def bot_files(tmp_path, monkeypatch):
 async def test_a_file_name_that_is_not_a_listed_regular_file_is_refused(world, bot_files, name):
     inter = make_inter(ADMIN)
 
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=name, attachment=None)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=name, attachment=None, link=None)
 
     world.playlists.import_file.assert_not_awaited()
     assert "não está disponível" in sent_text(inter)
@@ -208,7 +210,7 @@ async def test_a_file_name_that_is_not_a_listed_regular_file_is_refused(world, b
 async def test_a_bot_file_is_imported_and_only_there_the_icon_survives(world, bot_files):
     inter = make_inter(ADMIN)
 
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file="rock-80.json", attachment=None)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file="rock-80.json", attachment=None, link=None)
 
     (gid, parsed), _ = world.playlists.import_file.await_args
     assert gid == GID and parsed.items[0].icon == "icons/rock.png"
@@ -289,7 +291,7 @@ async def test_a_failed_attachment_download_is_a_friendly_answer_not_an_exceptio
     failing = attachment()
     failing.read = AsyncMock(side_effect=disnake.HTTPException(SimpleNamespace(status=500, reason="x"), "boom"))
 
-    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=failing)
+    await ServerPlaylistsCog.import_.callback(world.cog, inter, file=None, attachment=failing, link=None)
 
     assert "anexo" in sent_text(inter)
     world.playlists.import_file.assert_not_awaited()

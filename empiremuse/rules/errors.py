@@ -35,6 +35,8 @@ FILE_FORMAT = "file_format"
 FILE_TOO_MANY = "file_too_many"
 GENRES_INVALID = "genres_invalid"
 ORDER_INVALID = "order_invalid"
+IMPORT_URL_REFUSED = "import_url_refused"
+IMPORT_FETCH_FAILED = "import_fetch_failed"
 
 
 class RuleError(NamedTuple):

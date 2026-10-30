@@ -3,8 +3,8 @@
 
 Quem pode: dono do servidor, Administrador ou Gerenciar Servidor, conferido NA EXECUÇÃO de todo comando e de todo modal (nunca só pelo
 ``default_member_permissions``, nunca atalho do dono do bot). O servidor vem sempre de ``inter.guild_id``. Toda resposta é efêmera, sem
-menção (``AllowedMentions.none()``) e nunca traz texto de erro de exceção. Origens: arquivo do bot (``data/playlists``), anexo ``.json`` ou
-texto colado; a origem por URL é de outra fase.
+menção (``AllowedMentions.none()``) e nunca traz texto de erro de exceção. Origens: arquivo do bot (``data/playlists``), anexo ``.json``,
+link (``utils/server_playlists_fetch``, defesa contra SSRF) ou texto colado. O link nunca é repetido na resposta nem vai para o log.
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ from empiremuse.rules.errors import (
     FILE_FORMAT,
     FILE_TOO_LARGE,
     FILE_TOO_MANY,
+    IMPORT_FETCH_FAILED,
+    IMPORT_URL_REFUSED,
     NAME_INVALID,
     RuleError,
 )
@@ -28,12 +30,14 @@ from empiremuse.rules.limits import PLAYLIST_FILE_MAX_BYTES, PLAYLIST_PASTE_MAX
 from empiremuse.rules.playlists import (
     ParsedFile,
     check_attachment,
+    check_import_url,
     check_paste,
     format_report,
     may_manage,
     parse_file,
 )
 from empiremuse.utils.music.errors import GenericError
+from empiremuse.utils.server_playlists_fetch import fetch_import
 from empiremuse.utils.server_playlists_files import IMPORT_DIR, list_import_files, read_import_file
 
 if TYPE_CHECKING:
@@ -48,6 +52,9 @@ ERROR_TEXT = {
     FILE_FORMAT: "**O conteúdo não é um arquivo de playlists válido.**",
     FILE_TOO_MANY: "**O arquivo tem itens demais** (máximo de {limit}).",
     NAME_INVALID: "**Esse arquivo não está disponível para importação.**",
+    IMPORT_URL_REFUSED: "**Esse link não é aceito.** Use um link https de raw.githubusercontent.com, gist.githubusercontent.com, "
+    "cdn.discordapp.com ou media.discordapp.net.",
+    IMPORT_FETCH_FAILED: "**Não consegui baixar o arquivo desse link agora.** Confira o link e tente de novo.",
 }
 
 
@@ -156,7 +163,7 @@ class ServerPlaylistsCog(commands.Cog):
 
     @playlists.sub_command(
         name="importar",
-        description=f"{desc_prefix}Importar playlists de arquivo, anexo ou texto colado (só acrescenta).",
+        description=f"{desc_prefix}Importar playlists de arquivo, anexo, link ou texto (só acrescenta).",
         cooldown=cooldown,
     )
     @commands.check(_manage_check)
@@ -172,15 +179,26 @@ class ServerPlaylistsCog(commands.Cog):
         attachment: Optional[disnake.Attachment] = commands.Param(
             name="anexo", description="Um arquivo .json de playlists (até 64 KiB)", default=None
         ),
+        link: Optional[str] = commands.Param(
+            name="link",
+            description="Link https de um .json (GitHub, Gist ou Discord)",
+            default=None,
+            max_length=2000,
+        ),
     ) -> None:
         ensure_manage(inter)
 
-        if file is not None and attachment is not None:
-            raise GenericError("**Escolha só uma origem: o arquivo ou o anexo.**")
+        if sum(source is not None for source in (file, attachment, link)) > 1:
+            raise GenericError("**Escolha só uma origem: o arquivo, o anexo ou o link.**")
 
-        if file is None and attachment is None:
+        if file is None and attachment is None and link is None:
             await inter.response.send_modal(PasteModal(self))
             return
+
+        if link is not None:
+            refused = check_import_url(link)  # antes de deferir: link ruim não gasta busca nem rede
+            if isinstance(refused, RuleError):
+                raise GenericError(error_message(refused))
 
         await inter.response.defer(ephemeral=True)
 
@@ -199,6 +217,9 @@ class ServerPlaylistsCog(commands.Cog):
                 )
                 return
             allow_icon = False
+        elif link is not None:
+            data = await fetch_import(link)
+            allow_icon = False  # ícone só vem de arquivo do bot (P6)
         else:
             data = await asyncio.to_thread(read_import_file, IMPORT_DIR, file)
             allow_icon = True  # só arquivo do bot pode trazer ícone (P6)
