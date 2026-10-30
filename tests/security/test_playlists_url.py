@@ -386,16 +386,14 @@ async def test_the_url_with_a_token_never_reaches_the_log_even_when_everything_w
 @pytest.mark.asyncio
 async def test_a_dns_that_never_answers_times_out_as_a_generic_failure():
     world = World(hang_resolve=asyncio.Event())
-    assert is_error(
-        await asyncio.wait_for(world.fetch(timeout=0.05), 5), IMPORT_FETCH_FAILED
-    )  # 5 s: só se o limite sumir
+    assert is_error(await asyncio.wait_for(world.fetch(timeout=0), 5), IMPORT_FETCH_FAILED)  # 5 s: só se o limite sumir
     assert world.factories == []
 
 
 @pytest.mark.asyncio
 async def test_a_body_that_never_arrives_times_out_as_a_generic_failure():
     world = World(Response(chunks=[b"{", b"}"], hang=asyncio.Event()))
-    assert is_error(await asyncio.wait_for(world.fetch(timeout=0.05), 5), IMPORT_FETCH_FAILED)
+    assert is_error(await asyncio.wait_for(world.fetch(timeout=0), 5), IMPORT_FETCH_FAILED)
 
 
 # ---------------------------------------------------------------------- no máximo duas buscas ao mesmo tempo
