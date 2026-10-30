@@ -74,6 +74,8 @@ IMPORT_URL_HOSTS = frozenset(
 IMPORT_URL_MAX = 2000
 _HTTPS_PORT = "443"
 _NAT64_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+_SIIT_PREFIX = ipaddress.IPv6Network("::ffff:0:0:0/96")  # RFC 2765, diferente do mapeado ``::ffff:0:0/96``
+_GLOBAL_UNICAST_V6 = ipaddress.IPv6Network("2000::/3")
 _REASON_TEXT = {
     INVALID: "inválida",
     DUP_NAME: "nome já existe",
@@ -377,7 +379,7 @@ def _embedded_ipv4(address: ipaddress.IPv6Address) -> list[ipaddress.IPv4Address
         found.append(address.sixtofour)
     if address.teredo is not None:
         found.extend(address.teredo)
-    if address in _NAT64_PREFIX or int(address) < 2**32:
+    if address in _NAT64_PREFIX or address in _SIIT_PREFIX or int(address) < 2**32:
         found.append(ipaddress.IPv4Address(int(address) & 0xFFFFFFFF))
     return found
 
@@ -386,7 +388,12 @@ def _is_public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if not address.is_global or address.is_multicast:
         return False
     if isinstance(address, ipaddress.IPv6Address):
-        return all(_is_public(inner) for inner in _embedded_ipv4(address))
+        embedded = _embedded_ipv4(address)
+        if embedded:
+            return all(_is_public(inner) for inner in embedded)
+        return (
+            address in _GLOBAL_UNICAST_V6
+        )  # sem IPv4 dentro: só endereço unicast global (nada de site-local, SRv6, etc.)
     return True
 
 
