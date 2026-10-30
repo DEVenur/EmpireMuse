@@ -155,7 +155,7 @@ def _read_sums(emojis_dir: Path) -> dict[str, str]:
 
         pairs = (line.split(None, 1) for line in sums_file.read_text(encoding="utf-8").splitlines() if line.strip())
         return {path.strip().lstrip("*"): digest for digest, path in (p for p in pairs if len(p) == 2)}
-    except OSError, UnicodeDecodeError:
+    except (OSError, UnicodeDecodeError):
         return {}
 
 
