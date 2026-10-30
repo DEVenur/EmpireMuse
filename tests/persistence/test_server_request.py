@@ -264,3 +264,22 @@ def test_a_bot_that_is_not_in_the_server_is_not_the_panel_bot_and_costs_no_write
     saves = len(world.banco.saves)
     outsider = SimpleNamespace(user=SimpleNamespace(id=4040), identifier="TOKEN_9")
     assert run(world.request.is_panel_bot(GID, outsider)) is False and len(world.banco.saves) == saves
+
+
+# ---------------------------------------------------------------------- documento único antigo, sem a seção request
+
+
+def test_an_existing_server_document_without_the_request_section_reads_the_bots_own_channel_and_writes_nothing(world):
+    from empiremuse.rules.servers import new_doc
+
+    doc = new_doc()
+    del doc["request"]
+    doc["migrated"] = {section: True for section in doc["migrated"]}
+    world.banco.put(DBModel.servers, "global", GID, doc)
+    world.banco.put(DBModel.guilds, str(MAIN_ID), GID, legacy("12", "34"))
+    saves = len(world.banco.saves)
+
+    view = run(world.store.legacy_doc(world.bots[0], GID))  # antes: KeyError
+
+    assert view["player_controller"]["channel"] == "12" and view["player_controller"]["message_id"] == "34"
+    assert len(world.banco.saves) == saves

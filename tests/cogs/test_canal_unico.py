@@ -360,7 +360,7 @@ async def test_a_roster_change_resends_only_when_the_panel_bot_changed_and_there
     panel, pool = panel_world(make_bot(2, "TOKEN_2"))
     pool.servers.request.get.return_value = SimpleNamespace(channel=channel, message_id=PANEL_MESSAGE)
     pool.servers.request.elect.return_value = SimpleNamespace(bot=object(), changed=changed)
-    panel.resend = AsyncMock()
+    panel.resend, panel.refresh = AsyncMock(return_value=None), AsyncMock()
 
     await panel.on_roster_change(GID)
 
@@ -619,12 +619,14 @@ async def test_setup_rebinds_the_players_of_the_other_bots_to_the_new_channel_an
     channel = SimpleNamespace(id=22, guild=SimpleNamespace(id=GID))
     other_view_of_channel = SimpleNamespace(id=22)  # o outro bot enxerga o canal pelo cache dele
     other.get_channel = lambda cid: other_view_of_channel
+    other.music.players[GID].last_data = {"skin": "antiga"}
     message = SimpleNamespace(id=555)
 
     await request_channel._rebind_other_players(me, channel, message)
 
     other_player, own_player = other.music.players[GID], me.music.players[GID]
     assert other_player.text_channel is other_view_of_channel and other_player.message is message
+    assert other_player.last_data == {}  # o painel novo está ocioso: o redesenho não pode ser pulado
     other_player.setup_hints.assert_called_once()
     other_player.setup_features.assert_called_once()
     assert own_player.text_channel == "antes"  # o do próprio bot o comando já cuida
@@ -668,3 +670,123 @@ async def test_one_failing_player_does_not_stop_the_others_from_being_rebound(ca
 
     other.music.players[GID].setup_features.assert_called_once()  # o 2º segue mesmo com o 1º falhando
     panel.refresh.assert_awaited_once_with(GID, now=True)
+
+
+# ---------------------------------------------------------------------- correções do CodeRabbit: painel novo, tarefas e encerramento
+
+
+def static_players_world(*, resent):
+    one, two = make_bot(1, "TOKEN", call=100), make_bot(2, "TOKEN_2", call=200)
+    for bot in (one, two):
+        bot.music.players[GID].message = "mensagem antiga"
+        bot.music.players[GID].last_data = {"skin": "antiga"}
+    panel, pool = panel_world(one, two)
+    pool.servers.request.get.return_value = SimpleNamespace(channel=PANEL_CHANNEL, message_id=PANEL_MESSAGE)
+    pool.servers.request.elect.return_value = SimpleNamespace(bot=object(), changed=True)
+    panel.resend = AsyncMock(return_value=resent)
+    panel.refresh = AsyncMock()
+    return panel, one, two
+
+
+@pytest.mark.asyncio
+async def test_after_the_panel_is_resent_every_static_player_edits_the_new_message_and_is_redrawn_at_once():
+    new = SimpleNamespace(id=777)
+    panel, one, two = static_players_world(resent=new)
+
+    await panel.on_roster_change(GID)
+
+    for bot in (one, two):
+        player = bot.music.players[GID]
+        assert player.message is new and player.last_data == {}  # "nada mudou" não pode pular o redesenho
+    panel.refresh.assert_awaited_once_with(GID, now=True)
+
+
+@pytest.mark.asyncio
+async def test_when_nothing_could_be_resent_the_players_keep_what_they_had():
+    panel, one, two = static_players_world(resent=None)
+
+    await panel.on_roster_change(GID)
+
+    assert one.music.players[GID].message == "mensagem antiga" and one.music.players[GID].last_data == {
+        "skin": "antiga"
+    }
+    panel.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_drawing_the_list_resets_each_players_cache_so_going_back_to_one_player_redraws_its_skin(monkeypatch):
+    from empiremuse.utils.music.interactions import request_panel as ui
+    from empiremuse.utils import server_playlists
+
+    one, two = make_bot(1, "TOKEN", call=100), make_bot(2, "TOKEN_2", call=200)
+    for bot in (one, two):
+        bot.music.players[GID].last_data = {"skin": "antiga"}
+    panel, pool = panel_world(one, two)
+    pool.servers.request.panel_bot = AsyncMock(return_value=one)
+    message = SimpleNamespace(guild=SimpleNamespace(), edit=AsyncMock())
+    monkeypatch.setattr(panel_module, "fetch_panel_message", AsyncMock(return_value=message))
+    monkeypatch.setattr(ui, "render_panel", lambda *args, **kwargs: {"content": "lista"})
+    monkeypatch.setattr(server_playlists, "load_select_options", AsyncMock(return_value=[]))
+
+    await panel._draw(GID)
+
+    message.edit.assert_awaited_once()
+    assert message.edit.await_args.kwargs["allowed_mentions"].everyone is False
+    assert one.music.players[GID].last_data == {} and two.music.players[GID].last_data == {}
+
+
+@pytest.mark.asyncio
+async def test_closing_the_panel_cancels_its_background_tasks():
+    panel, _ = panel_world()
+    gate = asyncio.Event()
+
+    async def forever():
+        await gate.wait()
+
+    task = panel._spawn(forever())
+    await asyncio.sleep(0)
+    panel.close()
+    await asyncio.sleep(0)  # deixa o cancelamento chegar à tarefa
+    cancelled = task.cancelling() > 0
+    task.cancel()  # limpeza: se a asserção falhar, a tarefa não fica pendurada
+    assert cancelled
+
+
+@pytest.mark.asyncio
+async def test_the_pool_shutdown_closes_the_request_panel_before_closing_the_bots():
+    from empiremuse.utils.client import BotPool
+
+    order = []
+    closing_bot = SimpleNamespace(is_closed=lambda: False, close=AsyncMock(side_effect=lambda: order.append("bot")))
+    pool = SimpleNamespace(
+        heartbeat_task=None,
+        logs_task=None,
+        update_watch_task=None,
+        version_check_task=None,
+        helper_watch_tasks=set(),
+        request_panel=SimpleNamespace(close=lambda: order.append("panel")),
+        get_all_bots=lambda: [closing_bot],
+        lavalink_instance=None,
+        usage=None,
+    )
+
+    await BotPool.shutdown(pool)
+
+    assert order == ["panel", "bot"]
+
+
+@pytest.mark.asyncio
+async def test_unloading_the_guild_log_cancels_the_roster_tasks():
+    from empiremuse.cogs.misc import GuildLog
+
+    async def forever():
+        await asyncio.Event().wait()
+
+    tasks = {asyncio.get_running_loop().create_task(forever()) for _ in range(2)}
+    await asyncio.sleep(0)
+    GuildLog.cog_unload(SimpleNamespace(_roster_tasks=tasks))
+    await asyncio.sleep(0)
+    cancelled = all(task.cancelling() > 0 for task in tasks)
+    for task in tasks:
+        task.cancel()  # limpeza: nada fica pendurado se a asserção falhar
+    assert cancelled
